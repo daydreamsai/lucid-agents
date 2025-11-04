@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "composite": false,
+    "emitDeclarationOnly": false,
+    "resolveJsonModule": true,
+    "strict": true,
+    "sourceMap": true,
+    "types": ["bun-types", "node"],
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noImplicitAny": true
+  },
+  "include": ["src", "tests"]
+}

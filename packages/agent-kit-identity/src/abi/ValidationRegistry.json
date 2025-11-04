@@ -1,0 +1,242 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_identityRegistry",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "agentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "requestUri",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "requestHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ValidationRequest",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "agentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "requestHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "response",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "responseUri",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "responseHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "tag",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ValidationResponse",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" }
+    ],
+    "name": "getAgentValidations",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "requestHashes",
+        "type": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getIdentityRegistry",
+    "outputs": [
+      { "internalType": "address", "name": "registry", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "requestHash", "type": "bytes32" }
+    ],
+    "name": "getRequest",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      },
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "string", "name": "requestUri", "type": "string" },
+      { "internalType": "uint256", "name": "timestamp", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      {
+        "internalType": "address[]",
+        "name": "validatorAddresses",
+        "type": "address[]"
+      },
+      { "internalType": "bytes32", "name": "tag", "type": "bytes32" }
+    ],
+    "name": "getSummary",
+    "outputs": [
+      { "internalType": "uint64", "name": "count", "type": "uint64" },
+      { "internalType": "uint8", "name": "avgResponse", "type": "uint8" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "requestHash", "type": "bytes32" }
+    ],
+    "name": "getValidationStatus",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      },
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "uint8", "name": "response", "type": "uint8" },
+      { "internalType": "bytes32", "name": "tag", "type": "bytes32" },
+      { "internalType": "uint256", "name": "lastUpdate", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      }
+    ],
+    "name": "getValidatorRequests",
+    "outputs": [
+      {
+        "internalType": "bytes32[]",
+        "name": "requestHashes",
+        "type": "bytes32[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "identityRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IdentityRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "requestHash", "type": "bytes32" }
+    ],
+    "name": "requestExists",
+    "outputs": [{ "internalType": "bool", "name": "exists", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "validatorAddress",
+        "type": "address"
+      },
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "string", "name": "requestUri", "type": "string" },
+      { "internalType": "bytes32", "name": "requestHash", "type": "bytes32" }
+    ],
+    "name": "validationRequest",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "bytes32", "name": "requestHash", "type": "bytes32" },
+      { "internalType": "uint8", "name": "response", "type": "uint8" },
+      { "internalType": "string", "name": "responseUri", "type": "string" },
+      { "internalType": "bytes32", "name": "responseHash", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "tag", "type": "bytes32" }
+    ],
+    "name": "validationResponse",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

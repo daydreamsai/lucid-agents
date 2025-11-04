@@ -1,0 +1,285 @@
+[
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_identityRegistry",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "agentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "clientAddress",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint64",
+        "name": "feedbackIndex",
+        "type": "uint64"
+      }
+    ],
+    "name": "FeedbackRevoked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "agentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "clientAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint8",
+        "name": "score",
+        "type": "uint8"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "tag1",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "tag2",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "fileuri",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "filehash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "NewFeedback",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "agentId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "clientAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint64",
+        "name": "feedbackIndex",
+        "type": "uint64"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "responder",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "responseUri",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "responseHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "ResponseAppended",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "address", "name": "clientAddress", "type": "address" },
+      { "internalType": "uint64", "name": "feedbackIndex", "type": "uint64" },
+      { "internalType": "string", "name": "responseUri", "type": "string" },
+      { "internalType": "bytes32", "name": "responseHash", "type": "bytes32" }
+    ],
+    "name": "appendResponse",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" }
+    ],
+    "name": "getClients",
+    "outputs": [
+      { "internalType": "address[]", "name": "clientList", "type": "address[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getIdentityRegistry",
+    "outputs": [
+      { "internalType": "address", "name": "registry", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "address", "name": "clientAddress", "type": "address" }
+    ],
+    "name": "getLastIndex",
+    "outputs": [
+      { "internalType": "uint64", "name": "lastIndex", "type": "uint64" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "address", "name": "clientAddress", "type": "address" },
+      { "internalType": "uint64", "name": "feedbackIndex", "type": "uint64" },
+      { "internalType": "address[]", "name": "responders", "type": "address[]" }
+    ],
+    "name": "getResponseCount",
+    "outputs": [
+      { "internalType": "uint64", "name": "count", "type": "uint64" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      {
+        "internalType": "address[]",
+        "name": "clientAddresses",
+        "type": "address[]"
+      },
+      { "internalType": "bytes32", "name": "tag1", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "tag2", "type": "bytes32" }
+    ],
+    "name": "getSummary",
+    "outputs": [
+      { "internalType": "uint64", "name": "count", "type": "uint64" },
+      { "internalType": "uint8", "name": "averageScore", "type": "uint8" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "uint8", "name": "score", "type": "uint8" },
+      { "internalType": "bytes32", "name": "tag1", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "tag2", "type": "bytes32" },
+      { "internalType": "string", "name": "fileuri", "type": "string" },
+      { "internalType": "bytes32", "name": "filehash", "type": "bytes32" },
+      { "internalType": "bytes", "name": "feedbackAuth", "type": "bytes" }
+    ],
+    "name": "giveFeedback",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "identityRegistry",
+    "outputs": [
+      {
+        "internalType": "contract IdentityRegistry",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      {
+        "internalType": "address[]",
+        "name": "clientAddresses",
+        "type": "address[]"
+      },
+      { "internalType": "bytes32", "name": "tag1", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "tag2", "type": "bytes32" },
+      { "internalType": "bool", "name": "includeRevoked", "type": "bool" }
+    ],
+    "name": "readAllFeedback",
+    "outputs": [
+      { "internalType": "address[]", "name": "clients", "type": "address[]" },
+      { "internalType": "uint8[]", "name": "scores", "type": "uint8[]" },
+      { "internalType": "bytes32[]", "name": "tag1s", "type": "bytes32[]" },
+      { "internalType": "bytes32[]", "name": "tag2s", "type": "bytes32[]" },
+      { "internalType": "bool[]", "name": "revokedStatuses", "type": "bool[]" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "address", "name": "clientAddress", "type": "address" },
+      { "internalType": "uint64", "name": "index", "type": "uint64" }
+    ],
+    "name": "readFeedback",
+    "outputs": [
+      { "internalType": "uint8", "name": "score", "type": "uint8" },
+      { "internalType": "bytes32", "name": "tag1", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "tag2", "type": "bytes32" },
+      { "internalType": "bool", "name": "isRevoked", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "agentId", "type": "uint256" },
+      { "internalType": "uint64", "name": "feedbackIndex", "type": "uint64" }
+    ],
+    "name": "revokeFeedback",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

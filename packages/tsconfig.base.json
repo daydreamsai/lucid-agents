@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "downlevelIteration": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@lucid-dreams/agent-kit": ["./agent-kit/src"],
+      "@lucid-dreams/agent-kit-identity": ["./agent-kit-identity/src"],
+      "@lucid-dreams/create-agent-kit": ["./create-agent-kit/src"]
+    }
+  }
+}

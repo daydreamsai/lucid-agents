@@ -1,0 +1,36 @@
+{
+  "name": "@lucid-dreams/create-agent-kit",
+  "version": "0.2.24",
+  "description": "Scaffold a Bun agent app powered by @lucid/agent-kit.",
+  "type": "module",
+  "bin": {
+    "create-agent-kit": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepare": "bun run build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "agent",
+    "scaffold",
+    "bun",
+    "lucid"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "bun-types": "^1.1.16",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

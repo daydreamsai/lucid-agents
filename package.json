@@ -1,0 +1,41 @@
+{
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.1.12",
+      "typescript": "^5.9.2",
+      "@ax-llm/ax": "^14.0.31",
+      "hono": "4.10.1",
+      "viem": "latest",
+      "x402": "latest",
+      "x402-fetch": "latest",
+      "tsup": "^8.5.0"
+    }
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "build": "bun run scripts/build-all.ts",
+    "build:all": "bun run scripts/build-all.ts",
+    "build:packages": "bun run scripts/build-packages.ts",
+    "setup:changesets": "bun run scripts/setup-changesets.ts",
+    "changeset": "bunx changeset",
+    "release:version": "bunx changeset version",
+    "release:publish": "bun run scripts/build-packages.ts && bun run scripts/changeset-publish.ts",
+    "release": "bun run release:version && bun run release:publish"
+  },
+  "dependencies": {
+    "@types/bun": "^1.2.21",
+    "@types/node": "^24.3.1",
+    "@types/three": "^0.180.0",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.9"
+  }
+}

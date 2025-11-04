@@ -1,0 +1,5 @@
+{
+  "id": "axllm",
+  "name": "AxLLM Bun Agent",
+  "description": "Fully-featured Bun HTTP agent with @lucid-dreams/agent-kit and @ax-llm/ax wired up."
+}
