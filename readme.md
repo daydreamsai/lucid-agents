@@ -11,6 +11,7 @@ Build, ship, and monetize AI agents with a consistent surface across runtimes. T
 ## Key Packages
 
 - [`@lucid-agents/agent-kit`](packages/agent-kit/README.md) — Hono wrapper that registers entrypoints, serves manifests, manages payments, and exposes trust metadata utilities.
+- [`@lucid-agents/create-agent-kit`](packages/create-agent-kit/README.md) — CLI scaffolding tool to generate new agent projects with templates, environment setup, and optional dependency installation.
 - [`@lucid-agents/agent-kit-identity`](packages/agent-kit-identity/README.md) — ERC-8004 toolkit for registering agents, generating trust configs, and working with reputation/validation registries.
 
 Each package README contains API details, environment variables, and complete examples.
@@ -63,26 +64,49 @@ This pair wires together the agent runtime and ERC-8004 trust metadata in just a
 
 ## Getting Started
 
-### Scaffold a New Agent
+### Quick Start: Scaffold a New Agent
+
+The fastest way to get started is with the CLI scaffolding tool:
 
 ```bash
 bunx @lucid-agents/create-agent-kit@latest
 ```
 
-The CLI walks through template selection, environment setup, and optional dependency installation. Choose a project directory, decide whether to preconfigure ERC-8004 identity, and answer prompts for default pricing or entrypoint metadata.
+The interactive CLI will:
 
-### Iterate Locally
+1. Guide you through template selection (`blank`, `axllm`, or `axllm-flow`)
+2. Set up your project with agent metadata and entrypoints
+3. Configure environment variables for payments and identity (optional)
+4. Install dependencies automatically if you choose
 
-1. Install dependencies with `bun install`.
-2. Explore `packages/agent-kit` to scaffold an agent server via `createAgentApp`.
-3. Pair with `packages/agent-kit-identity` to register on-chain identity and surface trust metadata.
-4. Check `examples/` for end-to-end scripts, including monetized LLM calls and ERC-8004 workflows.
+See the [`create-agent-kit` README](packages/create-agent-kit/README.md) for detailed CLI options and template descriptions.
+
+### Working with the Codebase
+
+If you're contributing or exploring the monorepo:
+
+1. **Install dependencies**: `bun install`
+2. **Explore packages**:
+   - [`agent-kit`](packages/agent-kit/README.md) — Core runtime for building agent servers
+   - [`agent-kit-identity`](packages/agent-kit-identity/README.md) — ERC-8004 identity and trust
+   - [`create-agent-kit`](packages/create-agent-kit/README.md) — CLI for scaffolding projects
+3. **Run examples**: Check `examples/` in each package for working code samples
+4. **Build packages**: `bun run build:packages`
 
 ## Contributing
 
-- Use `bun test` and package-level scripts where available before opening PRs.
-- Keep documentation precise and update manifests or examples when APIs change.
-- Follow the repository coding standards and TypeScript linting configuration.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+
+- Setting up your development environment
+- Making changes and submitting pull requests
+- Testing and code standards
+- Release process with changesets
+
+Quick tips:
+
+- Use `bun test` and package-level scripts before opening PRs
+- Keep documentation up to date when changing APIs
+- Follow TypeScript strict mode and ESM standards
 
 ## Resources
 

@@ -13,6 +13,15 @@ ERC-8004 identity helpers for Lucid agents. Register your agent on the ERC-8004 
 - **Ownership**: Transfer the NFT to transfer agent ownership
 - **On-Chain Verification**: Anyone can verify agent ownership via the blockchain
 
+## What Can You Do?
+
+This package enables you to:
+
+- **Register Agent Identity**: Mint an ERC-721 NFT representing your agent on-chain with a verifiable domain
+- **Build Trust**: Integrate verifiable identity into your agent's manifest so other agents and users can verify ownership
+- **Manage Reputation**: Give and receive peer feedback through the reputation registry to build trust over time
+- **Validate Work**: Request validation of your agent's work or validate other agents' outputs through the validation registry
+
 ## Installation
 
 ```bash
@@ -122,6 +131,110 @@ if (identity.clients) {
 }
 ```
 
+## Working with Registry Clients
+
+`createAgentIdentity()` returns clients for all three ERC-8004 registries. These clients enable you to interact with the on-chain reputation and validation systems.
+
+```typescript
+const identity = await createAgentIdentity({ autoRegister: true });
+
+// Access all three registry clients
+identity.clients.identity; // Identity NFT management
+identity.clients.reputation; // Peer feedback system
+identity.clients.validation; // Work validation
+```
+
+### How to Manage Reputation
+
+Give and receive feedback on agent interactions:
+
+```typescript
+const { reputation } = identity.clients;
+
+// Give feedback to another agent
+await reputation.giveFeedback({
+  toAgentId: 42n,
+  score: 90, // 0-100
+  tag1: "reliable",
+  tag2: "fast",
+  fileUri: "ipfs://QmFeedbackDetails",
+});
+
+// Query reputation
+const summary = await reputation.getSummary(42n);
+console.log(
+  `Agent #42: ${summary.averageScore}/100 (${summary.count} reviews)`
+);
+
+// Get all feedback
+const feedback = await reputation.getAllFeedback(42n);
+
+// Revoke feedback you gave
+await reputation.revokeFeedback({
+  agentId: 42n,
+  feedbackIndex: 5n,
+});
+
+// Respond to feedback you received
+await reputation.appendResponse({
+  agentId: myAgentId,
+  clientAddress: "0x...",
+  feedbackIndex: 3n,
+  responseUri: "ipfs://QmMyResponse",
+  responseHash: "0x...",
+});
+```
+
+### How to Validate Work
+
+Request validation of your work or validate others:
+
+```typescript
+const { validation } = identity.clients;
+
+// Create validation request
+await validation.createRequest({
+  validatorAddress: "0x...",
+  agentId: myAgentId,
+  requestURI: "ipfs://QmMyWork",
+  requestHash: keccak256(toHex("work-data")),
+});
+
+// Submit validation response (as validator)
+await validation.submitResponse({
+  requestHash: "0xabc...",
+  response: 1, // 1 = valid, 0 = invalid
+  responseURI: "ipfs://QmValidationReport",
+  responseHash: "0x...",
+});
+
+// Query validations
+const requests = await validation.getAgentValidations(myAgentId);
+const summary = await validation.getSummary(myAgentId);
+console.log(`${summary.count} validations, avg: ${summary.avgResponse}`);
+```
+
+## Supported Networks
+
+The package supports multiple EVM-compatible chains. Set `CHAIN_ID` and `RPC_URL` in your environment:
+
+- Ethereum Mainnet (1)
+- Sepolia Testnet (11155111)
+- Base Mainnet (8453)
+- Base Sepolia (84532) - default
+- Arbitrum (42161)
+- Optimism (10)
+- Polygon (137)
+- Polygon Amoy (80002)
+
+## Examples
+
+See the [`examples/`](./examples) directory for complete examples:
+
+- [`quick-start.ts`](./examples/quick-start.ts) - Simple registration with environment variables
+- [`full-integration.ts`](./examples/full-integration.ts) - Full integration with agent-kit
+- [`test-clients.ts`](./examples/test-clients.ts) - Testing all three registry clients (identity, reputation, validation)
+
 ## API Reference
 
 ### `createAgentIdentity(options)`
@@ -227,112 +340,6 @@ const metadata = generateAgentMetadata(identity, {
 
 // Save to: https://your-domain/.well-known/agent-metadata.json
 ```
-
-## Supported Networks
-
-The package supports multiple EVM-compatible chains. Set `CHAIN_ID` and `RPC_URL` in your environment:
-
-- Ethereum Mainnet (1)
-- Sepolia Testnet (11155111)
-- Base Mainnet (8453)
-- Base Sepolia (84532) - default
-- Arbitrum (42161)
-- Optimism (10)
-- Polygon (137)
-- Polygon Amoy (80002)
-
-## Registry Clients
-
-`createAgentIdentity()` returns clients for all three ERC-8004 registries:
-
-```typescript
-const identity = await createAgentIdentity({ autoRegister: true });
-
-// Access all three registry clients
-identity.clients.identity; // Identity NFT management
-identity.clients.reputation; // Peer feedback system
-identity.clients.validation; // Work validation
-```
-
-### Reputation Registry
-
-Give and receive feedback on agent interactions:
-
-```typescript
-const { reputation } = identity.clients;
-
-// Give feedback to another agent
-await reputation.giveFeedback({
-  toAgentId: 42n,
-  score: 90, // 0-100
-  tag1: "reliable",
-  tag2: "fast",
-  fileUri: "ipfs://QmFeedbackDetails",
-});
-
-// Query reputation
-const summary = await reputation.getSummary(42n);
-console.log(
-  `Agent #42: ${summary.averageScore}/100 (${summary.count} reviews)`
-);
-
-// Get all feedback
-const feedback = await reputation.getAllFeedback(42n);
-
-// Revoke feedback you gave
-await reputation.revokeFeedback({
-  agentId: 42n,
-  feedbackIndex: 5n,
-});
-
-// Respond to feedback you received
-await reputation.appendResponse({
-  agentId: myAgentId,
-  clientAddress: "0x...",
-  feedbackIndex: 3n,
-  responseUri: "ipfs://QmMyResponse",
-  responseHash: "0x...",
-});
-```
-
-### Validation Registry
-
-Request validation of your work or validate others:
-
-```typescript
-const { validation } = identity.clients;
-
-// Create validation request
-await validation.createRequest({
-  validatorAddress: "0x...",
-  agentId: myAgentId,
-  requestURI: "ipfs://QmMyWork",
-  requestHash: keccak256(toHex("work-data")),
-});
-
-// Submit validation response (as validator)
-await validation.submitResponse({
-  requestHash: "0xabc...",
-  response: 1, // 1 = valid, 0 = invalid
-  responseURI: "ipfs://QmValidationReport",
-  responseHash: "0x...",
-});
-
-// Query validations
-const requests = await validation.getAgentValidations(myAgentId);
-const summary = await validation.getSummary(myAgentId);
-console.log(`${summary.count} validations, avg: ${summary.avgResponse}`);
-```
-
-## Examples
-
-See the [`examples/`](./examples) directory for complete examples:
-
-- [`quick-start.ts`](./examples/quick-start.ts) - Simple registration
-- [`full-integration.ts`](./examples/full-integration.ts) - Integration with agent-kit
-- [`reputation-workflow.ts`](./examples/reputation-workflow.ts) - Giving/receiving feedback
-- [`validation-workflow.ts`](./examples/validation-workflow.ts) - Validation requests/responses
-- [`test-clients.ts`](./examples/test-clients.ts) - Test all three registry clients
 
 ## How It Works
 
