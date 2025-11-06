@@ -1,5 +1,16 @@
 {
   "id": "axllm",
   "name": "AxLLM Bun Agent with Flow",
-  "description": "Fully-featured Bun HTTP agent with @lucid-dreams/agent-kit and @ax-llm/ax wired up and Flow for AxLLM."
+  "description": "Fully-featured Bun HTTP agent with @lucid-dreams/agent-kit and @ax-llm/ax wired up and Flow for AxLLM.",
+  "defaults": {
+    "AGENT_VERSION": "0.1.0",
+    "AGENT_DESCRIPTION": "AxLLM Flow example agent generated with create-agent-kit",
+    "ENTRYPOINT_KEY": "brainstorm",
+    "ENTRYPOINT_DESCRIPTION": "Summarise a topic and suggest three follow-up ideas using AxFlow.",
+    "PAYMENTS_FACILITATOR_URL": "https://facilitator.daydreams.systems",
+    "PAYMENTS_NETWORK": "base",
+    "PAYMENTS_PAY_TO": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+    "PAYMENTS_DEFAULT_PRICE": "0.1",
+    "ENTRYPOINT_PRICE": "0.1"
+  }
 }

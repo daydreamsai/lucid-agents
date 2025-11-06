@@ -2,6 +2,17 @@
   "id": "blank",
   "name": "Blank Bun Agent",
   "description": "Start from a minimal Bun HTTP agent with @lucid-dreams/agent-kit wired up.",
+  "defaults": {
+    "AGENT_VERSION": "0.1.0",
+    "AGENT_DESCRIPTION": "Starter agent generated with create-agent-kit",
+    "ENTRYPOINT_KEY": "echo",
+    "ENTRYPOINT_DESCRIPTION": "Returns text that you send to the agent.",
+    "PAYMENTS_FACILITATOR_URL": "https://facilitator.daydreams.systems",
+    "PAYMENTS_NETWORK": "base-sepolia",
+    "PAYMENTS_PAY_TO": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+    "PAYMENTS_DEFAULT_PRICE": "1000",
+    "ENTRYPOINT_PRICE": "1000"
+  },
   "onboarding": {
     "prompts": [
       {

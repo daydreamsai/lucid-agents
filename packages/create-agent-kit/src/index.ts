@@ -8,6 +8,12 @@ import process, {
 } from "node:process";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
+import { renderTemplateTree } from "./template/files.js";
+import {
+  GLOBAL_TEMPLATE_DEFAULTS,
+  TemplateDefaults,
+  resolveTemplateDefaults,
+} from "./template/defaults.js";
 
 type CliOptions = {
   install: boolean;
@@ -80,6 +86,7 @@ type TemplateMeta = {
   name?: string;
   description?: string;
   onboarding?: OnboardingConfig;
+  defaults?: Record<string, unknown>;
 };
 
 type TemplateDescriptor = {
@@ -88,6 +95,7 @@ type TemplateDescriptor = {
   description?: string;
   path: string;
   onboarding?: OnboardingConfig;
+  defaults: TemplateDefaults;
 };
 
 type OnboardingAnswers = Map<string, string | boolean>;
@@ -115,17 +123,6 @@ const LUCID_BANNER = [
   "       L U C I D  DREAMS   ",
   "   Agent scaffolding toolkit  ",
 ];
-
-const DEFAULT_TEMPLATE_VALUES = {
-  AGENT_VERSION: "0.1.0",
-  AGENT_DESCRIPTION: "Starter agent generated with create-agent-kit",
-  ENTRYPOINT_KEY: "echo",
-  ENTRYPOINT_DESCRIPTION: "Returns text that you send to the agent.",
-  PAYMENTS_FACILITATOR_URL: "https://facilitator.daydreams.systems",
-  PAYMENTS_PAY_TO: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-  PAYMENTS_NETWORK: "base-sepolia",
-  PAYMENTS_DEFAULT_PRICE: "1000",
-};
 
 const DEFAULT_PROJECT_NAME = "agent-app";
 const PROJECT_NAME_PROMPT = "Project directory name:";
@@ -190,11 +187,13 @@ export async function runCli(
       APP_NAME: projectDirName,
       PACKAGE_NAME: packageName,
     },
+    defaults: template.defaults,
   });
   const replacements = buildTemplateReplacements({
     projectDirName,
     packageName,
     answers: onboardingAnswers,
+    defaults: template.defaults,
   });
   await copyTemplate(template.path, targetDir);
   await applyTemplateTransforms(targetDir, {
@@ -309,6 +308,7 @@ async function loadTemplates(
     let title = toTitleCase(id);
     let description: string | undefined;
      let onboarding: OnboardingConfig | undefined;
+    let defaults = resolveTemplateDefaults(undefined);
 
     try {
       const raw = await fs.readFile(metaPath, "utf8");
@@ -316,6 +316,7 @@ async function loadTemplates(
       title = meta.name ?? toTitleCase(id);
       description = meta.description;
       onboarding = normalizeOnboardingConfig(meta.onboarding);
+      defaults = resolveTemplateDefaults(meta.defaults);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
@@ -328,6 +329,7 @@ async function loadTemplates(
       description,
       path,
       onboarding,
+      defaults,
     });
   }
 
@@ -488,8 +490,9 @@ async function collectOnboardingValues(params: {
   template: TemplateDescriptor;
   prompt?: PromptApi;
   context: Record<string, string>;
+  defaults: TemplateDefaults;
 }): Promise<OnboardingAnswers> {
-  const { template, prompt, context } = params;
+  const { template, prompt, context, defaults } = params;
   const answers: OnboardingAnswers = new Map();
   const prompts = template.onboarding?.prompts ?? [];
 
@@ -502,6 +505,7 @@ async function collectOnboardingValues(params: {
       question,
       context,
       answers,
+      defaults,
     });
 
     const response = await askOnboardingPrompt({
@@ -539,10 +543,11 @@ function resolveOnboardingDefault(params: {
   question: OnboardingPrompt;
   context: Record<string, string>;
   answers: OnboardingAnswers;
+  defaults: TemplateDefaults;
 }): string | boolean | undefined {
-  const { question, context, answers } = params;
+  const { question, context, answers, defaults } = params;
   const baseContext = {
-    ...DEFAULT_TEMPLATE_VALUES,
+    ...defaults,
     ...context,
   };
 
@@ -562,7 +567,8 @@ function resolveOnboardingDefault(params: {
     return interpolateTemplateString(
       question.defaultValue,
       baseContext,
-      answers
+      answers,
+      defaults
     );
   }
   if (typeof question.defaultValue === "boolean") {
@@ -659,7 +665,8 @@ function getNonInteractiveAnswer(
 function interpolateTemplateString(
   template: string,
   context: Record<string, string>,
-  answers: OnboardingAnswers
+  answers: OnboardingAnswers,
+  defaults: TemplateDefaults
 ): string {
   return template.replace(/{{([A-Z0-9_]+)}}/g, (_, token: string) => {
     const fromAnswers = answers.get(token);
@@ -674,8 +681,7 @@ function interpolateTemplateString(
       return context[token] ?? "";
     }
 
-    const defaultValue =
-      DEFAULT_TEMPLATE_VALUES[token as keyof typeof DEFAULT_TEMPLATE_VALUES];
+    const defaultValue = defaults[token];
     if (typeof defaultValue === "string") {
       return defaultValue;
     }
@@ -691,56 +697,64 @@ function buildTemplateReplacements(params: {
   projectDirName: string;
   packageName: string;
   answers: OnboardingAnswers;
+  defaults: TemplateDefaults;
 }): Record<string, string> {
-  const { projectDirName, packageName, answers } = params;
+  const { projectDirName, packageName, answers, defaults } = params;
 
   const agentDescription = getStringAnswer(
     answers,
     "AGENT_DESCRIPTION",
-    DEFAULT_TEMPLATE_VALUES.AGENT_DESCRIPTION
+    defaults
   );
   const agentVersion = getStringAnswer(
     answers,
     "AGENT_VERSION",
-    DEFAULT_TEMPLATE_VALUES.AGENT_VERSION
+    defaults
   );
+  const entrypointKeyFallback =
+    (defaults.ENTRYPOINT_KEY ??
+      GLOBAL_TEMPLATE_DEFAULTS.ENTRYPOINT_KEY) as string;
   const entrypointKey = toEntrypointKey(
-    getStringAnswer(
-      answers,
-      "ENTRYPOINT_KEY",
-      DEFAULT_TEMPLATE_VALUES.ENTRYPOINT_KEY
-    )
+    getStringAnswer(answers, "ENTRYPOINT_KEY", defaults, entrypointKeyFallback),
+    entrypointKeyFallback
   );
   const entrypointDescription = getStringAnswer(
     answers,
     "ENTRYPOINT_DESCRIPTION",
-    DEFAULT_TEMPLATE_VALUES.ENTRYPOINT_DESCRIPTION
+    defaults
   );
 
-  const enablePayments = getBooleanAnswer(answers, "ENABLE_PAYMENTS", false);
+  const enablePaymentsDefault =
+    parseBooleanDefault(defaults.ENABLE_PAYMENTS) ?? false;
+  const enablePayments = getBooleanAnswer(
+    answers,
+    "ENABLE_PAYMENTS",
+    enablePaymentsDefault
+  );
   const paymentsFacilitator = getStringAnswer(
     answers,
     "PAYMENTS_FACILITATOR_URL",
-    DEFAULT_TEMPLATE_VALUES.PAYMENTS_FACILITATOR_URL
+    defaults
   );
   const paymentsNetwork = getStringAnswer(
     answers,
     "PAYMENTS_NETWORK",
-    DEFAULT_TEMPLATE_VALUES.PAYMENTS_NETWORK
+    defaults
   );
   const paymentsPayTo = getStringAnswer(
     answers,
     "PAYMENTS_PAY_TO",
-    DEFAULT_TEMPLATE_VALUES.PAYMENTS_PAY_TO
+    defaults
   );
   const paymentsDefaultPrice = getStringAnswer(
     answers,
     "PAYMENTS_DEFAULT_PRICE",
-    DEFAULT_TEMPLATE_VALUES.PAYMENTS_DEFAULT_PRICE
+    defaults
   );
   const entrypointPrice = getStringAnswer(
     answers,
     "ENTRYPOINT_PRICE",
+    defaults,
     paymentsDefaultPrice
   );
 
@@ -768,7 +782,7 @@ function buildTemplateReplacements(params: {
     ? ` (price: ${entrypointPrice} base units)`
     : "";
 
-  return {
+  const replacements: Record<string, string> = {
     APP_NAME: projectDirName,
     PACKAGE_NAME: packageName,
     AGENT_DESCRIPTION: agentDescription,
@@ -784,12 +798,29 @@ function buildTemplateReplacements(params: {
     PAYMENTS_PAY_TO: paymentsPayTo,
     PAYMENTS_DEFAULT_PRICE: paymentsDefaultPrice,
   };
+
+  for (const [key, value] of answers.entries()) {
+    if (key in replacements) continue;
+    if (typeof value === "string") {
+      replacements[key] = sanitizeAnswerString(value);
+    } else {
+      replacements[key] = value ? "true" : "false";
+    }
+  }
+
+  for (const [key, value] of Object.entries(defaults)) {
+    if (key in replacements) continue;
+    replacements[key] = value;
+  }
+
+  return replacements;
 }
 
 function getStringAnswer(
   answers: OnboardingAnswers,
   key: string,
-  fallback: string
+  defaults: TemplateDefaults,
+  fallback?: string
 ): string {
   const value = answers.get(key);
   if (typeof value === "string" && value.trim().length > 0) {
@@ -798,7 +829,13 @@ function getStringAnswer(
   if (typeof value === "boolean") {
     return value ? "true" : "false";
   }
-  return fallback;
+  if (defaults[key] !== undefined) {
+    return defaults[key]!;
+  }
+  if (fallback !== undefined) {
+    return fallback;
+  }
+  return "";
 }
 
 function getBooleanAnswer(
@@ -818,7 +855,15 @@ function getBooleanAnswer(
   return fallback;
 }
 
-function toEntrypointKey(value: string): string {
+function parseBooleanDefault(value: string | undefined): boolean | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (["true", "yes", "y", "1"].includes(normalized)) return true;
+  if (["false", "no", "n", "0"].includes(normalized)) return false;
+  return undefined;
+}
+
+function toEntrypointKey(value: string, fallback: string): string {
   const normalized = value
     .trim()
     .toLowerCase()
@@ -828,9 +873,7 @@ function toEntrypointKey(value: string): string {
     .replace(/^-+/, "")
     .replace(/-+$/, "");
 
-  return normalized.length > 0
-    ? normalized
-    : DEFAULT_TEMPLATE_VALUES.ENTRYPOINT_KEY;
+  return normalized.length > 0 ? normalized : fallback;
 }
 
 async function assertTemplatePresent(templatePath: string) {
@@ -880,16 +923,7 @@ async function applyTemplateTransforms(
     PACKAGE_NAME: params.packageName,
     ...params.replacements,
   };
-
-  await replaceTemplatePlaceholders(join(targetDir, "README.md"), replacements);
-  await replaceTemplatePlaceholders(
-    join(targetDir, "src/agent.ts"),
-    replacements
-  );
-  await replaceTemplatePlaceholders(
-    join(targetDir, ".env.example"),
-    replacements
-  );
+  await renderTemplateTree(targetDir, replacements);
 
   await removeTemplateArtifacts(targetDir);
 }
@@ -904,27 +938,6 @@ async function updatePackageJson(targetDir: string, packageName: string) {
     `${JSON.stringify(packageJson, null, 2)}\n`,
     "utf8"
   );
-}
-
-async function replaceTemplatePlaceholders(
-  filePath: string,
-  replacements: Record<string, string>
-) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    let replaced = raw;
-    for (const [key, value] of Object.entries(replacements)) {
-      replaced = replaced.replaceAll(`{{${key}}}`, value);
-    }
-    if (replaced === raw) {
-      return;
-    }
-    await fs.writeFile(filePath, replaced, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw error;
-    }
-  }
 }
 
 async function removeTemplateArtifacts(targetDir: string) {
