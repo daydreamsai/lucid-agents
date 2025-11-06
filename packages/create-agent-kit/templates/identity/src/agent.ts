@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { createAgentApp } from "@lucid-agents/agent-kit";
+import {
+  AgentKitConfig,
+  createAgentApp,
+} from "@lucid-agents/agent-kit";
 import { createAgentIdentity, getTrustConfig } from "@lucid-agents/agent-kit-identity";
 
 // Bootstrap ERC-8004 identity (runs once at startup)
@@ -19,7 +22,20 @@ if (identity.didRegister) {
 // Extract trust config for the agent manifest
 const trustConfig = getTrustConfig(identity);
 
-// Configure agent with trust metadata
+// Payment configuration
+const configOverrides: AgentKitConfig = {
+  payments: {
+    facilitatorUrl:
+      (process.env.FACILITATOR_URL as any) ??
+      "https://facilitator.daydreams.systems",
+    payTo:
+      (process.env.ADDRESS as `0x${string}`) ??
+      "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+    network: (process.env.NETWORK as any) ?? "base-sepolia",
+    defaultPrice: process.env.DEFAULT_PRICE ?? "1000",
+  },
+};
+
 const { app, addEntrypoint } = createAgentApp(
   {
     name: "{{APP_NAME}}",
@@ -27,6 +43,7 @@ const { app, addEntrypoint } = createAgentApp(
     description: "{{AGENT_DESCRIPTION}}",
   },
   {
+    config: configOverrides,
     trust: trustConfig,
   }
 );

@@ -993,7 +993,7 @@ async function setupEnvironment(params: {
     // Check if we already have this value from onboarding
     const onboardingKey = envKeyMapping[entry.key] ?? entry.key;
     const defaultFromOnboarding = onboardingAnswers[onboardingKey];
-    
+
     if (defaultFromOnboarding) {
       // Already collected during onboarding - use it directly without prompting
       answers.set(entry.key, defaultFromOnboarding);
