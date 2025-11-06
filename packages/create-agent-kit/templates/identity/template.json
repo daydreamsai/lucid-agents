@@ -50,7 +50,7 @@
       {
         "key": "PAYMENTS_NETWORK",
         "type": "input",
-        "message": "Network (chain identifier)",
+        "message": "Payment network identifier (default: Base Sepolia)",
         "defaultValue": "base-sepolia",
         "when": { "key": "ENABLE_PAYMENTS", "equals": true }
       },
@@ -84,4 +84,3 @@
     ]
   }
 }
-

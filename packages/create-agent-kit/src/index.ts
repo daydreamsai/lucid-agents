@@ -119,6 +119,7 @@ const LUCID_BANNER = [
 const DEFAULT_TEMPLATE_VALUES = {
   AGENT_VERSION: "0.1.0",
   AGENT_DESCRIPTION: "Starter agent generated with create-agent-kit",
+  AGENT_DOMAIN: "agent.example.com",
   ENTRYPOINT_KEY: "echo",
   ENTRYPOINT_DESCRIPTION: "Returns text that you send to the agent.",
   PAYMENTS_FACILITATOR_URL: "https://facilitator.daydreams.systems",
@@ -308,7 +309,7 @@ async function loadTemplates(
     const metaPath = join(path, "template.json");
     let title = toTitleCase(id);
     let description: string | undefined;
-     let onboarding: OnboardingConfig | undefined;
+    let onboarding: OnboardingConfig | undefined;
 
     try {
       const raw = await fs.readFile(metaPath, "utf8");
@@ -474,10 +475,7 @@ function buildDefaultProjectName(params: {
     candidate = DEFAULT_PROJECT_NAME;
   }
 
-  if (
-    candidate !== DEFAULT_PROJECT_NAME &&
-    !candidate.endsWith("-agent")
-  ) {
+  if (candidate !== DEFAULT_PROJECT_NAME && !candidate.endsWith("-agent")) {
     candidate = `${candidate}-agent`;
   }
 
@@ -598,9 +596,7 @@ async function askOnboardingPrompt(params: {
       typeof defaultValue === "boolean"
         ? defaultValue
         : typeof defaultValue === "string"
-        ? ["true", "yes", "y", "1"].includes(
-            defaultValue.trim().toLowerCase()
-          )
+        ? ["true", "yes", "y", "1"].includes(defaultValue.trim().toLowerCase())
         : false;
 
     return promptApi.confirm({
@@ -704,6 +700,11 @@ function buildTemplateReplacements(params: {
     "AGENT_VERSION",
     DEFAULT_TEMPLATE_VALUES.AGENT_VERSION
   );
+  const agentDomain = getStringAnswer(
+    answers,
+    "AGENT_DOMAIN",
+    DEFAULT_TEMPLATE_VALUES.AGENT_DOMAIN
+  );
   const entrypointKey = toEntrypointKey(
     getStringAnswer(
       answers,
@@ -768,11 +769,14 @@ function buildTemplateReplacements(params: {
     ? ` (price: ${entrypointPrice} base units)`
     : "";
 
+  const autoRegister = getBooleanAnswer(answers, "AUTO_REGISTER", true);
+
   return {
     APP_NAME: projectDirName,
     PACKAGE_NAME: packageName,
     AGENT_DESCRIPTION: agentDescription,
     AGENT_VERSION: agentVersion,
+    AGENT_DOMAIN: agentDomain,
     ENTRYPOINT_KEY: entrypointKey,
     ENTRYPOINT_DESCRIPTION: entrypointDescription,
     ENTRYPOINT_PRICE: entrypointPrice,
@@ -783,6 +787,7 @@ function buildTemplateReplacements(params: {
     PAYMENTS_NETWORK: paymentsNetwork,
     PAYMENTS_PAY_TO: paymentsPayTo,
     PAYMENTS_DEFAULT_PRICE: paymentsDefaultPrice,
+    AUTO_REGISTER: String(autoRegister),
   };
 }
 
@@ -964,31 +969,18 @@ async function setupEnvironment(params: {
   }
 
   const shouldCreate = await prompt.confirm({
-    message: "Create a .env file now?",
+    message: "Create .env file? (You'll need to add your PRIVATE_KEY manually)",
     defaultValue: true,
   });
 
   if (!shouldCreate) {
-    logger.log("Skipping env setup.");
+    logger.log("Skipping .env creation. Copy .env.example to .env when ready.");
     return;
   }
 
-  const templateContent = await fs.readFile(examplePath, "utf8");
-  const entries = parseEnvTemplate(templateContent);
-  const answers = new Map<string, string>();
-
-  for (const entry of entries) {
-    if (entry.type !== "entry") continue;
-    const response = await prompt.input({
-      message: `${entry.key}`,
-      defaultValue: entry.value ?? "",
-    });
-    answers.set(entry.key, response);
-  }
-
-  const rendered = renderEnvTemplate(entries, answers);
-  await fs.writeFile(envPath, rendered, "utf8");
-  logger.log("Created .env with your values.");
+  // Just copy .env.example to .env - user will add PRIVATE_KEY manually
+  await fs.copyFile(examplePath, envPath);
+  logger.log("Created .env from template. Remember to add your PRIVATE_KEY!");
 }
 
 type EnvTemplateEntry =

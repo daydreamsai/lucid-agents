@@ -13,12 +13,21 @@ This project was scaffolded with `create-agent-kit` and includes **ERC-8004 iden
 ### Quick start
 
 1. **Set up your environment:**
+
    ```sh
    cp .env.example .env
-   # Edit .env and add your PRIVATE_KEY, RPC_URL, etc.
+   # Edit .env and add your PRIVATE_KEY
    ```
 
+   The private key is used to:
+
+   - Register your agent on-chain (ERC-8004 Identity Registry)
+   - Sign domain ownership proofs
+
+   By default, the agent is configured for **Base Sepolia testnet**. If you want to use a different network, update `CHAIN_ID` and `RPC_URL` in your `.env` file.
+
 2. **Install dependencies:**
+
    ```sh
    bun install
    ```
@@ -29,6 +38,7 @@ This project was scaffolded with `create-agent-kit` and includes **ERC-8004 iden
    ```
 
 The agent will:
+
 - Check if it's registered on the ERC-8004 Identity Registry
 - Auto-register if not found (when `AUTO_REGISTER=true`)
 - Sign a domain ownership proof
@@ -67,18 +77,25 @@ await validationClient.createRequest({
 
 ### Environment Variables
 
-Required:
-- `AGENT_DOMAIN` – Your agent's domain (must match DNS)
-- `PRIVATE_KEY` – Wallet private key for registration & payments
-- `RPC_URL` – Blockchain RPC endpoint
-- `CHAIN_ID` – Chain ID (e.g., 84532 for Base Sepolia)
+**Required:**
 
-Optional:
+- `PRIVATE_KEY` – Your wallet's private key for signing transactions and payments
+
+**Pre-configured from setup:**
+
+- `AGENT_DOMAIN` – Configured during agent creation
+- `FACILITATOR_URL`, `ADDRESS`, `NETWORK`, `DEFAULT_PRICE` – Payment settings from setup
+
+**Optional:**
+
+- `RPC_URL` – Blockchain RPC endpoint (default: Base Sepolia)
+- `CHAIN_ID` – Chain ID (default: 84532 for Base Sepolia)
+
+**Optional (server):**
+
 - `PORT` – HTTP server port (default: 3000)
-- `FACILITATOR_URL` – x402 facilitator endpoint
-- `ADDRESS` – Payment address (defaults to wallet from PRIVATE_KEY)
-- `NETWORK` – Payment network identifier
-- `IDENTITY_REGISTRY_ADDRESS` – Override registry address
+
+> **Note:** ERC-8004 registry addresses are automatically configured using CREATE2 deterministic addresses. You don't need to specify them.
 
 ### Available scripts
 
@@ -90,6 +107,7 @@ Optional:
 ### Next steps
 
 1. **Host metadata files** at your domain:
+
    - `https://{{AGENT_DOMAIN}}/.well-known/agent-card.json` (proxied from `/`)
    - `https://{{AGENT_DOMAIN}}/.well-known/agent-metadata.json`
 
@@ -97,11 +115,10 @@ Optional:
 
 3. **Add more entrypoints** with different capabilities
 
-4. **Deploy** to your favorite Bun-compatible platform
+4. **Deploy** to your favorite platform
 
 ### Learn more
 
-- [Agent Kit Documentation](https://github.com/lucid-dreams/lucid-agents/tree/master/packages/agent-kit)
-- [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/tree/master/packages/agent-kit-identity)
+- [Agent Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/agent-kit/README.md)
+- [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/agent-kit-identity/README.md)
 - [ERC-8004 Specification](https://eips.ethereum.org/EIPS/eip-8004)
-

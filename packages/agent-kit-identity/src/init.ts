@@ -24,7 +24,7 @@ import {
 } from "./registries/validation";
 import type { TrustConfig } from "./types";
 import type { Hex } from "./utils";
-import { getRegistryAddresses } from "./config";
+import { getRegistryAddresses, DEFAULT_CHAIN_ID } from "./config";
 
 export type { BootstrapIdentityResult, TrustConfig };
 
@@ -222,10 +222,23 @@ export async function createAgentIdentity(
       privateKey,
     }));
 
+  const resolvedChainId =
+    chainId ??
+    (typeof env === "object" && env?.CHAIN_ID
+      ? parseInt(env.CHAIN_ID)
+      : undefined) ??
+    DEFAULT_CHAIN_ID;
+  const resolvedRegistryAddress =
+    registryAddress ??
+    (typeof env === "object" && env?.IDENTITY_REGISTRY_ADDRESS
+      ? (env.IDENTITY_REGISTRY_ADDRESS as `0x${string}`)
+      : undefined) ??
+    getRegistryAddresses(resolvedChainId).IDENTITY_REGISTRY;
+
   const bootstrapOptions: BootstrapIdentityOptions = {
     domain,
-    chainId,
-    registryAddress,
+    chainId: resolvedChainId,
+    registryAddress: resolvedRegistryAddress,
     rpcUrl,
     env,
     logger,
