@@ -106,10 +106,10 @@ await validationClient.createRequest({
 
 ### Next steps
 
-1. **Host metadata files** at your domain:
+1. **Deploy your agent** - Both well-known files are auto-served:
 
-   - `https://{{AGENT_DOMAIN}}/.well-known/agent-card.json` (proxied from `/`)
-   - `https://{{AGENT_DOMAIN}}/.well-known/agent-metadata.json`
+   - `/.well-known/agent-card.json` - Full agent manifest
+   - `/.well-known/agent-metadata.json` - ERC-8004 identity metadata (only if registered)
 
 2. **Customize your agent** in `src/agent.ts`
 

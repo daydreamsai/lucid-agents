@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  AgentKitConfig,
-  createAgentApp,
-} from "@lucid-agents/agent-kit";
+import { createAgentApp } from "@lucid-agents/agent-kit";
 import { createAgentIdentity, getTrustConfig } from "@lucid-agents/agent-kit-identity";
 
 // Bootstrap ERC-8004 identity (runs once at startup)
@@ -12,29 +9,15 @@ const identity = await createAgentIdentity({
 });
 
 if (identity.didRegister) {
-  console.log("✅ Registered agent on-chain!");
+  console.log("Registered agent on-chain!");
   console.log("Transaction:", identity.transactionHash);
 } else if (identity.trust) {
-  console.log("✅ Found existing registration");
+  console.log("Found existing registration");
   console.log("Agent ID:", identity.record?.agentId);
 }
 
 // Extract trust config for the agent manifest
 const trustConfig = getTrustConfig(identity);
-
-// Payment configuration
-const configOverrides: AgentKitConfig = {
-  payments: {
-    facilitatorUrl:
-      (process.env.FACILITATOR_URL as any) ??
-      "https://facilitator.daydreams.systems",
-    payTo:
-      (process.env.ADDRESS as `0x${string}`) ??
-      "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-    network: (process.env.NETWORK as any) ?? "base-sepolia",
-    defaultPrice: process.env.DEFAULT_PRICE ?? "1000",
-  },
-};
 
 const { app, addEntrypoint } = createAgentApp(
   {
@@ -43,7 +26,7 @@ const { app, addEntrypoint } = createAgentApp(
     description: "{{AGENT_DESCRIPTION}}",
   },
   {
-    config: configOverrides,
+    useConfigPayments: true,
     trust: trustConfig,
   }
 );
