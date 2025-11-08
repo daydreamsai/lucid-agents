@@ -1,9 +1,10 @@
-import { paymentMiddleware } from "x402-hono";
-import type { FacilitatorConfig } from "x402/types";
-import type { EntrypointDef, PaymentsConfig } from "./types";
-import { resolveEntrypointPrice } from "./pricing";
-import { toJsonSchemaOrUndefined } from "./utils";
-import { validatePaymentsConfig } from "./validation";
+import type { FacilitatorConfig } from 'x402/types';
+import { paymentMiddleware } from 'x402-hono';
+
+import { resolveEntrypointPrice } from './pricing';
+import type { EntrypointDef, PaymentsConfig } from './types';
+import { toJsonSchemaOrUndefined } from './utils';
+import { validatePaymentsConfig } from './validation';
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
@@ -11,7 +12,7 @@ export type WithPaymentsParams = {
   app: { use: (path: string, ...handlers: unknown[]) => void };
   path: string;
   entrypoint: EntrypointDef;
-  kind: "invoke" | "stream";
+  kind: 'invoke' | 'stream';
   payments?: PaymentsConfig;
   facilitator?: FacilitatorConfig;
   middlewareFactory?: PaymentMiddlewareFactory;
@@ -39,15 +40,15 @@ export function withPayments({
 
   const description =
     entrypoint.description ??
-    `${entrypoint.key}${kind === "stream" ? " (stream)" : ""}`;
+    `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
   const postMimeType =
-    kind === "stream" ? "text/event-stream" : "application/json";
+    kind === 'stream' ? 'text/event-stream' : 'application/json';
   const inputSchema = {
-    bodyType: "json" as const,
+    bodyType: 'json' as const,
     ...(requestSchema ? { bodyFields: { input: requestSchema } } : {}),
   };
   const outputSchema =
-    kind === "invoke" && responseSchema
+    kind === 'invoke' && responseSchema
       ? { output: responseSchema }
       : undefined;
 
@@ -72,7 +73,7 @@ export function withPayments({
     network,
     config: {
       description,
-      mimeType: "application/json",
+      mimeType: 'application/json',
       discoverable: true,
       inputSchema,
       outputSchema,

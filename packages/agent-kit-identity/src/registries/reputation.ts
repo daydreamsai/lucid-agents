@@ -3,15 +3,14 @@
  * Handles peer feedback system for agent reputation
  */
 
-import type { Hex } from "../utils";
-import { normalizeAddress } from "../utils";
-import type { PublicClientLike, WalletClientLike } from "./identity";
-import { signFeedbackAuth, type SignerWalletClient } from "../utils";
-import { REPUTATION_REGISTRY_ABI } from "../abi/types";
+import { REPUTATION_REGISTRY_ABI } from '../abi/types';
+import type { Hex, SignerWalletClient } from '../utils';
+import { normalizeAddress, signFeedbackAuth } from '../utils';
+import type { PublicClientLike, WalletClientLike } from './identity';
 
 export type ReputationRegistryClientOptions<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 > = {
   address: Hex;
   chainId: number;
@@ -129,7 +128,7 @@ export type ReputationRegistryClient = {
  * Convert string to bytes32 for tags
  */
 function stringToBytes32(str: string): Hex {
-  if (str.startsWith("0x")) {
+  if (str.startsWith('0x')) {
     // Validate hex string is proper bytes32 format
     if (!/^0x[0-9a-fA-F]{64}$/.test(str)) {
       throw new Error(`Invalid bytes32 hex string: ${str}`);
@@ -146,8 +145,8 @@ function stringToBytes32(str: string): Hex {
   const padded = new Uint8Array(32);
   padded.set(bytes);
   return `0x${Array.from(padded)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")}` as Hex;
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')}` as Hex;
 }
 
 /**
@@ -155,7 +154,7 @@ function stringToBytes32(str: string): Hex {
  */
 export function createReputationRegistryClient<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 >(
   options: ReputationRegistryClientOptions<PublicClient, WalletClient>
 ): ReputationRegistryClient {
@@ -170,7 +169,7 @@ export function createReputationRegistryClient<
   function ensureWalletClient(): WalletClientLike {
     if (!walletClient) {
       throw new Error(
-        "Reputation registry client requires walletClient for write operations"
+        'Reputation registry client requires walletClient for write operations'
       );
     }
     return walletClient;
@@ -185,21 +184,21 @@ export function createReputationRegistryClient<
       const clientAddress = normalizeAddress(wallet.account?.address);
 
       if (!clientAddress) {
-        throw new Error("Wallet account address is required");
+        throw new Error('Wallet account address is required');
       }
 
       // Normalize tags
       const tag1 = input.tag1
-        ? typeof input.tag1 === "string"
+        ? typeof input.tag1 === 'string'
           ? stringToBytes32(input.tag1)
           : input.tag1
-        : ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        : ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
 
       const tag2 = input.tag2
-        ? typeof input.tag2 === "string"
+        ? typeof input.tag2 === 'string'
           ? stringToBytes32(input.tag2)
           : input.tag2
-        : ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        : ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
 
       // Generate feedback authorization signature if not provided
       let feedbackAuth = input.feedbackAuth;
@@ -221,15 +220,15 @@ export function createReputationRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "giveFeedback",
+        functionName: 'giveFeedback',
         args: [
           input.toAgentId,
           input.score,
           tag1,
           tag2,
-          input.fileUri ?? "",
+          input.fileUri ?? '',
           input.fileHash ??
-            ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex),
+            ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex),
           feedbackAuth,
         ],
       });
@@ -243,7 +242,7 @@ export function createReputationRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "revokeFeedback",
+        functionName: 'revokeFeedback',
         args: [input.agentId, input.feedbackIndex],
       });
 
@@ -256,7 +255,7 @@ export function createReputationRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "appendResponse",
+        functionName: 'appendResponse',
         args: [
           input.agentId,
           input.clientAddress,
@@ -274,7 +273,7 @@ export function createReputationRegistryClient<
         const result = (await publicClient.readContract({
           address,
           abi: REPUTATION_REGISTRY_ABI,
-          functionName: "readFeedback",
+          functionName: 'readFeedback',
           args: [agentId, clientAddress, feedbackIndex],
         })) as [number, Hex, Hex, boolean];
 
@@ -287,9 +286,9 @@ export function createReputationRegistryClient<
           score,
           tag1,
           tag2,
-          fileUri: "", // Not returned by readFeedback
+          fileUri: '', // Not returned by readFeedback
           fileHash:
-            "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
+            '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex,
           isRevoked,
         };
       } catch (error) {
@@ -301,16 +300,16 @@ export function createReputationRegistryClient<
       const clientAddresses = options.clientAddresses ?? [];
       const tag1 =
         options.tag1 ??
-        ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
       const tag2 =
         options.tag2 ??
-        ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
       const includeRevoked = options.includeRevoked ?? false;
 
       const result = (await publicClient.readContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "readAllFeedback",
+        functionName: 'readAllFeedback',
         args: [agentId, clientAddresses, tag1, tag2, includeRevoked],
       })) as [Hex[], number[], Hex[], Hex[], boolean[]];
 
@@ -323,9 +322,9 @@ export function createReputationRegistryClient<
         score: scores[i],
         tag1: tag1s[i],
         tag2: tag2s[i],
-        fileUri: "",
+        fileUri: '',
         fileHash:
-          "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
+          '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex,
         isRevoked: revokedStatuses[i],
       }));
     },
@@ -334,15 +333,15 @@ export function createReputationRegistryClient<
       const clientAddresses = options.clientAddresses ?? [];
       const tag1 =
         options.tag1 ??
-        ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
       const tag2 =
         options.tag2 ??
-        ("0x0000000000000000000000000000000000000000000000000000000000000000" as Hex);
+        ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
 
       const result = (await publicClient.readContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "getSummary",
+        functionName: 'getSummary',
         args: [agentId, clientAddresses, tag1, tag2],
       })) as [bigint, number];
 
@@ -358,7 +357,7 @@ export function createReputationRegistryClient<
       const result = (await publicClient.readContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "getClients",
+        functionName: 'getClients',
         args: [agentId],
       })) as Hex[];
 
@@ -369,7 +368,7 @@ export function createReputationRegistryClient<
       const result = (await publicClient.readContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "getLastIndex",
+        functionName: 'getLastIndex',
         args: [agentId, clientAddress],
       })) as bigint;
 
@@ -380,7 +379,7 @@ export function createReputationRegistryClient<
       const result = (await publicClient.readContract({
         address,
         abi: REPUTATION_REGISTRY_ABI,
-        functionName: "getResponseCount",
+        functionName: 'getResponseCount',
         args: [agentId, clientAddress, feedbackIndex, responders],
       })) as bigint;
 

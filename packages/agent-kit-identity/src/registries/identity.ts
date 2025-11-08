@@ -1,27 +1,27 @@
-import type { TrustConfig, RegistrationEntry } from "../types";
+import type { RegistrationEntry, TrustConfig } from '../types';
+import type { Hex } from '../utils';
 import {
-  ZERO_ADDRESS,
   normalizeAddress,
   normalizeDomain,
   toCaip10,
-} from "../utils";
-import type { Hex } from "../utils";
-export { toCaip10 } from "../utils";
+  ZERO_ADDRESS,
+} from '../utils';
+export { toCaip10 } from '../utils';
 
-import { IDENTITY_REGISTRY_ABI } from "../abi/types";
 import type {
   IdentityRegistryReadFunctionName,
   IdentityRegistryWriteFunctionName,
-} from "../abi/types";
+} from '../abi/types';
+import { IDENTITY_REGISTRY_ABI } from '../abi/types';
 import {
   DEFAULT_CHAIN_ID,
   DEFAULT_NAMESPACE,
   DEFAULT_TRUST_MODELS,
-} from "../config";
+} from '../config';
 
 export type IdentityRegistryClientOptions<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 > = {
   address: Hex;
   chainId?: number;
@@ -53,38 +53,38 @@ type RegistrationEntryParams = {
 type TrustOverridesInput = Partial<
   Pick<
     TrustConfig,
-    | "trustModels"
-    | "validationRequestsUri"
-    | "validationResponsesUri"
-    | "feedbackDataUri"
+    | 'trustModels'
+    | 'validationRequestsUri'
+    | 'validationResponsesUri'
+    | 'feedbackDataUri'
   >
 >;
 
 function normalizeAgentId(agentId: AgentIdentifierInput): string {
-  if (typeof agentId === "bigint") {
+  if (typeof agentId === 'bigint') {
     if (agentId < 0n) {
-      throw new Error("agentId must be non-negative");
+      throw new Error('agentId must be non-negative');
     }
     return agentId.toString(10);
   }
-  if (typeof agentId === "number") {
+  if (typeof agentId === 'number') {
     if (
       !Number.isFinite(agentId) ||
       !Number.isInteger(agentId) ||
       agentId < 0
     ) {
-      throw new Error("agentId must be a non-negative integer");
+      throw new Error('agentId must be a non-negative integer');
     }
     if (!Number.isSafeInteger(agentId)) {
       throw new Error(
-        "agentId number must be a safe integer; use string or bigint for larger values"
+        'agentId number must be a safe integer; use string or bigint for larger values'
       );
     }
     return agentId.toString(10);
   }
-  const normalized = `${agentId ?? ""}`.trim();
+  const normalized = `${agentId ?? ''}`.trim();
   if (!normalized) {
-    throw new Error("agentId is required");
+    throw new Error('agentId is required');
   }
   return normalized;
 }
@@ -181,7 +181,7 @@ export type RegisterAgentResult = {
 
 export function createIdentityRegistryClient<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 >(
   options: IdentityRegistryClientOptions<PublicClient, WalletClient>
 ): IdentityRegistryClient {
@@ -190,13 +190,13 @@ export function createIdentityRegistryClient<
     chainId,
     publicClient,
     walletClient,
-    namespace = "eip155",
+    namespace = 'eip155',
   } = options;
 
   function ensureWalletClient(): WalletClientLike {
     if (!walletClient) {
       throw new Error(
-        "identity registry client requires walletClient for writes"
+        'identity registry client requires walletClient for writes'
       );
     }
     return walletClient;
@@ -212,7 +212,7 @@ export function createIdentityRegistryClient<
       const exists = (await publicClient.readContract({
         address,
         abi: IDENTITY_REGISTRY_ABI,
-        functionName: "agentExists",
+        functionName: 'agentExists',
         args: [id],
       })) as boolean;
 
@@ -224,13 +224,13 @@ export function createIdentityRegistryClient<
         publicClient.readContract({
           address,
           abi: IDENTITY_REGISTRY_ABI,
-          functionName: "ownerOf",
+          functionName: 'ownerOf',
           args: [id],
         }) as Promise<string>,
         publicClient.readContract({
           address,
           abi: IDENTITY_REGISTRY_ABI,
-          functionName: "tokenURI",
+          functionName: 'tokenURI',
           args: [id],
         }) as Promise<string>,
       ]);
@@ -246,11 +246,11 @@ export function createIdentityRegistryClient<
       const wallet = ensureWalletClient();
 
       if (!input.tokenURI) {
-        throw new Error("tokenURI is required");
+        throw new Error('tokenURI is required');
       }
 
       if (!wallet.account?.address) {
-        throw new Error("wallet account address is required");
+        throw new Error('wallet account address is required');
       }
 
       const agentAddress = normalizeAddress(wallet.account.address);
@@ -262,7 +262,7 @@ export function createIdentityRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: IDENTITY_REGISTRY_ABI,
-        functionName: "register",
+        functionName: 'register',
         args,
       });
 
@@ -283,7 +283,7 @@ export function createIdentityRegistryClient<
         }
 
         const REGISTERED_EVENT_SIGNATURE =
-          "0xca52e62c367d81bb2e328eb795f7c7ba24afb478408a26c0e201d155c449bc4a";
+          '0xca52e62c367d81bb2e328eb795f7c7ba24afb478408a26c0e201d155c449bc4a';
 
         // topics[0] = event signature hash
         // topics[1] = agentId (indexed uint256)
@@ -314,7 +314,7 @@ export function createIdentityRegistryClient<
     toRegistrationEntry(record, signature) {
       if (chainId == null) {
         throw new Error(
-          "identity registry client needs chainId to build CAIP-10 registration entries"
+          'identity registry client needs chainId to build CAIP-10 registration entries'
         );
       }
       return createRegistrationEntry({
@@ -343,14 +343,14 @@ export async function signAgentDomainProof(
 ): Promise<string> {
   const { domain, address, chainId, nonce, signer } = options;
   const normalizedDomain = normalizeDomain(domain);
-  if (!normalizedDomain) throw new Error("domain is required");
+  if (!normalizedDomain) throw new Error('domain is required');
   const normalizedAddress = normalizeAddress(address);
   if (!normalizedAddress || normalizedAddress === ZERO_ADDRESS) {
-    throw new Error("address must be a valid hex address");
+    throw new Error('address must be a valid hex address');
   }
 
   // Use Viem's proper signMessage action
-  const { signDomainProof } = await import("../utils/signatures");
+  const { signDomainProof } = await import('../utils/signatures');
 
   return signDomainProof(signer as any, {
     domain: normalizedDomain,
@@ -372,7 +372,7 @@ export function buildTrustConfigFromIdentity(
   const chainRef = options?.chainId;
   if (chainRef == null) {
     throw new Error(
-      "chainId is required to generate trust config registration entry"
+      'chainId is required to generate trust config registration entry'
     );
   }
 
@@ -431,11 +431,11 @@ export type BootstrapTrustResult = {
 export function buildMetadataURI(domain: string): string {
   const normalized = normalizeDomain(domain);
   if (!normalized) {
-    throw new Error("domain is required");
+    throw new Error('domain is required');
   }
 
   // If domain already has protocol, use it; otherwise assume https
-  const origin = normalized.startsWith("http")
+  const origin = normalized.startsWith('http')
     ? normalized
     : `https://${normalized}`;
 
@@ -447,7 +447,7 @@ export async function bootstrapTrust(
 ): Promise<BootstrapTrustResult> {
   const normalizedDomain = normalizeDomain(options.domain);
   if (!normalizedDomain) {
-    throw new Error("domain is required to bootstrap trust state");
+    throw new Error('domain is required to bootstrap trust state');
   }
 
   const shouldRegister = Boolean(
@@ -522,13 +522,13 @@ export async function bootstrapTrust(
       }
     } catch (error) {
       defaultLogger.warn?.(
-        "[agent-kit-identity] Failed to generate domain proof signature",
+        '[agent-kit-identity] Failed to generate domain proof signature',
         error
       );
     }
   } else {
     defaultLogger.info?.(
-      "[agent-kit-identity] No signer provided - skipping domain proof signature"
+      '[agent-kit-identity] No signer provided - skipping domain proof signature'
     );
   }
 
@@ -550,11 +550,11 @@ export async function bootstrapTrust(
 
 const defaultLogger = {
   info:
-    typeof console !== "undefined" && typeof console.info === "function"
+    typeof console !== 'undefined' && typeof console.info === 'function'
       ? console.info.bind(console)
       : () => {},
   warn:
-    typeof console !== "undefined" && typeof console.warn === "function"
+    typeof console !== 'undefined' && typeof console.warn === 'function'
       ? console.warn.bind(console)
       : () => {},
 };
@@ -575,7 +575,7 @@ function resolveTrustOverrides(
 
   if (domain) {
     result.trustModels = [...DEFAULT_TRUST_MODELS]; // Copy to avoid readonly issues
-    const origin = domain.startsWith("http") ? domain : `https://${domain}`;
+    const origin = domain.startsWith('http') ? domain : `https://${domain}`;
     result.validationRequestsUri = `${origin}/validation/requests.json`;
     result.validationResponsesUri = `${origin}/validation/responses.json`;
     result.feedbackDataUri = `${origin}/feedback.json`;
@@ -662,7 +662,7 @@ export async function bootstrapIdentity(
 ): Promise<BootstrapIdentityResult> {
   const env =
     options.env ??
-    (typeof process !== "undefined" && typeof process.env === "object"
+    (typeof process !== 'undefined' && typeof process.env === 'object'
       ? (process.env as Record<string, string | undefined>)
       : {});
 
@@ -720,7 +720,7 @@ export async function bootstrapIdentity(
         signer,
         signatureNonce: options.signatureNonce ?? env.IDENTITY_SIGNATURE_NONCE,
         registerIfMissing:
-          options.registerIfMissing ?? env.REGISTER_IDENTITY === "true",
+          options.registerIfMissing ?? env.REGISTER_IDENTITY === 'true',
         skipRegister: options.skipRegister,
         trustOverrides: resolvedOverrides,
       });
@@ -730,17 +730,17 @@ export async function bootstrapIdentity(
       }
 
       logger.warn(
-        "[agent-kit-identity] identity not found in registry and registration not enabled"
+        '[agent-kit-identity] identity not found in registry and registration not enabled'
       );
     } catch (error) {
       logger.warn(
-        "[agent-kit-identity] failed to bootstrap ERC-8004 identity",
+        '[agent-kit-identity] failed to bootstrap ERC-8004 identity',
         error
       );
     }
   }
 
-  logger.info("[agent-kit-identity] agent will run without ERC-8004 identity");
+  logger.info('[agent-kit-identity] agent will run without ERC-8004 identity');
 
   return {};
 }
@@ -759,9 +759,9 @@ async function importViemModules(): Promise<{
   baseSepolia: { id: number } & Record<string, unknown>;
 } | null> {
   try {
-    const viem = await import("viem");
-    const accounts = await import("viem/accounts");
-    const chains = await import("viem/chains").catch(() => ({}));
+    const viem = await import('viem');
+    const accounts = await import('viem/accounts');
+    const chains = await import('viem/chains').catch(() => ({}));
     const baseSepoliaChain =
       (chains as any).baseSepolia ?? ({ id: DEFAULT_CHAIN_ID } as const);
     return {
@@ -773,7 +773,7 @@ async function importViemModules(): Promise<{
     };
   } catch (error) {
     defaultLogger.warn(
-      "[agent-kit] viem helpers unavailable; install viem to use makeViemClientsFromEnv",
+      '[agent-kit] viem helpers unavailable; install viem to use makeViemClientsFromEnv',
       error
     );
     return null;
@@ -784,7 +784,7 @@ function resolveEnvObject(
   env?: Record<string, string | undefined>
 ): Record<string, string | undefined> {
   if (env) return env;
-  if (typeof process !== "undefined" && typeof process.env === "object") {
+  if (typeof process !== 'undefined' && typeof process.env === 'object') {
     return process.env as Record<string, string | undefined>;
   }
   return {};
@@ -801,7 +801,7 @@ export async function makeViemClientsFromEnv(
     const effectiveRpcUrl = options.rpcUrl ?? rpcUrl ?? env.RPC_URL;
     if (!effectiveRpcUrl) {
       defaultLogger.warn(
-        "[agent-kit] RPC_URL missing for viem client factory; skipping"
+        '[agent-kit] RPC_URL missing for viem client factory; skipping'
       );
       return null;
     }
@@ -820,7 +820,7 @@ export async function makeViemClientsFromEnv(
     const rawKey = options.privateKey ?? mergedEnv.PRIVATE_KEY;
     if (rawKey) {
       const normalized = rawKey.trim();
-      privateKey = normalized.startsWith("0x")
+      privateKey = normalized.startsWith('0x')
         ? (normalized as `0x${string}`)
         : (`0x${normalized}` as `0x${string}`);
     }
@@ -836,7 +836,7 @@ export async function makeViemClientsFromEnv(
         });
       } catch (error) {
         defaultLogger.warn(
-          "[agent-kit] failed to configure viem wallet client from PRIVATE_KEY",
+          '[agent-kit] failed to configure viem wallet client from PRIVATE_KEY',
           error
         );
       }

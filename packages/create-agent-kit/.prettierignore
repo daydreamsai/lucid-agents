@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config files
+tsconfig.json
+tsconfig.*.json
+tsup.config.ts
+.eslintrc.cjs
+.eslintrc.js
+
+# Templates (these are scaffolded with their own formatting)
+templates/
+
+# Documentation (manually formatted)
+CHANGELOG.md
+

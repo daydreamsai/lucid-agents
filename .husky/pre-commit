@@ -1,0 +1,12 @@
+echo "Running pre-commit checks..."
+
+echo "Linting..."
+bun run lint
+
+echo "Type checking..."
+bun run type-check
+
+echo "Format checking..."
+bun run format:check
+
+echo "Pre-commit checks passed!"

@@ -2,16 +2,25 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - main
     paths-ignore:
-      - "**/*.md"
-      - "**/*.MD"
-      - "**/*.png"
-      - "**/*.jpg"
-      - "**/*.jpeg"
-      - "**/*.gif"
-      - "**/*.svg"
+      - '**/*.md'
+      - '**/*.MD'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.MD'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,7 +30,8 @@ permissions:
   contents: read
 
 jobs:
-  build_and_test:
+  quality_checks:
+    name: Code Quality, Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,6 +57,12 @@ jobs:
 
       - name: Build packages
         run: bun run build:packages
+
+      - name: Lint packages
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
 
       - name: Test packages
         run: bun test

@@ -1,0 +1,29 @@
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Config files (don't format these)
+tsconfig.json
+tsconfig.*.json
+tsup.config.ts
+*.config.js
+*.config.ts
+.eslintrc.cjs
+.eslintrc.js
+
+# Documentation (manually formatted)
+CHANGELOG.md
+
+# Add any package-specific ignores below:
+

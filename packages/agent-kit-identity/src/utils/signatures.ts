@@ -3,16 +3,11 @@
  * Supports EIP-191 (personal_sign) and EIP-712 (typed data) signing.
  */
 
-import type {
-  WalletClient,
-  PublicClient,
-  Account,
-  Chain,
-  Transport,
-} from "viem";
-import type { Hex } from "./types";
-import { signMessage, signTypedData, verifyMessage } from "viem/actions";
-import { hashMessage, recoverMessageAddress } from "viem";
+import type { Account, WalletClient } from 'viem';
+import { hashMessage, recoverMessageAddress } from 'viem';
+import { signMessage, signTypedData, verifyMessage } from 'viem/actions';
+
+import type { Hex } from './types';
 
 /**
  * Viem WalletClient type for signature operations
@@ -40,7 +35,7 @@ export async function signMessageWithViem(
  */
 export async function signTypedDataWithViem<
   const TTypedData extends Record<string, unknown>,
-  TPrimaryType extends string
+  TPrimaryType extends string,
 >(
   walletClient: SignerWalletClient,
   params: {
@@ -130,7 +125,7 @@ export function buildDomainProofMessage(params: {
   nonce?: string;
 }): string {
   const lines = [
-    "ERC-8004 Agent Ownership Proof",
+    'ERC-8004 Agent Ownership Proof',
     `Domain: ${params.domain}`,
     `Address: ${params.address.toLowerCase()}`,
     `ChainId: ${params.chainId}`,
@@ -138,7 +133,7 @@ export function buildDomainProofMessage(params: {
   if (params.nonce) {
     lines.push(`Nonce: ${params.nonce}`);
   }
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -153,14 +148,14 @@ export function buildFeedbackAuthMessage(params: {
   indexLimit: bigint;
 }): string {
   return [
-    "ERC-8004 Reputation Feedback Authorization",
+    'ERC-8004 Reputation Feedback Authorization',
     `From: ${params.fromAddress.toLowerCase()}`,
     `To Agent: ${params.toAgentId.toString()}`,
     `Score: ${params.score}`,
     `Chain ID: ${params.chainId}`,
     `Expiry: ${params.expiry}`,
     `Index Limit: ${params.indexLimit.toString()}`,
-  ].join("\n");
+  ].join('\n');
 }
 
 /**
@@ -174,13 +169,13 @@ export function buildValidationRequestMessage(params: {
   timestamp: number;
 }): string {
   return [
-    "ERC-8004 Validation Request",
+    'ERC-8004 Validation Request',
     `Agent ID: ${params.agentId.toString()}`,
     `Request Hash: ${params.requestHash}`,
     `Validator: ${params.validator.toLowerCase()}`,
     `Chain ID: ${params.chainId}`,
     `Timestamp: ${params.timestamp}`,
-  ].join("\n");
+  ].join('\n');
 }
 
 /**

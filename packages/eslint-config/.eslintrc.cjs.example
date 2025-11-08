@@ -1,0 +1,19 @@
+module.exports = {
+  extends: ['@lucid-agents/eslint-config'],
+  env: {
+    node: true,
+    es2022: true,
+  },
+  globals: {
+    // Add any global types that ESLint doesn't recognize
+    // NodeJS: 'readonly',
+    // RequestInfo: 'readonly',
+    // RequestInit: 'readonly',
+  },
+  rules: {
+    // Add any package-specific rules here
+    // Example: Allow while(true) for interactive prompts
+    // 'no-constant-condition': ['error', { checkLoops: false }],
+  },
+};
+

@@ -1,7 +1,7 @@
 export type TrustModel =
-  | "feedback"
-  | "inference-validation"
-  | "tee-attestation"
+  | 'feedback'
+  | 'inference-validation'
+  | 'tee-attestation'
   | string;
 
 export type RegistrationEntry = {

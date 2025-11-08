@@ -1,14 +1,13 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import type { AgentRuntime } from '@lucid-dreams/agent-auth';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 
-import type { AgentRuntime } from "@lucid-dreams/agent-auth";
-
+import { resetAgentKitConfigForTesting } from '../config';
 import {
   createRuntimePaymentContext,
   type RuntimePaymentOptions,
-} from "../runtime";
-import { resetAgentKitConfigForTesting } from "../config";
+} from '../runtime';
 
-type RuntimeStub = Pick<AgentRuntime, "ensureAccessToken" | "api">;
+type RuntimeStub = Pick<AgentRuntime, 'ensureAccessToken' | 'api'>;
 
 const makeRuntimeStub = (): {
   runtime: RuntimeStub;
@@ -19,19 +18,19 @@ const makeRuntimeStub = (): {
     signMessage: ReturnType<typeof mock>;
   };
 } => {
-  const ensureAccessToken = mock(async () => "token");
+  const ensureAccessToken = mock(async () => 'token');
   const getAgent = mock(async () => ({
     billing: {
-      wallet: { address: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429" },
+      wallet: { address: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429' },
     },
   }));
   const signTypedData = mock(async () => ({
-    wallet: { address: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429" },
-    signed: { signature: "0xdeadbeef" },
+    wallet: { address: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429' },
+    signed: { signature: '0xdeadbeef' },
   }));
   const signMessage = mock(async () => ({
-    wallet: { address: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429" },
-    signed: { signature: "0xbeefdead" },
+    wallet: { address: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429' },
+    signed: { signature: '0xbeefdead' },
   }));
 
   const runtime: RuntimeStub = {
@@ -40,7 +39,7 @@ const makeRuntimeStub = (): {
       getAgent,
       signTypedData,
       signMessage,
-    } as unknown as RuntimeStub["api"],
+    } as unknown as RuntimeStub['api'],
   };
 
   return {
@@ -55,23 +54,23 @@ const makeRuntimeStub = (): {
 };
 
 const paymentRequirements = {
-  scheme: "exact",
-  network: "base-sepolia",
-  maxAmountRequired: "1000",
-  resource: "https://example.com/pay",
-  description: "payment",
-  mimeType: "application/json",
-  payTo: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+  scheme: 'exact',
+  network: 'base-sepolia',
+  maxAmountRequired: '1000',
+  resource: 'https://example.com/pay',
+  description: 'payment',
+  mimeType: 'application/json',
+  payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
   maxTimeoutSeconds: 30,
-  asset: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  asset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
 };
 
-describe("runtime payments", () => {
+describe('runtime payments', () => {
   afterEach(() => {
     resetAgentKitConfigForTesting();
   });
 
-  it("wraps fetch with x402 handling using the runtime wallet", async () => {
+  it('wraps fetch with x402 handling using the runtime wallet', async () => {
     const { runtime, calls } = makeRuntimeStub();
 
     const fetchCalls: Array<{
@@ -94,15 +93,15 @@ describe("runtime payments", () => {
             }),
             {
               status: 402,
-              headers: { "content-type": "application/json" },
+              headers: { 'content-type': 'application/json' },
             }
           );
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
-            "content-type": "application/json",
-            "X-PAYMENT-RESPONSE": "settled",
+            'content-type': 'application/json',
+            'X-PAYMENT-RESPONSE': 'settled',
           },
         });
       }
@@ -111,17 +110,17 @@ describe("runtime payments", () => {
     const context = await createRuntimePaymentContext({
       runtime: runtime as AgentRuntime,
       fetch: baseFetch,
-      network: "base-sepolia",
+      network: 'base-sepolia',
     } satisfies RuntimePaymentOptions);
 
     expect(context.fetchWithPayment).toBeDefined();
     expect(context.signer).toBeDefined();
     expect(context.chainId).toBe(84532);
 
-    const response = await context.fetchWithPayment?.("https://example.com", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ hello: "world" }),
+    const response = await context.fetchWithPayment?.('https://example.com', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hello: 'world' }),
     });
 
     expect(response?.status).toBe(200);
@@ -134,24 +133,24 @@ describe("runtime payments", () => {
     expect(calls.signMessage).toHaveBeenCalledTimes(0);
   });
 
-  it("returns null fetch when no runtime or private key provided", async () => {
+  it('returns null fetch when no runtime or private key provided', async () => {
     const context = await createRuntimePaymentContext({
       runtime: undefined,
-      fetch: async () => new Response("ok"),
+      fetch: async () => new Response('ok'),
     });
     expect(context.fetchWithPayment).toBeNull();
     expect(context.signer).toBeNull();
     expect(context.walletAddress).toBeNull();
   });
 
-  it("warns when chain cannot be derived", async () => {
+  it('warns when chain cannot be derived', async () => {
     const { runtime } = makeRuntimeStub();
 
     const warn = mock(() => {});
     const context = await createRuntimePaymentContext({
       runtime: runtime as AgentRuntime,
-      fetch: async () => new Response("ok"),
-      network: "unsupported-network",
+      fetch: async () => new Response('ok'),
+      network: 'unsupported-network',
       logger: { warn },
     });
 

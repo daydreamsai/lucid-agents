@@ -1,1 +1,1 @@
-export * from "@lucid-agents/agent-kit-identity";
+export * from '@lucid-agents/agent-kit-identity';

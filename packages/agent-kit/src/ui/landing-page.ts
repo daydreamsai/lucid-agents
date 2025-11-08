@@ -1,8 +1,9 @@
-import { html } from "hono/html";
-import type { HtmlEscapedString } from "hono/utils/html";
-import { resolveEntrypointPrice } from "../pricing";
-import type { AgentMeta, EntrypointDef, PaymentsConfig } from "../types";
-import { toJsonSchemaOrUndefined } from "../utils";
+import { html } from 'hono/html';
+import type { HtmlEscapedString } from 'hono/utils/html';
+
+import { resolveEntrypointPrice } from '../pricing';
+import type { AgentMeta, EntrypointDef, PaymentsConfig } from '../types';
+import { toJsonSchemaOrUndefined } from '../utils';
 
 type LandingPageOptions = {
   meta: AgentMeta;
@@ -19,7 +20,7 @@ const sampleFromJsonSchema = (
   root: any,
   stack: Set<unknown>
 ): unknown => {
-  if (!schema || typeof schema !== "object") return undefined;
+  if (!schema || typeof schema !== 'object') return undefined;
   if (stack.has(schema)) {
     return undefined;
   }
@@ -43,18 +44,21 @@ const sampleFromJsonSchema = (
       ? sampleFromJsonSchema(part, root, stack)
       : sampleFromJsonSchema(schema.oneOf[0], root, stack);
   } else if (Array.isArray(schema.allOf) && schema.allOf.length > 0) {
-    const composite = schema.allOf.reduce((acc: any, current: any) => {
-      if (current && typeof current === "object") {
-        Object.assign(acc, current);
-      }
-      return acc;
-    }, {} as Record<string, unknown>);
+    const composite = schema.allOf.reduce(
+      (acc: any, current: any) => {
+        if (current && typeof current === 'object') {
+          Object.assign(acc, current);
+        }
+        return acc;
+      },
+      {} as Record<string, unknown>
+    );
     result = sampleFromJsonSchema(composite, root, stack);
-  } else if (schema.$ref && typeof schema.$ref === "string") {
-    const refPath = schema.$ref.replace(/^#\//, "").split("/");
+  } else if (schema.$ref && typeof schema.$ref === 'string') {
+    const refPath = schema.$ref.replace(/^#\//, '').split('/');
     let resolved: any = root;
     for (const segment of refPath) {
-      if (!resolved || typeof resolved !== "object") break;
+      if (!resolved || typeof resolved !== 'object') break;
       resolved = resolved[segment];
     }
     result = sampleFromJsonSchema(resolved, root, stack);
@@ -64,10 +68,10 @@ const sampleFromJsonSchema = (
       root,
       stack
     );
-  } else if (schema.properties && typeof schema.properties === "object") {
+  } else if (schema.properties && typeof schema.properties === 'object') {
     const obj: Record<string, unknown> = {};
     for (const [key, propSchema] of Object.entries(schema.properties)) {
-      if (propSchema && typeof propSchema === "object") {
+      if (propSchema && typeof propSchema === 'object') {
         const optional = Array.isArray(schema.required)
           ? !schema.required.includes(key)
           : false;
@@ -79,10 +83,10 @@ const sampleFromJsonSchema = (
       schema.additionalProperties === true &&
       schema.patternProperties === undefined
     ) {
-      obj.example = "value";
+      obj.example = 'value';
     } else if (
       schema.additionalProperties &&
-      typeof schema.additionalProperties === "object"
+      typeof schema.additionalProperties === 'object'
     ) {
       obj.example = sampleFromJsonSchema(
         schema.additionalProperties,
@@ -95,36 +99,36 @@ const sampleFromJsonSchema = (
     const itemsSchema = Array.isArray(schema.items)
       ? schema.items[0]
       : schema.items;
-    result = [sampleFromJsonSchema(itemsSchema ?? {}, root, stack) ?? "value"];
+    result = [sampleFromJsonSchema(itemsSchema ?? {}, root, stack) ?? 'value'];
   } else {
     switch (type) {
-      case "array": {
-        result = ["example"];
+      case 'array': {
+        result = ['example'];
         break;
       }
-      case "object": {
+      case 'object': {
         result = {};
         break;
       }
-      case "string": {
+      case 'string': {
         if (Array.isArray(schema.examples) && schema.examples.length) {
           result = schema.examples[0];
           break;
         }
-        if (schema.format === "email") {
-          result = "agent@example.com";
-        } else if (schema.format === "uri" || schema.format === "url") {
-          result = "https://example.com";
+        if (schema.format === 'email') {
+          result = 'agent@example.com';
+        } else if (schema.format === 'uri' || schema.format === 'url') {
+          result = 'https://example.com';
         } else {
-          result = schema.description ? `<${schema.description}>` : "string";
+          result = schema.description ? `<${schema.description}>` : 'string';
         }
         break;
       }
-      case "integer":
-      case "number": {
-        if (typeof schema.minimum === "number") {
+      case 'integer':
+      case 'number': {
+        if (typeof schema.minimum === 'number') {
           result = schema.minimum;
-        } else if (typeof schema.maximum === "number") {
+        } else if (typeof schema.maximum === 'number') {
           result = schema.maximum;
         } else if (Array.isArray(schema.examples) && schema.examples.length) {
           result = schema.examples[0];
@@ -133,18 +137,18 @@ const sampleFromJsonSchema = (
         }
         break;
       }
-      case "boolean":
+      case 'boolean':
         result = true;
         break;
-      case "null":
+      case 'null':
         result = null;
         break;
       default:
         result = schema.description
           ? `<${schema.description}>`
-          : schema.type === "null"
-          ? null
-          : "value";
+          : schema.type === 'null'
+            ? null
+            : 'value';
     }
   }
 
@@ -153,7 +157,7 @@ const sampleFromJsonSchema = (
 };
 
 const buildExampleFromJsonSchema = (schema: unknown): unknown => {
-  if (!schema || typeof schema !== "object") return undefined;
+  if (!schema || typeof schema !== 'object') return undefined;
   return sampleFromJsonSchema(schema, schema, new Set());
 };
 
@@ -167,7 +171,7 @@ export const renderLandingPage = ({
   x402ClientExample,
 }: LandingPageOptions): HtmlEscapedString | Promise<HtmlEscapedString> => {
   const entrypointCount = entrypoints.length;
-  const entrypointLabel = entrypointCount === 1 ? "Entrypoint" : "Entrypoints";
+  const entrypointLabel = entrypointCount === 1 ? 'Entrypoint' : 'Entrypoints';
   const hasPayments = Boolean(activePayments);
   const defaultNetwork = activePayments?.network;
 
@@ -185,9 +189,10 @@ export const renderLandingPage = ({
         <style>
           :root {
             color-scheme: light dark;
-            font-family: "JetBrains Mono", "Fira Code", "Roboto Mono",
-              "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
-              "Courier New", monospace;
+            font-family:
+              'JetBrains Mono', 'Fira Code', 'Roboto Mono', 'SFMono-Regular',
+              Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+              monospace;
             background-color: #0c2713;
             color: #e6f4ea;
             --surface: rgba(10, 31, 17, 0.95);
@@ -226,7 +231,8 @@ export const renderLandingPage = ({
             display: flex;
             flex-direction: column;
             gap: 1.5rem;
-            background: linear-gradient(135deg, rgba(17, 51, 29, 0.92), #0c2713),
+            background:
+              linear-gradient(135deg, rgba(17, 51, 29, 0.92), #0c2713),
               radial-gradient(
                 circle at top right,
                 rgba(109, 232, 165, 0.22),
@@ -335,7 +341,9 @@ export const renderLandingPage = ({
             font-weight: 500;
             text-decoration: none;
             font-size: 0.95rem;
-            transition: transform 150ms ease, box-shadow 150ms ease;
+            transition:
+              transform 150ms ease,
+              box-shadow 150ms ease;
             border: 1px solid rgba(109, 232, 165, 0.4);
             background: rgba(12, 39, 19, 0.75);
             color: #cff9dd;
@@ -392,7 +400,7 @@ export const renderLandingPage = ({
             overflow: hidden;
           }
           .entrypoint-card::after {
-            content: "";
+            content: '';
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -404,7 +412,8 @@ export const renderLandingPage = ({
                 rgba(109, 232, 165, 0)
               )
               border-box;
-            mask: linear-gradient(#fff, #fff) padding-box,
+            mask:
+              linear-gradient(#fff, #fff) padding-box,
               linear-gradient(#fff, #fff);
             mask-composite: exclude;
             opacity: 0;
@@ -487,7 +496,7 @@ export const renderLandingPage = ({
             display: none;
           }
           .schema-block summary::after {
-            content: "⌄";
+            content: '⌄';
             font-size: 0.75rem;
             transform: rotate(-90deg);
             transition: transform 200ms ease;
@@ -551,9 +560,10 @@ export const renderLandingPage = ({
             color: var(--muted-strong);
           }
           .meta-value code {
-            font-family: "JetBrains Mono", "Fira Code", ui-monospace,
-              SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-              "Courier New", monospace;
+            font-family:
+              'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular,
+              Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+              monospace;
             font-size: 0.82rem;
             padding: 0.25rem 0.45rem;
             border-radius: 0;
@@ -683,19 +693,19 @@ export const renderLandingPage = ({
                     <span class="stat-label">${entrypointLabel}</span>
                   </li>
                   <li>
-                    <span class="stat-value">v${meta.version ?? "0.0.0"}</span>
+                    <span class="stat-value">v${meta.version ?? '0.0.0'}</span>
                     <span class="stat-label">Version</span>
                   </li>
                   <li>
                     <span class="stat-value"
-                      >${hasPayments ? "Enabled" : "None"}</span
+                      >${hasPayments ? 'Enabled' : 'None'}</span
                     >
                     <span class="stat-label">Payments</span>
                   </li>
                 </ul>
               </div>
               <a class="hero-domain" href="${origin}" target="_blank"
-                >${origin.replace(/^https?:\/\//, "")}</a
+                >${origin.replace(/^https?:\/\//, '')}</a
               >
             </div>
             <div class="hero-actions">
@@ -719,35 +729,35 @@ export const renderLandingPage = ({
             </header>
             <div class="entrypoint-grid">
               ${entrypoints.length
-                ? entrypoints.map((entrypoint) => {
+                ? entrypoints.map(entrypoint => {
                     const streaming = Boolean(
                       entrypoint.stream ?? entrypoint.streaming
                     );
                     const description =
-                      entrypoint.description ?? "No description provided yet.";
+                      entrypoint.description ?? 'No description provided yet.';
                     const invokePrice = resolveEntrypointPrice(
                       entrypoint,
                       activePayments,
-                      "invoke"
+                      'invoke'
                     );
                     const streamPrice = streaming
                       ? resolveEntrypointPrice(
                           entrypoint,
                           activePayments,
-                          "stream"
+                          'stream'
                         )
                       : undefined;
                     const hasPricing = Boolean(invokePrice || streamPrice);
                     const network = entrypoint.network ?? defaultNetwork;
                     const priceLabel = hasPricing
-                      ? `Invoke: ${invokePrice ?? "—"}${
+                      ? `Invoke: ${invokePrice ?? '—'}${
                           streamPrice && streamPrice !== invokePrice
                             ? ` · Stream: ${streamPrice}`
                             : streamPrice && !invokePrice
-                            ? ` · Stream: ${streamPrice}`
-                            : ""
+                              ? ` · Stream: ${streamPrice}`
+                              : ''
                         }`
-                      : "Free";
+                      : 'Free';
                     const invokePath = `/entrypoints/${entrypoint.key}/invoke`;
                     const streamPath = `/entrypoints/${entrypoint.key}/stream`;
                     const inputSchema = toJsonSchemaOrUndefined(
@@ -765,9 +775,9 @@ export const renderLandingPage = ({
                       2
                     );
                     const payloadIndented = exampleInputPayload
-                      .split("\n")
-                      .map((line) => `    ${line}`)
-                      .join("\n");
+                      .split('\n')
+                      .map(line => `    ${line}`)
+                      .join('\n');
                     const inputSchemaJson = inputSchema
                       ? JSON.stringify(inputSchema, null, 2)
                       : undefined;
@@ -775,16 +785,16 @@ export const renderLandingPage = ({
                       ? JSON.stringify(outputSchema, null, 2)
                       : undefined;
                     const invokeCurl = [
-                      "curl -s -X POST \\",
+                      'curl -s -X POST \\',
                       `  '${origin}${invokePath}' \\`,
                       "  -H 'Content-Type: application/json' \\",
                       "  -d '",
                       payloadIndented,
                       "  '",
-                    ].join("\n");
+                    ].join('\n');
                     const streamCurl = streaming
                       ? [
-                          "curl -sN -X POST \\",
+                          'curl -sN -X POST \\',
                           `  '${origin}${streamPath}' \\`,
                           "  -H 'Content-Type: application/json' \\",
                           "  -H 'X-Payment: {{paymentHeader}}' \\",
@@ -792,14 +802,14 @@ export const renderLandingPage = ({
                           "  -d '",
                           payloadIndented,
                           "  '",
-                        ].join("\n")
+                        ].join('\n')
                       : undefined;
                     return html`<article class="entrypoint-card">
                       <header>
                         <h3>${entrypoint.key}</h3>
                         <span
-                          class="badge ${streaming ? "badge--streaming" : ""}"
-                          >${streaming ? "Streaming" : "Invoke"}</span
+                          class="badge ${streaming ? 'badge--streaming' : ''}"
+                          >${streaming ? 'Streaming' : 'Invoke'}</span
                         >
                       </header>
                       <p>${description}</p>
@@ -813,7 +823,7 @@ export const renderLandingPage = ({
                               <span class="meta-label">Network</span>
                               <span class="meta-value">${network}</span>
                             </div>`
-                          : ""}
+                          : ''}
                         <div class="meta-item">
                           <span class="meta-label">Invoke Endpoint</span>
                           <span class="meta-value"
@@ -827,7 +837,7 @@ export const renderLandingPage = ({
                                 ><code>POST ${streamPath}</code></span
                               >
                             </div>`
-                          : ""}
+                          : ''}
                       </div>
                       <div class="card-actions">
                         <a class="button button--small" href="${invokePath}">
@@ -840,7 +850,7 @@ export const renderLandingPage = ({
                             >
                               Stream
                             </a>`
-                          : ""}
+                          : ''}
                       </div>
                       <div class="schema-section">
                         ${inputSchemaJson
@@ -857,7 +867,7 @@ export const renderLandingPage = ({
                               <summary>Output Schema</summary>
                               <pre>${outputSchemaJson}</pre>
                             </details>`
-                          : ""}
+                          : ''}
                         <details class="schema-block" open>
                           <summary>Invoke with curl</summary>
                           <pre>${invokeCurl}</pre>
@@ -867,7 +877,7 @@ export const renderLandingPage = ({
                               <summary>Stream with curl</summary>
                               <pre>${streamCurl}</pre>
                             </details>`
-                          : ""}
+                          : ''}
                       </div>
                     </article>`;
                   })
@@ -920,24 +930,24 @@ export const renderLandingPage = ({
         </main>
         <script>
           const manifestUrl = ${JSON.stringify(manifestPath)};
-          document.addEventListener("DOMContentLoaded", () => {
-            const pre = document.getElementById("agent-manifest");
-            const status = document.getElementById("manifest-status");
+          document.addEventListener('DOMContentLoaded', () => {
+            const pre = document.getElementById('agent-manifest');
+            const status = document.getElementById('manifest-status');
             if (!pre || !status) return;
             fetch(manifestUrl)
-              .then((res) => {
-                if (!res.ok) throw new Error("HTTP " + res.status);
+              .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 return res.json();
               })
-              .then((card) => {
+              .then(card => {
                 pre.textContent = JSON.stringify(card, null, 2);
-                status.textContent = "Loaded";
+                status.textContent = 'Loaded';
               })
-              .catch((error) => {
-                console.error("[agent-kit] failed to load agent card", error);
+              .catch(error => {
+                console.error('[agent-kit] failed to load agent card', error);
                 pre.textContent =
-                  "Unable to load the agent card manifest. Check the console for details.";
-                status.textContent = "Unavailable";
+                  'Unable to load the agent card manifest. Check the console for details.';
+                status.textContent = 'Unavailable';
               });
           });
         </script>

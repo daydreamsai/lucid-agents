@@ -17,8 +17,8 @@
 This package is part of the monorepo. From sibling workspaces import:
 
 ```ts
-import { createAgentApp, paymentsFromEnv } from "@lucid-agents/agent-kit";
-import type { EntrypointDef, AgentMeta } from "@lucid-agents/agent-kit/types";
+import { createAgentApp, paymentsFromEnv } from '@lucid-agents/agent-kit';
+import type { EntrypointDef, AgentMeta } from '@lucid-agents/agent-kit/types';
 ```
 
 Subpath exports:
@@ -49,23 +49,23 @@ The return value exposes:
 - `payments` — the active `PaymentsConfig` (if paywalling is enabled) or `undefined`.
 
 ```ts
-import { z } from "zod";
-import { createAgentApp } from "@lucid-agents/agent-kit";
+import { z } from 'zod';
+import { createAgentApp } from '@lucid-agents/agent-kit';
 
 const { app, addEntrypoint } = createAgentApp({
-  name: "hello-agent",
-  version: "0.1.0",
-  description: "Echoes whatever you pass in",
+  name: 'hello-agent',
+  version: '0.1.0',
+  description: 'Echoes whatever you pass in',
 });
 
 addEntrypoint({
-  key: "echo",
-  description: "Echo a message",
+  key: 'echo',
+  description: 'Echo a message',
   input: z.object({ text: z.string() }),
   async handler({ input }) {
     return {
-      output: { text: String(input.text ?? "") },
-      usage: { total_tokens: String(input.text ?? "").length },
+      output: { text: String(input.text ?? '') },
+      usage: { total_tokens: String(input.text ?? '').length },
     };
   },
 });
@@ -89,14 +89,14 @@ Field highlights:
 
 ```ts
 addEntrypoint({
-  key: "stream",
-  description: "Streams characters back to the caller",
+  key: 'stream',
+  description: 'Streams characters back to the caller',
   input: z.object({ prompt: z.string() }),
   streaming: true,
-  price: { stream: "2500" },
+  price: { stream: '2500' },
   async stream({ input }, emit) {
-    for (const ch of input.prompt ?? "") {
-      await emit({ kind: "delta", delta: ch, mime: "text/plain" });
+    for (const ch of input.prompt ?? '') {
+      await emit({ kind: 'delta', delta: ch, mime: 'text/plain' });
     }
     return { output: { done: true } };
   },
@@ -129,17 +129,17 @@ import {
   configureAgentKit,
   getAgentKitConfig,
   paymentsFromEnv,
-} from "@lucid-agents/agent-kit";
+} from '@lucid-agents/agent-kit';
 
 configureAgentKit({
-  payments: { defaultPrice: "750" },
-  wallet: { walletApiUrl: "https://wallets.example" },
+  payments: { defaultPrice: '750' },
+  wallet: { walletApiUrl: 'https://wallets.example' },
 });
 
 const config = getAgentKitConfig();
 console.log(config.payments.facilitatorUrl); // resolved facilitator
 console.log(config.wallet.walletApiUrl); // resolved wallet API base URL
-console.log(paymentsFromEnv({ defaultPrice: "1000" })); // reuse inside handlers
+console.log(paymentsFromEnv({ defaultPrice: '1000' })); // reuse inside handlers
 ```
 
 ## Payments & Monetization
@@ -156,8 +156,8 @@ For authenticated wallet access, pair your agent with
 `@lucid-agents/agent-auth` and reuse the generated SDK surface:
 
 ```ts
-import { AgentRuntime } from "@lucid-agents/agent-auth";
-import { createRuntimePaymentContext } from "@lucid-agents/agent-kit";
+import { AgentRuntime } from '@lucid-agents/agent-auth';
+import { createRuntimePaymentContext } from '@lucid-agents/agent-kit';
 
 const { runtime } = await AgentRuntime.load({
   wallet: {
@@ -173,26 +173,26 @@ const { runtime } = await AgentRuntime.load({
       baseUrl: process.env.LUCID_API_URL,
       agentRef: process.env.AGENT_REF,
       credentialId: process.env.CREDENTIAL_ID,
-      scopes: ["agents.read"],
+      scopes: ['agents.read'],
     },
   },
 });
 
 const token = await runtime.ensureAccessToken();
 const agents = await runtime.api.listAgents();
-console.log("active bearer token", token.slice(0, 12), agents.items.length);
+console.log('active bearer token', token.slice(0, 12), agents.items.length);
 
 // Wrap fetch with x402 payments using the runtime-managed wallet
 const { fetchWithPayment } = await createRuntimePaymentContext({
   runtime,
 });
 
-const paidResponse = await fetchWithPayment?.("https://paid.endpoint/api", {
-  method: "POST",
-  body: JSON.stringify({ prompt: "charge me" }),
-  headers: { "content-type": "application/json" },
+const paidResponse = await fetchWithPayment?.('https://paid.endpoint/api', {
+  method: 'POST',
+  body: JSON.stringify({ prompt: 'charge me' }),
+  headers: { 'content-type': 'application/json' },
 });
-console.log("paid response", await paidResponse?.json());
+console.log('paid response', await paidResponse?.json());
 ```
 
 ## Manifest, AP2, and Discovery
@@ -215,19 +215,19 @@ Trust metadata is modelled by `TrustConfig`. For ERC-8004 identity management, u
 import {
   createAgentIdentity,
   getTrustConfig,
-} from "@lucid-agents/agent-kit-identity";
+} from '@lucid-agents/agent-kit-identity';
 
 // Register agent identity with auto-registration
 const identity = await createAgentIdentity({
-  domain: "agent.example.com",
+  domain: 'agent.example.com',
   autoRegister: true,
   chainId: 84532,
-  trustModels: ["feedback", "inference-validation"],
+  trustModels: ['feedback', 'inference-validation'],
 });
 
 // Use in your agent app
 const { app } = createAgentApp(
-  { name: "my-agent", version: "1.0.0" },
+  { name: 'my-agent', version: '1.0.0' },
   { trust: getTrustConfig(identity) }
 );
 

@@ -13,9 +13,9 @@ A tiny helper to build agent HTTP apps with Hono:
 This package is part of the monorepo. From other workspaces, import:
 
 ```ts
-import { createAgentApp, paymentsFromEnv } from "@lucid/agent-kit";
-import type { EntrypointDef, AgentMeta } from "@lucid/agent-kit/types";
-import type { AP2Config } from "@lucid/agent-kit/types";
+import { createAgentApp, paymentsFromEnv } from '@lucid/agent-kit';
+import type { EntrypointDef, AgentMeta } from '@lucid/agent-kit/types';
+import type { AP2Config } from '@lucid/agent-kit/types';
 ```
 
 Subpath exports are available:
@@ -32,21 +32,21 @@ All you need is the agent metadata and at least one entrypoint. You can leave
 payments/AP2/trust for later.
 
 ```ts
-import { z } from "zod";
-import { createAgentApp } from "@lucid/agent-kit";
+import { z } from 'zod';
+import { createAgentApp } from '@lucid/agent-kit';
 
 const { app, addEntrypoint } = createAgentApp({
-  name: "hello-agent",
-  version: "0.1.0",
-  description: "Echoes whatever you pass in",
+  name: 'hello-agent',
+  version: '0.1.0',
+  description: 'Echoes whatever you pass in',
 });
 
 addEntrypoint({
-  key: "echo",
-  description: "Echo a message",
+  key: 'echo',
+  description: 'Echo a message',
   input: z.object({ text: z.string() }),
   async handler(ctx) {
-    const text = String(ctx.input.text ?? "");
+    const text = String(ctx.input.text ?? '');
     return {
       output: { text },
       usage: { total_tokens: text.length },
@@ -67,38 +67,38 @@ helpers such as `paymentsFromEnv()` will reuse
 them automatically.
 
 ```ts
-import { z } from "zod";
-import { createAgentApp } from "@lucid/agent-kit";
+import { z } from 'zod';
+import { createAgentApp } from '@lucid/agent-kit';
 
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "paid-agent",
-    version: "0.2.0",
-    description: "Demonstrates payments + streaming",
+    name: 'paid-agent',
+    version: '0.2.0',
+    description: 'Demonstrates payments + streaming',
   },
   {
     config: {
       payments: {
-        facilitatorUrl: "https://facilitator.example",
-        payTo: "0xabc0000000000000000000000000000000000000",
-        network: "base-sepolia",
-        defaultPrice: "1000",
+        facilitatorUrl: 'https://facilitator.example',
+        payTo: '0xabc0000000000000000000000000000000000000',
+        network: 'base-sepolia',
+        defaultPrice: '1000',
       },
       wallet: {
-        apiBaseUrl: "https://api.example",
+        apiBaseUrl: 'https://api.example',
       },
     },
     useConfigPayments: true, // apply the config payments to every entrypoint
-    ap2: { roles: ["merchant", "shopper"] },
+    ap2: { roles: ['merchant', 'shopper'] },
     trust: {
-      trustModels: ["feedback"],
-      registrations: [{ agentId: 1, agentAddress: "eip155:8453:0xabc" }],
+      trustModels: ['feedback'],
+      registrations: [{ agentId: 1, agentAddress: 'eip155:8453:0xabc' }],
     },
   }
 );
 
 addEntrypoint({
-  key: "echo",
+  key: 'echo',
   input: z.object({ text: z.string() }),
   async handler(ctx) {
     return { output: { text: ctx.input.text } };
@@ -106,13 +106,13 @@ addEntrypoint({
 });
 
 addEntrypoint({
-  key: "stream",
-  description: "Streams characters back to the caller",
+  key: 'stream',
+  description: 'Streams characters back to the caller',
   input: z.object({ prompt: z.string() }),
   streaming: true,
   async stream(ctx, emit) {
-    for (const ch of String(ctx.input.prompt ?? "")) {
-      await emit({ kind: "delta", delta: ch, mime: "text/plain" });
+    for (const ch of String(ctx.input.prompt ?? '')) {
+      await emit({ kind: 'delta', delta: ch, mime: 'text/plain' });
     }
     return { output: { done: true } };
   },
@@ -129,7 +129,7 @@ The configuration is shared across the package. For example, the payments helper
 will reuse the values you passed to `createAgentApp`:
 
 ```ts
-import { paymentsFromEnv } from "@lucid/agent-kit";
+import { paymentsFromEnv } from '@lucid/agent-kit';
 
 const payments = paymentsFromEnv(); // returns the config you supplied earlier
 ```
@@ -183,22 +183,22 @@ Pull in `createIdentityRegistryClient` from `@lucid/agent-kit/erc8004` to read/w
 import {
   createIdentityRegistryClient,
   signAgentDomainProof,
-} from "@lucid/agent-kit/erc8004";
-import type { TrustConfig } from "@lucid/agent-kit/types";
+} from '@lucid/agent-kit/erc8004';
+import type { TrustConfig } from '@lucid/agent-kit/types';
 
 const identity = createIdentityRegistryClient({
-  address: "0xRegistry",
+  address: '0xRegistry',
   chainId: 84532,
   publicClient, // viem PublicClient-like (readContract)
   walletClient, // viem WalletClient-like (writeContract)
 });
 
 const { transactionHash } = await identity.register({
-  domain: "agent.example.com",
+  domain: 'agent.example.com',
   agentAddress: walletClient.account.address,
 });
 
-const record = await identity.resolveByDomain("agent.example.com");
+const record = await identity.resolveByDomain('agent.example.com');
 ```
 
 Use `signAgentDomainProof` and `toCaip10` to produce the proof blob surfaced in `registrations[]`:
@@ -213,7 +213,7 @@ const signature = await signAgentDomainProof({
 
 const trustConfig: TrustConfig = {
   registrations: [identity.toRegistrationEntry(record, signature)],
-  trustModels: ["feedback"],
+  trustModels: ['feedback'],
 };
 ```
 
@@ -229,7 +229,7 @@ import type {
   PaymentsConfig,
   Usage,
   Manifest,
-} from "@lucid/agent-kit/types";
+} from '@lucid/agent-kit/types';
 ```
 
 Key shapes:

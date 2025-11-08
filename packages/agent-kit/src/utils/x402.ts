@@ -1,11 +1,11 @@
-import { ai } from "@ax-llm/ax";
-import { privateKeyToAccount } from "viem/accounts";
-import { wrapFetchWithPayment, type Hex } from "x402-fetch";
+import { ai } from '@ax-llm/ax';
+import { privateKeyToAccount } from 'viem/accounts';
+import { type Hex, wrapFetchWithPayment } from 'x402-fetch';
 
-const DEFAULT_MODEL = "gpt-5";
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_API_URL = "https://api-beta.daydreams.systems/v1";
-const MAX_PAYMENT_BASE_UNITS = "10000000";
+const DEFAULT_MODEL = 'gpt-5';
+const DEFAULT_PROVIDER = 'openai';
+const DEFAULT_API_URL = 'https://api-beta.daydreams.systems/v1';
+const MAX_PAYMENT_BASE_UNITS = '10000000';
 
 type WrappedFetch = typeof fetch & {
   preconnect?: () => Promise<void>;
@@ -23,29 +23,29 @@ export const createX402Fetch = ({
   fetchImpl,
 }: CreateX402FetchOptions): WrappedFetch => {
   if (!account) {
-    throw new Error("[agent-kit] createX402Fetch requires an account");
+    throw new Error('[agent-kit] createX402Fetch requires an account');
   }
   const accountAddress =
-    typeof account === "object" && account && "address" in account
+    typeof account === 'object' && account && 'address' in account
       ? (account as { address?: string }).address
       : undefined;
   console.info(
-    "[agent-kit:x402] creating paid fetch",
-    accountAddress ? `for ${accountAddress}` : "(account address unavailable)"
+    '[agent-kit:x402] creating paid fetch',
+    accountAddress ? `for ${accountAddress}` : '(account address unavailable)'
   );
   const paymentFetch = wrapFetchWithPayment(
     (fetchImpl ?? fetch) as Parameters<typeof wrapFetchWithPayment>[0],
     account,
     BigInt(MAX_PAYMENT_BASE_UNITS)
   ) as WrappedFetch;
-  console.info("[agent-kit:x402] wrapFetchWithPayment initialised");
+  console.info('[agent-kit:x402] wrapFetchWithPayment initialised');
   const describeInput = (input: Parameters<typeof fetch>[0]) => {
-    if (typeof input === "string") return input;
+    if (typeof input === 'string') return input;
     if (input instanceof URL) return input.toString();
-    if (typeof (input as Request)?.url === "string") {
+    if (typeof (input as Request)?.url === 'string') {
       return (input as Request).url;
     }
-    return "[object Request]";
+    return '[object Request]';
   };
   const wrappedFetch: WrappedFetch = Object.assign(
     async (
@@ -56,21 +56,21 @@ export const createX402Fetch = ({
       const requestMethod =
         init?.method ??
         (input instanceof Request ? input.method : undefined) ??
-        "POST";
-      console.info("[agent-kit:x402] fetch request", requestUrl, requestMethod);
+        'POST';
+      console.info('[agent-kit:x402] fetch request', requestUrl, requestMethod);
       try {
         const response = await paymentFetch(input, init ?? {});
-        const paymentHeader = response.headers.get("X-PAYMENT-RESPONSE");
+        const paymentHeader = response.headers.get('X-PAYMENT-RESPONSE');
         console.info(
-          "[agent-kit:x402] fetch response",
+          '[agent-kit:x402] fetch response',
           requestUrl,
           response.status,
-          paymentHeader ? "(paid)" : "(no x402 header)"
+          paymentHeader ? '(paid)' : '(no x402 header)'
         );
         return response;
       } catch (error) {
         console.warn(
-          "[agent-kit:x402] fetch failed",
+          '[agent-kit:x402] fetch failed',
           requestUrl,
           (error as Error)?.message ?? error
         );
@@ -87,15 +87,15 @@ export const createX402Fetch = ({
 export const accountFromPrivateKey = (privateKey: Hex): X402Account => {
   if (!privateKey || privateKey.trim().length === 0) {
     throw new Error(
-      "[agent-kit] accountFromPrivateKey requires a non-empty private key"
+      '[agent-kit] accountFromPrivateKey requires a non-empty private key'
     );
   }
   return privateKeyToAccount(privateKey) as X402Account;
 };
 
 type AiFactoryArgs = Parameters<typeof ai>[0];
-type AiFactoryConfig = NonNullable<AiFactoryArgs["config"]>;
-type AiFactoryOptions = NonNullable<AiFactoryArgs["options"]>;
+type AiFactoryConfig = NonNullable<AiFactoryArgs['config']>;
+type AiFactoryOptions = NonNullable<AiFactoryArgs['options']>;
 
 export type CreateX402LLMOptions = {
   account?: X402Account;
@@ -115,12 +115,12 @@ export const createX402LLM = (
   options: CreateX402LLMOptions = {}
 ): ReturnType<typeof ai> => {
   if (options.account) {
-    console.info("[agent-kit:x402] initialising LLM with provided account");
+    console.info('[agent-kit:x402] initialising LLM with provided account');
   } else if (options.privateKey) {
-    console.info("[agent-kit:x402] deriving account from supplied private key");
+    console.info('[agent-kit:x402] deriving account from supplied private key');
   } else {
     console.info(
-      "[agent-kit:x402] no explicit account/private key supplied; falling back to env or downstream defaults"
+      '[agent-kit:x402] no explicit account/private key supplied; falling back to env or downstream defaults'
     );
   }
 
@@ -132,13 +132,13 @@ export const createX402LLM = (
 
   if (!account) {
     throw new Error(
-      "[agent-kit] createX402LLM requires either an account or a private key"
+      '[agent-kit] createX402LLM requires either an account or a private key'
     );
   }
 
   const paymentFetch =
     options.fetch ?? createX402Fetch({ account, fetchImpl: options.fetchImpl });
-  console.info("[agent-kit:x402] payment-enabled fetch ready for LLM");
+  console.info('[agent-kit:x402] payment-enabled fetch ready for LLM');
 
   const aiOverrides = options.ai ?? {};
   const {
@@ -151,23 +151,23 @@ export const createX402LLM = (
   } = aiOverrides;
 
   const configOverrides =
-    configOverridesRaw && typeof configOverridesRaw === "object"
+    configOverridesRaw && typeof configOverridesRaw === 'object'
       ? (configOverridesRaw as Partial<AiFactoryConfig>)
       : undefined;
   const optionOverrides =
-    optionOverridesRaw && typeof optionOverridesRaw === "object"
+    optionOverridesRaw && typeof optionOverridesRaw === 'object'
       ? (optionOverridesRaw as Partial<AiFactoryOptions>)
       : undefined;
   const explicitApiKey =
-    typeof apiKeyOverrideRaw === "string" && apiKeyOverrideRaw.trim().length > 0
+    typeof apiKeyOverrideRaw === 'string' && apiKeyOverrideRaw.trim().length > 0
       ? apiKeyOverrideRaw
       : undefined;
   const nameOverride =
-    typeof nameOverrideRaw === "string" && nameOverrideRaw.trim().length > 0
+    typeof nameOverrideRaw === 'string' && nameOverrideRaw.trim().length > 0
       ? nameOverrideRaw
       : undefined;
   const apiUrlOverride =
-    typeof apiUrlOverrideRaw === "string" && apiUrlOverrideRaw.trim().length > 0
+    typeof apiUrlOverrideRaw === 'string' && apiUrlOverrideRaw.trim().length > 0
       ? apiUrlOverrideRaw
       : undefined;
 
@@ -177,7 +177,7 @@ export const createX402LLM = (
 
   if (!apiKey) {
     throw new Error(
-      "[agent-kit] createX402LLM requires an OpenAI API key (set options.ai.apiKey or OPENAI_API_KEY)"
+      '[agent-kit] createX402LLM requires an OpenAI API key (set options.ai.apiKey or OPENAI_API_KEY)'
     );
   }
 
@@ -205,7 +205,7 @@ export const createX402LLM = (
   } as AiFactoryArgs;
 
   console.info(
-    "[agent-kit:x402] creating Ax client",
+    '[agent-kit:x402] creating Ax client',
     `provider=${aiArgs.name}`,
     `model=${finalConfig.model}`
     // `apiURL=${aiArgs}`

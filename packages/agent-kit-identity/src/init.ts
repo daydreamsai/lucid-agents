@@ -3,28 +3,27 @@
  * These functions provide a streamlined API for common use cases.
  */
 
+import { DEFAULT_CHAIN_ID, getRegistryAddresses } from './config';
 import {
   bootstrapIdentity,
-  makeViemClientsFromEnv,
+  type BootstrapIdentityClientFactory,
   type BootstrapIdentityOptions,
   type BootstrapIdentityResult,
-  type BootstrapIdentityClientFactory,
   createIdentityRegistryClient,
   type IdentityRegistryClient,
+  makeViemClientsFromEnv,
   type PublicClientLike,
   type WalletClientLike,
-} from "./registries/identity";
+} from './registries/identity';
 import {
   createReputationRegistryClient,
   type ReputationRegistryClient,
-} from "./registries/reputation";
+} from './registries/reputation';
 import {
   createValidationRegistryClient,
   type ValidationRegistryClient,
-} from "./registries/validation";
-import type { TrustConfig } from "./types";
-import type { Hex } from "./utils";
-import { getRegistryAddresses, DEFAULT_CHAIN_ID } from "./config";
+} from './registries/validation';
+import type { TrustConfig } from './types';
 
 export type { BootstrapIdentityResult, TrustConfig };
 
@@ -207,7 +206,7 @@ export async function createAgentIdentity(
     registryAddress,
     rpcUrl,
     privateKey,
-    trustModels = ["feedback", "inference-validation"],
+    trustModels = ['feedback', 'inference-validation'],
     trustOverrides,
     env,
     logger,
@@ -224,13 +223,13 @@ export async function createAgentIdentity(
 
   const resolvedChainId =
     chainId ??
-    (typeof env === "object" && env?.CHAIN_ID
+    (typeof env === 'object' && env?.CHAIN_ID
       ? parseInt(env.CHAIN_ID)
       : undefined) ??
     DEFAULT_CHAIN_ID;
   const resolvedRegistryAddress =
     registryAddress ??
-    (typeof env === "object" && env?.IDENTITY_REGISTRY_ADDRESS
+    (typeof env === 'object' && env?.IDENTITY_REGISTRY_ADDRESS
       ? (env.IDENTITY_REGISTRY_ADDRESS as `0x${string}`)
       : undefined) ??
     getRegistryAddresses(resolvedChainId).IDENTITY_REGISTRY;
@@ -256,24 +255,24 @@ export async function createAgentIdentity(
   let isNewRegistration = false;
 
   if (result.didRegister) {
-    status = "Successfully registered agent in ERC-8004 registry";
+    status = 'Successfully registered agent in ERC-8004 registry';
     if (result.signature) {
-      status += " (with domain proof signature)";
+      status += ' (with domain proof signature)';
     }
     isNewRegistration = true;
   } else if (result.record) {
-    status = "Found existing registration in ERC-8004 registry";
+    status = 'Found existing registration in ERC-8004 registry';
     if (result.signature) {
-      status += " (with domain proof signature)";
+      status += ' (with domain proof signature)';
     }
   } else if (result.trust) {
-    status = "ERC-8004 identity configured";
+    status = 'ERC-8004 identity configured';
   } else {
-    status = "No ERC-8004 identity - agent will run without on-chain identity";
+    status = 'No ERC-8004 identity - agent will run without on-chain identity';
   }
 
   const resolvedDomain =
-    domain ?? (typeof env === "object" ? env?.AGENT_DOMAIN : undefined);
+    domain ?? (typeof env === 'object' ? env?.AGENT_DOMAIN : undefined);
 
   // Create registry clients if we have the necessary components
   let clients: RegistryClients | undefined;
@@ -282,11 +281,11 @@ export async function createAgentIdentity(
     try {
       const resolvedChainId =
         chainId ??
-        (env && typeof env === "object"
-          ? parseInt(env.CHAIN_ID || "84532")
+        (env && typeof env === 'object'
+          ? parseInt(env.CHAIN_ID || '84532')
           : 84532);
       const resolvedRpcUrl =
-        rpcUrl ?? (env && typeof env === "object" ? env.RPC_URL : undefined);
+        rpcUrl ?? (env && typeof env === 'object' ? env.RPC_URL : undefined);
 
       if (resolvedRpcUrl) {
         const vClients = await viemFactory({
@@ -334,7 +333,7 @@ export async function createAgentIdentity(
       // Failed to create clients, but that's okay - agent can still work without them
       const log = logger ?? { warn: console.warn };
       log.warn?.(
-        "[agent-kit-identity] Failed to create registry clients",
+        '[agent-kit-identity] Failed to create registry clients',
         error
       );
     }
@@ -353,12 +352,12 @@ export async function createAgentIdentity(
     const log = logger ?? { info: console.log };
     const metadata = generateAgentMetadata(identity);
 
-    log.info?.("\n📋 Host this metadata at your domain:");
+    log.info?.('\n📋 Host this metadata at your domain:');
     log.info?.(
       `   https://${identity.domain}/.well-known/agent-metadata.json\n`
     );
     log.info?.(JSON.stringify(metadata, null, 2));
-    log.info?.("");
+    log.info?.('');
   }
 
   return identity;
@@ -436,8 +435,8 @@ export function generateAgentMetadata(
   }
 ) {
   const metadata: Record<string, unknown> = {
-    name: options?.name || "Agent",
-    description: options?.description || "An AI agent",
+    name: options?.name || 'Agent',
+    description: options?.description || 'An AI agent',
     domain: identity.domain,
   };
 

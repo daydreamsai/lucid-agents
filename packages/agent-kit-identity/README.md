@@ -53,7 +53,7 @@ REGISTER_IDENTITY=true
 ### 2. Register Your Agent
 
 ```typescript
-import { createAgentIdentity } from "@lucid-agents/agent-kit-identity";
+import { createAgentIdentity } from '@lucid-agents/agent-kit-identity';
 
 // Register with auto-configuration from env vars
 const identity = await createAgentIdentity({
@@ -64,7 +64,7 @@ console.log(identity.status);
 // "Successfully registered agent in ERC-8004 registry"
 
 if (identity.didRegister) {
-  console.log("Transaction:", identity.transactionHash);
+  console.log('Transaction:', identity.transactionHash);
   // The package will automatically log the metadata JSON you need to host
 }
 ```
@@ -80,13 +80,13 @@ https://my-agent.example.com/.well-known/agent-metadata.json
 You can also generate custom metadata using the helper:
 
 ```typescript
-import { generateAgentMetadata } from "@lucid-agents/agent-kit-identity";
+import { generateAgentMetadata } from '@lucid-agents/agent-kit-identity';
 
 const metadata = generateAgentMetadata(identity, {
-  name: "My Agent",
-  description: "An intelligent assistant",
+  name: 'My Agent',
+  description: 'An intelligent assistant',
   capabilities: [
-    { name: "chat", description: "Natural language conversation" },
+    { name: 'chat', description: 'Natural language conversation' },
   ],
 });
 
@@ -99,20 +99,20 @@ const metadata = generateAgentMetadata(identity, {
 import {
   createAgentIdentity,
   getTrustConfig,
-} from "@lucid-agents/agent-kit-identity";
-import { createAgentApp } from "@lucid-agents/agent-kit";
+} from '@lucid-agents/agent-kit-identity';
+import { createAgentApp } from '@lucid-agents/agent-kit';
 
 // 1. Create identity with all three registry clients
 const identity = await createAgentIdentity({
-  domain: "my-agent.example.com",
+  domain: 'my-agent.example.com',
   autoRegister: true,
 });
 
 // 2. Create agent with trust metadata
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "my-agent",
-    version: "1.0.0",
+    name: 'my-agent',
+    version: '1.0.0',
   },
   {
     trust: getTrustConfig(identity), // Include ERC-8004 identity
@@ -126,7 +126,7 @@ if (identity.clients) {
   const reputation = await identity.clients.reputation.getSummary(agentToHire);
 
   if (reputation.averageScore > 80) {
-    console.log("Agent has good reputation, proceeding...");
+    console.log('Agent has good reputation, proceeding...');
   }
 }
 ```
@@ -155,9 +155,9 @@ const { reputation } = identity.clients;
 await reputation.giveFeedback({
   toAgentId: 42n,
   score: 90, // 0-100
-  tag1: "reliable",
-  tag2: "fast",
-  fileUri: "ipfs://QmFeedbackDetails",
+  tag1: 'reliable',
+  tag2: 'fast',
+  fileUri: 'ipfs://QmFeedbackDetails',
 });
 
 // Query reputation
@@ -178,10 +178,10 @@ await reputation.revokeFeedback({
 // Respond to feedback you received
 await reputation.appendResponse({
   agentId: myAgentId,
-  clientAddress: "0x...",
+  clientAddress: '0x...',
   feedbackIndex: 3n,
-  responseUri: "ipfs://QmMyResponse",
-  responseHash: "0x...",
+  responseUri: 'ipfs://QmMyResponse',
+  responseHash: '0x...',
 });
 ```
 
@@ -194,18 +194,18 @@ const { validation } = identity.clients;
 
 // Create validation request
 await validation.createRequest({
-  validatorAddress: "0x...",
+  validatorAddress: '0x...',
   agentId: myAgentId,
-  requestURI: "ipfs://QmMyWork",
-  requestHash: keccak256(toHex("work-data")),
+  requestURI: 'ipfs://QmMyWork',
+  requestHash: keccak256(toHex('work-data')),
 });
 
 // Submit validation response (as validator)
 await validation.submitResponse({
-  requestHash: "0xabc...",
+  requestHash: '0xabc...',
   response: 1, // 1 = valid, 0 = invalid
-  responseURI: "ipfs://QmValidationReport",
-  responseHash: "0x...",
+  responseURI: 'ipfs://QmValidationReport',
+  responseHash: '0x...',
 });
 
 // Query validations
@@ -308,7 +308,7 @@ Convenience wrapper that forces `autoRegister: true`.
 
 ```typescript
 const identity = await registerAgent({
-  domain: "my-agent.example.com",
+  domain: 'my-agent.example.com',
 });
 ```
 
@@ -321,7 +321,7 @@ const identity = await createAgentIdentity({ autoRegister: true });
 const trustConfig = getTrustConfig(identity);
 
 // Use in createAgentApp
-createAgentApp({ name: "my-agent" }, { trust: trustConfig });
+createAgentApp({ name: 'my-agent' }, { trust: trustConfig });
 ```
 
 ### `generateAgentMetadata(identity, options?)`
@@ -330,11 +330,11 @@ Generate the metadata JSON to host at your domain. Automatically called after re
 
 ```typescript
 const metadata = generateAgentMetadata(identity, {
-  name: "My Agent",
-  description: "An intelligent assistant",
+  name: 'My Agent',
+  description: 'An intelligent assistant',
   capabilities: [
-    { name: "chat", description: "Natural language conversation" },
-    { name: "search", description: "Web search" },
+    { name: 'chat', description: 'Natural language conversation' },
+    { name: 'search', description: 'Web search' },
   ],
 });
 
