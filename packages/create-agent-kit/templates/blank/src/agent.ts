@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAgentApp } from "@lucid-dreams/agent-kit";
+import { createAgentApp } from "@lucid-agents/agent-kit-hono";
 
 // Adjust these options to configure payments, trust metadata, or AP2 metadata.
 const agentOptions = {{AGENT_OPTIONS}};

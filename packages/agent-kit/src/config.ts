@@ -1,4 +1,5 @@
-import type { Network, Resource, SolanaAddress } from "x402-hono";
+import type { Network, Resource } from "x402/types";
+import type { SolanaAddress } from "./types";
 
 export type PaymentDefaultsConfig = {
   facilitatorUrl?: Resource;
@@ -88,6 +89,7 @@ const environmentConfig: AgentKitConfig = {
 };
 
 let runtimeOverrides: AgentKitConfig = {};
+let activeInstanceConfig: AgentKitConfig | undefined;
 
 function assignDefined<T extends Record<string, any>>(
   target: T,
@@ -140,11 +142,16 @@ export function configureAgentKit(overrides: AgentKitConfig) {
 
 export function resetAgentKitConfigForTesting() {
   runtimeOverrides = {};
+  activeInstanceConfig = undefined;
 }
 
-export function getAgentKitConfig(): ResolvedAgentKitConfig {
+export function getAgentKitConfig(
+  instanceConfig?: AgentKitConfig
+): ResolvedAgentKitConfig {
   const withEnv = applyOverrides(defaultConfig, environmentConfig);
-  return applyOverrides(withEnv, runtimeOverrides);
+  const withRuntime = applyOverrides(withEnv, runtimeOverrides);
+  // Instance config takes highest priority, scoped to this specific call
+  return applyOverrides(withRuntime, instanceConfig);
 }
 
 export const defaults = {
@@ -153,3 +160,11 @@ export const defaults = {
   network: DEFAULT_NETWORK,
   walletApiUrl: DEFAULT_WALLET_API_URL,
 } as const;
+
+export function setActiveInstanceConfig(config?: AgentKitConfig) {
+  activeInstanceConfig = config;
+}
+
+export function getActiveInstanceConfig(): AgentKitConfig | undefined {
+  return activeInstanceConfig;
+}

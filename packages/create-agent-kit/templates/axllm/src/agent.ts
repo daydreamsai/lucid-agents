@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  AgentKitConfig,
-  createAgentApp,
+  type AgentKitConfig,
   createAxLLMClient,
-} from "@lucid-dreams/agent-kit";
+} from "@lucid-agents/agent-kit";
+import { createAgentApp } from "@lucid-agents/agent-kit-hono";
 
 const axClient = createAxLLMClient({
   logger: {

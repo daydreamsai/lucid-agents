@@ -6,7 +6,7 @@ import { getAgentKitConfig } from "./config";
 import {
   sanitizeAddress,
   ZERO_ADDRESS,
-} from "@lucid-dreams/agent-kit-identity";
+} from "@lucid-agents/agent-kit-identity";
 
 type FetchLike = typeof fetch;
 

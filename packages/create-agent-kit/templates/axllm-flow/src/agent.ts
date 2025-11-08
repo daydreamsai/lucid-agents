@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  createAgentApp,
   createAxLLMClient,
-  AgentKitConfig,
-} from "@lucid-dreams/agent-kit";
+  type AgentKitConfig,
+} from "@lucid-agents/agent-kit";
+import { createAgentApp } from "@lucid-agents/agent-kit-hono";
 import { flow } from "@ax-llm/ax";
 
 /**

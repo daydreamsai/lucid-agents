@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { PaymentsConfig } from "../types";
-import { getAgentKitConfig } from "../config";
+import {
+  getActiveInstanceConfig,
+  getAgentKitConfig,
+} from "../config";
 
 export function toJsonSchemaOrUndefined(s?: z.ZodTypeAny) {
   if (!s) return undefined;
@@ -14,7 +17,8 @@ export function toJsonSchemaOrUndefined(s?: z.ZodTypeAny) {
 export function paymentsFromEnv(params?: {
   defaultPrice?: string;
 }): PaymentsConfig {
-  const { payments } = getAgentKitConfig();
+  const activeInstanceConfig = getActiveInstanceConfig();
+  const { payments } = getAgentKitConfig(activeInstanceConfig);
   return {
     payTo: payments.payTo,
     facilitatorUrl: payments.facilitatorUrl,

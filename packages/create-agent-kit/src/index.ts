@@ -79,15 +79,22 @@ type TemplateMeta = {
   id?: string;
   name?: string;
   description?: string;
+  adapter?: string;
   onboarding?: OnboardingConfig;
 };
 
 type TemplateDescriptor = {
   id: string;
+  adapter: string;
   title: string;
   description?: string;
   path: string;
   onboarding?: OnboardingConfig;
+};
+
+const ADAPTER_DISPLAY_NAMES: Record<string, string> = {
+  hono: "Hono",
+  tanstack: "TanStack Start",
 };
 
 type OnboardingAnswers = Map<string, string | boolean>;
@@ -125,6 +132,7 @@ const DEFAULT_TEMPLATE_VALUES = {
   PAYMENTS_PAY_TO: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
   PAYMENTS_NETWORK: "base-sepolia",
   PAYMENTS_DEFAULT_PRICE: "1000",
+  WALLET_CONNECT_PROJECT_ID: "demo-project-id",
 };
 
 const DEFAULT_PROJECT_NAME = "agent-app";
@@ -168,6 +176,9 @@ export async function runCli(
     logger,
   });
 
+  logger.log(
+    `Using runtime adapter: ${formatAdapterName(template.adapter)}`
+  );
   logger.log(`Using template: ${template.title}`);
 
   const projectName = await resolveProjectName({
@@ -308,7 +319,8 @@ async function loadTemplates(
     const metaPath = join(path, "template.json");
     let title = toTitleCase(id);
     let description: string | undefined;
-     let onboarding: OnboardingConfig | undefined;
+    let onboarding: OnboardingConfig | undefined;
+    let adapter = "default";
 
     try {
       const raw = await fs.readFile(metaPath, "utf8");
@@ -316,6 +328,9 @@ async function loadTemplates(
       title = meta.name ?? toTitleCase(id);
       description = meta.description;
       onboarding = normalizeOnboardingConfig(meta.onboarding);
+      if (meta.adapter) {
+        adapter = meta.adapter.toLowerCase();
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
@@ -324,6 +339,7 @@ async function loadTemplates(
 
     descriptors.push({
       id,
+      adapter,
       title,
       description,
       path,
@@ -332,6 +348,10 @@ async function loadTemplates(
   }
 
   return descriptors.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function formatAdapterName(adapter: string): string {
+  return ADAPTER_DISPLAY_NAMES[adapter] ?? toTitleCase(adapter);
 }
 
 function normalizeOnboardingConfig(
@@ -381,34 +401,66 @@ async function resolveTemplate(params: {
     return match;
   }
 
-  if (templates.length === 1) {
+  const adapters = Array.from(new Set(templates.map((t) => t.adapter)));
+  let selectedAdapter = adapters[0];
+
+  if (adapters.length > 1) {
+    if (!prompt) {
+      const available = adapters
+        .map((adapter) => formatAdapterName(adapter))
+        .join(", ");
+      throw new Error(
+        `Multiple runtime adapters available (${available}). Re-run with --template <name>.`
+      );
+    }
+
+    const adapterChoices: PromptChoice[] = adapters.map((adapter) => ({
+      value: adapter,
+      title: formatAdapterName(adapter),
+    }));
+
+    selectedAdapter = await prompt.select({
+      message: "Select a runtime adapter:",
+      choices: adapterChoices,
+    });
+  }
+
+  const candidates = templates.filter((t) => t.adapter === selectedAdapter);
+  if (candidates.length === 0) {
+    logger.warn(
+      `No templates found for adapter "${selectedAdapter}". Falling back to default template list.`
+    );
     return templates[0]!;
   }
 
+  if (candidates.length === 1) {
+    return candidates[0]!;
+  }
+
   if (!prompt) {
-    const available = templates.map((t) => t.id).join(", ");
+    const available = candidates.map((t) => t.id).join(", ");
     throw new Error(
-      `Multiple templates available (${available}). Re-run with --template <name>.`
+      `Multiple templates available for adapter "${selectedAdapter}" (${available}). Re-run with --template <name>.`
     );
   }
 
-  const choices: PromptChoice[] = templates.map((template) => ({
+  const choices: PromptChoice[] = candidates.map((template) => ({
     value: template.id,
     title: template.title,
     description: template.description,
   }));
 
   const selection = await prompt.select({
-    message: "Select a template:",
+    message: "Select a template variant:",
     choices,
   });
 
-  const match = templates.find((t) => t.id === selection);
+  const match = candidates.find((t) => t.id === selection);
   if (!match) {
     logger.warn(
       `Template "${selection}" not found; falling back to first option.`
     );
-    return templates[0]!;
+    return candidates[0]!;
   }
   return match;
 }
@@ -743,6 +795,11 @@ function buildTemplateReplacements(params: {
     "ENTRYPOINT_PRICE",
     paymentsDefaultPrice
   );
+  const walletConnectProjectId = getStringAnswer(
+    answers,
+    "WALLET_CONNECT_PROJECT_ID",
+    DEFAULT_TEMPLATE_VALUES.WALLET_CONNECT_PROJECT_ID
+  );
 
   const agentOptions = enablePayments
     ? [
@@ -783,6 +840,7 @@ function buildTemplateReplacements(params: {
     PAYMENTS_NETWORK: paymentsNetwork,
     PAYMENTS_PAY_TO: paymentsPayTo,
     PAYMENTS_DEFAULT_PRICE: paymentsDefaultPrice,
+    WALLET_CONNECT_PROJECT_ID: walletConnectProjectId,
   };
 }
 
@@ -888,6 +946,10 @@ async function applyTemplateTransforms(
   );
   await replaceTemplatePlaceholders(
     join(targetDir, ".env.example"),
+    replacements
+  );
+  await replaceTemplatePlaceholders(
+    join(targetDir, "src/lib/agent.ts"),
     replacements
   );
 

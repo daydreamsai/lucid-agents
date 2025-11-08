@@ -1,5 +1,6 @@
 {
   "id": "axllm",
   "name": "AxLLM Bun Agent with Flow",
-  "description": "Fully-featured Bun HTTP agent with @lucid-dreams/agent-kit and @ax-llm/ax wired up and Flow for AxLLM."
+  "description": "Fully-featured Bun HTTP agent with @lucid-dreams/agent-kit and @ax-llm/ax wired up and Flow for AxLLM.",
+  "adapter": "hono"
 }

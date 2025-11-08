@@ -199,6 +199,57 @@ describe("buildManifest", () => {
       "https://agent.example/req"
     );
   });
+
+  it("caches manifest per origin", async () => {
+    const { app } = createAgentApp(meta, {
+      entrypoints: [
+        {
+          key: "initial",
+          description: "initial entrypoint",
+        },
+      ],
+    });
+
+    // First request - builds manifest
+    const res1 = await app.request("http://agent/.well-known/agent.json");
+    const manifest1 = await res1.json();
+    expect(manifest1.entrypoints.initial).toBeTruthy();
+
+    // Second request to same origin - should return cached manifest
+    const res2 = await app.request("http://agent/.well-known/agent.json");
+    const manifest2 = await res2.json();
+    expect(manifest2).toEqual(manifest1);
+
+    // Different origin - should build new manifest
+    const res3 = await app.request("https://different.example/.well-known/agent.json");
+    const manifest3 = await res3.json();
+    expect(manifest3.entrypoints.initial).toBeTruthy();
+    expect(manifest3.url).toBe("https://different.example/");
+  });
+
+  it("invalidates manifest cache when entrypoint added before first request", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta, {
+      entrypoints: [
+        {
+          key: "initial",
+          description: "initial entrypoint",
+        },
+      ],
+    });
+
+    // Add entrypoint before any requests (Hono limitation)
+    addEntrypoint({
+      key: "added",
+      description: "newly added entrypoint",
+    });
+
+    // Request should include both entrypoints
+    const res = await app.request("http://agent/.well-known/agent.json");
+    const manifest = await res.json();
+    expect(manifest.entrypoints.initial).toBeTruthy();
+    expect(manifest.entrypoints.added).toBeTruthy();
+    expect(manifest.entrypoints.added.description).toBe("newly added entrypoint");
+  });
 });
 
 describe("createAgentApp invoke/stream routes", () => {
@@ -421,5 +472,187 @@ describe("createAgentApp invoke/stream routes", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.code).toBe("stream_not_supported");
+  });
+});
+
+describe("Zod schema features (defaults, coercions, transformations)", () => {
+  it("applies default values from Zod schema in invoke handler", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta);
+    addEntrypoint({
+      key: "with-defaults",
+      input: z.object({
+        name: z.string(),
+        count: z.number().default(10),
+        enabled: z.boolean().default(true),
+      }),
+      handler: async ({ input }) => ({
+        output: { received: input },
+      }),
+    });
+
+    const res = await app.request(
+      "http://agent/entrypoints/with-defaults/invoke",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { name: "test" } }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.output.received).toEqual({
+      name: "test",
+      count: 10,
+      enabled: true,
+    });
+  });
+
+  it("applies coercions from Zod schema in invoke handler", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta);
+    addEntrypoint({
+      key: "with-coercion",
+      input: z.object({
+        age: z.coerce.number(),
+        active: z.coerce.boolean(),
+      }),
+      handler: async ({ input }) => ({
+        output: { types: { age: typeof input.age, active: typeof input.active }, values: input },
+      }),
+    });
+
+    const res = await app.request(
+      "http://agent/entrypoints/with-coercion/invoke",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { age: "42", active: "true" } }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.output.types).toEqual({ age: "number", active: "boolean" });
+    expect(body.output.values).toEqual({ age: 42, active: true });
+  });
+
+  it("applies transformations from Zod schema in invoke handler", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta);
+    addEntrypoint({
+      key: "with-transform",
+      input: z.object({
+        email: z.string().transform((val) => val.toLowerCase().trim()),
+        tags: z.string().transform((val) => val.split(",").map((t) => t.trim())),
+      }),
+      handler: async ({ input }) => ({
+        output: { transformed: input },
+      }),
+    });
+
+    const res = await app.request(
+      "http://agent/entrypoints/with-transform/invoke",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { email: "  TEST@EXAMPLE.COM  ", tags: "foo, bar, baz" } }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.output.transformed).toEqual({
+      email: "test@example.com",
+      tags: ["foo", "bar", "baz"],
+    });
+  });
+
+  it("applies default values from Zod schema in stream handler", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta);
+    addEntrypoint({
+      key: "stream-defaults",
+      input: z.object({
+        message: z.string(),
+        iterations: z.number().default(3),
+      }),
+      stream: async ({ input }, emit) => {
+        await emit({ kind: "text", text: `iterations=${input.iterations}` });
+        return { output: { iterations: input.iterations } };
+      },
+    });
+
+    const res = await app.request(
+      "http://agent/entrypoints/stream-defaults/stream",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { message: "hello" } }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("iterations=3");
+  });
+
+  it("applies transformations from Zod schema in stream handler", async () => {
+    const { app, addEntrypoint } = createAgentApp(meta);
+    addEntrypoint({
+      key: "stream-transform",
+      input: z.object({
+        text: z.string().transform((val) => val.toUpperCase()),
+      }),
+      stream: async ({ input }, emit) => {
+        await emit({ kind: "text", text: input.text });
+        return { output: { text: input.text } };
+      },
+    });
+
+    const res = await app.request(
+      "http://agent/entrypoints/stream-transform/stream",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { text: "hello world" } }),
+      }
+    );
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain("HELLO WORLD");
+  });
+});
+
+describe("Landing page renderer abstraction", () => {
+  it("disabling landing page removes / route entirely", async () => {
+    const { app } = createAgentApp(meta, {
+      landingPage: false,
+      entrypoints: [{ key: "test" }],
+    });
+
+    const res = await app.request("http://agent/");
+    expect(res.status).toBe(404);
+  });
+
+  it("custom renderer receives correct context", async () => {
+    const contexts: any[] = [];
+    const { app } = createAgentApp(meta, {
+      landingPage: (ctx) => {
+        contexts.push(ctx);
+        return "<html>custom</html>";
+      },
+      entrypoints: [{ key: "test" }],
+    });
+
+    const res = await app.request("http://agent/");
+    expect(res.status).toBe(200);
+    expect(contexts.length).toBe(1);
+    expect(contexts[0].meta.name).toBe(meta.name);
+    expect(contexts[0].entrypoints[0].key).toBe("test");
+  });
+
+  it("default renderer handles minimal entrypoint configuration", async () => {
+    const { app } = createAgentApp(meta, {
+      entrypoints: [{ key: "minimal" }],
+    });
+
+    const res = await app.request("http://agent/");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("minimal");
   });
 });

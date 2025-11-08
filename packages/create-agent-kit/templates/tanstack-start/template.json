@@ -1,0 +1,81 @@
+{
+  "id": "tanstack-start",
+  "name": "TanStack Start Full-Stack Agent",
+  "description": "SSR TanStack Start app with a bundled agent, UI shell, and optional x402 payments.",
+  "adapter": "tanstack",
+  "onboarding": {
+    "prompts": [
+      {
+        "key": "AGENT_DESCRIPTION",
+        "type": "input",
+        "message": "How would you describe your agent?",
+        "defaultValue": "Next generation agent running inside TanStack Start"
+      },
+      {
+        "key": "AGENT_VERSION",
+        "type": "input",
+        "message": "What version should the agent start at?",
+        "defaultValue": "0.1.0"
+      },
+      {
+        "key": "ENTRYPOINT_KEY",
+        "type": "input",
+        "message": "Name the default entrypoint",
+        "defaultValue": "echo"
+      },
+      {
+        "key": "ENTRYPOINT_DESCRIPTION",
+        "type": "input",
+        "message": "Describe what the default entrypoint does",
+        "defaultValue": "Echo back submitted text"
+      },
+      {
+        "key": "ENABLE_PAYMENTS",
+        "type": "confirm",
+        "message": "Configure x402 payments defaults now?",
+        "defaultValue": false
+      },
+      {
+        "key": "PAYMENTS_FACILITATOR_URL",
+        "type": "input",
+        "message": "Facilitator URL",
+        "defaultValue": "https://facilitator.daydreams.systems",
+        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+      },
+      {
+        "key": "PAYMENTS_NETWORK",
+        "type": "input",
+        "message": "Preferred network (chain identifier)",
+        "defaultValue": "base-sepolia",
+        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+      },
+      {
+        "key": "PAYMENTS_PAY_TO",
+        "type": "input",
+        "message": "Pay-to address",
+        "defaultValue": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+      },
+      {
+        "key": "PAYMENTS_DEFAULT_PRICE",
+        "type": "input",
+        "message": "Default price in base units",
+        "defaultValue": "1000",
+        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+      },
+      {
+        "key": "ENTRYPOINT_PRICE",
+        "type": "input",
+        "message": "Set a price for the default entrypoint",
+        "defaultValue": "{{PAYMENTS_DEFAULT_PRICE}}",
+        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+      },
+      {
+        "key": "WALLET_CONNECT_PROJECT_ID",
+        "type": "input",
+        "message": "WalletConnect / Reown project id (optional)",
+        "defaultValue": "demo-project-id"
+      }
+    ]
+  }
+}

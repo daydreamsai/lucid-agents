@@ -53,9 +53,8 @@
     "prepare": "bun run build"
   },
   "dependencies": {
+    "@lucid-agents/agent-core": "workspace:*",
     "zod": "catalog:",
-    "hono": "catalog:",
-    "x402-hono": "^0.7.1",
     "@lucid-dreams/agent-auth": "latest",
     "@lucid-dreams/client": "latest",
     "@lucid-agents/agent-kit-identity": "workspace:*",

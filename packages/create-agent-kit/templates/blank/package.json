@@ -13,7 +13,8 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
-    "@lucid-dreams/agent-kit": "latest",
+    "@lucid-agents/agent-kit": "latest",
+    "@lucid-agents/agent-kit-hono": "latest",
     "zod": "^4.1.12"
   },
   "devDependencies": {

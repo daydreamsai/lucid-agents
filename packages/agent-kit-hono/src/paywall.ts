@@ -1,13 +1,14 @@
+import type { Hono } from "hono";
 import { paymentMiddleware } from "x402-hono";
 import type { FacilitatorConfig } from "x402/types";
-import type { EntrypointDef, PaymentsConfig } from "./types";
-import { resolveEntrypointPrice } from "./pricing";
+import type { EntrypointDef, PaymentsConfig } from "@lucid-agents/agent-kit";
+import { resolveEntrypointPrice } from "@lucid-agents/agent-kit";
 import { toJsonSchemaOrUndefined } from "./utils";
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
 export type WithPaymentsParams = {
-  app: { use: (path: string, ...handlers: unknown[]) => void };
+  app: Hono;
   path: string;
   entrypoint: EntrypointDef;
   kind: "invoke" | "stream";
@@ -30,6 +31,7 @@ export function withPayments({
   if (!network) return false;
   const price = resolveEntrypointPrice(entrypoint, payments, kind);
   if (!price) return false;
+  if (!payments.payTo) return false;
   const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
   const responseSchema = toJsonSchemaOrUndefined(entrypoint.output);
 
@@ -78,7 +80,7 @@ export function withPayments({
   app.use(
     path,
     middlewareFactory(
-      payments.payTo,
+      payments.payTo as Parameters<PaymentMiddlewareFactory>[0],
       {
         [`POST ${path}`]: postRoute,
         [`GET ${path}`]: getRoute,

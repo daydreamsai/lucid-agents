@@ -1,0 +1,41 @@
+{
+  "name": "@lucid-agents/agent-kit-hono",
+  "version": "0.1.0",
+  "description": "Hono adapter for Lucid agent runtime",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "prepare": "bun run build"
+  },
+  "dependencies": {
+    "@lucid-agents/agent-core": "workspace:*",
+    "@lucid-agents/agent-kit": "workspace:*",
+    "hono": "catalog:",
+    "x402-hono": "^0.7.1",
+    "x402": "^0.7.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

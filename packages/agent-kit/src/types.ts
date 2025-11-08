@@ -1,143 +1,48 @@
-import type { ZodAny, ZodObject } from "zod";
-import type { Network, Resource, SolanaAddress } from "x402-hono";
+import type { ZodTypeAny } from "zod";
+import type { Network as X402Network, Resource } from "x402/types";
+import type {
+  AgentContext as CoreAgentContext,
+  AgentMeta as CoreAgentMeta,
+  EntrypointDef as CoreEntrypointDef,
+  Network as CoreNetwork,
+  PaymentsConfig as CorePaymentsConfig,
+  StreamEnvelope as CoreStreamEnvelope,
+  StreamPushEnvelope as CoreStreamPushEnvelope,
+  StreamResult as CoreStreamResult,
+  Usage as CoreUsage,
+} from "@lucid-agents/agent-core";
 import type { AP2ExtensionDescriptor, AP2Role } from "./ap2";
 import type {
   TrustConfig,
   RegistrationEntry,
   TrustModel,
-} from "@lucid-dreams/agent-kit-identity";
+} from "@lucid-agents/agent-kit-identity";
 
 export type {
   TrustConfig,
   RegistrationEntry,
   TrustModel,
-} from "@lucid-dreams/agent-kit-identity";
+} from "@lucid-agents/agent-kit-identity";
 
-export type Usage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-};
+export type SolanaAddress = string;
 
-export type AgentMeta = { name: string; version: string; description?: string };
+export type Usage = CoreUsage;
 
-export type AgentContext = {
-  key: string;
-  input: any;
-  signal: AbortSignal;
-  headers: Headers;
-  runId: string;
-};
+export type AgentMeta = CoreAgentMeta;
 
-export type StreamEnvelopeBase = {
-  runId?: string;
-  sequence?: number;
-  createdAt?: string;
-  metadata?: Record<string, unknown>;
-};
+export type AgentContext = CoreAgentContext & { runId: string };
 
-export type StreamRunStartEnvelope = StreamEnvelopeBase & {
-  kind: "run-start";
-  runId: string;
-};
+export type StreamEnvelope = CoreStreamEnvelope;
 
-export type StreamTextEnvelope = StreamEnvelopeBase & {
-  kind: "text";
-  text: string;
-  mime?: string;
-  role?: string;
-};
+export type StreamPushEnvelope = CoreStreamPushEnvelope;
 
-export type StreamDeltaEnvelope = StreamEnvelopeBase & {
-  kind: "delta";
-  delta: string;
-  mime?: string;
-  final?: boolean;
-  role?: string;
-};
+export type StreamResult = CoreStreamResult;
 
-export type StreamAssetInlineTransfer = {
-  transfer: "inline";
-  data: string;
-};
-
-export type StreamAssetExternalTransfer = {
-  transfer: "external";
-  href: string;
-  expiresAt?: string;
-};
-
-export type StreamAssetEnvelope = StreamEnvelopeBase & {
-  kind: "asset";
-  assetId: string;
-  mime: string;
-  name?: string;
-  sizeBytes?: number;
-} & (StreamAssetInlineTransfer | StreamAssetExternalTransfer);
-
-export type StreamControlEnvelope = StreamEnvelopeBase & {
-  kind: "control";
-  control: string;
-  payload?: unknown;
-};
-
-export type StreamErrorEnvelope = StreamEnvelopeBase & {
-  kind: "error";
-  code: string;
-  message: string;
-  retryable?: boolean;
-};
-
-export type StreamRunEndEnvelope = StreamEnvelopeBase & {
-  kind: "run-end";
-  runId: string;
-  status: "succeeded" | "failed" | "cancelled";
-  output?: unknown;
-  usage?: Usage;
-  model?: string;
-  error?: { code: string; message?: string };
-};
-
-export type StreamEnvelope =
-  | StreamRunStartEnvelope
-  | StreamTextEnvelope
-  | StreamDeltaEnvelope
-  | StreamAssetEnvelope
-  | StreamControlEnvelope
-  | StreamErrorEnvelope
-  | StreamRunEndEnvelope;
-
-export type StreamPushEnvelope = Exclude<
-  StreamEnvelope,
-  StreamRunStartEnvelope | StreamRunEndEnvelope
->;
-
-export type StreamResult = {
-  output?: unknown;
-  usage?: Usage;
-  model?: string;
-  status?: "succeeded" | "failed" | "cancelled";
-  error?: { code: string; message?: string };
-  metadata?: Record<string, unknown>;
-};
-
-export type EntrypointDef = {
-  key: string;
-  description?: string;
-  input?: ZodObject;
-  output?: ZodObject;
-  streaming?: boolean;
-  // Monetization: if set, this entrypoint is paywalled via x402
-  price?: string | { invoke?: string; stream?: string };
-  // Optional per-entrypoint network override (falls back to global)
+export type EntrypointDef = Omit<
+  CoreEntrypointDef<ZodTypeAny | undefined, ZodTypeAny | undefined>,
+  "network"
+> & {
   network?: Network;
-  handler?: (
-    ctx: AgentContext
-  ) => Promise<{ output: any; usage?: Usage; model?: string }>;
-  stream?: (
-    ctx: AgentContext,
-    emit: (chunk: StreamPushEnvelope) => Promise<void>
-  ) => Promise<StreamResult>;
 };
 
 export type Manifest = {
@@ -215,11 +120,12 @@ export type AgentCardWithEntrypoints = AgentCard & {
   entrypoints: Manifest["entrypoints"];
 };
 
-export type PaymentsConfig = {
+export type Network = X402Network;
+
+export type PaymentsConfig = Omit<CorePaymentsConfig, "network" | "payTo" | "facilitatorUrl"> & {
   payTo: `0x${string}` | SolanaAddress;
   facilitatorUrl: Resource;
   network: Network;
-  defaultPrice?: string; // used if entrypoint.price not specified
 };
 
 export type AP2Config = {
