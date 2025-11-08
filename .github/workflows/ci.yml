@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches:
+      - main
     paths-ignore:
       - '**/*.md'
       - '**/*.MD'
@@ -12,6 +13,14 @@ on:
       - '**/*.gif'
       - '**/*.svg'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.MD'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.jpeg'
+      - '**/*.gif'
+      - '**/*.svg'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
