@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Build typed agent HTTP apps",
   "type": "module",
   "main": "./dist/index.js",
