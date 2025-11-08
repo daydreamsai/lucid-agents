@@ -49,9 +49,9 @@
         "when": { "key": "ENABLE_PAYMENTS", "equals": true }
       },
       {
-        "key": "PAYMENTS_PAY_TO",
+        "key": "PAYMENTS_RECEIVABLE_ADDRESS",
         "type": "input",
-        "message": "Pay-to address",
+        "message": "Receivable address (address that receives payments)",
         "defaultValue": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
         "when": { "key": "ENABLE_PAYMENTS", "equals": true }
       },

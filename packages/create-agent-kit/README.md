@@ -31,6 +31,7 @@ bunx @lucid-agents/create-agent-kit@latest
 ```
 
 The CLI will guide you through:
+
 1. **Project name** - Directory name for your agent
 2. **Template selection** - Choose from available templates
 3. **Configuration** - Set up agent metadata, entrypoints, and optional payments
@@ -67,6 +68,7 @@ bunx @lucid-agents/create-agent-kit@latest --template axllm
 ```
 
 Available templates:
+
 - `blank` - Minimal agent with a single entrypoint
 - `axllm` - Agent with AI/LLM integration using @ax-llm/ax
 - `axllm-flow` - Agent with AxFlow for complex AI workflows
@@ -116,12 +118,14 @@ bunx @lucid-agents/create-agent-kit@latest --help
 Minimal agent with a single echo entrypoint. Best for starting from scratch or understanding the basics.
 
 **Includes:**
+
 - Basic agent configuration
 - Single echo entrypoint
 - TypeScript setup
 - Example environment variables
 
 **Use when:**
+
 - Learning agent-kit fundamentals
 - Building a custom agent from the ground up
 - Need minimal boilerplate
@@ -133,12 +137,14 @@ Minimal agent with a single echo entrypoint. Best for starting from scratch or u
 Agent with AI/LLM integration using `@ax-llm/ax`.
 
 **Includes:**
+
 - LLM client configuration
 - AI-powered entrypoints
 - Environment setup for OpenAI/other providers
 - Example prompts and completions
 
 **Use when:**
+
 - Building agents that need AI capabilities
 - Integrating with LLM providers like OpenAI
 - Creating conversational agents
@@ -150,12 +156,14 @@ Agent with AI/LLM integration using `@ax-llm/ax`.
 Agent with advanced AI workflows using AxFlow for complex multi-step AI operations.
 
 **Includes:**
+
 - AxFlow configuration
 - Complex workflow examples
 - Multi-step AI orchestration
 - Advanced prompt engineering patterns
 
 **Use when:**
+
 - Building sophisticated AI agents
 - Need multi-step reasoning or workflows
 - Orchestrating multiple LLM calls
@@ -179,20 +187,24 @@ my-agent/
 ### Key Files
 
 **`src/agent.ts`**
+
 - Defines your agent's metadata (name, version, description)
 - Registers entrypoints with handlers
 - Configures payments, AP2, and trust metadata (optional)
 
 **`src/index.ts`**
+
 - Boots a Bun HTTP server
 - Serves the agent app
 - Can be customized for different runtimes
 
 **`.env.example`**
+
 - Template showing required environment variables
 - Safe to commit to version control
 
 **`.env`**
+
 - Your actual environment values
 - Never commit this file
 
@@ -242,8 +254,8 @@ PORT=3000
 # x402 facilitator endpoint
 FACILITATOR_URL=https://facilitator.daydreams.systems
 
-# Payment recipient address
-ADDRESS=0xYourAddressHere
+# Payment receivable address (address that receives payments)
+PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddressHere
 
 # Network for payments (e.g., base-sepolia, base)
 NETWORK=base-sepolia
@@ -345,4 +357,3 @@ npx @lucid-agents/create-agent-kit@latest
 ## Contributing
 
 See the main repository's [CONTRIBUTING.md](../../CONTRIBUTING.md) for development guidelines.
-

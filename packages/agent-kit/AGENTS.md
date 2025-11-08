@@ -119,7 +119,7 @@ addEntrypoint({
 });
 ```
 
-> ℹ️ Environment variables (`FACILITATOR_URL`, `ADDRESS`, `NETWORK`,
+> ℹ️ Environment variables (`FACILITATOR_URL`, `PAYMENTS_RECEIVABLE_ADDRESS`, `NETWORK`,
 > `DEFAULT_PRICE`, `LUCID_API_URL`, etc.) are still respected. Values supplied
 > via `config` simply override the resolved defaults.
 
@@ -257,7 +257,7 @@ If payments are enabled, the invoke/stream routes are automatically paywalled:
 Required env for `paymentsFromEnv`:
 
 - `FACILITATOR_URL` — x402 facilitator endpoint
-- `ADDRESS` — pay-to address (EVM `0x...` or Solana address)
+- `PAYMENTS_RECEIVABLE_ADDRESS` — receivable address that receives payments (EVM `0x...` or Solana address)
 - `NETWORK` — supported network id (see `x402-hono`)
 
 ## Notes

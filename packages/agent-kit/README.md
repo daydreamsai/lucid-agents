@@ -118,7 +118,7 @@ Every agent app exposes the following for free:
 `agent-kit` keeps configuration centralized so every helper resolves the same values.
 
 - Defaults live in `src/config.ts` (facilitator, pay-to address, network, wallet API).
-- Environment variables override defaults automatically: `FACILITATOR_URL`, `ADDRESS`, `NETWORK`, `DEFAULT_PRICE`, `LUCID_API_URL`/`VITE_API_URL`, `AGENT_WALLET_MAX_PAYMENT_BASE_UNITS`, and `AGENT_WALLET_MAX_PAYMENT_USDC`.
+- Environment variables override defaults automatically: `FACILITATOR_URL`, `PAYMENTS_RECEIVABLE_ADDRESS`, `NETWORK`, `DEFAULT_PRICE`, `LUCID_API_URL`/`VITE_API_URL`, `AGENT_WALLET_MAX_PAYMENT_BASE_UNITS`, and `AGENT_WALLET_MAX_PAYMENT_USDC`.
 - `configureAgentKit(overrides)` merges values at runtime; use it inside tests or before calling `createAgentApp`.
 - `getAgentKitConfig()` returns the resolved values; `resetAgentKitConfigForTesting()` clears overrides.
 

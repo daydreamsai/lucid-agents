@@ -73,7 +73,7 @@ function parseNumberEnv(value: string | undefined): number | undefined {
 const environmentConfig: AgentKitConfig = {
   payments: {
     facilitatorUrl: process.env.FACILITATOR_URL as Resource | undefined,
-    payTo: process.env.ADDRESS as `0x${string}` | SolanaAddress | undefined,
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}` | SolanaAddress | undefined,
     network: process.env.NETWORK as Network | undefined,
     defaultPrice: process.env.DEFAULT_PRICE ?? undefined,
   },

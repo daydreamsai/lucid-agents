@@ -123,7 +123,7 @@ const DEFAULT_TEMPLATE_VALUES = {
   ENTRYPOINT_KEY: "echo",
   ENTRYPOINT_DESCRIPTION: "Returns text that you send to the agent.",
   PAYMENTS_FACILITATOR_URL: "https://facilitator.daydreams.systems",
-  PAYMENTS_PAY_TO: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
+  PAYMENTS_RECEIVABLE_ADDRESS: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
   PAYMENTS_NETWORK: "base-sepolia",
   PAYMENTS_DEFAULT_PRICE: "1000",
   RPC_URL: "https://sepolia.base.org",
@@ -734,8 +734,8 @@ function buildTemplateReplacements(params: {
   );
   const paymentsPayTo = getStringAnswer(
     answers,
-    "PAYMENTS_PAY_TO",
-    DEFAULT_TEMPLATE_VALUES.PAYMENTS_PAY_TO
+    "PAYMENTS_RECEIVABLE_ADDRESS",
+    DEFAULT_TEMPLATE_VALUES.PAYMENTS_RECEIVABLE_ADDRESS
   );
   const paymentsDefaultPrice = getStringAnswer(
     answers,
@@ -798,7 +798,7 @@ function buildTemplateReplacements(params: {
     AGENT_OPTIONS: agentOptions,
     PAYMENTS_FACILITATOR_URL: paymentsFacilitator,
     PAYMENTS_NETWORK: paymentsNetwork,
-    PAYMENTS_PAY_TO: paymentsPayTo,
+    PAYMENTS_RECEIVABLE_ADDRESS: paymentsPayTo,
     PAYMENTS_DEFAULT_PRICE: paymentsDefaultPrice,
     RPC_URL: rpcUrl,
     CHAIN_ID: chainId,
@@ -977,7 +977,7 @@ async function setupEnvironment(params: {
 
   const envKeyMapping: Record<string, string> = {
     FACILITATOR_URL: "PAYMENTS_FACILITATOR_URL",
-    ADDRESS: "PAYMENTS_PAY_TO",
+    PAYMENTS_RECEIVABLE_ADDRESS: "PAYMENTS_RECEIVABLE_ADDRESS",
     NETWORK: "PAYMENTS_NETWORK",
     DEFAULT_PRICE: "PAYMENTS_DEFAULT_PRICE",
   };
