@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit-identity",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "ERC-8004 identity helpers for Lucid agent kit surfaces",
   "type": "module",
   "main": "./dist/index.js",
