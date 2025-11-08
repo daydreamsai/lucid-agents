@@ -10,23 +10,23 @@
  * examples/README.md for the list of environment variables it understands.
  */
 
-import { z } from "zod";
+import { z } from 'zod';
 import {
   createAgentApp,
   createRuntimePaymentContext,
   type AgentKitConfig,
-} from "@lucid-agents/agent-kit";
+} from '@lucid-agents/agent-kit';
 import {
   createAgentIdentity,
   getTrustConfig,
   type AgentIdentity,
-} from "@lucid-agents/agent-kit-identity";
+} from '@lucid-agents/agent-kit-identity';
 import {
   AgentRuntime,
   MemoryStorageAdapter,
   type AgentRuntimeWallet,
-} from "@lucid-dreams/agent-auth";
-import { privateKeyToAccount } from "viem/accounts";
+} from '@lucid-dreams/agent-auth';
+import { privateKeyToAccount } from 'viem/accounts';
 
 type RuntimeBootstrap = {
   runtime: AgentRuntime;
@@ -46,7 +46,7 @@ function parseScopes(input?: string | null): string[] | undefined {
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) {
       const scopes = parsed
-        .map((scope) => (typeof scope === "string" ? scope.trim() : ""))
+        .map(scope => (typeof scope === 'string' ? scope.trim() : ''))
         .filter(Boolean);
       return scopes.length ? scopes : undefined;
     }
@@ -54,8 +54,8 @@ function parseScopes(input?: string | null): string[] | undefined {
     // fall back to comma-separated parsing
   }
   const scopes = trimmed
-    .split(",")
-    .map((scope) => scope.trim())
+    .split(',')
+    .map(scope => scope.trim())
     .filter(Boolean);
   return scopes.length ? scopes : undefined;
 }
@@ -64,7 +64,7 @@ function normalizePrivateKey(value?: string | null): `0x${string}` | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  const prefixed = trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+  const prefixed = trimmed.startsWith('0x') ? trimmed : `0x${trimmed}`;
   return prefixed as `0x${string}`;
 }
 
@@ -73,9 +73,9 @@ async function setupAgentRuntime(options: {
   network?: string;
 }): Promise<RuntimeBootstrap | null> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (typeof fetchImpl !== "function") {
+  if (typeof fetchImpl !== 'function') {
     console.warn(
-      "[examples] No fetch implementation available; skipping runtime auth bootstrap"
+      '[examples] No fetch implementation available; skipping runtime auth bootstrap'
     );
     return null;
   }
@@ -100,7 +100,7 @@ async function setupAgentRuntime(options: {
 
   if (!baseUrl || !agentRef || !credentialId) {
     console.warn(
-      "[examples] AgentRuntime auth skipped; provide LUCID_AGENT_BASE_URL, LUCID_AGENT_AGENT_REF, and LUCID_AGENT_CREDENTIAL_ID to enable challenge flow"
+      '[examples] AgentRuntime auth skipped; provide LUCID_AGENT_BASE_URL, LUCID_AGENT_AGENT_REF, and LUCID_AGENT_CREDENTIAL_ID to enable challenge flow'
     );
     return null;
   }
@@ -108,7 +108,7 @@ async function setupAgentRuntime(options: {
   const normalizedKey = normalizePrivateKey(privateKey);
   if (!normalizedKey) {
     console.warn(
-      "[examples] AgentRuntime auth skipped; AGENT_AUTH_PRIVATE_KEY (or PRIVATE_KEY) is required to sign challenges"
+      '[examples] AgentRuntime auth skipped; AGENT_AUTH_PRIVATE_KEY (or PRIVATE_KEY) is required to sign challenges'
     );
     return null;
   }
@@ -118,7 +118,7 @@ async function setupAgentRuntime(options: {
     account = privateKeyToAccount(normalizedKey);
   } catch (error) {
     console.warn(
-      "[examples] Failed to initialise signer for AgentRuntime auth:",
+      '[examples] Failed to initialise signer for AgentRuntime auth:',
       (error as Error)?.message ?? error
     );
     return null;
@@ -128,9 +128,9 @@ async function setupAgentRuntime(options: {
     signer: {
       async signChallenge(challenge) {
         const payload = challenge.payload;
-        if (typeof payload !== "string" || !payload.length) {
+        if (typeof payload !== 'string' || !payload.length) {
           throw new Error(
-            "[examples] Challenge payload must be a non-empty string"
+            '[examples] Challenge payload must be a non-empty string'
           );
         }
         return account.signMessage({ message: payload });
@@ -168,7 +168,7 @@ async function setupAgentRuntime(options: {
         network: options.network,
         logger: {
           warn(message, ...args) {
-            console.warn("[examples] runtime payments:", message, ...args);
+            console.warn('[examples] runtime payments:', message, ...args);
           },
         },
       });
@@ -180,7 +180,7 @@ async function setupAgentRuntime(options: {
       chainId = paymentContext.chainId;
     } catch (error) {
       console.warn(
-        "[examples] Failed to initialise runtime-backed paid fetch:",
+        '[examples] Failed to initialise runtime-backed paid fetch:',
         (error as Error)?.message ?? error
       );
     }
@@ -196,7 +196,7 @@ async function setupAgentRuntime(options: {
     };
   } catch (error) {
     console.warn(
-      "[examples] AgentRuntime auth bootstrap failed:",
+      '[examples] AgentRuntime auth bootstrap failed:',
       (error as Error)?.message ?? error
     );
     return null;
@@ -209,14 +209,14 @@ async function main() {
   try {
     const identity: AgentIdentity = await createAgentIdentity({
       domain: process.env.AGENT_DOMAIN,
-      autoRegister: process.env.REGISTER_IDENTITY === "true",
+      autoRegister: process.env.REGISTER_IDENTITY === 'true',
       chainId: process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : undefined,
       registryAddress: process.env.IDENTITY_REGISTRY_ADDRESS as
         | `0x${string}`
         | undefined,
       rpcUrl: process.env.RPC_URL,
       privateKey: process.env.PRIVATE_KEY,
-      trustModels: ["feedback", "inference-validation", "tee-attestation"],
+      trustModels: ['feedback', 'inference-validation', 'tee-attestation'],
       env: process.env as Record<string, string | undefined>,
       logger: {
         info(message) {
@@ -238,9 +238,9 @@ async function main() {
 
     if (identity.isNewRegistration && identity.transactionHash) {
       console.log(
-        `[examples] Registered ${domain ?? "agent"} on ERC-8004 (tx: ${
+        `[examples] Registered ${domain ?? 'agent'} on ERC-8004 (tx: ${
           identity.transactionHash
-        }, agentId: ${identity.record?.agentId ?? "unknown"})`
+        }, agentId: ${identity.record?.agentId ?? 'unknown'})`
       );
     } else if (identity.record?.agentId) {
       console.log(
@@ -250,7 +250,7 @@ async function main() {
 
     if (!identity.trust) {
       console.warn(
-        "[examples] Trust metadata unavailable; manifest will omit ERC-8004 entries"
+        '[examples] Trust metadata unavailable; manifest will omit ERC-8004 entries'
       );
     }
 
@@ -258,79 +258,79 @@ async function main() {
       payments: {
         facilitatorUrl:
           (process.env.FACILITATOR_URL as any) ??
-          "https://facilitator.daydreams.systems",
+          'https://facilitator.daydreams.systems',
         payTo:
           (process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`) ??
-          "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-        network: (process.env.NETWORK as any) ?? "base-sepolia",
-        defaultPrice: process.env.DEFAULT_PRICE ?? "1000",
+          '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+        network: (process.env.NETWORK as any) ?? 'base-sepolia',
+        defaultPrice: process.env.DEFAULT_PRICE ?? '1000',
       },
       wallet: {
-        walletApiUrl: process.env.API_BASE_URL ?? "https://localhost:8787",
+        walletApiUrl: process.env.API_BASE_URL ?? 'https://localhost:8787',
       },
     };
 
     const { app, addEntrypoint } = createAgentApp(
       {
-        name: "all-in-one-agent",
-        version: "0.1.0",
+        name: 'all-in-one-agent',
+        version: '0.1.0',
         description:
-          "Demonstrates every feature exposed by @lucid/agent-kit. A2A, x402, ERC-8004, and more.",
+          'Demonstrates every feature exposed by @lucid/agent-kit. A2A, x402, ERC-8004, and more.',
       },
       {
         config: configOverrides,
         useConfigPayments: true,
         ap2: {
-          roles: ["merchant", "shopper"],
-          description: "Supports dual-role AP2 interactions",
+          roles: ['merchant', 'shopper'],
+          description: 'Supports dual-role AP2 interactions',
         },
         trust: getTrustConfig(identity),
       }
     );
 
     addEntrypoint({
-      key: "echo",
-      description: "Returns the supplied text",
+      key: 'echo',
+      description: 'Returns the supplied text',
       input: z.object({ text: z.string() }),
       output: z.object({ text: z.string() }),
       async handler(ctx) {
-        const text = String(ctx.input.text ?? "");
+        const text = String(ctx.input.text ?? '');
         console.log(`[examples] invoke echo -> ${text}`);
         return {
           output: { text },
           usage: { total_tokens: text.length },
-          model: "echo-v1",
+          model: 'echo-v1',
         };
       },
     });
 
     addEntrypoint({
-      key: "stream",
-      description: "Streams characters back to the caller",
+      key: 'stream',
+      description: 'Streams characters back to the caller',
       input: z.object({ prompt: z.string() }),
       streaming: true,
       async stream(ctx, emit) {
-        const prompt = String(ctx.input.prompt ?? "");
+        const prompt = String(ctx.input.prompt ?? '');
         console.log(`[examples] stream prompt -> ${prompt}`);
         for (const ch of prompt) {
-          await emit({ kind: "delta", delta: ch, mime: "text/plain" });
+          await emit({ kind: 'delta', delta: ch, mime: 'text/plain' });
         }
         await emit({
-          kind: "text",
+          kind: 'text',
           text: `Echo: ${prompt}`,
-          mime: "text/plain",
+          mime: 'text/plain',
         });
         return {
           output: { done: true },
           usage: { total_tokens: prompt.length },
-          model: "stream-v1",
+          model: 'stream-v1',
         };
       },
     });
 
     const port = Number(process.env.PORT ?? 8787);
     const agentOrigin = process.env.AGENT_ORIGIN ?? `https://localhost:${port}`;
-    if (typeof Bun !== "undefined") {
+    if (typeof Bun !== 'undefined') {
       Bun.serve({
         port,
         fetch: app.fetch,
@@ -338,20 +338,20 @@ async function main() {
       console.log(`[examples] agent listening on https://localhost:${port}`);
     } else {
       console.warn(
-        "[examples] Bun runtime not detected; skipping server start"
+        '[examples] Bun runtime not detected; skipping server start'
       );
     }
 
     const runtimeBootstrap = await setupAgentRuntime({
-      fetchImpl: typeof fetch === "function" ? fetch : undefined,
+      fetchImpl: typeof fetch === 'function' ? fetch : undefined,
       network: configOverrides.payments?.network,
     });
 
     if (runtimeBootstrap) {
       runtime = runtimeBootstrap.runtime;
       const scopesLabel = runtimeBootstrap.scopes?.length
-        ? runtimeBootstrap.scopes.join(", ")
-        : "(default credential scopes)";
+        ? runtimeBootstrap.scopes.join(', ')
+        : '(default credential scopes)';
       console.log(
         `[examples] AgentRuntime authenticated via ${runtimeBootstrap.baseUrl} with scopes ${scopesLabel}`
       );
@@ -359,14 +359,14 @@ async function main() {
         const chainLabel =
           runtimeBootstrap.chainId !== null
             ? runtimeBootstrap.chainId
-            : "unknown";
+            : 'unknown';
         console.log(
           `[examples] Runtime wallet resolved: ${runtimeBootstrap.walletAddress} (chainId ${chainLabel})`
         );
       }
     } else {
       console.warn(
-        "[examples] Proceeding without AgentRuntime auth; payments will fall back to unsigned fetch"
+        '[examples] Proceeding without AgentRuntime auth; payments will fall back to unsigned fetch'
       );
     }
 
@@ -381,32 +381,32 @@ async function main() {
       headers: authHeaders,
     });
     const card = await cardResp.json();
-    console.log("[examples] AgentCard snapshot:", card);
+    console.log('[examples] AgentCard snapshot:', card);
 
     const invokeResp = await fetch(`${agentOrigin}/entrypoints/echo/invoke`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders },
-      body: JSON.stringify({ input: { text: "hello world" } }),
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ input: { text: 'hello world' } }),
     });
-    console.log("[examples] invoke response:", await invokeResp.json());
+    console.log('[examples] invoke response:', await invokeResp.json());
 
     // Minimal SSE consumer to demonstrate streaming output.
     const streamResp = await paidFetchImpl(
       `${agentOrigin}/entrypoints/stream/stream`,
       {
-        method: "POST",
-        headers: { "content-type": "application/json", ...authHeaders },
-        body: JSON.stringify({ input: { prompt: "hi" } }),
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ input: { prompt: 'hi' } }),
       }
     );
-    console.log("[examples] stream status:", streamResp.status);
-    console.log("[examples] stream body:", await streamResp.text());
+    console.log('[examples] stream status:', streamResp.status);
+    console.log('[examples] stream body:', await streamResp.text());
   } finally {
     await runtime?.shutdown();
   }
 }
 
-main().catch((error) => {
-  console.error("[examples] fatal error", error);
-  if (typeof process !== "undefined") process.exit(1);
+main().catch(error => {
+  console.error('[examples] fatal error', error);
+  if (typeof process !== 'undefined') process.exit(1);
 });

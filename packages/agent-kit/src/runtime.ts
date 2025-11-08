@@ -1,12 +1,12 @@
-import type { AgentRuntime } from "@lucid-dreams/agent-auth";
-import { wrapFetchWithPayment, createSigner, type Hex } from "x402-fetch";
-import type { Signer } from "x402/types";
-
-import { getAgentKitConfig } from "./config";
 import {
   sanitizeAddress,
   ZERO_ADDRESS,
-} from "@lucid-agents/agent-kit-identity";
+} from '@lucid-agents/agent-kit-identity';
+import type { AgentRuntime } from '@lucid-dreams/agent-auth';
+import type { Signer } from 'x402/types';
+import { createSigner, type Hex, wrapFetchWithPayment } from 'x402-fetch';
+
+import { getAgentKitConfig } from './config';
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -94,7 +94,7 @@ function attachPreconnect(
   };
   const fallbackPreconnect = async () => {};
   const preconnectFn =
-    typeof upstream.preconnect === "function"
+    typeof upstream.preconnect === 'function'
       ? upstream.preconnect.bind(baseFetch)
       : fallbackPreconnect;
 
@@ -109,11 +109,11 @@ function attachPreconnect(
 function inferChainId(network?: string): number | undefined {
   if (!network) return undefined;
   const normalized = network.toLowerCase();
-  if (normalized === "base" || normalized === "eip155:8453") return 8453;
+  if (normalized === 'base' || normalized === 'eip155:8453') return 8453;
   if (
-    normalized === "base-sepolia" ||
-    normalized === "eip155:84532" ||
-    normalized === "base_testnet"
+    normalized === 'base-sepolia' ||
+    normalized === 'eip155:84532' ||
+    normalized === 'base_testnet'
   )
     return 84532;
   return undefined;
@@ -122,7 +122,7 @@ function inferChainId(network?: string): number | undefined {
 function normalizeTypedData(input: TypedDataPayload) {
   const primaryType = input.primary_type ?? input.primaryType;
   if (!primaryType) {
-    throw new Error("[agent-kit] Typed data missing primaryType");
+    throw new Error('[agent-kit] Typed data missing primaryType');
   }
   return {
     domain: input.domain ?? {},
@@ -133,19 +133,19 @@ function normalizeTypedData(input: TypedDataPayload) {
 }
 
 const toStringMessage = (message: unknown): string => {
-  if (typeof message === "string") return message;
-  if (typeof (message as any)?.raw === "string") {
+  if (typeof message === 'string') return message;
+  if (typeof (message as any)?.raw === 'string') {
     return String((message as any).raw);
   }
   if (message instanceof Uint8Array) {
     return Array.from(message)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('');
   }
-  if (typeof message === "object") {
-    return JSON.stringify(message ?? "");
+  if (typeof message === 'object') {
+    return JSON.stringify(message ?? '');
   }
-  return String(message ?? "");
+  return String(message ?? '');
 };
 
 async function fetchWalletAddress(
@@ -158,7 +158,7 @@ async function fetchWalletAddress(
       (detail as any)?.wallet ??
       (detail as any)?.billingWallet;
     const address = billingWallet?.address;
-    return typeof address === "string" ? address : null;
+    return typeof address === 'string' ? address : null;
   } catch {
     return null;
   }
@@ -168,13 +168,13 @@ function resolveMaxPaymentBaseUnits(
   override?: bigint,
   configOverride?: { maxPaymentBaseUnits?: bigint; maxPaymentUsd?: number }
 ): bigint | undefined {
-  if (typeof override === "bigint") return override;
+  if (typeof override === 'bigint') return override;
   const config = configOverride ?? getAgentKitConfig().wallet;
-  if (typeof config.maxPaymentBaseUnits === "bigint") {
+  if (typeof config.maxPaymentBaseUnits === 'bigint') {
     return config.maxPaymentBaseUnits;
   }
   if (
-    typeof config.maxPaymentUsd === "number" &&
+    typeof config.maxPaymentUsd === 'number' &&
     Number.isFinite(config.maxPaymentUsd)
   ) {
     const scaled = Math.floor(config.maxPaymentUsd * 1_000_000);
@@ -201,13 +201,13 @@ function createRuntimeSigner(opts: {
   const signer: RuntimeSigner = {
     chain: { id: currentChainId },
     account: { address: currentAddress },
-    transport: { type: "agent-runtime" },
+    transport: { type: 'agent-runtime' },
     async signTypedData(data: TypedDataPayload) {
       const typedData = normalizeTypedData(data);
       const domainChain =
         (typedData.domain as any)?.chainId ??
         (typedData.domain as any)?.chain_id;
-      if (typeof domainChain !== "undefined") {
+      if (typeof domainChain !== 'undefined') {
         const parsed = Number(domainChain);
         if (Number.isFinite(parsed) && parsed > 0) {
           currentChainId = parsed;
@@ -218,11 +218,11 @@ function createRuntimeSigner(opts: {
       const response = await opts.runtime.api.signTypedData({
         typed_data: typedData,
         idempotency_key:
-          typeof crypto?.randomUUID === "function"
+          typeof crypto?.randomUUID === 'function'
             ? crypto.randomUUID()
             : globalThis?.crypto?.randomUUID
-            ? globalThis.crypto.randomUUID()
-            : `${Date.now()}-${Math.random()}`,
+              ? globalThis.crypto.randomUUID()
+              : `${Date.now()}-${Math.random()}`,
       });
 
       const nextAddress = normalizeAddressOrNull(response?.wallet?.address);
@@ -230,8 +230,8 @@ function createRuntimeSigner(opts: {
       signer.account.address = currentAddress;
 
       const signature = (response?.signed as any)?.signature;
-      if (typeof signature !== "string") {
-        throw new Error("[agent-kit] Wallet signature missing in response");
+      if (typeof signature !== 'string') {
+        throw new Error('[agent-kit] Wallet signature missing in response');
       }
       return signature as `0x${string}`;
     },
@@ -246,8 +246,8 @@ function createRuntimeSigner(opts: {
       signer.account.address = currentAddress;
 
       const signature = (response?.signed as any)?.signature;
-      if (typeof signature !== "string") {
-        throw new Error("[agent-kit] Wallet signature missing in response");
+      if (typeof signature !== 'string') {
+        throw new Error('[agent-kit] Wallet signature missing in response');
       }
       return signature as `0x${string}`;
     },
@@ -263,7 +263,7 @@ export async function createRuntimePaymentContext(
   if (!baseFetch) {
     logWarning(
       options.logger,
-      "[agent-kit] No fetch implementation available; skipping payment wrapping"
+      '[agent-kit] No fetch implementation available; skipping payment wrapping'
     );
     return {
       fetchWithPayment: null,
@@ -294,7 +294,7 @@ export async function createRuntimePaymentContext(
           (signer as any)?.account?.address
         ),
         chainId:
-          typeof (signer as any)?.chain?.id === "number"
+          typeof (signer as any)?.chain?.id === 'number'
             ? (signer as any).chain.id
             : null,
       };
@@ -317,7 +317,7 @@ export async function createRuntimePaymentContext(
   if (!options.runtime) {
     logWarning(
       options.logger,
-      "[agent-kit] Runtime payment context requires either a runtime or private key"
+      '[agent-kit] Runtime payment context requires either a runtime or private key'
     );
     return {
       fetchWithPayment: null,
@@ -336,7 +336,7 @@ export async function createRuntimePaymentContext(
   if (!chainId) {
     logWarning(
       options.logger,
-      "[agent-kit] Unable to derive chainId for runtime payments; provide options.chainId or options.network"
+      '[agent-kit] Unable to derive chainId for runtime payments; provide options.chainId or options.network'
     );
     return {
       fetchWithPayment: null,

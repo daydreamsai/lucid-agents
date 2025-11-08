@@ -3,20 +3,19 @@
  * Handles validation requests and responses for agent work verification
  */
 
-import type { Hex } from "../utils";
-import { normalizeAddress } from "../utils";
-import type { PublicClientLike, WalletClientLike } from "./identity";
-import { VALIDATION_REGISTRY_ABI } from "../abi/types";
+import { VALIDATION_REGISTRY_ABI } from '../abi/types';
+import type { Hex } from '../utils';
+import type { PublicClientLike, WalletClientLike } from './identity';
 
 /**
  * Default tag value for validation operations (zero bytes32)
  */
 const DEFAULT_TAG: Hex =
-  "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex;
+  '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
 
 export type ValidationRegistryClientOptions<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 > = {
   address: Hex;
   chainId: number;
@@ -106,7 +105,7 @@ export type ValidationRegistryClient = {
  */
 export function createValidationRegistryClient<
   PublicClient extends PublicClientLike,
-  WalletClient extends WalletClientLike | undefined = undefined
+  WalletClient extends WalletClientLike | undefined = undefined,
 >(
   options: ValidationRegistryClientOptions<PublicClient, WalletClient>
 ): ValidationRegistryClient {
@@ -121,7 +120,7 @@ export function createValidationRegistryClient<
   function ensureWalletClient(): WalletClientLike {
     if (!walletClient) {
       throw new Error(
-        "Validation registry client requires walletClient for write operations"
+        'Validation registry client requires walletClient for write operations'
       );
     }
     return walletClient;
@@ -137,7 +136,7 @@ export function createValidationRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "validationRequest",
+        functionName: 'validationRequest',
         args: [
           input.validatorAddress,
           input.agentId,
@@ -157,7 +156,7 @@ export function createValidationRegistryClient<
       const txHash = await wallet.writeContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "validationResponse",
+        functionName: 'validationResponse',
         args: [
           input.requestHash,
           input.response,
@@ -175,7 +174,7 @@ export function createValidationRegistryClient<
         const result = (await publicClient.readContract({
           address,
           abi: VALIDATION_REGISTRY_ABI,
-          functionName: "getRequest",
+          functionName: 'getRequest',
           args: [requestHash],
         })) as [Hex, bigint, string, bigint];
 
@@ -198,7 +197,7 @@ export function createValidationRegistryClient<
         const result = (await publicClient.readContract({
           address,
           abi: VALIDATION_REGISTRY_ABI,
-          functionName: "getValidationStatus",
+          functionName: 'getValidationStatus',
           args: [requestHash],
         })) as [Hex, bigint, number, Hex, bigint];
 
@@ -220,7 +219,7 @@ export function createValidationRegistryClient<
       const exists = (await publicClient.readContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "requestExists",
+        functionName: 'requestExists',
         args: [requestHash],
       })) as boolean;
 
@@ -231,7 +230,7 @@ export function createValidationRegistryClient<
       const requestHashes = (await publicClient.readContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "getAgentValidations",
+        functionName: 'getAgentValidations',
         args: [agentId],
       })) as Hex[];
 
@@ -242,7 +241,7 @@ export function createValidationRegistryClient<
       const requestHashes = (await publicClient.readContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "getValidatorRequests",
+        functionName: 'getValidatorRequests',
         args: [validatorAddress],
       })) as Hex[];
 
@@ -256,7 +255,7 @@ export function createValidationRegistryClient<
       const result = (await publicClient.readContract({
         address,
         abi: VALIDATION_REGISTRY_ABI,
-        functionName: "getSummary",
+        functionName: 'getSummary',
         args: [agentId, validatorAddresses, tag],
       })) as [bigint, number];
 

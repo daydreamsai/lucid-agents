@@ -3,7 +3,7 @@
 // the same shapes when constructing mandates or AgentCard extensions.
 
 export const CONTACT_ADDRESS_DATA_KEY =
-  "contact_picker.ContactAddress" as const;
+  'contact_picker.ContactAddress' as const;
 
 export type ContactAddress = {
   city?: string | null;
@@ -19,7 +19,7 @@ export type ContactAddress = {
 };
 
 export const PAYMENT_METHOD_DATA_KEY =
-  "payment_request.PaymentMethodData" as const;
+  'payment_request.PaymentMethodData' as const;
 
 export type PaymentCurrencyAmount = {
   currency: string;
@@ -45,7 +45,7 @@ export type PaymentOptions = {
   request_payer_email?: boolean | null;
   request_payer_phone?: boolean | null;
   request_shipping?: boolean | null;
-  shipping_type?: "shipping" | "delivery" | "pickup" | null;
+  shipping_type?: 'shipping' | 'delivery' | 'pickup' | null;
 };
 
 export type PaymentMethodData = {
@@ -86,9 +86,9 @@ export type PaymentResponse = {
   payer_phone?: string | null;
 };
 
-export const INTENT_MANDATE_DATA_KEY = "ap2.mandates.IntentMandate" as const;
-export const CART_MANDATE_DATA_KEY = "ap2.mandates.CartMandate" as const;
-export const PAYMENT_MANDATE_DATA_KEY = "ap2.mandates.PaymentMandate" as const;
+export const INTENT_MANDATE_DATA_KEY = 'ap2.mandates.IntentMandate' as const;
+export const CART_MANDATE_DATA_KEY = 'ap2.mandates.CartMandate' as const;
+export const PAYMENT_MANDATE_DATA_KEY = 'ap2.mandates.PaymentMandate' as const;
 
 export type IntentMandate = {
   user_cart_confirmation_required: boolean;
@@ -127,13 +127,13 @@ export type PaymentMandate = {
 };
 
 export const AP2_EXTENSION_URI =
-  "https://github.com/google-agentic-commerce/ap2/tree/v0.1" as const;
+  'https://github.com/google-agentic-commerce/ap2/tree/v0.1' as const;
 
 export type AP2Role =
-  | "merchant"
-  | "shopper"
-  | "credentials-provider"
-  | "payment-processor";
+  | 'merchant'
+  | 'shopper'
+  | 'credentials-provider'
+  | 'payment-processor';
 
 export type AP2ExtensionParams = {
   roles: [AP2Role, ...AP2Role[]];

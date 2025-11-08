@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 import {
   AgentKitConfig,
   createAgentApp,
   createAxLLMClient,
-} from "@lucid-agents/agent-kit";
-import { paymentsFromEnv } from "@lucid-agents/agent-kit/utils";
-import { flow } from "@ax-llm/ax";
+} from '@lucid-agents/agent-kit';
+import { paymentsFromEnv } from '@lucid-agents/agent-kit/utils';
+import { flow } from '@ax-llm/ax';
 
 /**
  * Agent Zero now runs a lightweight quiz arcade. Players register for a session,
@@ -15,8 +15,8 @@ import { flow } from "@ax-llm/ax";
  * back to scripted content so local development still works.
  */
 
-type Difficulty = "easy" | "medium" | "hard";
-type Verdict = "correct" | "partial" | "wrong";
+type Difficulty = 'easy' | 'medium' | 'hard';
+type Verdict = 'correct' | 'partial' | 'wrong';
 
 type ActiveQuestion = {
   id: string;
@@ -32,7 +32,7 @@ type ActiveQuestion = {
 
 type HistoryEntry = {
   questionId: string;
-  verdict: Verdict | "expired";
+  verdict: Verdict | 'expired';
   earned: number;
   balanceAfter: number;
   category?: string;
@@ -59,17 +59,17 @@ const PAYOUT_THRESHOLD = 100;
 const MAX_HISTORY = 100;
 
 const CATEGORIES = [
-  "general knowledge",
-  "sci-fi universe",
-  "crypto lore",
-  "pop culture",
-  "tech history",
+  'general knowledge',
+  'sci-fi universe',
+  'crypto lore',
+  'pop culture',
+  'tech history',
 ] as const;
 
-const DEFAULT_FUN_FACT = "Great effort! Keep the streak alive for bonus ARC.";
+const DEFAULT_FUN_FACT = 'Great effort! Keep the streak alive for bonus ARC.';
 
 const axClient = createAxLLMClient({
-  apiUrl: "https://api-beta.daydreams.systems/v1",
+  apiUrl: 'https://api-beta.daydreams.systems/v1',
   logger: {
     warn(message, error) {
       if (error) {
@@ -83,7 +83,7 @@ const axClient = createAxLLMClient({
 
 if (!axClient.isConfigured()) {
   console.warn(
-    "[examples] Ax LLM provider not configured — gameplay will fall back to scripted questions."
+    '[examples] Ax LLM provider not configured — gameplay will fall back to scripted questions.'
   );
 }
 
@@ -103,16 +103,16 @@ const questionFlow = flow<
   { question: string; answerKey: string; funFact?: string }
 >()
   .node(
-    "questionSmith",
+    'questionSmith',
     'category?:string, difficulty:string -> prompt:string "Question text only", answer_key:string "Canonical answer", fun_fact?:string "Optional reveal"'
   )
-  .execute("questionSmith", (state) => ({
+  .execute('questionSmith', state => ({
     category: state.category,
     difficulty: state.difficulty,
   }))
-  .returns((state) => ({
-    question: String(state.questionSmithResult.prompt ?? "").trim(),
-    answerKey: String(state.questionSmithResult.answer_key ?? "").trim(),
+  .returns(state => ({
+    question: String(state.questionSmithResult.prompt ?? '').trim(),
+    answerKey: String(state.questionSmithResult.answer_key ?? '').trim(),
     funFact: state.questionSmithResult.fun_fact
       ? String(state.questionSmithResult.fun_fact).trim()
       : undefined,
@@ -127,17 +127,17 @@ const judgeFlow = flow<
   { verdict: Verdict; rationale: string; normalizedExpected: string }
 >()
   .node(
-    "judgeJury",
+    'judgeJury',
     'question:string, player_answer:string, answer_key:string -> verdict:class "correct, partial, wrong", rationale:string, normalized_expected:string'
   )
-  .execute("judgeJury", (state) => ({
+  .execute('judgeJury', state => ({
     question: state.question,
     player_answer: state.playerAnswer,
     answer_key: state.answerKey,
   }))
-  .returns((state) => ({
-    verdict: (state.judgeJuryResult.verdict as Verdict) ?? "wrong",
-    rationale: String(state.judgeJuryResult.rationale ?? "").trim(),
+  .returns(state => ({
+    verdict: (state.judgeJuryResult.verdict as Verdict) ?? 'wrong',
+    rationale: String(state.judgeJuryResult.rationale ?? '').trim(),
     normalizedExpected: String(
       state.judgeJuryResult.normalized_expected ?? state.answerKey
     ).trim(),
@@ -148,16 +148,16 @@ const hintFlow = flow<
   { hint: string; encouragement?: string }
 >()
   .node(
-    "hintForge",
-    "question:string, answer_key:string, hint_number:number -> hint:string, encouragement?:string"
+    'hintForge',
+    'question:string, answer_key:string, hint_number:number -> hint:string, encouragement?:string'
   )
-  .execute("hintForge", (state) => ({
+  .execute('hintForge', state => ({
     question: state.question,
     answer_key: state.answerKey,
     hint_number: state.hintNumber,
   }))
-  .returns((state) => ({
-    hint: String(state.hintForgeResult.hint ?? "").trim(),
+  .returns(state => ({
+    hint: String(state.hintForgeResult.hint ?? '').trim(),
     encouragement: state.hintForgeResult.encouragement
       ? String(state.hintForgeResult.encouragement).trim()
       : undefined,
@@ -165,18 +165,18 @@ const hintFlow = flow<
 
 const config: AgentKitConfig = {
   payments: {
-    payTo: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-    network: "base",
-    defaultPrice: process.env.DEFAULT_PRICE ?? "0.03",
+    payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+    network: 'base',
+    defaultPrice: process.env.DEFAULT_PRICE ?? '0.03',
   },
 };
 
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "Agent Zero Arcade",
-    version: "1.0.0",
+    name: 'Agent Zero Arcade',
+    version: '1.0.0',
     description:
-      "A playful quiz agent where GPT runs the arcade, awards ARC tokens, and celebrates streaks.",
+      'A playful quiz agent where GPT runs the arcade, awards ARC tokens, and celebrates streaks.',
   },
   {
     config,
@@ -189,12 +189,12 @@ const { app, addEntrypoint } = createAgentApp(
       leaderboard: false,
     },
     trust: {
-      trustModels: ["arcade-fair-play"],
+      trustModels: ['arcade-fair-play'],
     },
   }
 );
 
-const difficultyEnum = z.enum(["easy", "medium", "hard"]);
+const difficultyEnum = z.enum(['easy', 'medium', 'hard']);
 
 const questionPayloadSchema = z.object({
   id: z.string(),
@@ -207,12 +207,12 @@ const questionPayloadSchema = z.object({
 });
 
 const registerInputSchema = z.object({
-  player_id: z.string().min(1, { message: "player_id is required" }),
+  player_id: z.string().min(1, { message: 'player_id is required' }),
   nickname: z
     .string()
     .trim()
-    .min(1, { message: "Nickname cannot be empty" })
-    .max(32, { message: "Nickname too long" })
+    .min(1, { message: 'Nickname cannot be empty' })
+    .max(32, { message: 'Nickname too long' })
     .optional(),
 });
 
@@ -224,7 +224,7 @@ const questionInputSchema = z.object({
 
 const answerInputSchema = z.object({
   session_token: z.string().min(1),
-  answer: z.string().trim().min(1, { message: "Answer cannot be empty" }),
+  answer: z.string().trim().min(1, { message: 'Answer cannot be empty' }),
 });
 
 const hintInputSchema = z.object({
@@ -255,7 +255,7 @@ function ensureSession(sessionToken: string): PlayerSession {
   const session = sessions.get(sessionToken);
   if (!session) {
     throw new Error(
-      "Session not found. Register first to get a session token."
+      'Session not found. Register first to get a session token.'
     );
   }
   return session;
@@ -281,18 +281,18 @@ function assignSession(input: {
 }
 
 function determineDifficulty(session: PlayerSession): Difficulty {
-  if (session.rating >= 1350) return "hard";
-  if (session.rating >= 1200) return "medium";
-  return "easy";
+  if (session.rating >= 1350) return 'hard';
+  if (session.rating >= 1200) return 'medium';
+  return 'easy';
 }
 
 function difficultyMultiplier(difficulty: Difficulty): number {
   switch (difficulty) {
-    case "easy":
+    case 'easy':
       return 1;
-    case "medium":
+    case 'medium':
       return 1.5;
-    case "hard":
+    case 'hard':
       return 2.25;
     default:
       return 1;
@@ -310,23 +310,23 @@ function adjustRating(
 ): void {
   const multiplier = difficultyMultiplier(difficulty);
   const base =
-    verdict === "correct" ? 20 : verdict === "partial" ? 5 : -15 * multiplier;
+    verdict === 'correct' ? 20 : verdict === 'partial' ? 5 : -15 * multiplier;
   const delta =
-    verdict === "correct"
+    verdict === 'correct'
       ? Math.round(multiplier * (25 + streakBonus(session.streak + 1)))
-      : verdict === "partial"
-      ? Math.round(multiplier * 5)
-      : Math.round(-20 * multiplier);
+      : verdict === 'partial'
+        ? Math.round(multiplier * 5)
+        : Math.round(-20 * multiplier);
   const nextRating = session.rating + Math.round(base + delta / 3);
   session.rating = Math.min(1600, Math.max(900, nextRating));
 }
 
 function computeThemes(session: PlayerSession): string[] {
   const themes: string[] = [];
-  if (session.balance >= 50) themes.push("bonus-round");
-  if (session.streak >= 3) themes.push("streak-fury");
-  if (session.rating >= 1350) themes.push("galactic-challenge");
-  if (session.history.length >= 10) themes.push("quiz-marathon");
+  if (session.balance >= 50) themes.push('bonus-round');
+  if (session.streak >= 3) themes.push('streak-fury');
+  if (session.rating >= 1350) themes.push('galactic-challenge');
+  if (session.history.length >= 10) themes.push('quiz-marathon');
   return themes;
 }
 
@@ -338,47 +338,47 @@ function trimHistory(session: PlayerSession) {
 
 function fallbackQuestion(difficulty: Difficulty, category?: string) {
   const fallbackBank: Array<
-    Omit<ActiveQuestion, "id" | "generatedAt" | "expiresAt" | "hintsUsed">
+    Omit<ActiveQuestion, 'id' | 'generatedAt' | 'expiresAt' | 'hintsUsed'>
   > = [
     {
       prompt:
-        "Which planet in our solar system is famous for its rings and is named after the Roman god of agriculture?",
-      answerKey: "Saturn",
+        'Which planet in our solar system is famous for its rings and is named after the Roman god of agriculture?',
+      answerKey: 'Saturn',
       funFact:
         "Saturn could float in a bathtub if you could find one big enough—it's less dense than water!",
-      category: "general knowledge",
-      difficulty: "easy",
+      category: 'general knowledge',
+      difficulty: 'easy',
     },
     {
       prompt:
-        "In the original Star Wars trilogy, what is the name of the moon-sized battle station capable of destroying planets?",
-      answerKey: "The Death Star",
+        'In the original Star Wars trilogy, what is the name of the moon-sized battle station capable of destroying planets?',
+      answerKey: 'The Death Star',
       funFact:
-        "The Death Star design is rumored to have inspired countless sci-fi mega-structures.",
-      category: "sci-fi universe",
-      difficulty: "medium",
+        'The Death Star design is rumored to have inspired countless sci-fi mega-structures.',
+      category: 'sci-fi universe',
+      difficulty: 'medium',
     },
     {
       prompt:
-        "What cryptographic concept, named after a British mathematician, involves breaking problems down using a diagonalization argument?",
-      answerKey: "Turing diagonalization",
+        'What cryptographic concept, named after a British mathematician, involves breaking problems down using a diagonalization argument?',
+      answerKey: 'Turing diagonalization',
       funFact:
-        "Alan Turing introduced diagonalization while exploring the limits of computation.",
-      category: "crypto lore",
-      difficulty: "hard",
+        'Alan Turing introduced diagonalization while exploring the limits of computation.',
+      category: 'crypto lore',
+      difficulty: 'hard',
     },
     {
       prompt:
         "Which pop icon released the album '1989', sparking a wave of synth-pop nostalgia?",
-      answerKey: "Taylor Swift",
+      answerKey: 'Taylor Swift',
       funFact:
         "The album is named after the artist's birth year and marked her shift into pop.",
-      category: "pop culture",
-      difficulty: "easy",
+      category: 'pop culture',
+      difficulty: 'easy',
     },
   ];
 
-  const candidates = fallbackBank.filter((item) => {
+  const candidates = fallbackBank.filter(item => {
     if (category && item.category !== category) return false;
     return item.difficulty === difficulty;
   });
@@ -399,7 +399,7 @@ async function generateQuestion(options: {
   difficulty: Difficulty;
   category?: string;
 }): Promise<
-  Omit<ActiveQuestion, "id" | "generatedAt" | "expiresAt" | "hintsUsed">
+  Omit<ActiveQuestion, 'id' | 'generatedAt' | 'expiresAt' | 'hintsUsed'>
 > {
   const llm = axClient.ax;
   if (!llm) {
@@ -429,7 +429,7 @@ async function generateQuestion(options: {
     };
   } catch (error) {
     console.warn(
-      "[examples] Question generation failed, using fallback",
+      '[examples] Question generation failed, using fallback',
       error
     );
     return fallbackQuestion(options.difficulty, options.category);
@@ -437,20 +437,20 @@ async function generateQuestion(options: {
 }
 
 function normalizeText(text: string) {
-  return text.toLowerCase().replace(/\s+/g, " ").trim();
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 function simpleVerdict(playerAnswer: string, answerKey: string): Verdict {
   const normalizedAnswer = normalizeText(playerAnswer);
   const normalizedKey = normalizeText(answerKey);
-  if (normalizedAnswer === normalizedKey) return "correct";
+  if (normalizedAnswer === normalizedKey) return 'correct';
   if (
     normalizedKey.includes(normalizedAnswer) ||
     normalizedAnswer.includes(normalizedKey)
   ) {
-    return "partial";
+    return 'partial';
   }
-  return "wrong";
+  return 'wrong';
 }
 
 async function judgeAnswer(input: {
@@ -468,11 +468,11 @@ async function judgeAnswer(input: {
     return {
       verdict,
       rationale:
-        verdict === "correct"
-          ? "Spot on! That matches the expected answer."
-          : verdict === "partial"
-          ? "Close! You're circling the right idea, add a bit more detail."
-          : "Not quite. Compare your answer to the canonical answer for clues.",
+        verdict === 'correct'
+          ? 'Spot on! That matches the expected answer.'
+          : verdict === 'partial'
+            ? "Close! You're circling the right idea, add a bit more detail."
+            : 'Not quite. Compare your answer to the canonical answer for clues.',
       normalizedExpected: input.answerKey,
     };
   }
@@ -486,16 +486,16 @@ async function judgeAnswer(input: {
     judgeFlow.resetUsage();
     return result;
   } catch (error) {
-    console.warn("[examples] Judge flow failed, using fallback verdict", error);
+    console.warn('[examples] Judge flow failed, using fallback verdict', error);
     const verdict = simpleVerdict(input.playerAnswer, input.answerKey);
     return {
       verdict,
       rationale:
-        verdict === "correct"
-          ? "Correct according to the fallback checker."
-          : verdict === "partial"
-          ? "Partially correct per fallback checker."
-          : "Incorrect according to the fallback checker.",
+        verdict === 'correct'
+          ? 'Correct according to the fallback checker.'
+          : verdict === 'partial'
+            ? 'Partially correct per fallback checker.'
+            : 'Incorrect according to the fallback checker.',
       normalizedExpected: input.answerKey,
     };
   }
@@ -511,9 +511,9 @@ async function buildHint(input: {
     return {
       hint:
         input.hintNumber === 1
-          ? "Think about the most iconic aspect related to this topic."
-          : "Try narrowing your answer to a specific proper noun or title.",
-      encouragement: "You got this! One more thought and the ARC is yours.",
+          ? 'Think about the most iconic aspect related to this topic.'
+          : 'Try narrowing your answer to a specific proper noun or title.',
+      encouragement: 'You got this! One more thought and the ARC is yours.',
     };
   }
 
@@ -522,16 +522,16 @@ async function buildHint(input: {
     hintFlow.resetUsage();
     if (!result.hint) {
       return {
-        hint: "The answer is within reach—focus on the unique identifier!",
-        encouragement: result.encouragement ?? "Trust your instincts.",
+        hint: 'The answer is within reach—focus on the unique identifier!',
+        encouragement: result.encouragement ?? 'Trust your instincts.',
       };
     }
     return result;
   } catch (error) {
-    console.warn("[examples] Hint flow failed, using fallback hint", error);
+    console.warn('[examples] Hint flow failed, using fallback hint', error);
     return {
-      hint: "Consider the main theme and reframe your guess through that lens.",
-      encouragement: "Keep at it! Even legends need a hint sometimes.",
+      hint: 'Consider the main theme and reframe your guess through that lens.',
+      encouragement: 'Keep at it! Even legends need a hint sometimes.',
     };
   }
 }
@@ -539,7 +539,7 @@ async function buildHint(input: {
 function ensureActiveQuestion(session: PlayerSession) {
   const current = session.lastQuestion;
   if (!current) {
-    throw new Error("No active question. Request a new question first.");
+    throw new Error('No active question. Request a new question first.');
   }
   return current;
 }
@@ -552,7 +552,7 @@ function handleExpiration(
   session.balance = Math.max(0, session.balance - 3);
   const historyEntry: HistoryEntry = {
     questionId: question.id,
-    verdict: "expired",
+    verdict: 'expired',
     earned: -3,
     balanceAfter: session.balance,
     category: question.category,
@@ -583,14 +583,14 @@ function maybeCreatePayout(balance: number) {
   if (!payments) {
     return {
       threshold: PAYOUT_THRESHOLD,
-      status: "pending-config",
+      status: 'pending-config',
       message:
-        "Balance reached payout threshold, but x402 payments are not configured for this environment.",
+        'Balance reached payout threshold, but x402 payments are not configured for this environment.',
     };
   }
   return {
     threshold: PAYOUT_THRESHOLD,
-    status: "ready",
+    status: 'ready',
     payments,
   };
 }
@@ -606,8 +606,8 @@ function chunkMessage(text: string, size = 64) {
 }
 
 addEntrypoint({
-  key: "register",
-  description: "Register a new player and receive a welcome ARC grant.",
+  key: 'register',
+  description: 'Register a new player and receive a welcome ARC grant.',
   input: registerInputSchema,
   output: z.object({
     session_token: z.string(),
@@ -654,8 +654,8 @@ addEntrypoint({
 });
 
 addEntrypoint({
-  key: "question",
-  description: "Request a fresh quiz question from the Agent Zero arcade.",
+  key: 'question',
+  description: 'Request a fresh quiz question from the Agent Zero arcade.',
   input: questionInputSchema,
   output: z.object({
     active_question: questionPayloadSchema,
@@ -701,12 +701,12 @@ addEntrypoint({
 });
 
 addEntrypoint({
-  key: "answer",
+  key: 'answer',
   description:
-    "Submit an answer. Tokens are awarded based on correctness, difficulty, and streak.",
+    'Submit an answer. Tokens are awarded based on correctness, difficulty, and streak.',
   input: answerInputSchema,
   output: z.object({
-    verdict: z.enum(["correct", "partial", "wrong", "expired"]),
+    verdict: z.enum(['correct', 'partial', 'wrong', 'expired']),
     explanation: z.string(),
     earned_arc: z.number(),
     balance: z.number(),
@@ -716,7 +716,7 @@ addEntrypoint({
     payout: z
       .object({
         threshold: z.number(),
-        status: z.enum(["ready", "pending-config"]),
+        status: z.enum(['ready', 'pending-config']),
         payments: z
           .object({
             facilitatorUrl: z.string(),
@@ -739,7 +739,7 @@ addEntrypoint({
       const historyEntry = handleExpiration(session, question);
       return {
         output: {
-          verdict: "expired",
+          verdict: 'expired',
           explanation:
             "Time's up! ARC slipped away. Request a new question to jump back in.",
           earned_arc: historyEntry.earned,
@@ -760,14 +760,14 @@ addEntrypoint({
     });
 
     let earned = 0;
-    if (judge.verdict === "correct") {
+    if (judge.verdict === 'correct') {
       session.streak += 1;
       earned =
         Math.round(
           CORRECT_BASE_REWARD * difficultyMultiplier(question.difficulty)
         ) + streakBonus(session.streak);
       session.balance += earned;
-    } else if (judge.verdict === "partial") {
+    } else if (judge.verdict === 'partial') {
       session.streak = 0;
       earned = Math.max(
         2,
@@ -800,7 +800,7 @@ addEntrypoint({
     trimHistory(session);
 
     const payout = maybeCreatePayout(session.balance);
-    if (payout?.status === "ready") {
+    if (payout?.status === 'ready') {
       // Reset balance after exposing payout payload to avoid double counting.
       session.balance = 0;
       session.streak = 0;
@@ -816,7 +816,7 @@ addEntrypoint({
         balance: session.balance,
         streak: session.streak,
         normalized_expected: judge.normalizedExpected ?? question.answerKey,
-        fun_fact: judge.verdict === "correct" ? question.funFact : undefined,
+        fun_fact: judge.verdict === 'correct' ? question.funFact : undefined,
         payout,
         next_hint_cost: HINT_COST,
       },
@@ -825,9 +825,9 @@ addEntrypoint({
 });
 
 addEntrypoint({
-  key: "hint",
+  key: 'hint',
   description:
-    "Spend ARC to receive a hint. Hints become progressively more specific.",
+    'Spend ARC to receive a hint. Hints become progressively more specific.',
   input: hintInputSchema,
   output: z.object({
     balance: z.number(),
@@ -842,9 +842,9 @@ addEntrypoint({
     if (Date.now() > question.expiresAt) {
       handleExpiration(session, question);
       await emit({
-        kind: "delta",
-        delta: "This question expired. Request a new challenge!",
-        mime: "text/plain",
+        kind: 'delta',
+        delta: 'This question expired. Request a new challenge!',
+        mime: 'text/plain',
       });
       return {
         output: {
@@ -856,9 +856,9 @@ addEntrypoint({
 
     if (question.hintsUsed >= 2) {
       await emit({
-        kind: "delta",
-        delta: "Hint limit reached. Try submitting an answer!",
-        mime: "text/plain",
+        kind: 'delta',
+        delta: 'Hint limit reached. Try submitting an answer!',
+        mime: 'text/plain',
       });
       return {
         output: {
@@ -870,9 +870,9 @@ addEntrypoint({
 
     if (session.balance < HINT_COST) {
       await emit({
-        kind: "delta",
-        delta: "Not enough ARC for a hint. Win a round or cash-in soon!",
-        mime: "text/plain",
+        kind: 'delta',
+        delta: 'Not enough ARC for a hint. Win a round or cash-in soon!',
+        mime: 'text/plain',
       });
       return {
         output: {
@@ -894,16 +894,16 @@ addEntrypoint({
     const chunks = chunkMessage(hintResult.hint);
     for (const chunk of chunks) {
       await emit({
-        kind: "delta",
+        kind: 'delta',
         delta: chunk,
-        mime: "text/plain",
+        mime: 'text/plain',
       });
     }
     if (hintResult.encouragement) {
       await emit({
-        kind: "text",
+        kind: 'text',
         text: hintResult.encouragement,
-        mime: "text/plain",
+        mime: 'text/plain',
       });
     }
 
@@ -917,8 +917,8 @@ addEntrypoint({
 });
 
 addEntrypoint({
-  key: "leaderboard",
-  description: "View top players, streaks, and unlocked quiz themes.",
+  key: 'leaderboard',
+  description: 'View top players, streaks, and unlocked quiz themes.',
   input: z.object({}).optional().default({}),
   output: leaderboardOutputSchema,
   async handler() {
@@ -926,7 +926,7 @@ addEntrypoint({
     const items = Array.from(sessions.values())
       .sort((a, b) => b.balance - a.balance || b.rating - a.rating)
       .slice(0, 10)
-      .map((session) =>
+      .map(session =>
         leaderboardItemSchema.parse({
           nickname: session.nickname,
           player_id: session.playerId,

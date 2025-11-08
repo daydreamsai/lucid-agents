@@ -48,5 +48,11 @@ jobs:
       - name: Build packages
         run: bun run build:packages
 
+      - name: Lint packages
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
       - name: Test packages
         run: bun test

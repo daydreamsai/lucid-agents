@@ -14,7 +14,12 @@
     "test": "bun test",
     "build": "tsup",
     "clean": "rm -rf dist",
-    "prepare": "bun run build"
+    "prepare": "bun run build",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc --build tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -31,6 +36,8 @@
     "@types/node": "^24.3.1",
     "bun-types": "^1.1.16",
     "tsup": "^8.5.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@lucid-agents/prettier-config": "workspace:*"
   }
 }

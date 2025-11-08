@@ -1,0 +1,8 @@
+{
+  "name": "@lucid-agents/eslint-config",
+  "version": "1.0.0",
+  "description": "Shared ESLint configuration for Lucid Agents monorepo",
+  "main": "index.js",
+  "private": true
+}
+

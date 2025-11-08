@@ -1,33 +1,26 @@
-export * from "./ap2";
-export * from "./erc8004";
-export * from "./types";
-
-export * from "./utils";
+export * from './ap2';
+export { createAgentApp, type CreateAgentAppOptions } from './app';
 export {
-  createAxLLMClient,
-  type AxLLMClient,
-  type AxLLMClientOptions,
-} from "./utils/axllm";
-
-export {
+  type AgentKitConfig,
   configureAgentKit,
   getAgentKitConfig,
   resetAgentKitConfigForTesting,
-  type AgentKitConfig,
   type ResolvedAgentKitConfig,
-} from "./config";
-
-export { resolveEntrypointPrice } from "./pricing";
-
-export { withPayments, type WithPaymentsParams } from "./paywall";
-
-export { buildManifest } from "./manifest";
-
-export { createAgentApp, type CreateAgentAppOptions } from "./app";
-
+} from './config';
+export * from './erc8004';
+export { buildManifest } from './manifest';
+export { withPayments, type WithPaymentsParams } from './paywall';
+export { resolveEntrypointPrice } from './pricing';
 export {
   createRuntimePaymentContext,
   type RuntimePaymentContext,
-  type RuntimePaymentOptions,
   type RuntimePaymentLogger,
-} from "./runtime";
+  type RuntimePaymentOptions,
+} from './runtime';
+export * from './types';
+export * from './utils';
+export {
+  type AxLLMClient,
+  type AxLLMClientOptions,
+  createAxLLMClient,
+} from './utils/axllm';

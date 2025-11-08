@@ -1,10 +1,10 @@
-import { z } from "zod";
+import { z } from 'zod';
 import {
   AgentKitConfig,
   createAgentApp,
   createAxLLMClient,
-} from "@lucid-agents/agent-kit";
-import { flow } from "@ax-llm/ax";
+} from '@lucid-agents/agent-kit';
+import { flow } from '@ax-llm/ax';
 
 /**
  * This example shows how to combine `createAxLLMClient` with a small AxFlow
@@ -17,7 +17,7 @@ import { flow } from "@ax-llm/ax";
  */
 
 const axClient = createAxLLMClient({
-  apiUrl: "http://localhost:8080/v1",
+  apiUrl: 'http://localhost:8080/v1',
   logger: {
     warn(message, error) {
       if (error) {
@@ -31,26 +31,26 @@ const axClient = createAxLLMClient({
 
 if (!axClient.isConfigured()) {
   console.warn(
-    "[examples] Ax LLM provider not configured — the flow will fall back to scripted output."
+    '[examples] Ax LLM provider not configured — the flow will fall back to scripted output.'
   );
 }
 
 const brainstormingFlow = flow<{ topic: string }>()
   .node(
-    "summarizer",
+    'summarizer',
     'topic:string -> summary:string "Two concise sentences describing the topic."'
   )
   .node(
-    "ideaGenerator",
+    'ideaGenerator',
     'summary:string -> ideas:string[] "Three short follow-up ideas."'
   )
-  .execute("summarizer", (state) => ({
+  .execute('summarizer', state => ({
     topic: state.topic,
   }))
-  .execute("ideaGenerator", (state) => ({
+  .execute('ideaGenerator', state => ({
     summary: state.summarizerResult.summary as string,
   }))
-  .returns((state) => ({
+  .returns(state => ({
     summary: state.summarizerResult.summary as string,
     ideas: Array.isArray(state.ideaGeneratorResult.ideas)
       ? (state.ideaGeneratorResult.ideas as string[])
@@ -59,18 +59,18 @@ const brainstormingFlow = flow<{ topic: string }>()
 
 const config: AgentKitConfig = {
   payments: {
-    payTo: "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-    network: "base",
-    defaultPrice: process.env.DEFAULT_PRICE ?? "0.03",
+    payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+    network: 'base',
+    defaultPrice: process.env.DEFAULT_PRICE ?? '0.03',
   },
 };
 
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "ax-flow-agent",
-    version: "0.0.1",
+    name: 'ax-flow-agent',
+    version: '0.0.1',
     description:
-      "Demonstrates driving an AxFlow pipeline through createAxLLMClient.",
+      'Demonstrates driving an AxFlow pipeline through createAxLLMClient.',
   },
   {
     config,
@@ -78,23 +78,23 @@ const { app, addEntrypoint } = createAgentApp(
 );
 
 addEntrypoint({
-  key: "brainstorm",
+  key: 'brainstorm',
   description:
-    "Summarise a topic and suggest three follow-up ideas using AxFlow.",
+    'Summarise a topic and suggest three follow-up ideas using AxFlow.',
   input: z.object({
     topic: z
       .string()
-      .min(1, { message: "Provide a topic to analyse." })
-      .describe("High level topic to explore."),
+      .min(1, { message: 'Provide a topic to analyse.' })
+      .describe('High level topic to explore.'),
   }),
   output: z.object({
     summary: z.string(),
     ideas: z.array(z.string()),
   }),
   async handler(ctx) {
-    const topic = String(ctx.input.topic ?? "").trim();
+    const topic = String(ctx.input.topic ?? '').trim();
     if (!topic) {
-      throw new Error("Topic cannot be empty.");
+      throw new Error('Topic cannot be empty.');
     }
 
     const llm = axClient.ax;
@@ -104,12 +104,12 @@ addEntrypoint({
         output: {
           summary: fallbackSummary,
           ideas: [
-            "Set OPENAI_API_KEY to enable the Ax integration.",
-            "Provide a PRIVATE_KEY so x402 can sign requests.",
-            "Re-run the request once credentials are configured.",
+            'Set OPENAI_API_KEY to enable the Ax integration.',
+            'Provide a PRIVATE_KEY so x402 can sign requests.',
+            'Re-run the request once credentials are configured.',
           ],
         },
-        model: "axllm-fallback",
+        model: 'axllm-fallback',
       };
     }
 
@@ -119,7 +119,7 @@ addEntrypoint({
 
     return {
       output: {
-        summary: result.summary ?? "",
+        summary: result.summary ?? '',
         ideas: Array.isArray(result.ideas) ? result.ideas : [],
       },
       model: usageEntry?.model,
@@ -129,13 +129,13 @@ addEntrypoint({
 
 const port = Number(process.env.PORT ?? 8787);
 
-if (typeof Bun !== "undefined") {
+if (typeof Bun !== 'undefined') {
   Bun.serve({ fetch: app.fetch, port });
   console.log(
     `[examples] AxFlow example listening on https://localhost:${port}/entrypoints/brainstorm/invoke`
   );
 } else {
   console.warn(
-    "[examples] Bun runtime not detected; export the app or adapt to your runtime instead."
+    '[examples] Bun runtime not detected; export the app or adapt to your runtime instead.'
   );
 }

@@ -1,5 +1,13 @@
-import { Hono } from "hono";
-import { streamSSE } from "hono/streaming";
+import { Buffer } from 'node:buffer';
+import { readFileSync } from 'node:fs';
+
+import { Hono } from 'hono';
+import { streamSSE } from 'hono/streaming';
+
+import type { AgentKitConfig, ResolvedAgentKitConfig } from './config';
+import { configureAgentKit, getAgentKitConfig } from './config';
+import { buildManifest } from './manifest';
+import { withPayments } from './paywall';
 import type {
   AgentMeta,
   AP2Config,
@@ -9,15 +17,9 @@ import type {
   StreamPushEnvelope,
   StreamResult,
   TrustConfig,
-} from "./types";
-import type { AgentKitConfig, ResolvedAgentKitConfig } from "./config";
-import { buildManifest } from "./manifest";
-import { withPayments } from "./paywall";
-import { configureAgentKit, getAgentKitConfig } from "./config";
-import { renderLandingPage } from "./ui/landing-page";
-import { readFileSync } from "node:fs";
-import { Buffer } from "node:buffer";
-import { validateAgentMetadata } from "./validation";
+} from './types';
+import { renderLandingPage } from './ui/landing-page';
+import { validateAgentMetadata } from './validation';
 
 export type CreateAgentAppOptions = {
   payments?: PaymentsConfig | false;
@@ -45,7 +47,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   const resolvedPayments: PaymentsConfig | undefined =
     paymentsOption === false
       ? undefined
-      : paymentsOption ??
+      : (paymentsOption ??
         (shouldUseConfiguredPayments
           ? {
               payTo: resolvedConfig.payments.payTo,
@@ -53,7 +55,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
               network: resolvedConfig.payments.network,
               defaultPrice: resolvedConfig.payments.defaultPrice,
             }
-          : undefined);
+          : undefined));
 
   let activePayments: PaymentsConfig | undefined = resolvedPayments;
 
@@ -62,18 +64,18 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
 
   const entrypointHasExplicitPrice = (entrypoint: EntrypointDef): boolean => {
     const { price } = entrypoint;
-    if (typeof price === "string") {
+    if (typeof price === 'string') {
       return price.trim().length > 0;
     }
-    if (price && typeof price === "object") {
+    if (price && typeof price === 'object') {
       const hasInvoke = price.invoke;
       const hasStream = price.stream;
       const invokeDefined =
-        typeof hasInvoke === "string"
+        typeof hasInvoke === 'string'
           ? hasInvoke.trim().length > 0
           : hasInvoke !== undefined;
       const streamDefined =
-        typeof hasStream === "string"
+        typeof hasStream === 'string'
           ? hasStream.trim().length > 0
           : hasStream !== undefined;
       return invokeDefined || streamDefined;
@@ -102,12 +104,12 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   `;
   const resolveFaviconSvg = () => {
     const candidateUrls = [
-      () => new URL("./logo.svg", import.meta.url),
-      () => new URL("../src/logo.svg", import.meta.url),
+      () => new URL('./logo.svg', import.meta.url),
+      () => new URL('../src/logo.svg', import.meta.url),
     ];
     for (const getUrl of candidateUrls) {
       try {
-        const svg = readFileSync(getUrl(), "utf8");
+        const svg = readFileSync(getUrl(), 'utf8');
         if (svg) return svg;
       } catch {
         // ignore and fall back to next candidate
@@ -118,23 +120,23 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   const faviconSvg = resolveFaviconSvg();
   const faviconDataUrl = `data:image/svg+xml;base64,${Buffer.from(
     faviconSvg
-  ).toString("base64")}`;
+  ).toString('base64')}`;
 
   const decodePointerSegment = (segment: string) =>
-    segment.replace(/~1/g, "/").replace(/~0/g, "~");
+    segment.replace(/~1/g, '/').replace(/~0/g, '~');
 
   const resolveJsonPointer = (root: any, pointer: string): any => {
-    if (typeof pointer !== "string" || !pointer.startsWith("#/"))
+    if (typeof pointer !== 'string' || !pointer.startsWith('#/'))
       return undefined;
     const parts = pointer
       .slice(2)
-      .split("/")
-      .map((part) => decodePointerSegment(part));
+      .split('/')
+      .map(part => decodePointerSegment(part));
     let current: any = root;
     for (const part of parts) {
       if (
         current &&
-        typeof current === "object" &&
+        typeof current === 'object' &&
         part in current &&
         current[part] !== undefined
       ) {
@@ -147,7 +149,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   };
 
   const extractInput = (payload: unknown): unknown => {
-    if (payload && typeof payload === "object" && "input" in payload) {
+    if (payload && typeof payload === 'object' && 'input' in payload) {
       const { input } = payload as { input?: unknown };
       return input ?? {};
     }
@@ -155,7 +157,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   };
 
   const listEntrypoints = () =>
-    Array.from(registry.values()).map((e) => ({
+    Array.from(registry.values()).map(e => ({
       key: e.key,
       description: e.description,
       streaming: Boolean(e.stream),
@@ -172,23 +174,23 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
     });
 
   // Health
-  app.get("/health", (c) => c.json({ ok: true, version: meta.version }));
+  app.get('/health', c => c.json({ ok: true, version: meta.version }));
 
   // Introspection
-  app.get("/entrypoints", (c) => c.json({ items: listEntrypoints() }));
-  app.get("/.well-known/agent.json", (c) => {
+  app.get('/entrypoints', c => c.json({ items: listEntrypoints() }));
+  app.get('/.well-known/agent.json', c => {
     const origin = new URL(c.req.url).origin;
     return c.json(buildManifestForOrigin(origin));
   });
   // A2A preferred path alias for well-known card
-  app.get("/.well-known/agent-card.json", (c) => {
+  app.get('/.well-known/agent-card.json', c => {
     const origin = new URL(c.req.url).origin;
     return c.json(buildManifestForOrigin(origin));
   });
 
   // Agent metadata - only registered if agent has on-chain identity
   if (opts?.trust?.registrations?.length) {
-    app.get("/.well-known/agent-metadata.json", (c) => {
+    app.get('/.well-known/agent-metadata.json', c => {
       const registration = opts.trust!.registrations![0];
       const domain = process.env.AGENT_DOMAIN || new URL(c.req.url).hostname;
 
@@ -214,7 +216,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
       app,
       path: invokePath,
       entrypoint: ep,
-      kind: "invoke",
+      kind: 'invoke',
       payments: activePayments,
     });
     if (ep.stream) {
@@ -222,13 +224,13 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
         app,
         path: streamPath,
         entrypoint: ep,
-        kind: "stream",
+        kind: 'stream',
         payments: activePayments,
       });
     }
 
     // Invoke handler
-    app.post(invokePath, async (c) => {
+    app.post(invokePath, async c => {
       const rawBody = await c.req.json().catch(() => undefined);
       const input = extractInput(rawBody);
       // Validate
@@ -236,20 +238,20 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
         const parsed = ep.input.safeParse(input);
         if (!parsed.success) {
           return c.json(
-            { error: { code: "invalid_input", issues: parsed.error.issues } },
+            { error: { code: 'invalid_input', issues: parsed.error.issues } },
             400
           );
         }
       }
       const runId = crypto.randomUUID();
       console.info(
-        "[agent-kit:entrypoint] invoke",
+        '[agent-kit:entrypoint] invoke',
         `key=${ep.key}`,
         `runId=${runId}`
       );
       try {
         if (!ep.handler)
-          return c.json({ error: { code: "not_implemented" } }, 501);
+          return c.json({ error: { code: 'not_implemented' } }, 501);
         const res = await ep.handler({
           key: ep.key,
           input,
@@ -259,7 +261,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
         });
         return c.json({
           run_id: runId,
-          status: "succeeded",
+          status: 'succeeded',
           output: res.output,
           usage: res.usage,
           model: res.model,
@@ -268,8 +270,8 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
         return c.json(
           {
             error: {
-              code: "internal_error",
-              message: (err as Error)?.message || "error",
+              code: 'internal_error',
+              message: (err as Error)?.message || 'error',
             },
           },
           500
@@ -278,10 +280,10 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
     });
 
     // Stream handler
-    app.post(streamPath, async (c) => {
+    app.post(streamPath, async c => {
       if (!ep.stream)
         return c.json(
-          { error: { code: "stream_not_supported", key: ep.key } },
+          { error: { code: 'stream_not_supported', key: ep.key } },
           400
         );
       const rawBody = await c.req.json().catch(() => undefined);
@@ -291,14 +293,14 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
         const parsed = ep.input.safeParse(input);
         if (!parsed.success) {
           return c.json(
-            { error: { code: "invalid_input", issues: parsed.error.issues } },
+            { error: { code: 'invalid_input', issues: parsed.error.issues } },
             400
           );
         }
       }
       const runId = crypto.randomUUID();
       console.info(
-        "[agent-kit:entrypoint] stream",
+        '[agent-kit:entrypoint] stream',
         `key=${ep.key}`,
         `runId=${runId}`
       );
@@ -308,7 +310,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
 
       return streamSSE(
         c,
-        async (s) => {
+        async s => {
           s.onAbort(() => {});
           const sendEnvelope = async (
             payload: StreamEnvelope | StreamPushEnvelope
@@ -329,7 +331,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
             });
           };
 
-          await sendEnvelope({ kind: "run-start", runId });
+          await sendEnvelope({ kind: 'run-start', runId });
 
           const emit = async (chunk: StreamPushEnvelope) => {
             await sendEnvelope(chunk);
@@ -348,9 +350,9 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
             );
 
             await sendEnvelope({
-              kind: "run-end",
+              kind: 'run-end',
               runId,
-              status: res.status ?? "succeeded",
+              status: res.status ?? 'succeeded',
               output: res.output,
               usage: res.usage,
               model: res.model,
@@ -358,46 +360,46 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
               metadata: res.metadata,
             });
           } catch (err) {
-            const message = (err as Error)?.message || "error";
+            const message = (err as Error)?.message || 'error';
             await sendEnvelope({
-              kind: "error",
-              code: "internal_error",
+              kind: 'error',
+              code: 'internal_error',
               message,
             });
             await sendEnvelope({
-              kind: "run-end",
+              kind: 'run-end',
               runId,
-              status: "failed",
-              error: { code: "internal_error", message },
+              status: 'failed',
+              error: { code: 'internal_error', message },
             });
           }
         },
         async (err, s) => {
-          const message = (err as Error)?.message || "error";
+          const message = (err as Error)?.message || 'error';
           const sequence = allocateSequence();
           const createdAt = nowIso();
           await s.writeSSE({
-            event: "error",
+            event: 'error',
             data: JSON.stringify({
-              kind: "error",
+              kind: 'error',
               runId,
               sequence,
               createdAt,
-              code: "stream_error",
+              code: 'stream_error',
               message,
             }),
             id: String(sequence),
           });
           const endSequence = allocateSequence();
           await s.writeSSE({
-            event: "run-end",
+            event: 'run-end',
             data: JSON.stringify({
-              kind: "run-end",
+              kind: 'run-end',
               runId,
               sequence: endSequence,
               createdAt: nowIso(),
-              status: "failed",
-              error: { code: "stream_error", message },
+              status: 'failed',
+              error: { code: 'stream_error', message },
             }),
             id: String(endSequence),
           });
@@ -407,7 +409,7 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
   };
 
   const addEntrypoint = (def: EntrypointDef) => {
-    if (!def.key) throw new Error("entrypoint.key required");
+    if (!def.key) throw new Error('entrypoint.key required');
     ensureActivePaymentsForEntrypoint(def);
     registry.set(def.key, def);
     registerEntrypointRoutes(def);
@@ -419,64 +421,64 @@ export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
     }
   }
 
-  app.get("/", (c) => {
+  app.get('/', c => {
     const origin = new URL(c.req.url).origin;
     const entrypointList = Array.from(registry.values());
     const entrypointCount = entrypointList.length;
     const entrypointLabel =
-      entrypointCount === 1 ? "Entrypoint" : "Entrypoints";
+      entrypointCount === 1 ? 'Entrypoint' : 'Entrypoints';
     const hasPayments = Boolean(activePayments);
-    const manifestPath = "/.well-known/agent-card.json";
+    const manifestPath = '/.well-known/agent-card.json';
     const defaultNetwork = activePayments?.network;
     const x402ClientExample = [
       'import { config } from "dotenv";',
-      "import {",
-      "  decodeXPaymentResponse,",
-      "  wrapFetchWithPayment,",
-      "  createSigner,",
-      "  type Hex,",
+      'import {',
+      '  decodeXPaymentResponse,',
+      '  wrapFetchWithPayment,',
+      '  createSigner,',
+      '  type Hex,',
       '} from "x402-fetch";',
-      "",
-      "config();",
-      "",
-      "const privateKey = process.env.PRIVATE_KEY as Hex | string;",
-      "const baseURL = process.env.RESOURCE_SERVER_URL as string; // e.g. https://example.com",
-      "const endpointPath = process.env.ENDPOINT_PATH as string; // e.g. /weather",
-      "const url = `${baseURL}${endpointPath}`; // e.g. https://example.com/weather",
-      "",
-      "if (!baseURL || !privateKey || !endpointPath) {",
+      '',
+      'config();',
+      '',
+      'const privateKey = process.env.PRIVATE_KEY as Hex | string;',
+      'const baseURL = process.env.RESOURCE_SERVER_URL as string; // e.g. https://example.com',
+      'const endpointPath = process.env.ENDPOINT_PATH as string; // e.g. /weather',
+      'const url = `${baseURL}${endpointPath}`; // e.g. https://example.com/weather',
+      '',
+      'if (!baseURL || !privateKey || !endpointPath) {',
       '  console.error("Missing required environment variables");',
-      "  process.exit(1);",
-      "}",
-      "",
-      "/**",
-      " * Demonstrates paying for a protected resource using x402-fetch.",
-      " *",
-      " * Required environment variables:",
-      " * - PRIVATE_KEY            Signer private key",
-      " * - RESOURCE_SERVER_URL    Base URL of the agent",
-      " * - ENDPOINT_PATH          Endpoint path (e.g. /entrypoints/echo/invoke)",
-      " */",
-      "async function main(): Promise<void> {",
+      '  process.exit(1);',
+      '}',
+      '',
+      '/**',
+      ' * Demonstrates paying for a protected resource using x402-fetch.',
+      ' *',
+      ' * Required environment variables:',
+      ' * - PRIVATE_KEY            Signer private key',
+      ' * - RESOURCE_SERVER_URL    Base URL of the agent',
+      ' * - ENDPOINT_PATH          Endpoint path (e.g. /entrypoints/echo/invoke)',
+      ' */',
+      'async function main(): Promise<void> {',
       '  // const signer = await createSigner("solana-devnet", privateKey); // uncomment for Solana',
       '  const signer = await createSigner("base-sepolia", privateKey);',
-      "  const fetchWithPayment = wrapFetchWithPayment(fetch, signer);",
-      "",
+      '  const fetchWithPayment = wrapFetchWithPayment(fetch, signer);',
+      '',
       '  const response = await fetchWithPayment(url, { method: "GET" });',
-      "  const body = await response.json();",
-      "  console.log(body);",
-      "",
-      "  const paymentResponse = decodeXPaymentResponse(",
+      '  const body = await response.json();',
+      '  console.log(body);',
+      '',
+      '  const paymentResponse = decodeXPaymentResponse(',
       '    response.headers.get("x-payment-response")!',
-      "  );",
-      "  console.log(paymentResponse);",
-      "}",
-      "",
-      "main().catch((error) => {",
-      "  console.error(error?.response?.data?.error ?? error);",
-      "  process.exit(1);",
-      "});",
-    ].join("\n");
+      '  );',
+      '  console.log(paymentResponse);',
+      '}',
+      '',
+      'main().catch((error) => {',
+      '  console.error(error?.response?.data?.error ?? error);',
+      '  process.exit(1);',
+      '});',
+    ].join('\n');
 
     return c.html(
       renderLandingPage({

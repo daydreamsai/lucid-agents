@@ -1,5 +1,6 @@
-import { createX402LLM, type CreateX402LLMOptions } from "./x402";
-import type { Hex } from "viem";
+import type { Hex } from 'viem';
+
+import { createX402LLM, type CreateX402LLMOptions } from './x402';
 
 export type AxLLMClientOptions = {
   provider?: string;
@@ -22,8 +23,8 @@ export type AxLLMClient = {
   isConfigured(): boolean;
 };
 
-const DEFAULT_PROVIDER = "openai";
-const DEFAULT_MODEL = "gpt-5";
+const DEFAULT_PROVIDER = 'openai';
+const DEFAULT_MODEL = 'gpt-5';
 
 export function createAxLLMClient(
   options: AxLLMClientOptions = {}
@@ -99,16 +100,16 @@ function buildCreateOptions(
   const x402 = overrides ? { ...overrides } : {};
   const aiOverrides = overrides?.ai ? { ...overrides.ai } : {};
   const aiConfigOverrides =
-    aiOverrides.config && typeof aiOverrides.config === "object"
+    aiOverrides.config && typeof aiOverrides.config === 'object'
       ? { ...aiOverrides.config }
       : undefined;
   const aiOptionOverrides =
-    aiOverrides.options && typeof aiOverrides.options === "object"
+    aiOverrides.options && typeof aiOverrides.options === 'object'
       ? { ...aiOverrides.options }
       : undefined;
 
   const finalTemperature =
-    aiConfigOverrides && "temperature" in aiConfigOverrides
+    aiConfigOverrides && 'temperature' in aiConfigOverrides
       ? aiConfigOverrides.temperature
       : resolved.temperature;
 
@@ -129,11 +130,11 @@ function buildCreateOptions(
   const apiKey =
     aiOverrides.apiKey ??
     resolved.apiKey ??
-    (typeof process !== "undefined" ? process.env.OPENAI_API_KEY : undefined);
+    (typeof process !== 'undefined' ? process.env.OPENAI_API_KEY : undefined);
 
   if (!apiKey) {
     throw new Error(
-      "[agent-kit] createAxLLMClient requires an OpenAI API key (set apiKey or OPENAI_API_KEY)"
+      '[agent-kit] createAxLLMClient requires an OpenAI API key (set apiKey or OPENAI_API_KEY)'
     );
   }
 
@@ -147,7 +148,7 @@ function buildCreateOptions(
     ...(apiURL ? { apiURL } : {}),
     config: finalConfig,
     options: finalOptions,
-  } as NonNullable<CreateX402LLMOptions["ai"]>;
+  } as NonNullable<CreateX402LLMOptions['ai']>;
 
   const createOptions: CreateX402LLMOptions = {
     ...x402,
@@ -157,7 +158,7 @@ function buildCreateOptions(
 
   if (!createOptions.account && !createOptions.privateKey) {
     const envPrivateKey =
-      typeof process !== "undefined"
+      typeof process !== 'undefined'
         ? (process.env.PRIVATE_KEY as Hex | undefined)
         : undefined;
     if (envPrivateKey) {
@@ -172,7 +173,7 @@ function readEnv(
   env: Record<string, string | undefined> | undefined
 ): Record<string, string | undefined> {
   if (env) return env;
-  if (typeof process !== "undefined" && process?.env) {
+  if (typeof process !== 'undefined' && process?.env) {
     return process.env as Record<string, string | undefined>;
   }
   return {};
@@ -180,8 +181,8 @@ function readEnv(
 
 function parseBoolean(value: string | undefined): boolean | undefined {
   if (value === undefined) return undefined;
-  if (value.trim() === "") return undefined;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
+  if (value.trim() === '') return undefined;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
 }
 
 function parseNumber(value: string | undefined): number | undefined {

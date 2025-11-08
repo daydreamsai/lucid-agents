@@ -3,7 +3,7 @@
  * Contract addresses and constants
  */
 
-import type { Hex } from "../utils";
+import type { Hex } from '../utils';
 
 /**
  * Default ERC-8004 registry addresses (CREATE2 deterministic)
@@ -18,19 +18,19 @@ const DEFAULT_ADDRESSES = {
    * Identity Registry - ERC-721 NFTs representing agent identities
    * Functions: register(), ownerOf(), tokenURI(), agentExists()
    */
-  IDENTITY_REGISTRY: "0x7177a6867296406881E20d6647232314736Dd09A" as Hex,
+  IDENTITY_REGISTRY: '0x7177a6867296406881E20d6647232314736Dd09A' as Hex,
 
   /**
    * Reputation Registry - Peer feedback and reputation system
    * Functions: giveFeedback(), revokeFeedback(), getSummary(), getAllFeedback()
    */
-  REPUTATION_REGISTRY: "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322" as Hex,
+  REPUTATION_REGISTRY: '0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322' as Hex,
 
   /**
    * Validation Registry - Validation requests and responses
    * Functions: validationRequest(), validationResponse(), getRequest(), getSummary()
    */
-  VALIDATION_REGISTRY: "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8" as Hex,
+  VALIDATION_REGISTRY: '0x662b40A526cb4017d947e71eAF6753BF3eeE66d8' as Hex,
 } as const;
 
 /**
@@ -69,14 +69,14 @@ export type SupportedChainId =
  * Default network configuration
  */
 export const DEFAULT_CHAIN_ID = 84532; // Base Sepolia
-export const DEFAULT_NAMESPACE = "eip155"; // EVM chains
+export const DEFAULT_NAMESPACE = 'eip155'; // EVM chains
 
 /**
  * Default trust models supported by ERC-8004
  */
 export const DEFAULT_TRUST_MODELS: string[] = [
-  "feedback",
-  "inference-validation",
+  'feedback',
+  'inference-validation',
 ];
 
 /**
@@ -94,17 +94,17 @@ export function getRegistryAddresses(
  * Get a specific registry address for a chain
  */
 export function getRegistryAddress(
-  registry: "identity" | "reputation" | "validation",
+  registry: 'identity' | 'reputation' | 'validation',
   chainId: number
 ): Hex {
   const addresses = getRegistryAddresses(chainId);
 
   switch (registry) {
-    case "identity":
+    case 'identity':
       return addresses.IDENTITY_REGISTRY;
-    case "reputation":
+    case 'reputation':
       return addresses.REPUTATION_REGISTRY;
-    case "validation":
+    case 'validation':
       return addresses.VALIDATION_REGISTRY;
   }
 }
@@ -126,16 +126,16 @@ export function isERC8004Registry(address: Hex, chainId?: number): boolean {
     // Check specific chain
     const addresses = getRegistryAddresses(chainId);
     return Object.values(addresses).some(
-      (addr) => addr.toLowerCase() === normalized
+      addr => addr.toLowerCase() === normalized
     );
   }
 
   // Check all supported chains
   const chains = Object.values(SUPPORTED_CHAINS);
-  return chains.some((cid) => {
+  return chains.some(cid => {
     const addresses = getRegistryAddresses(cid);
     return Object.values(addresses).some(
-      (addr) => addr.toLowerCase() === normalized
+      addr => addr.toLowerCase() === normalized
     );
   });
 }

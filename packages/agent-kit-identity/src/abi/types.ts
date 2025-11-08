@@ -1,7 +1,8 @@
-import type { Abi, ContractFunctionName } from "viem";
-import identityRegistryAbiJson from "./IdentityRegistry.json";
-import reputationRegistryAbiJson from "./ReputationRegistry.json";
-import validationRegistryAbiJson from "./ValidationRegistry.json";
+import type { Abi, ContractFunctionName } from 'viem';
+
+import identityRegistryAbiJson from './IdentityRegistry.json';
+import reputationRegistryAbiJson from './ReputationRegistry.json';
+import validationRegistryAbiJson from './ValidationRegistry.json';
 
 /**
  * ERC-8004 Identity Registry ABI
@@ -27,7 +28,7 @@ export const VALIDATION_REGISTRY_ABI = validationRegistryAbiJson as Abi;
  */
 export type IdentityRegistryReadFunctionName = ContractFunctionName<
   typeof IDENTITY_REGISTRY_ABI,
-  "view" | "pure"
+  'view' | 'pure'
 >;
 
 /**
@@ -36,7 +37,7 @@ export type IdentityRegistryReadFunctionName = ContractFunctionName<
  */
 export type IdentityRegistryWriteFunctionName = ContractFunctionName<
   typeof IDENTITY_REGISTRY_ABI,
-  "nonpayable" | "payable"
+  'nonpayable' | 'payable'
 >;
 
 /**
@@ -44,7 +45,7 @@ export type IdentityRegistryWriteFunctionName = ContractFunctionName<
  */
 export type ReputationRegistryReadFunctionName = ContractFunctionName<
   typeof REPUTATION_REGISTRY_ABI,
-  "view" | "pure"
+  'view' | 'pure'
 >;
 
 /**
@@ -52,7 +53,7 @@ export type ReputationRegistryReadFunctionName = ContractFunctionName<
  */
 export type ReputationRegistryWriteFunctionName = ContractFunctionName<
   typeof REPUTATION_REGISTRY_ABI,
-  "nonpayable" | "payable"
+  'nonpayable' | 'payable'
 >;
 
 /**
@@ -60,7 +61,7 @@ export type ReputationRegistryWriteFunctionName = ContractFunctionName<
  */
 export type ValidationRegistryReadFunctionName = ContractFunctionName<
   typeof VALIDATION_REGISTRY_ABI,
-  "view" | "pure"
+  'view' | 'pure'
 >;
 
 /**
@@ -68,5 +69,5 @@ export type ValidationRegistryReadFunctionName = ContractFunctionName<
  */
 export type ValidationRegistryWriteFunctionName = ContractFunctionName<
   typeof VALIDATION_REGISTRY_ABI,
-  "nonpayable" | "payable"
+  'nonpayable' | 'payable'
 >;

@@ -10,41 +10,41 @@
  * 3. Run: bun run examples/full-integration.ts
  */
 
-import { createAgentIdentity, getTrustConfig } from "../src/index.js";
+import { createAgentIdentity, getTrustConfig } from '../src/index.js';
 
 // Note: Import from your actual agent-kit package
 // import { createAgentApp } from "@lucid-agents/agent-kit";
 
 async function main() {
-  console.log("🤖 Agent Kit + ERC-8004 Integration\n");
+  console.log('🤖 Agent Kit + ERC-8004 Integration\n');
 
   // Step 1: Create ERC-8004 identity
-  console.log("Step 1: Creating ERC-8004 identity...");
+  console.log('Step 1: Creating ERC-8004 identity...');
   const identity = await createAgentIdentity({
     autoRegister: true,
-    trustModels: ["feedback", "inference-validation"],
+    trustModels: ['feedback', 'inference-validation'],
   });
 
-  console.log("✅", identity.status);
+  console.log('✅', identity.status);
 
   if (identity.didRegister) {
-    console.log("Transaction:", identity.transactionHash);
-    console.log("\n📋 Important: Host your metadata at:");
+    console.log('Transaction:', identity.transactionHash);
+    console.log('\n📋 Important: Host your metadata at:');
     console.log(`  https://${identity.domain}/.well-known/agent-metadata.json`);
-    console.log("\nMetadata should include:");
+    console.log('\nMetadata should include:');
     console.log(
       JSON.stringify(
         {
-          name: "My Agent",
-          description: "An intelligent assistant",
+          name: 'My Agent',
+          description: 'An intelligent assistant',
           domain: identity.domain,
           capabilities: [
             {
-              name: "chat",
-              description: "Natural language conversation",
+              name: 'chat',
+              description: 'Natural language conversation',
             },
           ],
-          trustModels: ["feedback", "inference-validation"],
+          trustModels: ['feedback', 'inference-validation'],
         },
         null,
         2
@@ -56,12 +56,12 @@ async function main() {
   const trustConfig = getTrustConfig(identity);
 
   if (trustConfig) {
-    console.log("\n✅ Trust config ready:");
+    console.log('\n✅ Trust config ready:');
     console.log(JSON.stringify(trustConfig, null, 2));
   }
 
   // Step 3: Create agent with trust metadata
-  console.log("\n\nStep 2: Creating agent with identity...");
+  console.log('\n\nStep 2: Creating agent with identity...');
 
   // Uncomment when using with actual agent-kit:
   /*
@@ -94,11 +94,11 @@ async function main() {
   // app.listen(3000);
   */
 
-  console.log("\n✨ Integration complete!");
-  console.log("\nYour agent now has:");
-  console.log("  • Verifiable on-chain identity");
-  console.log("  • Trust metadata in manifest");
-  console.log("  • Discoverable via ERC-8004 registry");
+  console.log('\n✨ Integration complete!');
+  console.log('\nYour agent now has:');
+  console.log('  • Verifiable on-chain identity');
+  console.log('  • Trust metadata in manifest');
+  console.log('  • Discoverable via ERC-8004 registry');
 }
 
 main().catch(console.error);

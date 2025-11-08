@@ -1,4 +1,4 @@
-import type { Network, Resource, SolanaAddress } from "x402-hono";
+import type { Network, Resource, SolanaAddress } from 'x402-hono';
 
 export type PaymentDefaultsConfig = {
   facilitatorUrl?: Resource;
@@ -33,11 +33,11 @@ export type ResolvedAgentKitConfig = {
 };
 
 const DEFAULT_FACILITATOR_URL =
-  "https://facilitator.daydreams.systems" as Resource;
+  'https://facilitator.daydreams.systems' as Resource;
 const DEFAULT_PAYMENT_WALLET_ADDRESS =
-  "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429";
-const DEFAULT_NETWORK = "base-sepolia" as Network;
-const DEFAULT_WALLET_API_URL = "http://localhost:8787";
+  '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429';
+const DEFAULT_NETWORK = 'base-sepolia' as Network;
+const DEFAULT_WALLET_API_URL = 'http://localhost:8787';
 
 const defaultConfig: ResolvedAgentKitConfig = {
   payments: {
@@ -73,7 +73,10 @@ function parseNumberEnv(value: string | undefined): number | undefined {
 const environmentConfig: AgentKitConfig = {
   payments: {
     facilitatorUrl: process.env.FACILITATOR_URL as Resource | undefined,
-    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}` | SolanaAddress | undefined,
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as
+      | `0x${string}`
+      | SolanaAddress
+      | undefined,
     network: process.env.NETWORK as Network | undefined,
     defaultPrice: process.env.DEFAULT_PRICE ?? undefined,
   },

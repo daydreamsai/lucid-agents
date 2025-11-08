@@ -21,7 +21,6 @@
   ### AGENTS.md Documentation
 
   Added comprehensive AGENTS.md files following the agents.md industry standard (20,000+ projects):
-
   - Template-specific guides for blank, axllm, axllm-flow, and identity templates
   - Root-level monorepo guide with architecture overview and API reference
   - Example-driven with copy-paste-ready code samples
@@ -32,14 +31,12 @@
   Added machine-readable JSON Schema files (`template.schema.json`) for each template documenting all configuration arguments, types, and defaults.
 
   ### Improvements
-
   - Fixed boolean handling in environment setup (boolean false now correctly outputs "false" not empty string)
   - Converted IDENTITY_AUTO_REGISTER to confirm-type prompt for better UX
   - Added 11 new comprehensive test cases (21 total, all passing)
   - Updated CLI help text and README with non-interactive examples
 
   ### Bug Fixes
-
   - Fixed release bot workflow to use proper dependency sanitization script
   - Ensures published npm packages have resolved workspace and catalog dependencies
 
@@ -51,7 +48,6 @@
 ### Minor Changes
 
 - e5b652c: Complete template system refactor with improved validation and safety
-
   - **Renamed environment variables** for clarity: `ADDRESS` → `PAYMENTS_RECEIVABLE_ADDRESS`, `APP_NAME` → `AGENT_NAME`, `AUTO_REGISTER` → `IDENTITY_AUTO_REGISTER`
   - **Removed default payment address** (issue #2) - prevents accidental fund loss by requiring explicit wallet address configuration
   - **Added validation** for agent metadata (name, version, description) and payment configuration with clear error messages (issue #8)

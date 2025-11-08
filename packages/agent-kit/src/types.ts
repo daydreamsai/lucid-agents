@@ -1,17 +1,17 @@
-import type { ZodAny, ZodObject } from "zod";
-import type { Network, Resource, SolanaAddress } from "x402-hono";
-import type { AP2ExtensionDescriptor, AP2Role } from "./ap2";
 import type {
-  TrustConfig,
   RegistrationEntry,
   TrustModel,
-} from "@lucid-agents/agent-kit-identity";
+} from '@lucid-agents/agent-kit-identity';
+import type { Network, Resource, SolanaAddress } from 'x402-hono';
+import type { ZodObject } from 'zod';
+
+import type { AP2ExtensionDescriptor, AP2Role } from './ap2';
 
 export type {
-  TrustConfig,
   RegistrationEntry,
+  TrustConfig,
   TrustModel,
-} from "@lucid-agents/agent-kit-identity";
+} from '@lucid-agents/agent-kit-identity';
 
 export type Usage = {
   prompt_tokens?: number;
@@ -37,19 +37,19 @@ export type StreamEnvelopeBase = {
 };
 
 export type StreamRunStartEnvelope = StreamEnvelopeBase & {
-  kind: "run-start";
+  kind: 'run-start';
   runId: string;
 };
 
 export type StreamTextEnvelope = StreamEnvelopeBase & {
-  kind: "text";
+  kind: 'text';
   text: string;
   mime?: string;
   role?: string;
 };
 
 export type StreamDeltaEnvelope = StreamEnvelopeBase & {
-  kind: "delta";
+  kind: 'delta';
   delta: string;
   mime?: string;
   final?: boolean;
@@ -57,18 +57,18 @@ export type StreamDeltaEnvelope = StreamEnvelopeBase & {
 };
 
 export type StreamAssetInlineTransfer = {
-  transfer: "inline";
+  transfer: 'inline';
   data: string;
 };
 
 export type StreamAssetExternalTransfer = {
-  transfer: "external";
+  transfer: 'external';
   href: string;
   expiresAt?: string;
 };
 
 export type StreamAssetEnvelope = StreamEnvelopeBase & {
-  kind: "asset";
+  kind: 'asset';
   assetId: string;
   mime: string;
   name?: string;
@@ -76,22 +76,22 @@ export type StreamAssetEnvelope = StreamEnvelopeBase & {
 } & (StreamAssetInlineTransfer | StreamAssetExternalTransfer);
 
 export type StreamControlEnvelope = StreamEnvelopeBase & {
-  kind: "control";
+  kind: 'control';
   control: string;
   payload?: unknown;
 };
 
 export type StreamErrorEnvelope = StreamEnvelopeBase & {
-  kind: "error";
+  kind: 'error';
   code: string;
   message: string;
   retryable?: boolean;
 };
 
 export type StreamRunEndEnvelope = StreamEnvelopeBase & {
-  kind: "run-end";
+  kind: 'run-end';
   runId: string;
-  status: "succeeded" | "failed" | "cancelled";
+  status: 'succeeded' | 'failed' | 'cancelled';
   output?: unknown;
   usage?: Usage;
   model?: string;
@@ -116,7 +116,7 @@ export type StreamResult = {
   output?: unknown;
   usage?: Usage;
   model?: string;
-  status?: "succeeded" | "failed" | "cancelled";
+  status?: 'succeeded' | 'failed' | 'cancelled';
   error?: { code: string; message?: string };
   metadata?: Record<string, unknown>;
 };
@@ -158,7 +158,7 @@ export type Manifest = {
 
 // A2A Agent Card (subset sufficient for interop)
 export type PaymentMethod = {
-  method: "x402";
+  method: 'x402';
   // The payee address (e.g., EVM 0x..., Solana base58)
   payee: `0x${string}` | SolanaAddress;
   // The network where payment should be settled
@@ -212,7 +212,7 @@ export type AgentCard = {
 
 export type AgentCardWithEntrypoints = AgentCard & {
   // Back-compat for our server: embed our previous manifest block
-  entrypoints: Manifest["entrypoints"];
+  entrypoints: Manifest['entrypoints'];
 };
 
 export type PaymentsConfig = {

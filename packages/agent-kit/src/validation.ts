@@ -1,4 +1,4 @@
-import type { AgentMeta, PaymentsConfig } from "./types";
+import type { AgentMeta, PaymentsConfig } from './types';
 
 /**
  * Validates required agent metadata and throws descriptive errors if invalid.
@@ -7,17 +7,17 @@ import type { AgentMeta, PaymentsConfig } from "./types";
  */
 export function validateAgentMetadata(meta: AgentMeta): void {
   const missingFields: string[] = [];
-  if (!meta.name) missingFields.push("name");
-  if (!meta.version) missingFields.push("version");
-  if (!meta.description) missingFields.push("description");
+  if (!meta.name) missingFields.push('name');
+  if (!meta.version) missingFields.push('version');
+  if (!meta.description) missingFields.push('description');
 
   if (missingFields.length > 0) {
     console.error(
-      "[agent-kit] Required agent metadata is missing:",
-      missingFields.join(", ")
+      '[agent-kit] Required agent metadata is missing:',
+      missingFields.join(', ')
     );
     throw new Error(
-      `Missing required agent metadata: ${missingFields.join(", ")}. ` +
+      `Missing required agent metadata: ${missingFields.join(', ')}. ` +
         `Please ensure AGENT_NAME, AGENT_VERSION, and AGENT_DESCRIPTION are set in your .env file.`
     );
   }
@@ -38,8 +38,8 @@ export function validatePaymentsConfig(
   if (!payments.payTo) {
     console.error(
       `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
-      "PAYMENTS_RECEIVABLE_ADDRESS is not set.",
-      "Please set the environment variable or configure payments.payTo in your agent setup."
+      'PAYMENTS_RECEIVABLE_ADDRESS is not set.',
+      'Please set the environment variable or configure payments.payTo in your agent setup.'
     );
     throw new Error(
       `Payment configuration error: PAYMENTS_RECEIVABLE_ADDRESS environment variable is not set. ` +
@@ -50,8 +50,8 @@ export function validatePaymentsConfig(
   if (!payments.facilitatorUrl) {
     console.error(
       `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
-      "FACILITATOR_URL is not set.",
-      "Please set the environment variable or configure payments.facilitatorUrl."
+      'FACILITATOR_URL is not set.',
+      'Please set the environment variable or configure payments.facilitatorUrl.'
     );
     throw new Error(
       `Payment configuration error: FACILITATOR_URL environment variable is not set. ` +
@@ -62,8 +62,8 @@ export function validatePaymentsConfig(
   if (!network) {
     console.error(
       `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
-      "NETWORK is not set.",
-      "Please set the NETWORK environment variable or configure payments.network."
+      'NETWORK is not set.',
+      'Please set the NETWORK environment variable or configure payments.network.'
     );
     throw new Error(
       `Payment configuration error: NETWORK is not set. ` +

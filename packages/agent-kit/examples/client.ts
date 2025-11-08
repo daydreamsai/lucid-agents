@@ -3,7 +3,7 @@ import {
   wrapFetchWithPayment,
   createSigner,
   type Hex,
-} from "x402-fetch";
+} from 'x402-fetch';
 
 const privateKey = process.env.PRIVATE_KEY as Hex | string;
 
@@ -11,7 +11,7 @@ const url = `http://localhost:8788/entrypoints/buffett-signal/invoke`;
 
 async function once(): Promise<void> {
   // const signer = await createSigner("solana-devnet", privateKey); // uncomment for solana
-  const signer = await createSigner("base", privateKey);
+  const signer = await createSigner('base', privateKey);
   const fetchWithPayment = wrapFetchWithPayment(
     fetch,
     signer,
@@ -19,10 +19,10 @@ async function once(): Promise<void> {
   );
 
   const response = await fetchWithPayment(url, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({
       input: {
-        tickers: ["TSLA"],
+        tickers: ['TSLA'],
       },
     }),
   });
@@ -45,11 +45,11 @@ async function mainLoop(): Promise<void> {
         error?.response?.data?.error ?? error
       );
     }
-    await new Promise((resolve) => setTimeout(resolve, 60_000));
+    await new Promise(resolve => setTimeout(resolve, 60_000));
   }
 }
 
-mainLoop().catch((error) => {
+mainLoop().catch(error => {
   console.error(error?.response?.data?.error ?? error);
   process.exit(1);
 });
