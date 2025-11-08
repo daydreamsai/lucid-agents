@@ -3,7 +3,7 @@ import { describe, it, expect } from "bun:test";
 import { createAgentApp, AP2_EXTENSION_URI } from "../index";
 
 describe("createAgentApp AP2 extension", () => {
-  const meta = { name: "Test Agent", version: "0.1.0" };
+  const meta = { name: "Test Agent", version: "0.1.0", description: "Test agent for AP2" };
 
   const fetchCard = async (app: ReturnType<typeof createAgentApp>["app"]) => {
     const res = await app.request("http://agent/.well-known/agent-card.json");

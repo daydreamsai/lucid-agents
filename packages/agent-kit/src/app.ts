@@ -17,6 +17,7 @@ import { configureAgentKit, getAgentKitConfig } from "./config";
 import { renderLandingPage } from "./ui/landing-page";
 import { readFileSync } from "node:fs";
 import { Buffer } from "node:buffer";
+import { validateAgentMetadata } from "./validation";
 
 export type CreateAgentAppOptions = {
   payments?: PaymentsConfig | false;
@@ -28,6 +29,8 @@ export type CreateAgentAppOptions = {
 };
 
 export function createAgentApp(meta: AgentMeta, opts?: CreateAgentAppOptions) {
+  validateAgentMetadata(meta);
+
   if (opts?.config) {
     configureAgentKit(opts.config);
   }

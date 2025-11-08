@@ -1,4 +1,4 @@
-## {{APP_NAME}}
+## {{AGENT_NAME}}
 
 This project was scaffolded with `create-agent-kit` and includes **ERC-8004 identity registration** built on [`@lucid-agents/agent-kit`](https://www.npmjs.com/package/@lucid-agents/agent-kit) and [`@lucid-agents/agent-kit-identity`](https://www.npmjs.com/package/@lucid-agents/agent-kit-identity).
 
@@ -51,7 +51,7 @@ The agent will:
 
 ### Default entrypoints
 
-- `{{ENTRYPOINT_KEY}}` – {{ENTRYPOINT_DESCRIPTION}}{{ENTRYPOINT_PRICE_NOTE}}
+- `echo` – Echo input text
 
 ### ERC-8004 Registries
 

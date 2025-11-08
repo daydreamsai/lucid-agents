@@ -2,7 +2,7 @@
   "id": "identity",
   "name": "Agent with ERC-8004 Identity",
   "description": "Full-featured agent with ERC-8004 identity registration, payments, and trust metadata.",
-  "onboarding": {
+  "wizard": {
     "prompts": [
       {
         "key": "AGENT_DESCRIPTION",
@@ -23,57 +23,28 @@
         "defaultValue": "agent.example.com"
       },
       {
-        "key": "ENTRYPOINT_KEY",
-        "type": "input",
-        "message": "Name the default entrypoint",
-        "defaultValue": "process"
-      },
-      {
-        "key": "ENTRYPOINT_DESCRIPTION",
-        "type": "input",
-        "message": "Describe what the default entrypoint does",
-        "defaultValue": "Processes input and returns a result."
-      },
-      {
-        "key": "ENABLE_PAYMENTS",
-        "type": "confirm",
-        "message": "Configure x402 payments?",
-        "defaultValue": true
-      },
-      {
         "key": "PAYMENTS_FACILITATOR_URL",
         "type": "input",
         "message": "Facilitator URL",
-        "defaultValue": "https://facilitator.daydreams.systems",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": "https://facilitator.daydreams.systems"
       },
       {
         "key": "PAYMENTS_NETWORK",
         "type": "input",
-        "message": "Payment network identifier (default: Base Sepolia)",
-        "defaultValue": "base-sepolia",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "message": "Payment network identifier",
+        "defaultValue": "base-sepolia"
       },
       {
         "key": "PAYMENTS_RECEIVABLE_ADDRESS",
         "type": "input",
         "message": "Receivable address (address that receives payments)",
-        "defaultValue": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": ""
       },
       {
         "key": "PAYMENTS_DEFAULT_PRICE",
         "type": "input",
         "message": "Default price in base units",
-        "defaultValue": "1000",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
-      },
-      {
-        "key": "ENTRYPOINT_PRICE",
-        "type": "input",
-        "message": "Set a price for the default entrypoint",
-        "defaultValue": "{{PAYMENTS_DEFAULT_PRICE}}",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": "1000"
       },
       {
         "key": "RPC_URL",
@@ -88,10 +59,16 @@
         "defaultValue": "84532"
       },
       {
-        "key": "AUTO_REGISTER",
-        "type": "confirm",
-        "message": "Auto-register on ERC-8004 registry if not found?",
-        "defaultValue": true
+        "key": "IDENTITY_AUTO_REGISTER",
+        "type": "input",
+        "message": "Auto-register on ERC-8004 registry? (true/false)",
+        "defaultValue": "true"
+      },
+      {
+        "key": "PRIVATE_KEY",
+        "type": "input",
+        "message": "Wallet private key (leave empty to add later)",
+        "defaultValue": ""
       }
     ]
   }

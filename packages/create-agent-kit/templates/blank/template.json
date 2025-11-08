@@ -2,7 +2,7 @@
   "id": "blank",
   "name": "Blank Bun Agent",
   "description": "Start from a minimal Bun HTTP agent with @lucid-dreams/agent-kit wired up.",
-  "onboarding": {
+  "wizard": {
     "prompts": [
       {
         "key": "AGENT_DESCRIPTION",
@@ -17,57 +17,34 @@
         "defaultValue": "0.1.0"
       },
       {
-        "key": "ENTRYPOINT_KEY",
-        "type": "input",
-        "message": "Name the default entrypoint",
-        "defaultValue": "echo"
-      },
-      {
-        "key": "ENTRYPOINT_DESCRIPTION",
-        "type": "input",
-        "message": "Describe what the default entrypoint does",
-        "defaultValue": "Returns text that you send to the agent."
-      },
-      {
-        "key": "ENABLE_PAYMENTS",
-        "type": "confirm",
-        "message": "Configure x402 payments defaults now?",
-        "defaultValue": false
-      },
-      {
         "key": "PAYMENTS_FACILITATOR_URL",
         "type": "input",
         "message": "Facilitator URL",
-        "defaultValue": "https://facilitator.daydreams.systems",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": "https://facilitator.daydreams.systems"
       },
       {
         "key": "PAYMENTS_NETWORK",
         "type": "input",
-        "message": "Preferred network (chain identifier)",
-        "defaultValue": "base-sepolia",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "message": "Payment network identifier",
+        "defaultValue": "base-sepolia"
       },
       {
         "key": "PAYMENTS_RECEIVABLE_ADDRESS",
         "type": "input",
         "message": "Receivable address (address that receives payments)",
-        "defaultValue": "0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": ""
       },
       {
         "key": "PAYMENTS_DEFAULT_PRICE",
         "type": "input",
         "message": "Default price in base units",
-        "defaultValue": "1000",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "defaultValue": "1000"
       },
       {
-        "key": "ENTRYPOINT_PRICE",
+        "key": "PRIVATE_KEY",
         "type": "input",
-        "message": "Set a price for the default entrypoint",
-        "defaultValue": "{{PAYMENTS_DEFAULT_PRICE}}",
-        "when": { "key": "ENABLE_PAYMENTS", "equals": true }
+        "message": "Wallet private key (leave empty to add later)",
+        "defaultValue": ""
       }
     ]
   }

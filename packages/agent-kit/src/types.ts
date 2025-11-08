@@ -19,7 +19,7 @@ export type Usage = {
   total_tokens?: number;
 };
 
-export type AgentMeta = { name: string; version: string; description?: string };
+export type AgentMeta = { name: string; version: string; description: string };
 
 export type AgentContext = {
   key: string;

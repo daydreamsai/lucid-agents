@@ -1,4 +1,4 @@
-## {{APP_NAME}}
+## {{AGENT_NAME}}
 
 This project was scaffolded with `create-agent-kit` and ships with a ready-to-run agent app built on [`@lucid-agents/agent-kit`](https://www.npmjs.com/package/@lucid-agents/agent-kit).
 

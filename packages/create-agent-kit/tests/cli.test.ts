@@ -87,11 +87,11 @@ const readJson = async (path: string) => {
 };
 
 describe("create-agent-kit CLI", () => {
-  it("scaffolds a new project with placeholders replaced", async () => {
+  it("scaffolds a new project with wizard defaults", async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
 
-    await runCli(["demo-agent", "--template=blank", "--env=no"], {
+    await runCli(["demo-agent", "--template=blank", "--wizard=no"], {
       cwd,
       logger,
     });
@@ -100,49 +100,51 @@ describe("create-agent-kit CLI", () => {
     const pkg = await readJson(join(projectDir, "package.json"));
     const readme = await readFile(join(projectDir, "README.md"), "utf8");
     const agentSrc = await readFile(join(projectDir, "src/agent.ts"), "utf8");
-    const envExample = await readFile(join(projectDir, ".env.example"), "utf8");
+    const envFile = await readFile(join(projectDir, ".env"), "utf8");
 
     expect(pkg.name).toBe("demo-agent");
     expect(readme).toContain("demo-agent");
-    expect(readme).toContain(
-      "- `echo` – Returns text that you send to the agent."
-    );
     expect(readme).not.toContain("{{");
-    expect(agentSrc).toContain('name: "demo-agent"');
-    expect(agentSrc).toContain('version: "0.1.0"');
-    expect(agentSrc).toContain(
-      'description: "Starter agent generated with create-agent-kit"'
-    );
-    expect(agentSrc).toContain("const agentOptions = {}");
+
+    // agent.ts uses process.env
+    expect(agentSrc).toContain("process.env.AGENT_NAME");
+    expect(agentSrc).toContain("process.env.AGENT_VERSION");
+    expect(agentSrc).toContain("process.env.AGENT_DESCRIPTION");
     expect(agentSrc).toContain('key: "echo"');
-    expect(agentSrc).toContain('// price: "1000",');
-    expect(agentSrc).not.toContain("{{APP_NAME}}");
+    expect(agentSrc).toContain("useConfigPayments: true");
+    expect(agentSrc).not.toContain("{{");
+
+    // .env has defaults from template.json
+    expect(envFile).toContain("AGENT_NAME=demo-agent");
+    expect(envFile).toContain("AGENT_VERSION=0.1.0");
+    expect(envFile).toContain("PAYMENTS_RECEIVABLE_ADDRESS=");
+    expect(envFile).toContain("PRIVATE_KEY=");
   });
 
-  it("applies onboarding answers to the scaffolded template", async () => {
+  it("applies wizard answers to generate .env file", async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
     const inputResponses = new Map<string, string>([
       ["How would you describe your agent?", "Quote assistant for pricing."],
       ["What version should the agent start at?", "1.0.0"],
-      ["Name the default entrypoint", "Quote Price"],
-      ["Describe what the default entrypoint does", "Calculates quote totals."],
       ["Facilitator URL", "https://facilitator.example"],
-      ["Preferred network (chain identifier)", "base"],
-      ["Receivable address (address that receives payments)", "0xabc0000000000000000000000000000000000000"],
+      ["Payment network identifier", "base"],
+      [
+        "Receivable address (address that receives payments)",
+        "0xabc0000000000000000000000000000000000000",
+      ],
       ["Default price in base units", "4200"],
-      ["Set a price for the default entrypoint", "4500"],
+      ["Wallet private key (leave empty to add later)", ""],
     ]);
 
     const prompt: PromptApi = {
       select: async ({ choices }) => choices[0]?.value ?? "",
-      confirm: async ({ message, defaultValue }) =>
-        message.includes("x402 payments") ? true : defaultValue ?? false,
+      confirm: async ({ defaultValue }) => defaultValue ?? false,
       input: async ({ message, defaultValue = "" }) =>
         inputResponses.get(message) ?? defaultValue,
     };
 
-    await runCli(["quote-agent", "--template=blank", "--env=no"], {
+    await runCli(["quote-agent", "--template=blank"], {
       cwd,
       logger,
       prompt,
@@ -150,23 +152,32 @@ describe("create-agent-kit CLI", () => {
 
     const projectDir = join(cwd, "quote-agent");
     const agentSrc = await readFile(join(projectDir, "src/agent.ts"), "utf8");
+    const envFile = await readFile(join(projectDir, ".env"), "utf8");
     const readme = await readFile(join(projectDir, "README.md"), "utf8");
-    const envExample = await readFile(join(projectDir, ".env.example"), "utf8");
 
-    expect(agentSrc).toContain('version: "1.0.0"');
-    expect(agentSrc).toContain('description: "Quote assistant for pricing."');
-    expect(agentSrc).toContain('key: "quote-price"');
-    expect(agentSrc).toContain('price: "4500",');
-    expect(agentSrc).toContain('facilitatorUrl: "https://facilitator.example"');
-    expect(agentSrc).toContain('defaultPrice: "4200",');
-    expect(agentSrc).toContain('network: "base"');
-    expect(agentSrc).toContain(
-      'payTo: "0xabc0000000000000000000000000000000000000"'
+    // agent.ts now uses process.env
+    expect(agentSrc).toContain("process.env.AGENT_NAME");
+    expect(agentSrc).toContain("process.env.AGENT_VERSION");
+    expect(agentSrc).toContain("process.env.AGENT_DESCRIPTION");
+    expect(agentSrc).toContain('key: "echo"');
+    expect(agentSrc).toContain("useConfigPayments: true");
+
+    // .env contains wizard answers
+    expect(envFile).toContain("AGENT_NAME=quote-agent");
+    expect(envFile).toContain("AGENT_VERSION=1.0.0");
+    expect(envFile).toContain("AGENT_DESCRIPTION=Quote assistant for pricing.");
+    expect(envFile).toContain(
+      "PAYMENTS_FACILITATOR_URL=https://facilitator.example"
     );
-    expect(readme).toContain("quote-price");
-    expect(readme).toContain("(price: 4500 base units)");
-    // .env.example should keep safe placeholder values (not user's real values)
-    expect(envExample).toContain("PRIVATE_KEY=");
+    expect(envFile).toContain(
+      "PAYMENTS_RECEIVABLE_ADDRESS=0xabc0000000000000000000000000000000000000"
+    );
+    expect(envFile).toContain("PAYMENTS_NETWORK=base");
+    expect(envFile).toContain("PAYMENTS_DEFAULT_PRICE=4200");
+    expect(envFile).toContain("PRIVATE_KEY=");
+
+    // README uses agent name
+    expect(readme).toContain("quote-agent");
   });
 
   it("prompts for a project name when not provided and prompt is available", async () => {
@@ -180,7 +191,7 @@ describe("create-agent-kit CLI", () => {
         message === "Project directory name:" ? "prompted-agent" : defaultValue,
     };
 
-    await runCli(["--template=blank", "--env=no"], {
+    await runCli(["--template=blank"], {
       cwd,
       logger,
       prompt,
@@ -196,7 +207,7 @@ describe("create-agent-kit CLI", () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
 
-    await runCli(["--template=blank", "--env=no"], {
+    await runCli(["--template=blank", "--wizard=no"], {
       cwd,
       logger,
     });
@@ -215,7 +226,7 @@ describe("create-agent-kit CLI", () => {
     await writeFile(join(targetDir, "README.md"), "hello");
 
     await expect(
-      runCli(["existing", "--template=blank", "--env=no"], { cwd, logger })
+      runCli(["existing", "--template=blank", "--wizard=no"], { cwd, logger })
     ).rejects.toThrow(/already exists and is not empty/);
   });
 
@@ -226,40 +237,20 @@ describe("create-agent-kit CLI", () => {
     await runCli(["--help"], { cwd, logger });
 
     expect(messages.join("\n")).toContain(
-      "Usage: npx create-agent-kit <app-name>"
+      "Usage: bunx @lucid-agents/create-agent-kit <app-name>"
     );
     const entries = await readdir(cwd);
     expect(entries.length).toBe(0);
   });
 
-  it("copies env example when --env=yes", async () => {
-    const cwd = await createTempDir();
-    const { logger } = createLogger();
-
-    await runCli(["env-agent", "--template=blank", "--env=yes"], {
-      cwd,
-      logger,
-    });
-
-    const projectDir = join(cwd, "env-agent");
-    const env = await readFile(join(projectDir, ".env"), "utf8");
-    const envExample = await readFile(join(projectDir, ".env.example"), "utf8");
-    expect(env).toBe(envExample);
-  });
-
-  it("generates .env from onboarding answers", async () => {
+  it("generates .env from wizard answers with defaults", async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(["blank"]);
     const { logger } = createLogger();
 
     const prompt: PromptApi = {
       select: async ({ choices }) => choices[0]?.value ?? "",
-      confirm: async ({ message }) => {
-        // Enable payments and confirm .env creation
-        if (message.includes("payments")) return true;
-        if (message.includes(".env")) return true;
-        return false;
-      },
+      confirm: async () => false,
       input: async ({ message, defaultValue = "" }) => {
         // Just use defaults for all inputs
         return defaultValue;
@@ -271,12 +262,13 @@ describe("create-agent-kit CLI", () => {
     const projectDir = join(cwd, "env-agent");
     const env = await readFile(join(projectDir, ".env"), "utf8");
 
-    // Should have values from onboarding (defaults in this case)
-    expect(env).toContain("NETWORK=base-sepolia");
+    // Should have values from wizard (defaults in this case)
+    expect(env).toContain("AGENT_NAME=env-agent");
+    expect(env).toContain("PAYMENTS_NETWORK=base-sepolia");
     expect(env).toContain(
-      "FACILITATOR_URL=https://facilitator.daydreams.systems"
+      "PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems"
     );
-    expect(env).toContain("PRIVATE_KEY="); // Empty - user adds manually
+    expect(env).toContain("PRIVATE_KEY=");
   });
 
   it("requires --template when multiple templates and no prompt", async () => {
@@ -306,5 +298,40 @@ describe("create-agent-kit CLI", () => {
     const projectDir = join(cwd, "project");
     const readme = await readFile(join(projectDir, "README.md"), "utf8");
     expect(readme).toContain("<!-- template:beta -->");
+  });
+
+  it("does not invoke prompt API when --wizard=no is used", async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    // Create a prompt that throws if any method is called
+    const prompt: PromptApi = {
+      select: async () => {
+        throw new Error("select() should not be called with --wizard=no");
+      },
+      confirm: async () => {
+        throw new Error("confirm() should not be called with --wizard=no");
+      },
+      input: async () => {
+        throw new Error("input() should not be called with --wizard=no");
+      },
+    };
+
+    // Should not throw because prompt is never invoked
+    await runCli(["no-prompt-agent", "--template=blank", "--wizard=no"], {
+      cwd,
+      logger,
+      prompt,
+    });
+
+    // Verify project was created successfully with defaults
+    const projectDir = join(cwd, "no-prompt-agent");
+    const pkg = await readJson(join(projectDir, "package.json"));
+    const envFile = await readFile(join(projectDir, ".env"), "utf8");
+
+    expect(pkg.name).toBe("no-prompt-agent");
+    expect(envFile).toContain("AGENT_NAME=no-prompt-agent");
+    expect(envFile).toContain("AGENT_VERSION=0.1.0");
+    expect(envFile).toContain("PAYMENTS_NETWORK=base-sepolia");
   });
 });

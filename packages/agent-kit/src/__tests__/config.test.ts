@@ -16,7 +16,7 @@ describe("AgentKit config management", () => {
 
   it("allows overriding payment defaults", () => {
     createAgentApp(
-      { name: "config-test", version: "0.0.0" },
+      { name: "config-test", version: "0.0.0", description: "Config test agent" },
       {
         config: {
           payments: {
@@ -38,7 +38,7 @@ describe("AgentKit config management", () => {
 
   it("exposes payments helpers via config utils", () => {
     createAgentApp(
-      { name: "config-test-wallet", version: "0.0.0" },
+      { name: "config-test-wallet", version: "0.0.0", description: "Config test wallet agent" },
       {
         config: { wallet: { walletApiUrl: "https://api.example" } },
       }

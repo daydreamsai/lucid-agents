@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { createAgentApp } from "@lucid-agents/agent-kit";
-import { createAgentIdentity, getTrustConfig } from "@lucid-agents/agent-kit-identity";
+import {
+  createAgentIdentity,
+  getTrustConfig,
+} from "@lucid-agents/agent-kit-identity";
 
 // Bootstrap ERC-8004 identity (runs once at startup)
 const identity = await createAgentIdentity({
-  domain: process.env.AGENT_DOMAIN || "{{AGENT_DOMAIN}}",
-  autoRegister: {{AUTO_REGISTER}},
+  domain: process.env.AGENT_DOMAIN,
+  autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
 });
 
 if (identity.didRegister) {
@@ -21,9 +24,9 @@ const trustConfig = getTrustConfig(identity);
 
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "{{APP_NAME}}",
-    version: "{{AGENT_VERSION}}",
-    description: "{{AGENT_DESCRIPTION}}",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   {
     useConfigPayments: true,
@@ -32,17 +35,15 @@ const { app, addEntrypoint } = createAgentApp(
 );
 
 addEntrypoint({
-  key: "{{ENTRYPOINT_KEY}}",
-  description: "{{ENTRYPOINT_DESCRIPTION}}",
+  key: "echo",
+  description: "Echo input text",
   input: z.object({
     text: z.string().min(1, "Please provide some text."),
   }),
-  // Price is configured globally via DEFAULT_PRICE environment variable
   handler: async ({ input }) => {
     return {
       output: {
         text: input.text,
-        processed: true,
       },
     };
   },
@@ -54,4 +55,3 @@ export const reputationClient = identity.clients?.reputation;
 export const validationClient = identity.clients?.validation;
 
 export { app };
-

@@ -1,25 +1,23 @@
 import { z } from "zod";
 import { createAgentApp } from "@lucid-agents/agent-kit";
 
-// Adjust these options to configure payments, trust metadata, or AP2 metadata.
-const agentOptions = {{AGENT_OPTIONS}};
-
 const { app, addEntrypoint } = createAgentApp(
   {
-    name: "{{APP_NAME}}",
-    version: "{{AGENT_VERSION}}",
-    description: "{{AGENT_DESCRIPTION}}",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
-  agentOptions
+  {
+    useConfigPayments: true,
+  }
 );
 
 addEntrypoint({
-  key: "{{ENTRYPOINT_KEY}}",
-  description: "{{ENTRYPOINT_DESCRIPTION}}",
+  key: "echo",
+  description: "Echo input text",
   input: z.object({
-    text: z.string().min(1, "Please provide some text to echo."),
+    text: z.string().min(1, "Please provide some text."),
   }),
-{{ENTRYPOINT_PRICE_LINE}}
   handler: async ({ input }) => {
     return {
       output: {
