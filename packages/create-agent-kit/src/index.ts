@@ -13,6 +13,7 @@ type CliOptions = {
   install: boolean;
   templateId?: string;
   skipWizard?: boolean;
+  templateArgs?: Map<string, string>;
 };
 
 type ParsedArgs = {
@@ -181,6 +182,9 @@ export async function runCli(
       AGENT_NAME: projectDirName,
       PACKAGE_NAME: packageName,
     },
+    preSuppliedArgs: parsed.options.skipWizard
+      ? parsed.options.templateArgs
+      : undefined,
   });
   const replacements = buildTemplateReplacements({
     projectDirName,
@@ -225,7 +229,11 @@ export async function runCli(
 export type { PromptApi, RunLogger };
 
 function parseArgs(args: string[]): ParsedArgs {
-  const options: CliOptions = { install: false, skipWizard: false };
+  const options: CliOptions = {
+    install: false,
+    skipWizard: false,
+    templateArgs: new Map(),
+  };
   const positional: string[] = [];
   let showHelp = false;
 
@@ -251,7 +259,15 @@ function parseArgs(args: string[]): ParsedArgs {
       i += 1;
     } else if (arg?.startsWith("--template=")) {
       options.templateId = arg.slice("--template=".length);
-    } else {
+    } else if (arg?.startsWith("--") && arg.includes("=")) {
+      // Capture template arguments like --SOME_KEY=value
+      const equalIndex = arg.indexOf("=");
+      const key = arg.slice(2, equalIndex);
+      const value = arg.slice(equalIndex + 1);
+      if (key.length > 0) {
+        options.templateArgs?.set(key, value);
+      }
+    } else if (!arg?.startsWith("-")) {
       positional.push(arg ?? "");
     }
   }
@@ -270,6 +286,9 @@ function printHelp(logger: RunLogger) {
   logger.log("  --no-install          Skip bun install");
   logger.log("  --wizard=no           Skip wizard, use template defaults");
   logger.log("  --non-interactive     Same as --wizard=no");
+  logger.log(
+    "  --KEY=value           Pass template argument (use with --non-interactive)"
+  );
   logger.log("  -h, --help            Show this help");
   logger.log("");
   logger.log("Examples:");
@@ -278,6 +297,14 @@ function printHelp(logger: RunLogger) {
     "  bunx @lucid-agents/create-agent-kit my-agent --template=identity --install"
   );
   logger.log("  bunx @lucid-agents/create-agent-kit my-agent --wizard=no");
+  logger.log("");
+  logger.log("Non-interactive with template arguments:");
+  logger.log(
+    "  bunx @lucid-agents/create-agent-kit my-agent --template=identity \\"
+  );
+  logger.log("    --non-interactive \\");
+  logger.log('    --AGENT_DESCRIPTION="My agent" \\');
+  logger.log('    --PAYMENTS_RECEIVABLE_ADDRESS="0x..."');
 }
 
 function printBanner(logger: RunLogger) {
@@ -474,12 +501,26 @@ async function collectWizardAnswers(params: {
   template: TemplateDescriptor;
   prompt?: PromptApi;
   context: Record<string, string>;
+  preSuppliedArgs?: Map<string, string>;
 }): Promise<WizardAnswers> {
-  const { template, prompt, context } = params;
+  const { template, prompt, context, preSuppliedArgs } = params;
   const answers: WizardAnswers = new Map();
   const prompts = template.wizard?.prompts ?? [];
 
   for (const question of prompts) {
+    // Check if we have a pre-supplied value for this key
+    if (preSuppliedArgs?.has(question.key)) {
+      const preSupplied = preSuppliedArgs.get(question.key);
+      if (question.type === "confirm") {
+        const normalized = preSupplied?.trim().toLowerCase() ?? "";
+        const boolValue = ["true", "yes", "y", "1"].includes(normalized);
+        answers.set(question.key, boolValue);
+      } else {
+        answers.set(question.key, sanitizeAnswerString(preSupplied ?? ""));
+      }
+      continue;
+    }
+
     if (!shouldAskWizardPrompt(question, answers)) {
       continue;
     }
@@ -812,9 +853,10 @@ async function setupEnvironment(params: {
   const lines = [`AGENT_NAME=${agentName}`];
 
   for (const prompt of template.wizard?.prompts || []) {
-    const value = skipWizard
-      ? prompt.defaultValue
-      : wizardAnswers.get(prompt.key);
+    // Check wizard answers first (includes CLI args in non-interactive mode)
+    // Fall back to default value if not present
+    const answer = wizardAnswers.get(prompt.key);
+    const value = answer !== undefined ? answer : prompt.defaultValue;
 
     lines.push(`${prompt.key}=${value || ""}`);
   }

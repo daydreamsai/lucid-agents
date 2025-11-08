@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Identity Agent Template Schema",
+  "description": "Configuration schema for the ERC-8004 identity-enabled agent template",
+  "type": "object",
+  "properties": {
+    "AGENT_NAME": {
+      "type": "string",
+      "description": "Agent name (set automatically from project directory name)",
+      "examples": ["my-identity-agent", "verified-agent"]
+    },
+    "AGENT_DESCRIPTION": {
+      "type": "string",
+      "description": "Human-readable description of the agent",
+      "default": "Verifiable agent with on-chain identity"
+    },
+    "AGENT_VERSION": {
+      "type": "string",
+      "description": "Semantic version number for the agent",
+      "default": "0.1.0",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "AGENT_DOMAIN": {
+      "type": "string",
+      "description": "Domain that will host the agent (used for ERC-8004 registration)",
+      "default": "agent.example.com",
+      "examples": ["agent.example.com", "ai.mydomain.com"]
+    },
+    "PAYMENTS_FACILITATOR_URL": {
+      "type": "string",
+      "description": "x402 facilitator endpoint URL for payment processing",
+      "default": "https://facilitator.daydreams.systems",
+      "format": "uri"
+    },
+    "PAYMENTS_NETWORK": {
+      "type": "string",
+      "description": "Payment network identifier (e.g., base-sepolia, ethereum-mainnet)",
+      "default": "base-sepolia"
+    },
+    "PAYMENTS_RECEIVABLE_ADDRESS": {
+      "type": "string",
+      "description": "Ethereum or Solana address that receives payments",
+      "default": "",
+      "examples": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", ""]
+    },
+    "PAYMENTS_DEFAULT_PRICE": {
+      "type": "string",
+      "description": "Default price in smallest network units (wei for EVM, lamports for Solana)",
+      "default": "1000"
+    },
+    "RPC_URL": {
+      "type": "string",
+      "description": "Blockchain RPC endpoint URL for on-chain operations",
+      "default": "https://sepolia.base.org",
+      "format": "uri",
+      "examples": ["https://sepolia.base.org", "https://mainnet.base.org"]
+    },
+    "CHAIN_ID": {
+      "type": "string",
+      "description": "Blockchain network chain ID",
+      "default": "84532",
+      "examples": ["84532", "8453", "1"]
+    },
+    "IDENTITY_AUTO_REGISTER": {
+      "type": "string",
+      "description": "Auto-register agent on ERC-8004 identity registry at startup (true/false)",
+      "default": "true",
+      "enum": ["true", "false"]
+    },
+    "PRIVATE_KEY": {
+      "type": "string",
+      "description": "Wallet private key for signing transactions (required for identity registration)",
+      "default": "",
+      "examples": ["0x...", ""]
+    }
+  },
+  "required": [
+    "AGENT_NAME",
+    "AGENT_DESCRIPTION",
+    "AGENT_VERSION",
+    "AGENT_DOMAIN",
+    "RPC_URL",
+    "CHAIN_ID"
+  ],
+  "notes": "This template requires a PRIVATE_KEY for on-chain identity registration. Ensure the wallet has sufficient gas for the target network."
+}
+

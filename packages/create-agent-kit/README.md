@@ -86,6 +86,7 @@ Options:
   --no-install          Skip bun install (default)
   --wizard=no           Skip wizard, use template defaults
   --non-interactive     Same as --wizard=no
+  --KEY=value           Pass template argument (use with --non-interactive)
   -h, --help            Show this help
 ```
 
@@ -104,6 +105,50 @@ bunx @lucid-agents/create-agent-kit@latest my-agent --install
 # Non-interactive with defaults
 bunx @lucid-agents/create-agent-kit@latest my-agent --template=blank --wizard=no
 ```
+
+### Non-Interactive Mode with Template Arguments
+
+Perfect for CI/CD, automation, or AI coding agents:
+
+```bash
+# Blank template with custom configuration
+bunx @lucid-agents/create-agent-kit@latest my-agent \
+  --template=blank \
+  --non-interactive \
+  --AGENT_DESCRIPTION="Custom agent for automation" \
+  --AGENT_VERSION="1.0.0" \
+  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+
+# Identity template with full configuration
+bunx @lucid-agents/create-agent-kit@latest verified-agent \
+  --template=identity \
+  --non-interactive \
+  --install \
+  --AGENT_DESCRIPTION="Verifiable agent with on-chain identity" \
+  --AGENT_VERSION="0.1.0" \
+  --AGENT_DOMAIN="agent.example.com" \
+  --PAYMENTS_FACILITATOR_URL="https://facilitator.daydreams.systems" \
+  --PAYMENTS_NETWORK="base-sepolia" \
+  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
+  --PAYMENTS_DEFAULT_PRICE="1000" \
+  --RPC_URL="https://sepolia.base.org" \
+  --CHAIN_ID="84532" \
+  --IDENTITY_AUTO_REGISTER="true"
+
+# AxLLM template
+bunx @lucid-agents/create-agent-kit@latest ai-agent \
+  --template=axllm \
+  --non-interactive \
+  --AGENT_DESCRIPTION="AI-powered agent" \
+  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+```
+
+**How it works:**
+
+1. Any flag matching a wizard prompt key (e.g., `--AGENT_DESCRIPTION`) is captured
+2. In non-interactive mode, these values override template defaults
+3. Values not provided fall back to `defaultValue` from `template.json`
+4. Check `template.schema.json` in each template for available arguments
 
 ## Environment Variables
 
