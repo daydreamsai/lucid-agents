@@ -57,8 +57,8 @@ jobs:
         with:
           version: bun run changeset version
           publish: bun run changeset publish
-          title: "Version Packages (${{ steps.version.outputs.version }})"
-          commit: "chore: version packages (${{ steps.version.outputs.version }})"
+          title: "Version Packages"
+          commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
