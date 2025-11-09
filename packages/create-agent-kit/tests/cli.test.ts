@@ -86,6 +86,32 @@ const readJson = async (path: string) => {
   return JSON.parse(raw) as Record<string, unknown>;
 };
 
+const setAdaptersForTemplates = async (
+  root: string,
+  templateIds: string[],
+  adapters: string[]
+) => {
+  await Promise.all(
+    templateIds.map(async id => {
+      const metaPath = join(root, id, 'template.json');
+      const raw = await readFile(metaPath, 'utf8');
+      const meta = JSON.parse(raw) as Record<string, unknown>;
+      await writeFile(
+        metaPath,
+        JSON.stringify(
+          {
+            ...meta,
+            adapters,
+          },
+          null,
+          2
+        ),
+        'utf8'
+      );
+    })
+  );
+};
+
 describe('create-agent-kit CLI', () => {
   it('scaffolds a new project with wizard defaults', async () => {
     const cwd = await createTempDir();
@@ -178,6 +204,88 @@ describe('create-agent-kit CLI', () => {
 
     // README uses agent name
     expect(readme).toContain('quote-agent');
+  });
+
+  it('honors the --adapter flag to select a runtime framework', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(['demo-agent', '--adapter=tanstack', '--wizard=no'], {
+      cwd,
+      logger,
+      templateRoot,
+    });
+
+    const projectDir = join(cwd, 'demo-agent');
+    const tanstackAgent = await readFile(join(projectDir, 'src/agent.ts'), 'utf8');
+    const pkg = (await readJson(
+      join(projectDir, 'package.json')
+    )) as Record<string, unknown>;
+    const deps = (pkg.dependencies ?? {}) as Record<string, unknown>;
+
+    expect(tanstackAgent).toContain('createTanStackRuntime');
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        deps,
+        '@lucid-agents/agent-kit-tanstack'
+      )
+    ).toBe(true);
+  });
+
+  it('generates tanstack projects without leftover template tokens', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(['demo-agent', '--adapter=tanstack', '--wizard=no'], {
+      cwd,
+      logger,
+      templateRoot,
+    });
+
+    const projectDir = join(cwd, 'demo-agent');
+    const filesToCheck = ['src/agent.ts', 'src/lib/agent.ts', '.env'];
+    let checked = 0;
+    for (const file of filesToCheck) {
+      try {
+        const contents = await readFile(join(projectDir, file), 'utf8');
+        checked += 1;
+        expect(contents).not.toContain('{{');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('supports the tanstack headless adapter mode', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'headless-agent',
+        '--template=blank',
+        '--adapter=tanstack',
+        '--adapter-ui=headless',
+        '--wizard=no',
+      ],
+      { cwd, logger, templateRoot }
+    );
+
+    const projectDir = join(cwd, 'headless-agent');
+    const componentsDir = join(projectDir, 'src/components');
+    const indexRoute = await readFile(
+      join(projectDir, 'src/routes/index.tsx'),
+      'utf8'
+    );
+
+    await expect(readdir(componentsDir)).rejects.toThrow();
+    expect(indexRoute).toContain('TanStack runtime without a UI shell');
   });
 
   it('prompts for a project name when not provided and prompt is available', async () => {
@@ -274,6 +382,7 @@ describe('create-agent-kit CLI', () => {
   it('requires --template when multiple templates and no prompt', async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(['alpha', 'beta']);
+    await setAdaptersForTemplates(templateRoot, ['alpha', 'beta'], ['hono']);
     const { logger } = createLogger();
 
     await expect(
@@ -284,6 +393,7 @@ describe('create-agent-kit CLI', () => {
   it('allows selecting template via prompt', async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(['alpha', 'beta']);
+    await setAdaptersForTemplates(templateRoot, ['alpha', 'beta'], ['hono']);
     const { logger } = createLogger();
 
     const prompt: PromptApi = {

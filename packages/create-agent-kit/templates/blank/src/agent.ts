@@ -1,30 +1,11 @@
 import { z } from "zod";
-import { createAgentApp } from "@lucid-agents/agent-kit-hono";
+import type { AgentKitConfig } from "@lucid-agents/agent-kit";
+{{ADAPTER_IMPORTS}}
 
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: process.env.AGENT_NAME,
-    version: process.env.AGENT_VERSION,
-    description: process.env.AGENT_DESCRIPTION,
-  },
-  {
-    useConfigPayments: true,
-  }
-);
+{{ADAPTER_CONFIG_OVERRIDES}}
 
-addEntrypoint({
-  key: "echo",
-  description: "Echo input text",
-  input: z.object({
-    text: z.string().min(1, "Please provide some text."),
-  }),
-  handler: async ({ input }) => {
-    return {
-      output: {
-        text: input.text,
-      },
-    };
-  },
-});
+{{ADAPTER_APP_CREATION}}
 
-export { app };
+{{ADAPTER_ENTRYPOINT_REGISTRATION}}
+
+{{ADAPTER_EXPORTS}}

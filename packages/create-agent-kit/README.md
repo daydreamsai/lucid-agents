@@ -75,6 +75,22 @@ When you run the CLI:
 
 All configuration goes into `.env` - easy to change later without editing code.
 
+### Adapter Layers & Headless Mode
+
+Framework-specific assets live under `packages/create-agent-kit/adapters/<adapter>`.  
+When a template selects an adapter the CLI copies:
+
+1. The template’s own files (agent logic, README, tests, etc.)
+2. The adapter layer (UI, router, build config, etc.)
+3. Optional template overrides in `templates/<id>/adapters/<adapter>`
+
+For example, the TanStack adapter ships two variants:
+
+- `--adapter=tanstack` (default) – copies the full UI shell from `adapters/tanstack/ui`
+- `--adapter=tanstack --adapter-ui=headless` – copies the API-only variant from `adapters/tanstack/headless`
+
+This keeps the runtime skeleton in one place while templates focus on agent behaviour.
+
 ## CLI Options
 
 ```bash
@@ -82,6 +98,8 @@ bunx @lucid-agents/create-agent-kit <app-name> [options]
 
 Options:
   -t, --template <id>   Select template (blank, axllm, axllm-flow, identity)
+  -a, --adapter <id>    Select runtime adapter/framework (hono, tanstack, etc.)
+      --adapter-ui <mode>  Adapter-specific mode (e.g. headless for TanStack)
   -i, --install         Run bun install after scaffolding
   --no-install          Skip bun install (default)
   --wizard=no           Skip wizard, use template defaults
@@ -98,6 +116,15 @@ bunx @lucid-agents/create-agent-kit@latest my-agent
 
 # With specific template
 bunx @lucid-agents/create-agent-kit@latest my-agent --template=identity
+
+# Force a specific framework/runtime
+bunx @lucid-agents/create-agent-kit@latest my-agent --adapter=tanstack --template=blank
+
+# Headless TanStack runtime (API only)
+bunx @lucid-agents/create-agent-kit@latest my-agent \
+  --adapter=tanstack \
+  --adapter-ui=headless \
+  --template=blank
 
 # Auto-install dependencies
 bunx @lucid-agents/create-agent-kit@latest my-agent --install

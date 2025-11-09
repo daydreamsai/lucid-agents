@@ -1,5 +1,4 @@
 export * from './ap2';
-export { createAgentApp, type CreateAgentAppOptions } from './app';
 export {
   type AgentKitConfig,
   configureAgentKit,
@@ -30,7 +29,6 @@ export {
   paymentRequiredResponse,
   type PaymentRequirement,
 } from './http/payments';
-export { withPayments, type WithPaymentsParams } from './paywall';
 export { resolveEntrypointPrice } from './pricing';
 export { validatePaymentsConfig } from './validation';
 export {

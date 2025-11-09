@@ -2,7 +2,7 @@
   "id": "axllm-flow",
   "name": "AxLLM Flow Agent",
   "description": "Agent with AxFlow integration for multi-step workflows.",
-  "adapter": "hono",
+  "adapters": ["hono", "tanstack"],
   "wizard": {
     "prompts": [
       {

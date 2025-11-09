@@ -343,7 +343,7 @@ export function createAgentHttpRuntime(
             faviconDataUrl,
             x402ClientExample,
           });
-          return new Response(html, {
+          return new Response(String(html), {
             headers: {
               "Content-Type": "text/html; charset=utf-8",
             },

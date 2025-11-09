@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "adapters"
   ],
   "scripts": {
     "test": "bun test",

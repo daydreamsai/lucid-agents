@@ -2,7 +2,7 @@
   "id": "blank",
   "name": "Blank Bun Agent",
   "description": "Start from a minimal Bun HTTP agent with @lucid-dreams/agent-kit wired up.",
-  "adapter": "hono",
+  "adapters": ["hono", "tanstack"],
   "wizard": {
     "prompts": [
       {

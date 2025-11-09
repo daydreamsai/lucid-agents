@@ -8,10 +8,20 @@ import process, {
 } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  type AdapterDefinition,
+  type AdapterOptions,
+  getAdapterDefinition,
+  getAdapterDisplayName,
+  getAdapterLayers,
+  isAdapterSupported,
+} from './adapters.js';
 
 type CliOptions = {
   install: boolean;
   templateId?: string;
+  adapterId?: string;
+  adapterUiPreference?: 'ui' | 'headless';
   skipWizard?: boolean;
   templateArgs?: Map<string, string>;
 };
@@ -80,22 +90,21 @@ type TemplateMeta = {
   id?: string;
   name?: string;
   description?: string;
+  /** Single adapter (backward compatible) */
   adapter?: string;
+  /** Multiple compatible adapters (takes precedence over adapter) */
+  adapters?: string[];
   wizard?: WizardConfig;
 };
 
 type TemplateDescriptor = {
   id: string;
-  adapter: string;
+  /** Array of compatible adapters */
+  adapters: string[];
   title: string;
   description?: string;
   path: string;
   wizard?: WizardConfig;
-};
-
-const ADAPTER_DISPLAY_NAMES: Record<string, string> = {
-  hono: "Hono",
-  tanstack: "TanStack Start",
 };
 
 type WizardAnswers = Map<string, string | boolean>;
@@ -160,16 +169,37 @@ export async function runCli(
     throw new Error(`No templates found in ${templateRoot}`);
   }
 
-  const template = await resolveTemplate({
+  const { template, adapter: selectedAdapter } = await resolveTemplate({
     templates,
     requestedId: parsed.options.templateId,
+    requestedAdapter: parsed.options.adapterId,
     prompt,
     logger,
   });
+  const adapterDefinition = getAdapterDefinition(selectedAdapter);
+  const requestedVariant = parsed.options.adapterUiPreference;
+  if (
+    requestedVariant &&
+    adapterDefinition.supportedVariants &&
+    !adapterDefinition.supportedVariants.includes(requestedVariant)
+  ) {
+    const supported = adapterDefinition.supportedVariants.join(', ');
+    throw new Error(
+      `Adapter "${selectedAdapter}" does not support "--adapter-ui=${requestedVariant}". Supported modes: ${supported}`
+    );
+  }
+  const adapterVariant =
+    requestedVariant ?? adapterDefinition.defaultVariant ?? undefined;
+  const adapterOptions: AdapterOptions = {
+    variant: adapterVariant,
+  };
 
-  logger.log(
-    `Using runtime adapter: ${formatAdapterName(template.adapter)}`
-  );
+  logger.log(`Using runtime adapter: ${formatAdapterName(selectedAdapter)}`);
+  if (adapterVariant) {
+    logger.log(
+      `Adapter mode: ${adapterVariant === 'headless' ? 'Headless API' : 'Full UI'}`
+    );
+  }
   logger.log(`Using template: ${template.title}`);
 
   const projectName = await resolveProjectName({
@@ -200,11 +230,20 @@ export async function runCli(
     projectDirName,
     packageName,
     answers: wizardAnswers,
+    adapter: adapterDefinition,
+    templateId: template.id,
+    adapterOptions,
   });
-  await copyTemplate(template.path, targetDir);
+  await copyTemplate(
+    template.path,
+    targetDir,
+    adapterDefinition,
+    adapterOptions
+  );
   await applyTemplateTransforms(targetDir, {
     packageName,
     replacements,
+    adapter: adapterDefinition,
   });
 
   await setupEnvironment({
@@ -269,6 +308,31 @@ function parseArgs(args: string[]): ParsedArgs {
       i += 1;
     } else if (arg?.startsWith('--template=')) {
       options.templateId = arg.slice('--template='.length);
+    } else if (
+      arg === '--adapter' ||
+      arg === '--framework' ||
+      arg === '-a'
+    ) {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error('Expected value after --adapter');
+      }
+      options.adapterId = value.toLowerCase();
+      i += 1;
+    } else if (arg?.startsWith('--adapter=')) {
+      options.adapterId = arg.slice('--adapter='.length).toLowerCase();
+    } else if (arg?.startsWith('--framework=')) {
+      options.adapterId = arg.slice('--framework='.length).toLowerCase();
+    } else if (arg === '--adapter-ui') {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error('Expected value after --adapter-ui');
+      }
+      options.adapterUiPreference = normalizeAdapterUi(value);
+      i += 1;
+    } else if (arg?.startsWith('--adapter-ui=')) {
+      const value = arg.slice('--adapter-ui='.length);
+      options.adapterUiPreference = normalizeAdapterUi(value);
     } else if (arg?.startsWith('--') && arg.includes('=')) {
       // Capture template arguments like --SOME_KEY=value
       const equalIndex = arg.indexOf('=');
@@ -285,12 +349,36 @@ function parseArgs(args: string[]): ParsedArgs {
   return { options, target: positional[0] ?? null, showHelp };
 }
 
+function normalizeAdapterUi(value: string): 'ui' | 'headless' {
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === 'headless' ||
+    normalized === 'api' ||
+    normalized === 'api-only' ||
+    normalized === 'no-ui'
+  ) {
+    return 'headless';
+  }
+  if (normalized === 'ui' || normalized === 'full' || normalized === 'shell') {
+    return 'ui';
+  }
+  throw new Error(
+    `Unknown adapter UI mode "${value}". Use "ui" or "headless".`
+  );
+}
+
 function printHelp(logger: RunLogger) {
   logger.log('Usage: bunx @lucid-agents/create-agent-kit <app-name> [options]');
   logger.log('');
   logger.log('Options:');
   logger.log(
     '  -t, --template <id>   Select template (blank, axllm, axllm-flow, identity)'
+  );
+  logger.log(
+    '  -a, --adapter <id>    Select runtime adapter/framework (hono, tanstack, etc.)'
+  );
+  logger.log(
+    '      --adapter-ui <mode>  Adapter-specific mode (ui, headless for TanStack)'
   );
   logger.log('  -i, --install         Run bun install after scaffolding');
   logger.log('  --no-install          Skip bun install');
@@ -335,7 +423,7 @@ async function loadTemplates(
     let title = toTitleCase(id);
     let description: string | undefined;
     let wizard: WizardConfig | undefined;
-    let adapter = "default";
+    let adapters: string[] = ['hono'];
 
     try {
       const raw = await fs.readFile(metaPath, 'utf8');
@@ -343,8 +431,12 @@ async function loadTemplates(
       title = meta.name ?? toTitleCase(id);
       description = meta.description;
       wizard = normalizeWizardConfig(meta.wizard);
-      if (meta.adapter) {
-        adapter = meta.adapter.toLowerCase();
+
+      // Support both new adapters array and legacy adapter string
+      if (meta.adapters && Array.isArray(meta.adapters)) {
+        adapters = meta.adapters.map(a => a.toLowerCase());
+      } else if (meta.adapter) {
+        adapters = [meta.adapter.toLowerCase()];
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -352,9 +444,14 @@ async function loadTemplates(
       }
     }
 
+    adapters = Array.from(new Set(adapters));
+    if (adapters.length === 0) {
+      adapters = ['hono'];
+    }
+
     descriptors.push({
       id,
-      adapter,
+      adapters,
       title,
       description,
       path,
@@ -366,7 +463,7 @@ async function loadTemplates(
 }
 
 function formatAdapterName(adapter: string): string {
-  return ADAPTER_DISPLAY_NAMES[adapter] ?? toTitleCase(adapter);
+  return getAdapterDisplayName(adapter);
 }
 
 function normalizeWizardConfig(
@@ -400,10 +497,12 @@ function normalizeWizardConfig(
 async function resolveTemplate(params: {
   templates: TemplateDescriptor[];
   requestedId?: string;
+  requestedAdapter?: string;
   prompt?: PromptApi;
   logger: RunLogger;
-}): Promise<TemplateDescriptor> {
-  const { templates, requestedId, prompt, logger } = params;
+}): Promise<{ template: TemplateDescriptor; adapter: string }> {
+  const { templates, requestedId, requestedAdapter, prompt, logger } = params;
+  const normalizedAdapter = requestedAdapter?.toLowerCase();
 
   if (requestedId) {
     const match = templates.find(t => t.id === requestedId);
@@ -413,71 +512,125 @@ async function resolveTemplate(params: {
         `Unknown template "${requestedId}". Available templates: ${available}`
       );
     }
-    return match;
+    const supportedAdapters = match.adapters.filter(isAdapterSupported);
+    if (supportedAdapters.length === 0) {
+      throw new Error(
+        `Template "${requestedId}" does not support any known runtime adapters.`
+      );
+    }
+    if (normalizedAdapter) {
+      if (!isAdapterSupported(normalizedAdapter)) {
+        const supported = supportedAdapters.map(formatAdapterName).join(', ');
+        throw new Error(
+          `Unknown adapter "${normalizedAdapter}". Supported adapters for template "${requestedId}": ${supported}`
+        );
+      }
+      if (!match.adapters.includes(normalizedAdapter)) {
+        const supported = supportedAdapters.map(formatAdapterName).join(', ');
+        throw new Error(
+          `Template "${requestedId}" does not support adapter "${normalizedAdapter}". Supported adapters: ${supported}`
+        );
+      }
+      return { template: match, adapter: normalizedAdapter };
+    }
+    return { template: match, adapter: supportedAdapters[0]! };
   }
 
-  const adapters = Array.from(new Set(templates.map((t) => t.adapter)));
-  let selectedAdapter = adapters[0];
+  // Collect all unique adapters from templates, warning about unknown adapters
+  const allAdapters = new Set<string>();
+  const unknownAdapters = new Set<string>();
+  for (const template of templates) {
+    for (const adapter of template.adapters) {
+      if (!isAdapterSupported(adapter)) {
+        if (!unknownAdapters.has(adapter)) {
+          logger.warn(
+            `Template "${template.id}" references unknown adapter "${adapter}".`
+          );
+          unknownAdapters.add(adapter);
+        }
+        continue;
+      }
+      allAdapters.add(adapter);
+    }
+  }
+  const adapters = Array.from(allAdapters);
 
-  if (adapters.length > 1) {
+  if (adapters.length === 0) {
+    throw new Error('No valid adapters found in templates');
+  }
+
+  if (normalizedAdapter && !adapters.includes(normalizedAdapter)) {
+    const available = adapters.map(formatAdapterName).join(', ');
+    throw new Error(
+      `Adapter "${normalizedAdapter}" is not available. Supported adapters: ${available}`
+    );
+  }
+
+  let selectedAdapter: string = normalizedAdapter ?? adapters[0]!;
+
+  // Always prompt for adapter selection if multiple adapters exist and none was requested
+  if (!normalizedAdapter && adapters.length > 1) {
     if (!prompt) {
-      const available = adapters
-        .map((adapter) => formatAdapterName(adapter))
-        .join(", ");
+      const available = adapters.map(formatAdapterName).join(', ');
       throw new Error(
-        `Multiple runtime adapters available (${available}). Re-run with --template <name>.`
+        `Multiple runtime adapters available (${available}). Re-run with --template <name> or pass --adapter <adapter>.`
       );
     }
 
-    const adapterChoices: PromptChoice[] = adapters.map((adapter) => ({
+    const adapterChoices: PromptChoice[] = adapters.map(adapter => ({
       value: adapter,
       title: formatAdapterName(adapter),
     }));
 
     selectedAdapter = await prompt.select({
-      message: "Select a runtime adapter:",
+      message: 'Select a runtime adapter:',
       choices: adapterChoices,
     });
+  } else if (prompt) {
+    logger.log(`Using runtime adapter: ${formatAdapterName(selectedAdapter)}`);
   }
 
-  const candidates = templates.filter((t) => t.adapter === selectedAdapter);
+  // Filter templates that are compatible with the selected adapter
+  const candidates = templates.filter(t =>
+    t.adapters.includes(selectedAdapter)
+  );
   if (candidates.length === 0) {
-    logger.warn(
-      `No templates found for adapter "${selectedAdapter}". Falling back to default template list.`
+    const available = adapters.map(formatAdapterName).join(', ');
+    throw new Error(
+      `No templates found for adapter "${selectedAdapter}". Available adapters: ${available}`
     );
-    return templates[0]!;
   }
 
   if (candidates.length === 1) {
-    return candidates[0]!;
+    return { template: candidates[0]!, adapter: selectedAdapter };
   }
 
   if (!prompt) {
-    const available = candidates.map((t) => t.id).join(', ');
+    const available = candidates.map(t => t.id).join(', ');
     throw new Error(
       `Multiple templates available for adapter "${selectedAdapter}" (${available}). Re-run with --template <name>.`
     );
   }
 
-  const choices: PromptChoice[] = candidates.map((template) => ({
+  const choices: PromptChoice[] = candidates.map(template => ({
     value: template.id,
     title: template.title,
     description: template.description,
   }));
 
   const selection = await prompt.select({
-    message: 'Select a template:',
+    message: `Select a template for ${formatAdapterName(selectedAdapter)}:`,
     choices,
   });
 
-  const match = candidates.find((t) => t.id === selection);
+  const match = candidates.find(t => t.id === selection);
   if (!match) {
     logger.warn(
       `Template "${selection}" not found; falling back to first option.`
     );
-    return candidates[0]!;
+    return { template: candidates[0]!, adapter: selectedAdapter };
   }
-  return match;
+  return { template: match, adapter: selectedAdapter };
 }
 
 function toTitleCase(value: string) {
@@ -761,46 +914,50 @@ function buildTemplateReplacements(params: {
   projectDirName: string;
   packageName: string;
   answers: WizardAnswers;
+  adapter: AdapterDefinition;
+  templateId?: string;
+  adapterOptions?: AdapterOptions;
 }): Record<string, string> {
-  const { projectDirName, packageName } = params;
+  const {
+    projectDirName,
+    packageName,
+    adapter,
+    answers,
+    templateId,
+    adapterOptions,
+  } = params;
+  const { snippets } = adapter;
 
-  // Only used for package.json and README.md now
+  const answerEntries: Record<string, string> = {};
+  for (const [key, value] of answers.entries()) {
+    if (typeof value === 'string') {
+      answerEntries[key] = value;
+    } else {
+      answerEntries[key] = value ? 'true' : 'false';
+    }
+  }
+
   return {
+    ...answerEntries,
     AGENT_NAME: projectDirName,
+    APP_NAME: projectDirName,
     PACKAGE_NAME: packageName,
+    ADAPTER_ID: adapter.id,
+    ADAPTER_DISPLAY_NAME: adapter.displayName,
+    ADAPTER_VARIANT: adapterOptions?.variant ?? adapter.defaultVariant ?? 'default',
+    ADAPTER_IMPORTS: snippets.imports,
+    ADAPTER_CONFIG_OVERRIDES: snippets.configOverrides,
+    ADAPTER_APP_CREATION: snippets.appCreation,
+    ADAPTER_ENTRYPOINT_REGISTRATION: snippets.entrypointRegistration,
+    ADAPTER_EXPORTS: snippets.exports,
+    ...(adapter.buildReplacements
+      ? adapter.buildReplacements({
+          answers,
+          templateId,
+          options: adapterOptions,
+        })
+      : {}),
   };
-}
-
-function getStringAnswer(
-  answers: WizardAnswers,
-  key: string,
-  fallback: string = ''
-): string {
-  const value = answers.get(key);
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return sanitizeAnswerString(value);
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-  return fallback;
-}
-
-function getBooleanAnswer(
-  answers: WizardAnswers,
-  key: string,
-  fallback: boolean
-): boolean {
-  const value = answers.get(key);
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase();
-    if (['true', 'yes', 'y', '1'].includes(normalized)) return true;
-    if (['false', 'no', 'n', '0'].includes(normalized)) return false;
-  }
-  return fallback;
 }
 
 // toEntrypointKey removed - no longer needed without entrypoint customization
@@ -830,27 +987,88 @@ async function assertTargetDirectory(targetDir: string) {
   }
 }
 
-async function copyTemplate(templateRoot: string, targetDir: string) {
-  await fs.cp(templateRoot, targetDir, {
-    recursive: true,
-    errorOnExist: false,
-  });
+async function copyTemplate(
+  templateRoot: string,
+  targetDir: string,
+  adapter: AdapterDefinition,
+  adapterOptions: AdapterOptions
+) {
+  // Copy base template files, excluding adapters directory
+  const entries = await fs.readdir(templateRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === 'adapters') continue; // Skip adapters directory
+
+    const sourcePath = join(templateRoot, entry.name);
+    const targetPath = join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      await fs.cp(sourcePath, targetPath, {
+        recursive: true,
+        errorOnExist: false,
+      });
+    } else {
+      await fs.copyFile(sourcePath, targetPath);
+    }
+  }
+
+  // Copy shared adapter files (framework layer)
+  const adapterLayers = getAdapterLayers(adapter, adapterOptions);
+  for (const layer of adapterLayers) {
+    await copyAdapterLayer(layer, targetDir);
+  }
+
+  // Copy template-specific overrides for this adapter
+  const overrideDir = join(templateRoot, 'adapters', adapter.id);
+  await copyAdapterLayer(overrideDir, targetDir);
 }
+
+async function copyAdapterLayer(
+  sourceDir: string | undefined,
+  targetDir: string
+) {
+  if (!sourceDir) return;
+  try {
+    await fs.cp(sourceDir, targetDir, {
+      recursive: true,
+      errorOnExist: false,
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+}
+
+const DEFAULT_PLACEHOLDER_TARGETS = ['src/agent.ts', 'src/lib/agent.ts'];
 
 async function applyTemplateTransforms(
   targetDir: string,
   params: {
     packageName: string;
     replacements: Record<string, string>;
+    adapter: AdapterDefinition;
   }
 ) {
   await updatePackageJson(targetDir, params.packageName);
 
-  // Only replace tokens in README.md (agent.ts uses process.env)
+  // Replace tokens in README.md
   await replaceTemplatePlaceholders(
     join(targetDir, 'README.md'),
     params.replacements
   );
+
+  // Replace adapter-specific code in agent files (base locations + adapter overrides)
+  const placeholderTargets = new Set<string>();
+  for (const target of DEFAULT_PLACEHOLDER_TARGETS) {
+    placeholderTargets.add(join(targetDir, target));
+  }
+  for (const target of params.adapter.placeholderTargets ?? []) {
+    placeholderTargets.add(join(targetDir, target));
+  }
+
+  for (const filePath of placeholderTargets) {
+    await replaceTemplatePlaceholders(filePath, params.replacements);
+  }
 
   await removeTemplateArtifacts(targetDir);
 }

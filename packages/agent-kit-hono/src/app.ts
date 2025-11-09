@@ -84,7 +84,7 @@ export function createAgentApp(
     runtime.addEntrypoint(def);
     const entrypoint = runtime
       .snapshotEntrypoints()
-      .find((item) => item.key === def.key);
+      .find((item: EntrypointDef) => item.key === def.key);
     if (!entrypoint) {
       throw new Error(`Failed to register entrypoint "${def.key}"`);
     }
