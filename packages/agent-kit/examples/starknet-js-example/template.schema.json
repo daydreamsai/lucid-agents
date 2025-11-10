@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AxLLM Flow Agent Template Schema",
+  "description": "Configuration schema for the AxLLM Flow-powered Bun agent template with multi-step workflows",
+  "type": "object",
+  "properties": {
+    "AGENT_NAME": {
+      "type": "string",
+      "description": "Agent name (set automatically from project directory name)",
+      "examples": ["my-flow-agent", "workflow-assistant"]
+    },
+    "AGENT_DESCRIPTION": {
+      "type": "string",
+      "description": "Human-readable description of the agent",
+      "default": "Agent with LLM workflow integration"
+    },
+    "AGENT_VERSION": {
+      "type": "string",
+      "description": "Semantic version number for the agent",
+      "default": "0.1.0",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "PAYMENTS_FACILITATOR_URL": {
+      "type": "string",
+      "description": "x402 facilitator endpoint URL for payment processing",
+      "default": "https://facilitator.daydreams.systems",
+      "format": "uri"
+    },
+    "PAYMENTS_NETWORK": {
+      "type": "string",
+      "description": "Payment network identifier (e.g., base-sepolia, ethereum-mainnet)",
+      "default": "base-sepolia"
+    },
+    "PAYMENTS_RECEIVABLE_ADDRESS": {
+      "type": "string",
+      "description": "Ethereum or Solana address that receives payments",
+      "default": "",
+      "examples": ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", ""]
+    },
+    "PAYMENTS_DEFAULT_PRICE": {
+      "type": "string",
+      "description": "Default price in smallest network units (wei for EVM, lamports for Solana)",
+      "default": "1000"
+    },
+    "PRIVATE_KEY": {
+      "type": "string",
+      "description": "Wallet private key for signing transactions (optional, can be added later)",
+      "default": "",
+      "examples": ["0x...", ""]
+    }
+  },
+  "required": ["AGENT_NAME", "AGENT_DESCRIPTION", "AGENT_VERSION"],
+  "notes": "This template requires LLM API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) and supports the Ax Flow API for multi-step workflows"
+}
+
