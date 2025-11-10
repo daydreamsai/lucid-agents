@@ -13,6 +13,7 @@ type BalanceResult = {
 let provider: RpcProvider | null = null;
 let account: Account | null = null;
 let ethContract: Contract | null = null;
+let ethContractPromise: Promise<Contract> | null = null;
 
 function getProvider(): RpcProvider {
   if (provider) {
@@ -49,23 +50,37 @@ async function getEthContract(): Promise<Contract> {
     return ethContract;
   }
 
-  const config = readStarknetConfig();
-  const providerInstance = getProvider();
-  const classInfo = await providerInstance.getClassAt(
-    config.ethContractAddress
-  );
-
-  if (!classInfo.abi) {
-    throw new Error("ETH contract ABI not found");
+  if (ethContractPromise) {
+    return ethContractPromise;
   }
 
-  ethContract = new Contract({
-    abi: classInfo.abi,
-    address: config.ethContractAddress,
-    providerOrAccount: providerInstance,
-  });
+  ethContractPromise = (async () => {
+    try {
+      const config = readStarknetConfig();
+      const providerInstance = getProvider();
+      const classInfo = await providerInstance.getClassAt(
+        config.ethContractAddress
+      );
 
-  return ethContract;
+      if (!classInfo.abi) {
+        throw new Error("ETH contract ABI not found");
+      }
+
+      const contractInstance = new Contract({
+        abi: classInfo.abi,
+        address: config.ethContractAddress,
+        providerOrAccount: providerInstance,
+      });
+
+      ethContract = contractInstance;
+      return contractInstance;
+    } catch (error) {
+      ethContractPromise = null;
+      throw error;
+    }
+  })();
+
+  return ethContractPromise;
 }
 
 function formatUnits(value: bigint, decimals: number): string {

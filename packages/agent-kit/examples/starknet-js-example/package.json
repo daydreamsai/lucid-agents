@@ -13,7 +13,7 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
-    "@lucid-agents/agent-kit": "latest",
+    "@lucid-agents/agent-kit": "workspace:*",
     "starknet": "^8.7.0",
     "zod": "^4.1.12"
   },
