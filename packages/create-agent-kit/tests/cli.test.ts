@@ -136,9 +136,9 @@ describe('create-agent-kit CLI', () => {
     expect(agentSrc).toContain('process.env.AGENT_NAME');
     expect(agentSrc).toContain('process.env.AGENT_VERSION');
     expect(agentSrc).toContain('process.env.AGENT_DESCRIPTION');
-    expect(agentSrc).toContain('key: "echo"');
     expect(agentSrc).toContain('useConfigPayments: true');
     expect(agentSrc).not.toContain('{{');
+    expect(agentSrc).toContain('key: "echo"');
 
     // .env has defaults from template.json
     expect(envFile).toContain('AGENT_NAME=demo-agent');
@@ -185,8 +185,8 @@ describe('create-agent-kit CLI', () => {
     expect(agentSrc).toContain('process.env.AGENT_NAME');
     expect(agentSrc).toContain('process.env.AGENT_VERSION');
     expect(agentSrc).toContain('process.env.AGENT_DESCRIPTION');
-    expect(agentSrc).toContain('key: "echo"');
     expect(agentSrc).toContain('useConfigPayments: true');
+    expect(agentSrc).toContain('key: "echo"');
 
     // .env contains wizard answers
     expect(envFile).toContain('AGENT_NAME=quote-agent');
@@ -288,6 +288,67 @@ describe('create-agent-kit CLI', () => {
     expect(indexRoute).toContain('TanStack runtime without a UI shell');
   });
 
+  it('adds additional features via the --feature flag', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'combo-agent',
+        '--template=blank',
+        '--wizard=no',
+        '--feature=axllm',
+      ],
+      { cwd, logger, templateRoot }
+    );
+
+    const projectDir = join(cwd, 'combo-agent');
+    const agentSrc = await readFile(join(projectDir, 'src/agent.ts'), 'utf8');
+    const pkg = (await readJson(
+      join(projectDir, 'package.json')
+    )) as Record<string, any>;
+
+    expect(agentSrc).toContain('key: "echo"');
+    expect(agentSrc).toContain('ax-chat');
+    expect(pkg.dependencies).toMatchObject({
+      '@ax-llm/ax': expect.any(String),
+    });
+  });
+
+  it('adds the identity feature with its dependencies and env entries', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'identity-agent',
+        '--template=blank',
+        '--wizard=no',
+        '--feature=identity',
+      ],
+      { cwd, logger, templateRoot }
+    );
+
+    const projectDir = join(cwd, 'identity-agent');
+    const agentSrc = await readFile(join(projectDir, 'src/agent.ts'), 'utf8');
+    const envFile = await readFile(join(projectDir, '.env'), 'utf8');
+    const readme = await readFile(join(projectDir, 'README.md'), 'utf8');
+    const pkg = (await readJson(
+      join(projectDir, 'package.json')
+    )) as Record<string, any>;
+
+    expect(envFile).toContain('AGENT_DOMAIN=');
+    expect(envFile).toContain('RPC_URL=');
+    expect(envFile).toContain('CHAIN_ID=');
+    expect(agentSrc).toContain('createAgentIdentity');
+    expect(readme).toContain('ERC-8004 Identity Feature');
+    expect(pkg.dependencies).toHaveProperty(
+      '@lucid-agents/agent-kit-identity'
+    );
+  });
+
   it('prompts for a project name when not provided and prompt is available', async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
@@ -377,37 +438,6 @@ describe('create-agent-kit CLI', () => {
       'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems'
     );
     expect(env).toContain('PRIVATE_KEY=');
-  });
-
-  it('requires --template when multiple templates and no prompt', async () => {
-    const cwd = await createTempDir();
-    const templateRoot = await createTemplateRoot(['alpha', 'beta']);
-    await setAdaptersForTemplates(templateRoot, ['alpha', 'beta'], ['hono']);
-    const { logger } = createLogger();
-
-    await expect(
-      runCli(['project'], { cwd, logger, templateRoot })
-    ).rejects.toThrow(/Multiple templates available/);
-  });
-
-  it('allows selecting template via prompt', async () => {
-    const cwd = await createTempDir();
-    const templateRoot = await createTemplateRoot(['alpha', 'beta']);
-    await setAdaptersForTemplates(templateRoot, ['alpha', 'beta'], ['hono']);
-    const { logger } = createLogger();
-
-    const prompt: PromptApi = {
-      select: async ({ choices }) =>
-        choices.find(c => c.value === 'beta')!.value,
-      confirm: async () => false,
-      input: async ({ defaultValue = '' }) => defaultValue,
-    };
-
-    await runCli(['project'], { cwd, logger, templateRoot, prompt });
-
-    const projectDir = join(cwd, 'project');
-    const readme = await readFile(join(projectDir, 'README.md'), 'utf8');
-    expect(readme).toContain('<!-- template:beta -->');
   });
 
   it('does not invoke prompt API when --wizard=no is used', async () => {

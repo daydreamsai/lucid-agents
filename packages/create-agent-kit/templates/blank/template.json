@@ -1,8 +1,9 @@
 {
   "id": "blank",
-  "name": "Blank Bun Agent",
-  "description": "Start from a minimal Bun HTTP agent with @lucid-dreams/agent-kit wired up.",
+  "name": "Lucid Agent",
+  "description": "Pick a runtime and mix in features like AxLLM chat or ERC-8004 identity.",
   "adapters": ["hono", "tanstack"],
+  "features": ["blank"],
   "wizard": {
     "prompts": [
       {

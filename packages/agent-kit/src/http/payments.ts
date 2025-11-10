@@ -1,4 +1,5 @@
 import type { Network } from "@lucid-agents/agent-core";
+
 import type { EntrypointDef, PaymentsConfig } from "../types";
 
 export type PaymentRequirement =

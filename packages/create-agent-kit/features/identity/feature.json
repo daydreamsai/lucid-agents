@@ -1,0 +1,45 @@
+{
+  "id": "identity",
+  "name": "ERC-8004 Identity",
+  "description": "Bootstrap an on-chain identity and trust config via @lucid-agents/agent-kit-identity.",
+  "dependencies": {
+    "dependencies": {
+      "@lucid-agents/agent-kit-identity": "latest"
+    }
+  },
+  "wizard": {
+    "prompts": [
+      {
+        "key": "AGENT_DOMAIN",
+        "type": "input",
+        "message": "What domain will host your agent?",
+        "defaultValue": "agent.example.com"
+      },
+      {
+        "key": "RPC_URL",
+        "type": "input",
+        "message": "RPC URL (blockchain endpoint)",
+        "defaultValue": "https://sepolia.base.org"
+      },
+      {
+        "key": "CHAIN_ID",
+        "type": "input",
+        "message": "Chain ID",
+        "defaultValue": "84532"
+      },
+      {
+        "key": "IDENTITY_AUTO_REGISTER",
+        "type": "confirm",
+        "message": "Auto-register on the ERC-8004 identity registry?",
+        "defaultValue": true
+      }
+    ]
+  },
+  "readme": "README.md",
+  "snippets": {
+    "imports": "snippets/imports.ts",
+    "preApp": "snippets/pre-app.ts",
+    "agentOptions": "snippets/agent-options.ts",
+    "exports": "snippets/exports.ts"
+  }
+}

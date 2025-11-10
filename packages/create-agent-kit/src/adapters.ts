@@ -45,6 +45,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
   hono: {
     id: 'hono',
     displayName: 'Hono',
+    filesDir: join(ADAPTER_FILES_ROOT, 'hono'),
     snippets: {
       imports: `import { createAgentApp } from "@lucid-agents/agent-kit-hono";`,
       configOverrides: sharedConfigOverrides,
@@ -56,22 +57,10 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
   },
   {
     useConfigPayments: true,
+    {{FEATURE_AGENT_OPTIONS}}
   }
 );`,
-      entrypointRegistration: `addEntrypoint({
-  key: "echo",
-  description: "Echo input text",
-  input: z.object({
-    text: z.string().min(1, "Please provide some text."),
-  }),
-  handler: async ({ input }) => {
-    return {
-      output: {
-        text: input.text,
-      },
-    };
-  },
-});`,
+      entrypointRegistration: ``,
       exports: `export { app };`,
     },
   },
@@ -99,24 +88,12 @@ import type { CreateAgentHttpOptions } from "@lucid-agents/agent-kit";`,
   },
   {
     useConfigPayments: true,
+    {{FEATURE_AGENT_OPTIONS}}
   }
 );
 
 const { runtime, handlers } = tanstack;`,
-      entrypointRegistration: `runtime.addEntrypoint({
-  key: "echo",
-  description: "Echo input text",
-  input: z.object({
-    text: z.string().min(1, "Please provide some text."),
-  }),
-  handler: async ({ input }) => {
-    return {
-      output: {
-        text: input.text,
-      },
-    };
-  },
-});`,
+      entrypointRegistration: ``,
       exports: `const { agent } = runtime;
 
 export { agent, handlers, runtime };`,

@@ -1,0 +1,15 @@
+{
+  "id": "axllm-flow",
+  "name": "AxLLM Flow",
+  "description": "Multi-step AxFlow pipeline that summarises a topic and suggests follow-up ideas.",
+  "dependencies": {
+    "dependencies": {
+      "@ax-llm/ax": "^14.0.37"
+    }
+  },
+  "snippets": {
+    "imports": "snippets/imports.ts",
+    "preApp": "snippets/pre-app.ts",
+    "entrypoints": "snippets/entrypoints.ts"
+  }
+}

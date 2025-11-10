@@ -1,0 +1,12 @@
+{
+  "id": "blank",
+  "name": "Echo Entrypoint",
+  "description": "Minimal echo entrypoint for quick experiments.",
+  "dependencies": {
+    "dependencies": {}
+  },
+  "snippets": {
+    "imports": "snippets/imports.ts",
+    "entrypoints": "snippets/entrypoints.ts"
+  }
+}

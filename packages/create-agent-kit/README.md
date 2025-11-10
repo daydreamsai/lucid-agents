@@ -1,6 +1,6 @@
 # @lucid-agents/create-agent-kit
 
-CLI scaffolding tool to quickly generate new agent projects with built-in templates and interactive configuration.
+CLI scaffolding tool to quickly generate new agent projects with built-in feature packs and interactive configuration.
 
 ## Quick Start
 
@@ -10,62 +10,27 @@ Create a new agent in seconds:
 bunx @lucid-agents/create-agent-kit@latest my-agent
 ```
 
-The wizard will guide you through template selection and configuration. That's it!
+The wizard will guide you through runtime/feature selection and configuration. That's it!
 
-## Available Templates
+## Available Features
 
-Choose the template that fits your use case:
+Every project starts with the **Blank** feature (echo entrypoint) and you can layer in any of the following:
 
-### Blank Template (`blank`)
+- **axllm** – AxLLM chat entrypoint powered by `createAxLLMClient`
+- **axllm-flow** – AxFlow pipeline that summarises a topic and proposes ideas
+- **identity** – ERC-8004 identity bootstrap via `@lucid-agents/agent-kit-identity`
 
-Minimal agent with echo entrypoint. Best starting point for custom agents.
-
-**Best for:**
-
-- Learning agent-kit fundamentals
-- Building custom agents from scratch
-- Minimal boilerplate
-
-### AxLLM Template (`axllm`)
-
-Agent with AI/LLM integration using `@ax-llm/ax`.
-
-**Best for:**
-
-- AI-powered agents
-- LLM integration (OpenAI, etc.)
-- Conversational interfaces
-
-### AxLLM Flow Template (`axllm-flow`)
-
-Agent with AxFlow for multi-step AI workflows.
-
-**Best for:**
-
-- Complex AI workflows
-- Multi-step reasoning
-- Orchestrating multiple LLM calls
-
-### ERC-8004 Identity Template (`identity`)
-
-Full-featured agent with on-chain identity and verifiable attestations.
-
-**Best for:**
-
-- Verifiable agents with on-chain identity
-- Trust and reputation tracking
-- Domain-bound agent attestations
-- Decentralized agent networks
+Use `--feature=<id>` multiple times (or rely on the interactive multi-select prompt) to mix features together.
 
 ## How It Works
 
 When you run the CLI:
 
-1. **Choose your template** - Select which type of agent to create
+1. **Pick a runtime** - Choose between Hono (Bun HTTP) or TanStack Start (full-stack React)
 2. **Configure through wizard** - Answer questions about your agent:
    - Agent name, version, description
    - Payment settings (receivable address, network, pricing)
-   - Template-specific settings (domain for identity, etc.)
+   - Feature-specific settings (AxLLM defaults, identity domain, etc.)
 3. **Project generated** - Complete agent project with:
    - Configured `src/agent.ts`
    - Generated `.env` with your answers
@@ -91,15 +56,22 @@ For example, the TanStack adapter ships two variants:
 
 This keeps the runtime skeleton in one place while templates focus on agent behaviour.
 
+### Feature Packs
+
+After picking a runtime you can layer in additional features (LLM chat, AxFlow pipelines, etc.). Templates declare their default features, and you can add more with `--feature=<id>` (repeat the flag to add multiple). In interactive mode you’ll see a checkbox prompt (space to toggle, enter to confirm); in non-interactive mode use the flags. The CLI stitches together the selected feature modules and generates `src/agent.ts` so you can mix and match capabilities without duplicating boilerplate.
+
+Feature code is copied directly into `src/agent.ts`, so you can inspect or modify each entrypoint inline after scaffolding.
+
 ## CLI Options
 
 ```bash
 bunx @lucid-agents/create-agent-kit <app-name> [options]
 
 Options:
-  -t, --template <id>   Select template (blank, axllm, axllm-flow, identity)
+  -t, --template <id>   Legacy preset name (blank by default; axllm/identity map to features)
   -a, --adapter <id>    Select runtime adapter/framework (hono, tanstack, etc.)
       --adapter-ui <mode>  Adapter-specific mode (e.g. headless for TanStack)
+  -f, --feature <id>    Add an extra feature (axllm, axllm-flow, ...)
   -i, --install         Run bun install after scaffolding
   --no-install          Skip bun install (default)
   --wizard=no           Skip wizard, use template defaults
@@ -114,17 +86,18 @@ Options:
 # Interactive setup (recommended)
 bunx @lucid-agents/create-agent-kit@latest my-agent
 
-# With specific template
-bunx @lucid-agents/create-agent-kit@latest my-agent --template=identity
-
-# Force a specific framework/runtime
-bunx @lucid-agents/create-agent-kit@latest my-agent --adapter=tanstack --template=blank
+# Add features explicitly
+bunx @lucid-agents/create-agent-kit@latest my-agent --feature=identity
 
 # Headless TanStack runtime (API only)
 bunx @lucid-agents/create-agent-kit@latest my-agent \
   --adapter=tanstack \
   --adapter-ui=headless \
-  --template=blank
+  --feature=axllm
+
+# Blank runtime + AxLLM feature
+bunx @lucid-agents/create-agent-kit@latest my-agent \
+  --feature=axllm
 
 # Auto-install dependencies
 bunx @lucid-agents/create-agent-kit@latest my-agent --install
@@ -138,33 +111,28 @@ bunx @lucid-agents/create-agent-kit@latest my-agent --template=blank --wizard=no
 Perfect for CI/CD, automation, or AI coding agents:
 
 ```bash
-# Blank template with custom configuration
+# Default blank agent with custom configuration
 bunx @lucid-agents/create-agent-kit@latest my-agent \
-  --template=blank \
   --non-interactive \
   --AGENT_DESCRIPTION="Custom agent for automation" \
-  --AGENT_VERSION="1.0.0" \
-  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+  --AGENT_VERSION="0.1.0" \
+  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
 
-# Identity template with full configuration
+# Identity feature with full configuration
 bunx @lucid-agents/create-agent-kit@latest verified-agent \
-  --template=identity \
+  --feature=identity \
   --non-interactive \
   --install \
   --AGENT_DESCRIPTION="Verifiable agent with on-chain identity" \
   --AGENT_VERSION="0.1.0" \
   --AGENT_DOMAIN="agent.example.com" \
-  --PAYMENTS_FACILITATOR_URL="https://facilitator.daydreams.systems" \
-  --PAYMENTS_NETWORK="base-sepolia" \
-  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
-  --PAYMENTS_DEFAULT_PRICE="1000" \
   --RPC_URL="https://sepolia.base.org" \
   --CHAIN_ID="84532" \
   --IDENTITY_AUTO_REGISTER="true"
 
-# AxLLM template
+# AxLLM feature preset
 bunx @lucid-agents/create-agent-kit@latest ai-agent \
-  --template=axllm \
+  --feature=axllm \
   --non-interactive \
   --AGENT_DESCRIPTION="AI-powered agent" \
   --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"

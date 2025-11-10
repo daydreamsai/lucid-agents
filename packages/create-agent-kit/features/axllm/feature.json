@@ -1,0 +1,15 @@
+{
+  "id": "axllm",
+  "name": "AxLLM Chat",
+  "description": "LLM-powered chat entrypoint using createAxLLMClient.",
+  "dependencies": {
+    "dependencies": {
+      "@ax-llm/ax": "^14.0.37"
+    }
+  },
+  "snippets": {
+    "imports": "snippets/imports.ts",
+    "preApp": "snippets/pre-app.ts",
+    "entrypoints": "snippets/entrypoints.ts"
+  }
+}

@@ -74,7 +74,7 @@ bunx @lucid-agents/create-agent-kit@latest
 
 The interactive CLI will:
 
-1. Guide you through template selection (`blank`, `axllm`, or `axllm-flow`)
+1. Guide you through feature selection (`blank` core with optional add-ons like `axllm` or `axllm-flow`)
 2. Set up your project with agent metadata and entrypoints
 3. Configure environment variables for payments and identity (optional)
 4. Install dependencies automatically if you choose

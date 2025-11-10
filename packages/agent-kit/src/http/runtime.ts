@@ -1,18 +1,20 @@
-import { randomUUID } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+
 import {
+  type AgentCore,
   createAgentCore,
   ZodValidationError,
-  type AgentCore,
 } from "@lucid-agents/agent-core";
-import { buildManifest } from "../manifest";
+
 import {
-  getAgentKitConfig,
-  setActiveInstanceConfig,
   type AgentKitConfig,
+  getAgentKitConfig,
   type ResolvedAgentKitConfig,
+  setActiveInstanceConfig,
 } from "../config";
+import { buildManifest } from "../manifest";
 import type {
   AgentCardWithEntrypoints,
   AgentMeta,
@@ -27,14 +29,16 @@ import type {
 } from "../types";
 import { renderLandingPage } from "../ui/landing-page";
 import {
+  paymentRequiredResponse,
+  type PaymentRequirement,
+  resolvePaymentRequirement,
+} from "./payments";
+import {
   createSSEStream,
   type SSEStreamRunnerContext,
 } from "./sse";
-import {
-  paymentRequiredResponse,
-  resolvePaymentRequirement,
-  type PaymentRequirement,
-} from "./payments";
+
+type AgentResponseInit = globalThis.ResponseInit;
 
 export type CreateAgentHttpOptions = {
   payments?: PaymentsConfig | false;
@@ -84,7 +88,7 @@ export type AgentHttpRuntime = {
 
 const jsonResponse = (
   payload: unknown,
-  init?: ResponseInit
+  init?: AgentResponseInit
 ): Response => {
   const body = JSON.stringify(payload);
   const headers = new Headers(init?.headers);

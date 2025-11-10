@@ -1,13 +1,17 @@
 import { spawn } from 'node:child_process';
-import { existsSync, realpathSync } from 'node:fs';
+import {
+  type Dirent,
+  existsSync,
+  realpathSync,
+} from 'node:fs';
 import fs from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import process, {
   stdin as defaultInput,
   stdout as defaultOutput,
 } from 'node:process';
-import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+
 import {
   type AdapterDefinition,
   type AdapterOptions,
@@ -22,6 +26,7 @@ type CliOptions = {
   templateId?: string;
   adapterId?: string;
   adapterUiPreference?: 'ui' | 'headless';
+  featureIds?: string[];
   skipWizard?: boolean;
   templateArgs?: Map<string, string>;
 };
@@ -49,6 +54,10 @@ type PromptApi = {
     message: string;
     choices: PromptChoice[];
   }) => Promise<string>;
+  multiSelect?: (params: {
+    message: string;
+    choices: PromptChoice[];
+  }) => Promise<string[]>;
   confirm: (params: {
     message: string;
     defaultValue?: boolean;
@@ -94,7 +103,31 @@ type TemplateMeta = {
   adapter?: string;
   /** Multiple compatible adapters (takes precedence over adapter) */
   adapters?: string[];
+  /** Default feature IDs to include */
+  features?: string[];
   wizard?: WizardConfig;
+};
+
+type FeatureMeta = {
+  id?: string;
+  name?: string;
+  description?: string;
+  files?: string[];
+  entry?: string;
+  dependencies?: FeatureDependencies;
+  wizard?: WizardConfig;
+  readme?: string;
+  env?: string[];
+  snippets?: Partial<FeatureSnippetPaths>;
+};
+
+type FeatureSnippetPaths = {
+  imports?: string;
+  preApp?: string;
+  postApp?: string;
+  entrypoints?: string;
+  exports?: string;
+  agentOptions?: string;
 };
 
 type TemplateDescriptor = {
@@ -105,13 +138,35 @@ type TemplateDescriptor = {
   description?: string;
   path: string;
   wizard?: WizardConfig;
+  defaultFeatures?: string[];
+  supportsFeatures: boolean;
 };
 
 type WizardAnswers = Map<string, string | boolean>;
 
+type FeatureDependencies = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+type FeatureDescriptor = {
+  id: string;
+  title: string;
+  description?: string;
+  files: string[];
+  entryModule: string;
+  dir: string;
+  dependencies?: FeatureDependencies;
+  wizard?: WizardConfig;
+  readmePath?: string;
+  extraEnv?: string[];
+  snippets?: FeatureSnippetPaths;
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const TEMPLATE_ROOT = resolve(__dirname, '../templates');
+const FEATURE_ROOT = resolve(__dirname, '../features');
 
 const LUCID_BANNER = [
   '____   ____     ___   ____   ___________   ',
@@ -144,6 +199,12 @@ const defaultLogger: RunLogger = {
   error: message => console.error(message),
 };
 
+const LEGACY_TEMPLATE_FEATURES: Record<string, string[]> = {
+  axllm: ['axllm'],
+  'axllm-flow': ['axllm-flow'],
+  identity: ['identity'],
+};
+
 export async function runCli(
   argv: string[],
   options: RunOptions = {}
@@ -168,6 +229,7 @@ export async function runCli(
   if (templates.length === 0) {
     throw new Error(`No templates found in ${templateRoot}`);
   }
+  const features = await loadFeatures(FEATURE_ROOT);
 
   const { template, adapter: selectedAdapter } = await resolveTemplate({
     templates,
@@ -202,11 +264,34 @@ export async function runCli(
   }
   logger.log(`Using template: ${template.title}`);
 
+  const { selected: selectedFeatures } = await resolveSelectedFeatures({
+    template,
+    allFeatures: features,
+    requestedIds: parsed.options.featureIds ?? [],
+    prompt: parsed.options.skipWizard ? undefined : prompt,
+    logger,
+  });
+  if (selectedFeatures.length > 0) {
+    logger.log(
+      `Features: ${selectedFeatures.map(feature => feature.title).join(', ')}`
+    );
+  }
+
+  const mergedWizard = mergeWizardConfigs(
+    template.wizard,
+    ...selectedFeatures.map(feature => feature.wizard)
+  );
+
+  const templateForWizard =
+    mergedWizard && mergedWizard !== template.wizard
+      ? { ...template, wizard: mergedWizard }
+      : template;
+
   const projectName = await resolveProjectName({
     parsed,
     prompt,
     logger,
-    template,
+    template: templateForWizard,
   });
 
   const targetDir = projectName === '.' ? cwd : resolve(cwd, projectName);
@@ -216,7 +301,7 @@ export async function runCli(
   await assertTemplatePresent(template.path);
   await assertTargetDirectory(targetDir);
   const wizardAnswers = await collectWizardAnswers({
-    template,
+    template: templateForWizard,
     prompt: parsed.options.skipWizard ? undefined : prompt,
     context: {
       AGENT_NAME: projectDirName,
@@ -226,14 +311,16 @@ export async function runCli(
       ? parsed.options.templateArgs
       : undefined,
   });
-  const replacements = buildTemplateReplacements({
+  const replacements = await buildTemplateReplacements({
     projectDirName,
     packageName,
     answers: wizardAnswers,
     adapter: adapterDefinition,
     templateId: template.id,
     adapterOptions,
+    features: selectedFeatures,
   });
+  const featureDependencies = mergeFeatureDependencies(selectedFeatures);
   await copyTemplate(
     template.path,
     targetDir,
@@ -244,14 +331,23 @@ export async function runCli(
     packageName,
     replacements,
     adapter: adapterDefinition,
+    dependencies: featureDependencies,
   });
+  await applyFeatureAssets({
+    targetDir,
+    features: selectedFeatures,
+  });
+
+  const extraEnv = selectedFeatures.flatMap(
+    feature => feature.extraEnv ?? []
+  );
 
   await setupEnvironment({
     targetDir,
-    skipWizard: parsed.options.skipWizard ?? false,
     wizardAnswers,
     agentName: projectDirName,
-    template,
+    template: templateForWizard,
+    extraEnv,
   });
 
   if (parsed.options.install) {
@@ -281,6 +377,7 @@ function parseArgs(args: string[]): ParsedArgs {
   const options: CliOptions = {
     install: false,
     skipWizard: false,
+    featureIds: [],
     templateArgs: new Map(),
   };
   const positional: string[] = [];
@@ -323,6 +420,16 @@ function parseArgs(args: string[]): ParsedArgs {
       options.adapterId = arg.slice('--adapter='.length).toLowerCase();
     } else if (arg?.startsWith('--framework=')) {
       options.adapterId = arg.slice('--framework='.length).toLowerCase();
+    } else if (arg === '--feature' || arg === '-f') {
+      const value = args[i + 1];
+      if (!value) {
+        throw new Error('Expected value after --feature');
+      }
+      addFeatureArgs(value, options);
+      i += 1;
+    } else if (arg?.startsWith('--feature=')) {
+      const value = arg.slice('--feature='.length);
+      addFeatureArgs(value, options);
     } else if (arg === '--adapter-ui') {
       const value = args[i + 1];
       if (!value) {
@@ -346,6 +453,17 @@ function parseArgs(args: string[]): ParsedArgs {
     }
   }
 
+  if (options.templateId && options.templateId !== 'blank') {
+    const presetFeatures = LEGACY_TEMPLATE_FEATURES[options.templateId];
+    if (!presetFeatures) {
+      throw new Error(
+        `Unknown template "${options.templateId}". Available templates: blank`
+      );
+    }
+    presetFeatures.forEach(feature => options.featureIds?.push(feature));
+    options.templateId = 'blank';
+  }
+
   return { options, target: positional[0] ?? null, showHelp };
 }
 
@@ -367,18 +485,29 @@ function normalizeAdapterUi(value: string): 'ui' | 'headless' {
   );
 }
 
+function addFeatureArgs(value: string, options: CliOptions) {
+  const entries = value
+    .split(',')
+    .map(entry => entry.trim().toLowerCase())
+    .filter(entry => entry.length > 0);
+  entries.forEach(entry => options.featureIds?.push(entry));
+}
+
 function printHelp(logger: RunLogger) {
   logger.log('Usage: bunx @lucid-agents/create-agent-kit <app-name> [options]');
   logger.log('');
   logger.log('Options:');
   logger.log(
-    '  -t, --template <id>   Select template (blank, axllm, axllm-flow, identity)'
+    '  -t, --template <id>   Legacy preset name (blank by default; axllm/identity map to features)'
   );
   logger.log(
     '  -a, --adapter <id>    Select runtime adapter/framework (hono, tanstack, etc.)'
   );
   logger.log(
     '      --adapter-ui <mode>  Adapter-specific mode (ui, headless for TanStack)'
+  );
+  logger.log(
+    '  -f, --feature <id>    Include an additional feature (axllm, axllm-flow, ...)'
   );
   logger.log('  -i, --install         Run bun install after scaffolding');
   logger.log('  --no-install          Skip bun install');
@@ -424,6 +553,8 @@ async function loadTemplates(
     let description: string | undefined;
     let wizard: WizardConfig | undefined;
     let adapters: string[] = ['hono'];
+    let defaultFeatures: string[] | undefined;
+    let supportsFeatures = false;
 
     try {
       const raw = await fs.readFile(metaPath, 'utf8');
@@ -431,6 +562,12 @@ async function loadTemplates(
       title = meta.name ?? toTitleCase(id);
       description = meta.description;
       wizard = normalizeWizardConfig(meta.wizard);
+      if (Array.isArray(meta.features)) {
+        defaultFeatures = meta.features.filter(
+          feature => typeof feature === 'string'
+        );
+        supportsFeatures = true;
+      }
 
       // Support both new adapters array and legacy adapter string
       if (meta.adapters && Array.isArray(meta.adapters)) {
@@ -456,6 +593,86 @@ async function loadTemplates(
       description,
       path,
       wizard,
+      defaultFeatures,
+      supportsFeatures,
+    });
+  }
+
+  return descriptors.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function loadFeatures(
+  featureRoot: string
+): Promise<FeatureDescriptor[]> {
+  const descriptors: FeatureDescriptor[] = [];
+  let entries: Dirent[] = [];
+  try {
+    entries = await fs.readdir(featureRoot, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const id = entry.name;
+    const dir = join(featureRoot, id);
+    const metaPath = join(dir, 'feature.json');
+    let title = toTitleCase(id);
+    let description: string | undefined;
+    let entryModule = `src/features/${id}.ts`;
+    let dependencies: FeatureDependencies | undefined;
+    let wizard: WizardConfig | undefined;
+    let readmePath: string | undefined;
+    let extraEnv: string[] | undefined;
+    let snippets: FeatureSnippetPaths | undefined;
+
+    try {
+      const raw = await fs.readFile(metaPath, 'utf8');
+      const meta = JSON.parse(raw) as FeatureMeta;
+      title = meta.name ?? title;
+      description = meta.description;
+      entryModule = meta.entry ?? entryModule;
+      dependencies = meta.dependencies;
+      wizard = normalizeWizardConfig(meta.wizard);
+      if (typeof meta.readme === 'string') {
+        readmePath = join(dir, meta.readme);
+      }
+      if (Array.isArray(meta.env) && meta.env.length > 0) {
+        extraEnv = meta.env.map(value => String(value));
+      }
+      if (meta.snippets && typeof meta.snippets === 'object') {
+        snippets = {
+          imports: meta.snippets.imports,
+          preApp: meta.snippets.preApp,
+          postApp: meta.snippets.postApp,
+          entrypoints: meta.snippets.entrypoints,
+          exports: meta.snippets.exports,
+          agentOptions: meta.snippets.agentOptions,
+        };
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Skip feature directories without metadata
+        continue;
+      }
+      throw error;
+    }
+
+    descriptors.push({
+      id,
+      title,
+      description,
+      files: [],
+      entryModule,
+      dir,
+      dependencies,
+      wizard,
+      readmePath,
+      extraEnv,
+      snippets,
     });
   }
 
@@ -472,7 +689,7 @@ function normalizeWizardConfig(
   if (!config) return undefined;
   const prompts =
     config.prompts
-      ?.map((prompt: any) => {
+      ?.map((prompt): WizardPrompt | undefined => {
         if (!prompt || !prompt.key || !prompt.type) {
           return undefined;
         }
@@ -492,6 +709,20 @@ function normalizeWizardConfig(
   }
 
   return { prompts };
+}
+
+function mergeWizardConfigs(
+  ...configs: Array<WizardConfig | undefined>
+): WizardConfig | undefined {
+  const combinedPrompts =
+    configs.flatMap(config => config?.prompts ?? []) ?? [];
+  if (combinedPrompts.length === 0) {
+    return undefined;
+  }
+
+  return normalizeWizardConfig({
+    prompts: combinedPrompts,
+  });
 }
 
 async function resolveTemplate(params: {
@@ -631,6 +862,153 @@ async function resolveTemplate(params: {
     return { template: candidates[0]!, adapter: selectedAdapter };
   }
   return { template: match, adapter: selectedAdapter };
+}
+
+async function resolveSelectedFeatures(params: {
+  template: TemplateDescriptor;
+  allFeatures: FeatureDescriptor[];
+  requestedIds: string[];
+  prompt?: PromptApi;
+  logger?: RunLogger;
+}): Promise<{ selected: FeatureDescriptor[] }> {
+  const { template, allFeatures, requestedIds, prompt, logger } = params;
+  const featureMap = new Map(allFeatures.map(feature => [feature.id, feature]));
+  const selectedIds = new Set<string>();
+
+  if (template.supportsFeatures) {
+    const defaults = template.defaultFeatures ?? [];
+    if (defaults.length === 0) {
+      throw new Error(
+        `Template "${template.id}" enables features but does not specify any defaults.`
+      );
+    }
+    for (const id of defaults) {
+      const descriptor = featureMap.get(id);
+      if (!descriptor) {
+        const available = allFeatures.map(feature => feature.id).join(', ');
+        throw new Error(
+          `Template "${template.id}" references unknown feature "${id}". Available features: ${available}`
+        );
+      }
+      selectedIds.add(descriptor.id);
+    }
+  } else if (requestedIds.length > 0) {
+    throw new Error(
+      `Template "${template.id}" does not support --feature selections.`
+    );
+  }
+
+  for (const requested of requestedIds) {
+    const normalized = requested.toLowerCase();
+    const descriptor = featureMap.get(normalized);
+    if (!descriptor) {
+      const available = allFeatures.map(feature => feature.id).join(', ');
+      throw new Error(
+        `Unknown feature "${requested}". Available features: ${available}`
+      );
+    }
+    selectedIds.add(descriptor.id);
+  }
+
+  if (template.supportsFeatures && prompt) {
+    const availableToAdd = () =>
+      allFeatures.filter(feature => !selectedIds.has(feature.id));
+
+    let available = availableToAdd();
+    if (available.length > 0) {
+      if (prompt.multiSelect) {
+        const selection = await prompt.multiSelect({
+          message:
+            'Select additional features (space to toggle, enter to confirm):',
+          choices: available.map(feature => ({
+            value: feature.id,
+            title: feature.title,
+            description: feature.description,
+          })),
+        });
+        selection.forEach(id => {
+          if (featureMap.has(id)) {
+            selectedIds.add(id);
+          }
+        });
+      } else {
+        logger?.log('Optional features:');
+        available.forEach((feature, index) => {
+          const description = feature.description
+            ? ` – ${feature.description}`
+            : '';
+          logger?.log(`  ${index + 1}. ${feature.title}${description}`);
+        });
+
+        while (available.length > 0) {
+          const answer = await prompt.input({
+            message:
+              'Enter feature numbers separated by commas (press enter to skip):',
+            defaultValue: '',
+          });
+          const trimmed = sanitizeAnswerString(answer);
+          if (!trimmed) {
+            break;
+          }
+
+          const selections = trimmed
+            .split(',')
+            .map(part => part.trim())
+            .filter(Boolean)
+            .map(part => Number.parseInt(part, 10))
+            .filter(Number.isFinite);
+
+          const invalid = selections.find(
+            index => index < 1 || index > available.length
+          );
+          if (invalid) {
+            logger?.warn(
+              `Please choose numbers between 1 and ${available.length}.`
+            );
+            continue;
+          }
+
+          const uniqueSelections = Array.from(new Set(selections));
+
+          uniqueSelections.forEach(index => {
+            const feature = available[index - 1];
+            if (feature) {
+              selectedIds.add(feature.id);
+            }
+          });
+
+          available = availableToAdd();
+          if (available.length === 0) {
+            break;
+          }
+
+          logger?.log('Remaining optional features:');
+          available.forEach((feature, index) => {
+            const description = feature.description
+              ? ` – ${feature.description}`
+              : '';
+            logger?.log(`  ${index + 1}. ${feature.title}${description}`);
+          });
+        }
+      }
+    }
+  }
+
+  const selected = Array.from(selectedIds).map(id => {
+    const descriptor = featureMap.get(id);
+    if (!descriptor) {
+      throw new Error(`Feature "${id}" is not defined.`);
+    }
+    return descriptor;
+  });
+
+  if (template.supportsFeatures && selected.length === 0) {
+    throw new Error(
+      `Template "${template.id}" requires at least one feature to be selected.`
+    );
+  }
+
+  return { selected };
 }
 
 function toTitleCase(value: string) {
@@ -910,14 +1288,15 @@ function sanitizeAnswerString(value: string): string {
   return value.replace(/\r/g, '').trim();
 }
 
-function buildTemplateReplacements(params: {
+async function buildTemplateReplacements(params: {
   projectDirName: string;
   packageName: string;
   answers: WizardAnswers;
   adapter: AdapterDefinition;
   templateId?: string;
   adapterOptions?: AdapterOptions;
-}): Record<string, string> {
+  features: FeatureDescriptor[];
+}): Promise<Record<string, string>> {
   const {
     projectDirName,
     packageName,
@@ -925,6 +1304,7 @@ function buildTemplateReplacements(params: {
     answers,
     templateId,
     adapterOptions,
+    features,
   } = params;
   const { snippets } = adapter;
 
@@ -936,6 +1316,9 @@ function buildTemplateReplacements(params: {
       answerEntries[key] = value ? 'true' : 'false';
     }
   }
+
+  const featureSnippetReplacements =
+    await buildFeatureSnippetReplacements(features);
 
   return {
     ...answerEntries,
@@ -950,6 +1333,7 @@ function buildTemplateReplacements(params: {
     ADAPTER_APP_CREATION: snippets.appCreation,
     ADAPTER_ENTRYPOINT_REGISTRATION: snippets.entrypointRegistration,
     ADAPTER_EXPORTS: snippets.exports,
+    ...featureSnippetReplacements,
     ...(adapter.buildReplacements
       ? adapter.buildReplacements({
           answers,
@@ -1047,9 +1431,13 @@ async function applyTemplateTransforms(
     packageName: string;
     replacements: Record<string, string>;
     adapter: AdapterDefinition;
+    dependencies?: FeatureDependencies;
   }
 ) {
-  await updatePackageJson(targetDir, params.packageName);
+  await updatePackageJson(targetDir, {
+    packageName: params.packageName,
+    dependencies: params.dependencies,
+  });
 
   // Replace tokens in README.md
   await replaceTemplatePlaceholders(
@@ -1073,11 +1461,30 @@ async function applyTemplateTransforms(
   await removeTemplateArtifacts(targetDir);
 }
 
-async function updatePackageJson(targetDir: string, packageName: string) {
+async function updatePackageJson(
+  targetDir: string,
+  params: { packageName: string; dependencies?: FeatureDependencies }
+) {
+  const { packageName, dependencies } = params;
   const packageJsonPath = join(targetDir, 'package.json');
   const packageJsonRaw = await fs.readFile(packageJsonPath, 'utf8');
   const packageJson = JSON.parse(packageJsonRaw) as Record<string, unknown>;
   packageJson.name = packageName;
+  if (dependencies?.dependencies && Object.keys(dependencies.dependencies).length > 0) {
+    packageJson.dependencies = {
+      ...(packageJson.dependencies as Record<string, string> | undefined),
+      ...dependencies.dependencies,
+    };
+  }
+  if (
+    dependencies?.devDependencies &&
+    Object.keys(dependencies.devDependencies).length > 0
+  ) {
+    packageJson.devDependencies = {
+      ...(packageJson.devDependencies as Record<string, string> | undefined),
+      ...dependencies.devDependencies,
+    };
+  }
   await fs.writeFile(
     packageJsonPath,
     `${JSON.stringify(packageJson, null, 2)}\n`,
@@ -1111,14 +1518,159 @@ async function removeTemplateArtifacts(targetDir: string) {
   await fs.rm(metaPath, { force: true });
 }
 
+function mergeFeatureDependencies(
+  features: FeatureDescriptor[]
+): FeatureDependencies | undefined {
+  const dependencies: Record<string, string> = {};
+  const devDependencies: Record<string, string> = {};
+
+  for (const feature of features) {
+    Object.assign(dependencies, feature.dependencies?.dependencies ?? {});
+    Object.assign(
+      devDependencies,
+      feature.dependencies?.devDependencies ?? {}
+    );
+  }
+
+  const hasDependencies = Object.keys(dependencies).length > 0;
+  const hasDevDependencies = Object.keys(devDependencies).length > 0;
+
+  if (!hasDependencies && !hasDevDependencies) {
+    return undefined;
+  }
+
+  return {
+    ...(hasDependencies ? { dependencies } : {}),
+    ...(hasDevDependencies ? { devDependencies } : {}),
+  };
+}
+
+async function applyFeatureAssets(params: {
+  targetDir: string;
+  features: FeatureDescriptor[];
+}) {
+  const { targetDir, features } = params;
+  for (const feature of features) {
+    const assetsDir = join(feature.dir, 'files');
+    await copyAdapterLayer(assetsDir, targetDir);
+  }
+
+  await appendFeatureReadmeSections(targetDir, features);
+}
+
+async function appendFeatureReadmeSections(
+  targetDir: string,
+  features: FeatureDescriptor[]
+) {
+  const readmePath = join(targetDir, 'README.md');
+  try {
+    await fs.access(readmePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  let appended = '';
+  for (const feature of features) {
+    if (!feature.readmePath) continue;
+    try {
+      const snippet = await fs.readFile(feature.readmePath, 'utf8');
+      if (snippet.trim().length > 0) {
+        appended += `\n\n${snippet.trim()}\n`;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  if (appended.trim().length === 0) {
+    return;
+  }
+
+  await fs.appendFile(readmePath, `${appended.trimEnd()}\n`, 'utf8');
+}
+
+async function buildFeatureSnippetReplacements(
+  features: FeatureDescriptor[]
+): Promise<Record<string, string>> {
+  const keys: Array<keyof FeatureSnippetPaths> = [
+    'imports',
+    'preApp',
+    'postApp',
+    'entrypoints',
+    'exports',
+    'agentOptions',
+  ];
+  const parts: Record<keyof FeatureSnippetPaths, string[]> = {
+    imports: [],
+    preApp: [],
+    postApp: [],
+    entrypoints: [],
+    exports: [],
+    agentOptions: [],
+  };
+
+  for (const feature of features) {
+    const snippetPaths = feature.snippets;
+    if (!snippetPaths) continue;
+    for (const key of keys) {
+      const relative = snippetPaths[key];
+      if (!relative) continue;
+      const absolute = join(feature.dir, relative);
+      try {
+        const raw = await fs.readFile(absolute, 'utf8');
+        const trimmed = raw.trim();
+        if (trimmed.length > 0) {
+          parts[key].push(trimmed);
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+    }
+  }
+
+  const block = (values: string[]) =>
+    values.length > 0 ? values.join('\n\n') + '\n' : '';
+
+  const dedupeImportBlock = (values: string[]) => {
+    const lines: string[] = [];
+    const seen = new Set<string>();
+    for (const block of values) {
+      for (const rawLine of block.split('\n')) {
+        const trimmed = rawLine.trim();
+        if (!trimmed) continue;
+        if (seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        lines.push(trimmed);
+      }
+    }
+    return lines.length > 0 ? lines.join('\n') + '\n' : '';
+  };
+
+  return {
+    FEATURE_IMPORTS: dedupeImportBlock(parts.imports),
+    FEATURE_PRE_APP: block(parts.preApp),
+    FEATURE_POST_APP: block(parts.postApp),
+    FEATURE_ENTRYPOINTS: block(parts.entrypoints),
+    FEATURE_EXPORTS: block(parts.exports),
+    FEATURE_AGENT_OPTIONS: block(parts.agentOptions),
+  };
+}
+
 async function setupEnvironment(params: {
   targetDir: string;
-  skipWizard: boolean;
   wizardAnswers: WizardAnswers;
   agentName: string;
   template: TemplateDescriptor;
+  extraEnv?: string[];
 }) {
-  const { targetDir, skipWizard, wizardAnswers, agentName, template } = params;
+  const { targetDir, wizardAnswers, agentName, template, extraEnv } = params;
   const envPath = join(targetDir, '.env');
 
   const lines = [`AGENT_NAME=${agentName}`];
@@ -1132,6 +1684,15 @@ async function setupEnvironment(params: {
     const stringValue = value == null ? '' : String(value);
 
     lines.push(`${prompt.key}=${stringValue}`);
+  }
+
+  if (extraEnv && extraEnv.length > 0) {
+    const sanitizedExtras = extraEnv
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    if (sanitizedExtras.length > 0) {
+      lines.push('', ...sanitizedExtras);
+    }
   }
 
   await fs.writeFile(envPath, lines.join('\n') + '\n', 'utf8');
@@ -1157,73 +1718,76 @@ async function runInstall(cwd: string, logger: RunLogger) {
         }
       });
     });
-  } catch (error) {
+  } catch {
     logger.warn(
       '⚠️  Failed to run `bun install`. Please install dependencies manually.'
     );
   }
 }
 
-function createInteractivePrompt(logger: RunLogger): PromptApi | undefined {
+async function createInteractivePrompt(
+  logger: RunLogger
+): Promise<PromptApi | undefined> {
   if (!defaultInput.isTTY || !defaultOutput.isTTY) {
     return undefined;
   }
 
-  const rl = createInterface({
-    input: defaultInput,
-    output: defaultOutput,
-  });
+  const loadPrompt = async <T extends keyof typeof import('@inquirer/prompts')>(
+    key: T
+  ) => {
+    const prompts = await import('@inquirer/prompts');
+    return prompts[key];
+  };
 
   return {
     async select({ message, choices }) {
-      logger.log(message);
-      choices.forEach((choice, index) => {
-        const detail = choice.description ? ` – ${choice.description}` : '';
-        logger.log(`  ${index + 1}. ${choice.title}${detail}`);
+      const selectPrompt = await loadPrompt('select');
+      const value = await selectPrompt({
+        message,
+        choices: choices.map(choice => ({
+          name: choice.title,
+          value: choice.value,
+          description: choice.description,
+        })),
       });
-      const range = `1-${choices.length}`;
-      while (true) {
-        const answer = await rl.question(`Select an option [${range}]: `);
-        const parsed = Number.parseInt(answer, 10);
-        if (
-          Number.isInteger(parsed) &&
-          parsed >= 1 &&
-          parsed <= choices.length
-        ) {
-          return choices[parsed - 1]!.value;
-        }
-        logger.log('Please enter a valid option number.');
-      }
+      logger.log(`${message} ${value}`);
+      return value as string;
     },
     async confirm({ message, defaultValue = true }) {
-      const suffix = defaultValue ? 'Y/n' : 'y/N';
-      while (true) {
-        const answer = await rl.question(`${message} (${suffix}) `);
-        const normalized = answer.trim().toLowerCase();
-        if (normalized === '' && defaultValue !== undefined) {
-          return defaultValue;
-        }
-        if (['y', 'yes'].includes(normalized)) return true;
-        if (['n', 'no'].includes(normalized)) return false;
-        logger.log('Please respond with y or n.');
-      }
+      const confirmPrompt = await loadPrompt('confirm');
+      return (await confirmPrompt({
+        message,
+        default: defaultValue,
+      })) as boolean;
     },
     async input({ message, defaultValue = '' }) {
-      const promptMessage =
-        defaultValue && defaultValue.length > 0
-          ? `${message} (${defaultValue}): `
-          : `${message}: `;
-      const answer = await rl.question(promptMessage);
-      return answer === '' ? defaultValue : answer;
+      const inputPrompt = await loadPrompt('input');
+      const result = await inputPrompt({
+        message,
+        default: defaultValue,
+      });
+      return String(result ?? defaultValue);
+    },
+    async multiSelect({ message, choices }) {
+      const checkboxPrompt = await loadPrompt('checkbox');
+      const selected = await checkboxPrompt({
+        message,
+        choices: choices.map(choice => ({
+          name: choice.title,
+          value: choice.value,
+          description: choice.description,
+        })),
+      });
+      return (selected ?? []) as string[];
     },
     async close() {
-      await rl.close();
+      // no-op for inquirer-based prompts
     },
   };
 }
 
 async function main() {
-  const prompt = createInteractivePrompt(defaultLogger);
+  const prompt = await createInteractivePrompt(defaultLogger);
   try {
     await runCli(process.argv.slice(2), {
       prompt,
