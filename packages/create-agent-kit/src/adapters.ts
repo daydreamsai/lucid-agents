@@ -38,7 +38,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
     id: 'hono',
     displayName: 'Hono',
     filesDir: join(ADAPTER_FILES_ROOT, 'hono'),
-    placeholderTargets: ['src/lib/agent.ts'],
+    placeholderTargets: ['src/lib/agent.ts.template'],
     snippets: {
       imports: `import { createAgentApp } from "@lucid-agents/agent-kit-hono";`,
       preSetup: ``,
@@ -79,7 +79,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
       }
       return [join(ADAPTER_FILES_ROOT, 'tanstack', 'ui')];
     },
-    placeholderTargets: ['src/lib/agent.ts'],
+    placeholderTargets: ['src/lib/agent.ts.template'],
     snippets: {
       imports: `import { createTanStackRuntime } from "@lucid-agents/agent-kit-tanstack";`,
       preSetup: ``,

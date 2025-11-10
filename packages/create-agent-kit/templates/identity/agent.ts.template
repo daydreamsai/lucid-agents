@@ -8,7 +8,6 @@ import {
 // Identity feature setup
 const identity = await createAgentIdentity({
   domain: process.env.AGENT_DOMAIN,
-  autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
 });
 
 if (identity.didRegister) {

@@ -43,7 +43,7 @@ export function getNetworkInfo(id?: string | null): NetworkInfo {
     NETWORKS[id] ?? {
       id,
       label: id,
-      chainId: 8453,
+      chainId: 84532,
     }
   );
 }

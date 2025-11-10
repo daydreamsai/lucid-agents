@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+
 import { cn } from '@/lib/utils';
 
 type JSONSchema = {
@@ -212,7 +213,7 @@ export function SchemaForm({
       });
       setFormData(defaults);
     }
-  }, [schema]);
+  }, [schema, value]);
 
   // Update parent whenever formData changes
   useEffect(() => {

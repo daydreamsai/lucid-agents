@@ -1173,7 +1173,7 @@ async function copyTemplate(
   const entries = await fs.readdir(templateRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isDirectory()) continue;
-    if (entry.name === 'agent.ts') continue;
+    if (entry.name === 'agent.ts.template') continue;
     if (entry.name === 'package.json' || entry.name === 'tsconfig.json')
       continue;
 
@@ -1192,6 +1192,10 @@ async function copyAdapterLayer(
     await fs.cp(sourceDir, targetDir, {
       recursive: true,
       errorOnExist: false,
+      filter: source => {
+        // Skip .template files - they'll be processed separately
+        return !source.endsWith('.template');
+      },
     });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -1221,7 +1225,7 @@ async function applyTemplateTransforms(
     'utf8'
   );
 
-  const templateAgentPath = join(params.templateRoot, 'agent.ts');
+  const templateAgentPath = join(params.templateRoot, 'agent.ts.template');
   const templateAgentExists = existsSync(templateAgentPath);
 
   if (templateAgentExists) {
@@ -1232,9 +1236,13 @@ async function applyTemplateTransforms(
       templateSections
     );
 
-    const agentTargetPath = params.adapter.placeholderTargets?.[0]
-      ? join(targetDir, params.adapter.placeholderTargets[0])
-      : join(targetDir, 'src/lib/agent.ts');
+    // Get target path from adapter, but remove .template extension
+    const adapterTarget =
+      params.adapter.placeholderTargets?.[0] || 'src/lib/agent.ts.template';
+    const agentTargetPath = join(
+      targetDir,
+      adapterTarget.replace(/\.template$/, '')
+    );
 
     await fs.writeFile(agentTargetPath, mergedAgentContent, 'utf8');
   }

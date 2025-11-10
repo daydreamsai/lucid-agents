@@ -1,6 +1,7 @@
 'use client';
 
 import { useAccount } from 'wagmi';
+
 import { cn } from '@/lib/utils';
 
 export function WalletSummary({ className }: { className?: string }) {
@@ -39,7 +40,7 @@ export function WalletSummary({ className }: { className?: string }) {
         </div>
         {mode === 'appkit' && requiresProjectId && (
           <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-[11px] text-amber-300">
-            Provide <code>WALLET_CONNECT_PROJECT_ID</code> to enable
+            Provide <code>VITE_WALLET_CONNECT_PROJECT_ID</code> to enable
             WalletConnect.
           </p>
         )}
