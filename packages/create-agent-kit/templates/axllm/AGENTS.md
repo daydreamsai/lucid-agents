@@ -42,7 +42,7 @@ This template accepts the following configuration arguments (see `template.schem
 - `PAYMENTS_FACILITATOR_URL` - x402 facilitator endpoint
 - `PAYMENTS_NETWORK` - Network identifier (e.g., "base-sepolia")
 - `PAYMENTS_RECEIVABLE_ADDRESS` - Address that receives payments
-- `PAYMENTS_DEFAULT_PRICE` - Default price in base units
+- `PAYMENTS_DEFAULT_PRICE` - Default price in USDC (decimal string, e.g., "0.1")
 - `PRIVATE_KEY` - Wallet private key (optional)
 
 Additionally, you'll need LLM API keys in `.env`:
@@ -339,7 +339,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
 PAYMENTS_NETWORK=base-sepolia
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
-PAYMENTS_DEFAULT_PRICE=1000
+PAYMENTS_DEFAULT_PRICE=0.1
 
 # Optional
 PRIVATE_KEY=0x...
@@ -511,4 +511,3 @@ Ensure:
 - [OpenAI API reference](https://platform.openai.com/docs/api-reference)
 - [Anthropic API reference](https://docs.anthropic.com/claude/reference)
 - [@lucid-agents/agent-kit docs](../../../agent-kit/README.md)
-

@@ -47,8 +47,8 @@
       {
         "key": "PAYMENTS_DEFAULT_PRICE",
         "type": "input",
-        "message": "Default price in base units",
-        "defaultValue": "1000"
+        "message": "Default price (USDC)",
+        "defaultValue": "0.1"
       },
       {
         "key": "PRIVATE_KEY",

@@ -1,7 +1,13 @@
 'use client';
 
 import { createAppKit } from '@reown/appkit/react';
-import { WagmiProvider, cookieStorage, createStorage } from 'wagmi';
+import {
+  Config,
+  WagmiProvider,
+  cookieStorage,
+  cookieToInitialState,
+  createStorage,
+} from 'wagmi';
 import {
   base,
   baseSepolia,
@@ -12,6 +18,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import { SolanaAdapter } from '@reown/appkit-adapter-solana';
+import React, { type ReactNode } from 'react';
 
 const queryClient = new QueryClient();
 
@@ -63,11 +70,21 @@ if (typeof window !== 'undefined' && projectId) {
 
 export function AppKitProvider({
   children,
+  cookies,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
+  cookies: string | null;
 }) {
+  const initialState = cookieToInitialState(
+    wagmiAdapter.wagmiConfig as Config,
+    cookies
+  );
+
   return (
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+    <WagmiProvider
+      config={wagmiAdapter.wagmiConfig}
+      initialState={initialState}
+    >
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );

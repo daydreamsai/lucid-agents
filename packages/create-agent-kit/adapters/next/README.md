@@ -22,7 +22,7 @@ Update `.env` with:
 NEXT_PUBLIC_PROJECT_ID=your_wallet_connect_id
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 PAYMENTS_NETWORK=base-sepolia
-PAYMENTS_DEFAULT_PRICE=1000
+PAYMENTS_DEFAULT_PRICE=0.1
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
 ```
 

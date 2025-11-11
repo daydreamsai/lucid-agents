@@ -51,8 +51,8 @@
     },
     "PAYMENTS_DEFAULT_PRICE": {
       "type": "string",
-      "description": "Default price in smallest network units (wei for EVM, lamports for Solana)",
-      "default": "1000"
+      "description": "Default price in USDC (decimal string, e.g., '0.1')",
+      "default": "0.1"
     },
     "PRIVATE_KEY": {
       "type": "string",
@@ -64,4 +64,3 @@
   "required": ["AGENT_NAME", "AGENT_DESCRIPTION", "AGENT_VERSION"],
   "notes": "This template requires LLM API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) which should be added to .env after project generation"
 }
-

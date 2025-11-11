@@ -40,8 +40,7 @@ export function WalletSummary({ className }: { className?: string }) {
         </div>
         {mode === 'appkit' && requiresProjectId && (
           <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-[11px] text-amber-300">
-            Provide <code>VITE_WALLET_CONNECT_PROJECT_ID</code> to enable
-            WalletConnect.
+            Provide <code>NEXT_PUBLIC_PROJECT_ID</code> to enable WalletConnect.
           </p>
         )}
       </div>

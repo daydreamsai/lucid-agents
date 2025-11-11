@@ -162,7 +162,7 @@ describe('create-agent-kit CLI', () => {
         'Receivable address (address that receives payments)',
         '0xabc0000000000000000000000000000000000000',
       ],
-      ['Default price in base units', '4200'],
+      ['Default price (USDC)', '4200'],
       ['Wallet private key (leave empty to add later)', ''],
     ]);
 
@@ -257,6 +257,7 @@ describe('create-agent-kit CLI', () => {
     const projectDir = join(cwd, 'demo-agent');
     const agentSrc = await readFile(join(projectDir, 'lib/agent.ts'), 'utf8');
     const proxySrc = await readFile(join(projectDir, 'proxy.ts'), 'utf8');
+    const envFile = await readFile(join(projectDir, '.env'), 'utf8');
     const pkg = (await readJson(join(projectDir, 'package.json'))) as Record<
       string,
       any
@@ -266,6 +267,8 @@ describe('create-agent-kit CLI', () => {
     expect(proxySrc).toContain('createNextPaywall');
     expect(pkg.dependencies?.next).toBeDefined();
     expect(pkg.dependencies?.['x402-next']).toBeDefined();
+    expect(envFile).toContain('OPENAI_API_KEY=0xtest');
+    expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=0xtest');
   });
 
   it('generates tanstack projects without leftover template tokens', async () => {

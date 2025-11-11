@@ -57,8 +57,8 @@
     },
     "PAYMENTS_DEFAULT_PRICE": {
       "type": "string",
-      "description": "Default price in smallest network units (wei for EVM, lamports for Solana)",
-      "default": "1000"
+      "description": "Default price in USDC (decimal string, e.g., '0.1')",
+      "default": "0.1"
     },
     "RPC_URL": {
       "type": "string",
@@ -95,4 +95,3 @@
   ],
   "notes": "This template requires a PRIVATE_KEY for on-chain identity registration. Ensure the wallet has sufficient gas for the target network."
 }
-

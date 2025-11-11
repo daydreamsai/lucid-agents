@@ -198,7 +198,7 @@ bunx @lucid-agents/create-agent-kit@latest verified-agent \
   --PAYMENTS_FACILITATOR_URL="https://facilitator.daydreams.systems" \
   --PAYMENTS_NETWORK="base-sepolia" \
   --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
-  --PAYMENTS_DEFAULT_PRICE="1000" \
+  --PAYMENTS_DEFAULT_PRICE="0.1" \
   --RPC_URL="https://sepolia.base.org" \
   --CHAIN_ID="84532" \
   --IDENTITY_AUTO_REGISTER="true"
@@ -234,7 +234,7 @@ AGENT_DESCRIPTION=Your agent description
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
 PAYMENTS_RECEIVABLE_ADDRESS=0xYourWalletAddress
 PAYMENTS_NETWORK=base-sepolia
-PAYMENTS_DEFAULT_PRICE=1000
+PAYMENTS_DEFAULT_PRICE=0.1
 
 # Wallet for transactions
 PRIVATE_KEY=
