@@ -66,7 +66,9 @@ function buildEntrypointRoutes({
 
     const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
     const responseSchema =
-      kind === 'invoke' ? toJsonSchemaOrUndefined(entrypoint.output) : undefined;
+      kind === 'invoke'
+        ? toJsonSchemaOrUndefined(entrypoint.output)
+        : undefined;
     const description =
       entrypoint.description ??
       `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
@@ -150,11 +152,17 @@ export function createNextPaywall({
   }
 
   const resolvedFacilitator: FacilitatorConfig =
-    facilitator ?? ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);
+    facilitator ??
+    ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);
 
   const payTo = activePayments.payTo as Parameters<typeof paymentMiddleware>[0];
 
-  const middleware = paymentMiddleware(payTo, routes, resolvedFacilitator, paywall);
+  const middleware = paymentMiddleware(
+    payTo,
+    routes,
+    resolvedFacilitator,
+    paywall
+  );
 
   return {
     middleware,

@@ -33,12 +33,12 @@ const derivePriceLabel = (
   const invokePrice =
     typeof price === 'string'
       ? price
-      : normalize(price?.invoke) ?? defaultPrice;
+      : (normalize(price?.invoke) ?? defaultPrice);
 
   const streamPrice = entrypoint.streaming
     ? typeof price === 'string'
       ? price
-      : normalize(price?.stream) ?? defaultPrice
+      : (normalize(price?.stream) ?? defaultPrice)
     : undefined;
 
   if (!invokePrice && !streamPrice) return 'Free';
@@ -138,7 +138,9 @@ export default function Dashboard({
   );
   const entrypointCount = cards.length;
   const entrypointLabel = entrypointCount === 1 ? 'Entrypoint' : 'Entrypoints';
-  const networkInfo = getNetworkInfo(initialData.payments?.network ?? undefined);
+  const networkInfo = getNetworkInfo(
+    initialData.payments?.network ?? undefined
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 py-8 px-4 sm:px-6 lg:px-8">

@@ -77,7 +77,9 @@ export function ManifestViewer({
           <span className="text-sm">📄</span>
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-zinc-100">Agent Manifest</h2>
+          <h2 className="text-lg font-semibold text-zinc-100">
+            Agent Manifest
+          </h2>
           <p className="text-sm text-zinc-500">
             Complete agent specification served from{' '}
             <code className="text-xs text-emerald-400">{manifestPath}</code>
