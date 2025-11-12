@@ -1,5 +1,12 @@
 # @lucid-agents/agent-kit
 
+## 1.4.2
+
+### Patch Changes
+
+- @lucid-agents/agent-kit-identity@1.4.2
+- @lucid-agents/agent-kit-payments@1.1.2
+
 ## 1.4.1
 
 ### Patch Changes

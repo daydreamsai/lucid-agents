@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/create-agent-kit",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Scaffold a Bun agent app powered by @lucid-agents/agent-kit.",
   "type": "module",
   "bin": {
