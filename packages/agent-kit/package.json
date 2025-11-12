@@ -43,17 +43,18 @@
     "type-check": "tsc --build tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "catalog:",
-    "hono": "catalog:",
-    "@lucid-dreams/agent-auth": "latest",
-    "@lucid-dreams/client": "latest",
+    "@ax-llm/ax": "^14.0.37",
+    "@ax-llm/ax-tools": "^14.0.37",
+    "@google-cloud/vertexai": "^1.10.0",
     "@lucid-agents/agent-kit-identity": "workspace:*",
     "@lucid-agents/agent-kit-payments": "workspace:*",
-    "x402-fetch": "catalog:",
-    "x402": "^0.7.1",
+    "@lucid-dreams/agent-auth": "latest",
+    "@lucid-dreams/client": "latest",
+    "hono": "catalog:",
     "viem": "^2.38.5",
-    "@ax-llm/ax": "^14.0.37",
-    "@ax-llm/ax-tools": "^14.0.37"
+    "x402": "^0.7.1",
+    "x402-fetch": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "tsup": "catalog:",
