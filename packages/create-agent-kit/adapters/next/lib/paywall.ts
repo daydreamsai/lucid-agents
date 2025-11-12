@@ -8,13 +8,13 @@ import {
   toJsonSchemaOrUndefined,
   validatePaymentsConfig,
 } from '@lucid-agents/agent-kit';
-import { paymentMiddleware } from 'x402-next';
 import type {
   FacilitatorConfig,
   PaywallConfig,
   RouteConfig,
   RoutesConfig,
 } from 'x402/types';
+import { paymentMiddleware } from 'x402-next';
 
 const DEFAULT_BASE_PATH = '/api/agent';
 
@@ -42,10 +42,10 @@ type BuildRoutesParams = {
 
 function normalizeBasePath(path?: string) {
   if (!path) return DEFAULT_BASE_PATH;
-  if (!path.startsWith('/')) {
-    return `/${path.replace(/^\/+/u, '').replace(/\/+$/u, '')}`;
-  }
-  return path.replace(/\/+$/u, '') || '/';
+  const sanitized = path.startsWith('/')
+    ? path.replace(/\/+$/u, '')
+    : `/${path.replace(/^\/+/u, '').replace(/\/+$/u, '')}`;
+  return sanitized === '/' ? '' : sanitized;
 }
 
 function buildEntrypointRoutes({
@@ -66,7 +66,9 @@ function buildEntrypointRoutes({
 
     const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
     const responseSchema =
-      kind === 'invoke' ? toJsonSchemaOrUndefined(entrypoint.output) : undefined;
+      kind === 'invoke'
+        ? toJsonSchemaOrUndefined(entrypoint.output)
+        : undefined;
     const description =
       entrypoint.description ??
       `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
@@ -150,11 +152,17 @@ export function createNextPaywall({
   }
 
   const resolvedFacilitator: FacilitatorConfig =
-    facilitator ?? ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);
+    facilitator ??
+    ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);
 
   const payTo = activePayments.payTo as Parameters<typeof paymentMiddleware>[0];
 
-  const middleware = paymentMiddleware(payTo, routes, resolvedFacilitator, paywall);
+  const middleware = paymentMiddleware(
+    payTo,
+    routes,
+    resolvedFacilitator,
+    paywall
+  );
 
   return {
     middleware,

@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit-hono",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Hono adapter for Lucid agent runtime",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,8 +27,8 @@
     "prepare": "bun run build"
   },
   "dependencies": {
-    "@lucid-agents/agent-core": "workspace:*",
     "@lucid-agents/agent-kit": "workspace:*",
+    "@lucid-agents/agent-kit-payments": "workspace:*",
     "hono": "catalog:",
     "x402-hono": "^0.7.1",
     "x402": "^0.7.1",

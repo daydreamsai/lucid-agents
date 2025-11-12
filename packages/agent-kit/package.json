@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "description": "Build typed agent HTTP apps",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,30 +12,15 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "import": "./dist/types.js",
-      "default": "./dist/types.js"
-    },
     "./utils": {
       "types": "./dist/utils.d.ts",
       "import": "./dist/utils.js",
       "default": "./dist/utils.js"
     },
-    "./utils/axllm": {
-      "types": "./dist/utils/axllm.d.ts",
-      "import": "./dist/utils/axllm.js",
-      "default": "./dist/utils/axllm.js"
-    },
-    "./utils/x402": {
-      "types": "./dist/utils/x402.d.ts",
-      "import": "./dist/utils/x402.js",
-      "default": "./dist/utils/x402.js"
-    },
-    "./erc8004": {
-      "types": "./dist/erc8004.d.ts",
-      "import": "./dist/erc8004.js",
-      "default": "./dist/erc8004.js"
+    "./axllm": {
+      "types": "./dist/axllm/index.d.ts",
+      "import": "./dist/axllm/index.js",
+      "default": "./dist/axllm/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -58,12 +43,12 @@
     "type-check": "tsc --build tsconfig.json && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lucid-agents/agent-core": "workspace:*",
     "zod": "catalog:",
     "hono": "catalog:",
     "@lucid-dreams/agent-auth": "latest",
     "@lucid-dreams/client": "latest",
     "@lucid-agents/agent-kit-identity": "workspace:*",
+    "@lucid-agents/agent-kit-payments": "workspace:*",
     "x402-fetch": "catalog:",
     "x402": "^0.7.1",
     "viem": "^2.38.5",

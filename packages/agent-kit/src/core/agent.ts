@@ -1,12 +1,14 @@
+import type { PaymentsConfig } from '@lucid-agents/agent-kit-payments';
 import { z } from 'zod';
-import type {
-  AgentConfig,
-  AgentContext,
-  EntrypointDef,
-  PaymentsConfig,
-  StreamResult,
-  Usage,
-} from './types';
+
+import type { EntrypointDef, StreamResult } from '../http/types';
+import type { AgentContext, AgentMeta, Usage } from './types';
+
+export type AgentConfig = {
+  meta: AgentMeta;
+  payments?: PaymentsConfig | false;
+  walletConnectProjectId?: string;
+};
 
 export type InvokeContext = {
   signal: AbortSignal;
@@ -27,7 +29,10 @@ export class AgentCore {
 
   constructor(public readonly config: AgentConfig) {}
 
-  addEntrypoint(entrypoint: EntrypointDef): void {
+  addEntrypoint<
+    TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+    TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  >(entrypoint: EntrypointDef<TInput, TOutput>): void {
     if (!entrypoint.key || typeof entrypoint.key !== 'string') {
       throw new Error('Entrypoint must include a non-empty string key');
     }
@@ -43,7 +48,7 @@ export class AgentCore {
   }
 
   resolveManifest(origin: string, basePath: string = '') {
-    const originBase = origin?.endsWith('/') ? origin.slice(0, -1) : origin;
+    const originBase = origin.endsWith('/') ? origin.slice(0, -1) : origin;
     const normalizedBasePath = basePath
       ? basePath.startsWith('/')
         ? basePath
@@ -182,18 +187,4 @@ function toJsonSchema(schema: z.ZodTypeAny | undefined) {
 
 export function createAgentCore(config: AgentConfig): AgentCore {
   return new AgentCore(config);
-}
-
-export function resolveEntrypointPrice(
-  entrypoint: EntrypointDef,
-  payments: PaymentsConfig | undefined,
-  kind: 'invoke' | 'stream'
-): string | undefined {
-  if (typeof entrypoint.price === 'string') {
-    return entrypoint.price;
-  }
-  if (entrypoint.price && entrypoint.price[kind]) {
-    return entrypoint.price[kind] ?? undefined;
-  }
-  return payments?.defaultPrice;
 }

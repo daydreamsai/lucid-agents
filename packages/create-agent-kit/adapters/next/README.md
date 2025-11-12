@@ -18,7 +18,7 @@ This adapter scaffolds a full-stack Next.js agent shell with:
 
 Update `.env` with:
 
-```
+```bash
 NEXT_PUBLIC_PROJECT_ID=your_wallet_connect_id
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 PAYMENTS_NETWORK=base-sepolia

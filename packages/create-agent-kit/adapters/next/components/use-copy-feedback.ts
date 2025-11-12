@@ -9,10 +9,7 @@ export function useCopyFeedback() {
     if (!value) return;
 
     try {
-      if (
-        typeof navigator !== 'undefined' &&
-        navigator.clipboard?.writeText
-      ) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(value);
       } else if (typeof document !== 'undefined') {
         const textarea = document.createElement('textarea');

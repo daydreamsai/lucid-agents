@@ -35,7 +35,10 @@ const StatusChip = ({ state }: { state: HealthState }) => {
       icon: '✕',
       className: 'border-rose-500/50 bg-rose-500/10 text-rose-400',
     },
-  } satisfies Record<HealthState, { label: string; icon: string; className: string }>;
+  } satisfies Record<
+    HealthState,
+    { label: string; icon: string; className: string }
+  >;
 
   const { label, icon, className } = config[state];
 
@@ -114,9 +117,7 @@ export function HealthCard({
         </div>
         <div className="flex justify-between items-center">
           <dt className="text-zinc-400">Last Checked</dt>
-          <dd className="text-zinc-300">
-            {health?.timestamp ?? 'Just now'}
-          </dd>
+          <dd className="text-zinc-300">{health?.timestamp ?? 'Just now'}</dd>
         </div>
       </dl>
     </div>

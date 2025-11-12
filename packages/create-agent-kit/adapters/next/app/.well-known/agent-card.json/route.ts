@@ -5,8 +5,8 @@ import { agent } from '@/lib/agent';
 
 const getCachedManifest = unstable_cache(
   async (origin: string) => agent.resolveManifest(origin, '/api/agent'),
-  ['agent-manifest'],
-  { revalidate: 300, tags: ['agent-manifest'] }
+  origin => ['agent-manifest', origin],
+  { revalidate: 300, tags: origin => ['agent-manifest', origin] }
 );
 
 export async function GET(request: NextRequest) {

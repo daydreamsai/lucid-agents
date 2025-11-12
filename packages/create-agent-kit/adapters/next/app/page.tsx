@@ -134,10 +134,7 @@ async function loadInitialHealth(): Promise<AgentHealth | null> {
 export default async function Page() {
   const origin = await getRequestOrigin();
   const [{ dashboard, manifestText, origin: resolvedOrigin }, initialHealth] =
-    await Promise.all([
-      loadDashboardPayload(origin),
-      loadInitialHealth(),
-    ]);
+    await Promise.all([loadDashboardPayload(origin), loadInitialHealth()]);
 
   return (
     <Dashboard

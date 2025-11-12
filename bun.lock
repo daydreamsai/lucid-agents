@@ -24,25 +24,14 @@
         "prettier": "^3.0.0",
       },
     },
-    "packages/agent-core": {
-      "name": "@lucid-agents/agent-core",
-      "version": "0.2.0",
-      "dependencies": {
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "tsup": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
     "packages/agent-kit": {
       "name": "@lucid-agents/agent-kit",
-      "version": "1.3.1",
+      "version": "1.4.0",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
-        "@lucid-agents/agent-core": "workspace:*",
         "@lucid-agents/agent-kit-identity": "workspace:*",
+        "@lucid-agents/agent-kit-payments": "workspace:*",
         "@lucid-dreams/agent-auth": "latest",
         "@lucid-dreams/client": "latest",
         "hono": "catalog:",
@@ -62,8 +51,8 @@
       "name": "@lucid-agents/agent-kit-express",
       "version": "0.0.0",
       "dependencies": {
-        "@lucid-agents/agent-core": "workspace:*",
         "@lucid-agents/agent-kit": "workspace:*",
+        "@lucid-agents/agent-kit-payments": "workspace:*",
         "express": "^4.19.2",
         "x402": "^0.7.1",
         "x402-express": "^0.7.1",
@@ -77,10 +66,10 @@
     },
     "packages/agent-kit-hono": {
       "name": "@lucid-agents/agent-kit-hono",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "dependencies": {
-        "@lucid-agents/agent-core": "workspace:*",
         "@lucid-agents/agent-kit": "workspace:*",
+        "@lucid-agents/agent-kit-payments": "workspace:*",
         "hono": "catalog:",
         "x402": "^0.7.1",
         "x402-hono": "^0.7.1",
@@ -93,7 +82,7 @@
     },
     "packages/agent-kit-identity": {
       "name": "@lucid-agents/agent-kit-identity",
-      "version": "1.3.1",
+      "version": "1.4.0",
       "dependencies": {
         "viem": "^2.38.1",
       },
@@ -104,11 +93,29 @@
         "typescript": "^5.9.2",
       },
     },
+    "packages/agent-kit-payments": {
+      "name": "@lucid-agents/agent-kit-payments",
+      "version": "1.1.0",
+      "dependencies": {
+        "@ax-llm/ax": "catalog:",
+        "@lucid-agents/agent-kit": "workspace:*",
+        "@lucid-dreams/agent-auth": "latest",
+        "viem": "^2.38.5",
+        "x402": "^0.7.1",
+        "x402-fetch": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/agent-kit-tanstack": {
       "name": "@lucid-agents/agent-kit-tanstack",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "dependencies": {
         "@lucid-agents/agent-kit": "workspace:*",
+        "@lucid-agents/agent-kit-payments": "workspace:*",
         "@lucid-agents/x402-tanstack-start": "workspace:*",
         "viem": "^2.21.26",
         "x402": "catalog:",
@@ -120,7 +127,7 @@
     },
     "packages/create-agent-kit": {
       "name": "@lucid-agents/create-agent-kit",
-      "version": "1.3.1",
+      "version": "1.4.0",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -370,8 +377,6 @@
 
     "@lit/reactive-element": ["@lit/reactive-element@2.1.1", "", { "dependencies": { "@lit-labs/ssr-dom-shim": "^1.4.0" } }, "sha512-N+dm5PAYdQ8e6UlywyyrgI2t++wFGXfHx+dSJ1oBrg6FAxUj40jId++EaRm80MKX5JnlH1sBsyZ5h0bcZKemCg=="],
 
-    "@lucid-agents/agent-core": ["@lucid-agents/agent-core@workspace:packages/agent-core"],
-
     "@lucid-agents/agent-kit": ["@lucid-agents/agent-kit@workspace:packages/agent-kit"],
 
     "@lucid-agents/agent-kit-express": ["@lucid-agents/agent-kit-express@workspace:packages/agent-kit-express"],
@@ -379,6 +384,8 @@
     "@lucid-agents/agent-kit-hono": ["@lucid-agents/agent-kit-hono@workspace:packages/agent-kit-hono"],
 
     "@lucid-agents/agent-kit-identity": ["@lucid-agents/agent-kit-identity@workspace:packages/agent-kit-identity"],
+
+    "@lucid-agents/agent-kit-payments": ["@lucid-agents/agent-kit-payments@workspace:packages/agent-kit-payments"],
 
     "@lucid-agents/agent-kit-tanstack": ["@lucid-agents/agent-kit-tanstack@workspace:packages/agent-kit-tanstack"],
 

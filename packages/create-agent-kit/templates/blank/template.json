@@ -55,6 +55,18 @@
         "type": "input",
         "message": "Wallet private key (leave empty to add later)",
         "defaultValue": ""
+      },
+      {
+        "key": "OPENAI_API_KEY",
+        "type": "input",
+        "message": "OpenAI API key (leave empty to add later)",
+        "defaultValue": ""
+      },
+      {
+        "key": "NEXT_PUBLIC_PROJECT_ID",
+        "type": "input",
+        "message": "WalletConnect project ID (leave empty to add later)",
+        "defaultValue": ""
       }
     ]
   }

@@ -27,8 +27,8 @@
     "prepare": "bun run build"
   },
   "dependencies": {
-    "@lucid-agents/agent-core": "workspace:*",
     "@lucid-agents/agent-kit": "workspace:*",
+    "@lucid-agents/agent-kit-payments": "workspace:*",
     "express": "^4.19.2",
     "x402": "^0.7.1",
     "x402-express": "^0.7.1",

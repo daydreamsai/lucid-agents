@@ -1,7 +1,7 @@
 {
-  "name": "@lucid-agents/agent-core",
-  "version": "0.2.0",
-  "description": "Framework-agnostic core utilities for Lucid agents",
+  "name": "@lucid-agents/agent-kit-payments",
+  "version": "1.1.0",
+  "description": "Payment logic for bidirectional agent-to-agent payments",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -27,6 +27,12 @@
     "prepare": "bun run build"
   },
   "dependencies": {
+    "@ax-llm/ax": "catalog:",
+    "@lucid-agents/agent-kit": "workspace:*",
+    "@lucid-dreams/agent-auth": "latest",
+    "x402-fetch": "catalog:",
+    "x402": "^0.7.1",
+    "viem": "^2.38.5",
     "zod": "catalog:"
   },
   "devDependencies": {

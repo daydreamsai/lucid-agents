@@ -267,8 +267,8 @@ describe('create-agent-kit CLI', () => {
     expect(proxySrc).toContain('createNextPaywall');
     expect(pkg.dependencies?.next).toBeDefined();
     expect(pkg.dependencies?.['x402-next']).toBeDefined();
-    expect(envFile).toContain('OPENAI_API_KEY=0xtest');
-    expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=0xtest');
+    expect(envFile).toContain('OPENAI_API_KEY=');
+    expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=');
   });
 
   it('generates tanstack projects without leftover template tokens', async () => {

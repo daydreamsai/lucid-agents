@@ -1,4 +1,24 @@
-export * from './ap2';
+// Core types and functions
+export {
+  type AgentConfig,
+  AgentCore,
+  createAgentCore,
+  type InvokeContext,
+  type InvokeResult,
+  type StreamContext,
+  ZodValidationError,
+} from './core/agent';
+export type { AgentContext, AgentMeta, Network, Usage } from './core/types';
+export type {
+  EntrypointDef,
+  EntrypointHandler,
+  EntrypointStreamHandler,
+  StreamEnvelope,
+  StreamPushEnvelope,
+  StreamResult,
+} from './http/types';
+
+// Config management
 export {
   type AgentKitConfig,
   configureAgentKit,
@@ -7,13 +27,9 @@ export {
   resetAgentKitConfigForTesting,
   type ResolvedAgentKitConfig,
   setActiveInstanceConfig,
-} from './config';
-export * from './erc8004';
-export {
-  paymentRequiredResponse,
-  type PaymentRequirement,
-  resolvePaymentRequirement,
-} from './http/payments';
+} from './config/config';
+
+// HTTP runtime
 export {
   type AgentHttpHandlers,
   type AgentHttpRuntime,
@@ -28,19 +44,32 @@ export {
   type SSEWriteOptions,
   writeSSE,
 } from './http/sse';
-export { buildManifest } from './manifest';
-export { resolveEntrypointPrice } from './pricing';
-export {
-  createRuntimePaymentContext,
-  type RuntimePaymentContext,
-  type RuntimePaymentLogger,
-  type RuntimePaymentOptions,
-} from './runtime';
-export * from './types';
-export * from './utils';
+
+// Manifest and A2A types
+export * from './manifest/ap2';
+export { buildManifest } from './manifest/manifest';
+export type {
+  AgentCapabilities,
+  AgentCard,
+  AgentCardWithEntrypoints,
+  AP2Config,
+  Manifest,
+  PaymentMethod,
+} from './manifest/types';
+
+// AX LLM Utilities
 export {
   type AxLLMClient,
   type AxLLMClientOptions,
   createAxLLMClient,
-} from './utils/axllm';
-export { validatePaymentsConfig } from './validation';
+} from './axllm';
+export * from './utils';
+export { validateAgentMetadata } from './validation';
+
+// Crypto utilities
+export {
+  type Hex,
+  normalizeAddress,
+  sanitizeAddress,
+  ZERO_ADDRESS,
+} from './crypto/address';

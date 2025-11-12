@@ -1,6 +1,5 @@
+import type { SolanaAddress } from '@lucid-agents/agent-kit-payments';
 import type { Network, Resource } from 'x402/types';
-
-import type { SolanaAddress } from './types';
 
 export type PaymentDefaultsConfig = {
   facilitatorUrl?: Resource;

@@ -51,8 +51,9 @@ export function EntrypointCard({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<unknown>(null);
   const [paymentUsed, setPaymentUsed] = useState(false);
-  const [streamingStatus, setStreamingStatus] =
-    useState<'idle' | 'streaming' | 'error'>('idle');
+  const [streamingStatus, setStreamingStatus] = useState<
+    'idle' | 'streaming' | 'error'
+  >('idle');
   const [streamingEvents, setStreamingEvents] = useState<string[]>([]);
   const [streamingError, setStreamingError] = useState<string | null>(null);
   const streamCancelRef = useRef<() => void>();
@@ -367,9 +368,7 @@ export function EntrypointCard({
             {streamingStatus === 'error' && streamingError && (
               <div className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2">
                 <span className="text-rose-400">⚠</span>
-                <p className="flex-1 text-xs text-rose-300">
-                  {streamingError}
-                </p>
+                <p className="flex-1 text-xs text-rose-300">{streamingError}</p>
               </div>
             )}
           </div>

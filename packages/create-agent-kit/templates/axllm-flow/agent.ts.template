@@ -1,5 +1,5 @@
 {{ADAPTER_IMPORTS}}
-import { createAxLLMClient } from "@lucid-agents/agent-kit/utils/axllm";
+import { createAxLLMClient } from "@lucid-agents/agent-kit/axllm";
 import { flow } from "@ax-llm/ax";
 
 {{ADAPTER_PRE_SETUP}}
