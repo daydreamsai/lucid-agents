@@ -19,7 +19,3 @@ async function handleStream(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   return handleStream(request, context);
 }
-
-export async function GET(request: NextRequest, context: RouteContext) {
-  return handleStream(request, context);
-}

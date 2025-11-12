@@ -13,7 +13,7 @@ const paywall = createNextPaywall({
 });
 
 export const config = {
-  matcher: ['/api/agent/entrypoints/:path*'],
+  matcher: ROUTE_MATCHER,
 };
 
 export function proxy(request: NextRequest) {

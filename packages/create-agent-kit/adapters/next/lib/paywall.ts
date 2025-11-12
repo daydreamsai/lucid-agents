@@ -8,13 +8,13 @@ import {
   toJsonSchemaOrUndefined,
   validatePaymentsConfig,
 } from '@lucid-agents/agent-kit';
-import { paymentMiddleware } from 'x402-next';
 import type {
   FacilitatorConfig,
   PaywallConfig,
   RouteConfig,
   RoutesConfig,
 } from 'x402/types';
+import { paymentMiddleware } from 'x402-next';
 
 const DEFAULT_BASE_PATH = '/api/agent';
 
@@ -42,10 +42,10 @@ type BuildRoutesParams = {
 
 function normalizeBasePath(path?: string) {
   if (!path) return DEFAULT_BASE_PATH;
-  if (!path.startsWith('/')) {
-    return `/${path.replace(/^\/+/u, '').replace(/\/+$/u, '')}`;
-  }
-  return path.replace(/\/+$/u, '') || '/';
+  const sanitized = path.startsWith('/')
+    ? path.replace(/\/+$/u, '')
+    : `/${path.replace(/^\/+/u, '').replace(/\/+$/u, '')}`;
+  return sanitized === '/' ? '' : sanitized;
 }
 
 function buildEntrypointRoutes({
