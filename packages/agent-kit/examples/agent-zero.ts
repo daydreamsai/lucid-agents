@@ -174,6 +174,9 @@ const { app, addEntrypoint } = createAgentApp(
     version: '1.0.0',
     description:
       'A playful quiz agent where GPT runs the arcade, awards ARC tokens, and celebrates streaks.',
+    image: 'https://agent-zero-arcade.example.com/og-image.png',
+    url: 'https://agent-zero-arcade.example.com',
+    type: 'website',
   },
   {
     config,

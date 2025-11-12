@@ -140,6 +140,39 @@ now-removed `createAgentPaymentContext` flow.
 `createRuntimePaymentContext({ runtime })` will hand you the same x402-enabled
 fetch + signer wiring backed by the agent wallet.
 
+### Open Graph Tags for Discoverability
+
+Agent landing pages automatically include Open Graph meta tags for better social sharing and x402scan discovery. Add optional `image`, `url`, and `type` fields to your `AgentMeta`:
+
+```ts
+const { app, addEntrypoint } = createAgentApp({
+  name: 'My AI Agent',
+  version: '1.0.0',
+  description: 'AI-powered image processing for $0.10 per request',
+  image: 'https://my-agent.com/og-image.png', // Preview image (1200x630px recommended)
+  url: 'https://my-agent.com', // Canonical URL
+  type: 'website', // OG type (defaults to 'website')
+});
+```
+
+**What this enables:**
+
+- **x402scan discovery**: Agent directories can display your agent with a rich preview
+- **Social sharing**: Links to your agent show preview cards on Twitter, Discord, Slack, etc.
+- **Professional appearance**: Makes your agent look polished when shared
+
+**Rendered HTML:**
+
+```html
+<meta property="og:title" content="My AI Agent" />
+<meta property="og:description" content="AI-powered image processing..." />
+<meta property="og:image" content="https://my-agent.com/og-image.png" />
+<meta property="og:url" content="https://my-agent.com" />
+<meta property="og:type" content="website" />
+```
+
+All fields are optional. If `url` is not provided, it defaults to the agent's origin. Headless agents (with `landingPage: false`) don't render these tags since they don't serve HTML.
+
 ## Routes
 
 - `/health` — `{ ok: true, version }`

@@ -188,6 +188,21 @@ export const renderLandingPage = ({
         <meta name="theme-color" content="#0c2713" />
         <link rel="icon" type="image/svg+xml" href="${faviconDataUrl}" />
         <title>${meta.name}</title>
+
+        <!-- Open Graph tags for social sharing and x402scan discovery -->
+        <meta property="og:title" content="${meta.name}" />
+        ${meta.description
+          ? html`<meta
+              property="og:description"
+              content="${meta.description}"
+            />`
+          : ''}
+        ${meta.image
+          ? html`<meta property="og:image" content="${meta.image}" />`
+          : ''}
+        <meta property="og:url" content="${meta.url || origin}" />
+        <meta property="og:type" content="${meta.type || 'website'}" />
+
         <style>
           :root {
             color-scheme: light dark;
