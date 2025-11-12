@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit-tanstack",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "TanStack Start adapter for Lucid agent runtime",
   "type": "module",
   "main": "./dist/index.js",

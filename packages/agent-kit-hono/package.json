@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/agent-kit-hono",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Hono adapter for Lucid agent runtime",
   "type": "module",
   "main": "./dist/index.js",
