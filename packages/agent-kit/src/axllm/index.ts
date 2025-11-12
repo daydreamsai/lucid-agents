@@ -116,7 +116,7 @@ function buildCreateOptions(
       : resolved.temperature;
 
   const finalConfig = {
-    stream: true,
+    stream: false,
     model: aiConfigOverrides?.model ?? x402.model ?? resolved.model,
     ...(aiConfigOverrides ?? {}),
     ...(finalTemperature !== undefined
