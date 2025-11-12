@@ -24,6 +24,41 @@ Subpath exports are available:
 - `@lucid/agent-kit/types` — public types
 - `@lucid/agent-kit/utils` — helpers (e.g., `toJsonSchemaOrUndefined`, `paymentsFromEnv`)
 
+## AI Providers
+
+`agent-kit` supports multiple AI providers. You can configure the provider and model using environment variables or by passing them to the `createAgentApp` function.
+
+### OpenAI
+
+To use OpenAI, set the following environment variables:
+
+- `AX_PROVIDER=openai`
+- `OPENAI_API_KEY=your-api-key`
+
+You can also specify a model:
+
+- `AX_MODEL=gpt-4`
+
+### Gemini
+
+To use Gemini, set the following environment variables:
+
+- `AX_PROVIDER=gemini`
+- `GOOGLE_PROJECT_ID=your-project-id`
+- `GOOGLE_LOCATION=your-project-location`
+
+You can also specify a model:
+
+- `AX_MODEL=gemini-1.5-flash`
+
+### Local
+
+To use a local AI model, set the following environment variables:
+
+- `AX_PROVIDER=local`
+- `AX_API_URL=http://localhost:11434/v1`
+- `AX_MODEL=llama2`
+
 ## Quick Start
 
 ### Minimal agent
@@ -172,6 +207,10 @@ const { app, addEntrypoint } = createAgentApp({
 ```
 
 All fields are optional. If `url` is not provided, it defaults to the agent's origin. Headless agents (with `landingPage: false`) don't render these tags since they don't serve HTML.
+
+## Examples
+
+This repository includes a number of example agents that you can use as a starting point for your own agents. See the [examples directory](./examples) for more information.
 
 ## Routes
 

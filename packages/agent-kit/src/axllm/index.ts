@@ -3,6 +3,9 @@ import {
   type CreateX402LLMOptions,
 } from '@lucid-agents/agent-kit-payments';
 import type { Hex } from 'viem';
+import { OpenAIProvider } from './providers/openai';
+import { GeminiProvider } from './providers/gemini';
+import { LocalProvider } from './providers/local';
 
 export type AxLLMClientOptions = {
   provider?: string;
@@ -41,7 +44,8 @@ export function createAxLLMClient(
     if (fromFactory) return fromFactory;
 
     try {
-      return createX402LLM(buildCreateOptions(resolved, options.x402));
+      const provider = getProvider(resolved.provider);
+      return provider.create(buildCreateOptions(resolved, options.x402));
     } catch (error) {
       logger?.warn?.(
         `[agent-kit] failed to initialise Ax LLM client: ${
@@ -59,6 +63,19 @@ export function createAxLLMClient(
       return Boolean(axInstance);
     },
   };
+}
+
+function getProvider(provider: string) {
+  switch (provider) {
+    case 'openai':
+      return new OpenAIProvider();
+    case 'gemini':
+      return new GeminiProvider();
+    case 'local':
+      return new LocalProvider();
+    default:
+      throw new Error(`Unsupported provider: ${provider}`);
+  }
 }
 
 function resolveOptions(options: AxLLMClientOptions) {
@@ -136,7 +153,7 @@ function buildCreateOptions(
 
   if (!apiKey) {
     throw new Error(
-      '[agent-kit] createAxLLMClient requires an OpenAI API key (set apiKey or OPENAI_API_KEY)'
+      '[agent-kit] createAxLLMClient requires an API key'
     );
   }
 
