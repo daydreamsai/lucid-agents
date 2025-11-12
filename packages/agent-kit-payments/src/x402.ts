@@ -7,7 +7,7 @@ const DEFAULT_PROVIDER = 'openai';
 const DEFAULT_API_URL = 'https://api-beta.daydreams.systems/v1';
 const MAX_PAYMENT_BASE_UNITS = '10000000';
 
-type WrappedFetch = typeof fetch & {
+export type WrappedFetch = typeof fetch & {
   preconnect?: () => Promise<void>;
 };
 
@@ -23,14 +23,14 @@ export const createX402Fetch = ({
   fetchImpl,
 }: CreateX402FetchOptions): WrappedFetch => {
   if (!account) {
-    throw new Error('[agent-kit] createX402Fetch requires an account');
+    throw new Error('[agent-kit-payments] createX402Fetch requires an account');
   }
   const accountAddress =
     typeof account === 'object' && account && 'address' in account
       ? (account as { address?: string }).address
       : undefined;
   console.info(
-    '[agent-kit:x402] creating paid fetch',
+    '[agent-kit-payments:x402] creating paid fetch',
     accountAddress ? `for ${accountAddress}` : '(account address unavailable)'
   );
   const paymentFetch = wrapFetchWithPayment(
@@ -38,7 +38,7 @@ export const createX402Fetch = ({
     account,
     BigInt(MAX_PAYMENT_BASE_UNITS)
   ) as WrappedFetch;
-  console.info('[agent-kit:x402] wrapFetchWithPayment initialised');
+  console.info('[agent-kit-payments:x402] wrapFetchWithPayment initialised');
   const describeInput = (input: Parameters<typeof fetch>[0]) => {
     if (typeof input === 'string') return input;
     if (input instanceof URL) return input.toString();
@@ -57,12 +57,16 @@ export const createX402Fetch = ({
         init?.method ??
         (input instanceof Request ? input.method : undefined) ??
         'POST';
-      console.info('[agent-kit:x402] fetch request', requestUrl, requestMethod);
+      console.info(
+        '[agent-kit-payments:x402] fetch request',
+        requestUrl,
+        requestMethod
+      );
       try {
         const response = await paymentFetch(input, init ?? {});
         const paymentHeader = response.headers.get('X-PAYMENT-RESPONSE');
         console.info(
-          '[agent-kit:x402] fetch response',
+          '[agent-kit-payments:x402] fetch response',
           requestUrl,
           response.status,
           paymentHeader ? '(paid)' : '(no x402 header)'
@@ -70,7 +74,7 @@ export const createX402Fetch = ({
         return response;
       } catch (error) {
         console.warn(
-          '[agent-kit:x402] fetch failed',
+          '[agent-kit-payments:x402] fetch failed',
           requestUrl,
           (error as Error)?.message ?? error
         );
@@ -87,11 +91,15 @@ export const createX402Fetch = ({
 export const accountFromPrivateKey = (privateKey: Hex): X402Account => {
   if (!privateKey || privateKey.trim().length === 0) {
     throw new Error(
-      '[agent-kit] accountFromPrivateKey requires a non-empty private key'
+      '[agent-kit-payments] accountFromPrivateKey requires a non-empty private key'
     );
   }
   return privateKeyToAccount(privateKey) as X402Account;
 };
+
+// ============================================================================
+// AxLLM Integration (x402 payment-enabled LLM client)
+// ============================================================================
 
 type AiFactoryArgs = Parameters<typeof ai>[0];
 type AiFactoryConfig = NonNullable<AiFactoryArgs['config']>;
@@ -115,12 +123,16 @@ export const createX402LLM = (
   options: CreateX402LLMOptions = {}
 ): ReturnType<typeof ai> => {
   if (options.account) {
-    console.info('[agent-kit:x402] initialising LLM with provided account');
+    console.info(
+      '[agent-kit-payments:x402] initialising LLM with provided account'
+    );
   } else if (options.privateKey) {
-    console.info('[agent-kit:x402] deriving account from supplied private key');
+    console.info(
+      '[agent-kit-payments:x402] deriving account from supplied private key'
+    );
   } else {
     console.info(
-      '[agent-kit:x402] no explicit account/private key supplied; falling back to env or downstream defaults'
+      '[agent-kit-payments:x402] no explicit account/private key supplied; falling back to env or downstream defaults'
     );
   }
 
@@ -132,13 +144,13 @@ export const createX402LLM = (
 
   if (!account) {
     throw new Error(
-      '[agent-kit] createX402LLM requires either an account or a private key'
+      '[agent-kit-payments] createX402LLM requires either an account or a private key'
     );
   }
 
   const paymentFetch =
     options.fetch ?? createX402Fetch({ account, fetchImpl: options.fetchImpl });
-  console.info('[agent-kit:x402] payment-enabled fetch ready for LLM');
+  console.info('[agent-kit-payments:x402] payment-enabled fetch ready for LLM');
 
   const aiOverrides = options.ai ?? {};
   const {
@@ -177,7 +189,7 @@ export const createX402LLM = (
 
   if (!apiKey) {
     throw new Error(
-      '[agent-kit] createX402LLM requires an OpenAI API key (set options.ai.apiKey or OPENAI_API_KEY)'
+      '[agent-kit-payments] createX402LLM requires an OpenAI API key (set options.ai.apiKey or OPENAI_API_KEY)'
     );
   }
 
@@ -205,10 +217,9 @@ export const createX402LLM = (
   } as AiFactoryArgs;
 
   console.info(
-    '[agent-kit:x402] creating Ax client',
+    '[agent-kit-payments:x402] creating Ax client',
     `provider=${aiArgs.name}`,
     `model=${finalConfig.model}`
-    // `apiURL=${aiArgs}`
   );
 
   return ai(aiArgs);

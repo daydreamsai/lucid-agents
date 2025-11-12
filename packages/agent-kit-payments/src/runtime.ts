@@ -1,12 +1,7 @@
-import {
-  sanitizeAddress,
-  ZERO_ADDRESS,
-} from '@lucid-agents/agent-kit-identity';
 import type { AgentRuntime } from '@lucid-dreams/agent-auth';
 import type { Signer } from 'x402/types';
 import { createSigner, type Hex, wrapFetchWithPayment } from 'x402-fetch';
-
-import { getAgentKitConfig } from './config';
+import { sanitizeAddress, ZERO_ADDRESS } from '@lucid-agents/agent-kit';
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -169,15 +164,16 @@ function resolveMaxPaymentBaseUnits(
   configOverride?: { maxPaymentBaseUnits?: bigint; maxPaymentUsd?: number }
 ): bigint | undefined {
   if (typeof override === 'bigint') return override;
-  const config = configOverride ?? getAgentKitConfig().wallet;
-  if (typeof config.maxPaymentBaseUnits === 'bigint') {
-    return config.maxPaymentBaseUnits;
+  if (!configOverride) return undefined;
+
+  if (typeof configOverride.maxPaymentBaseUnits === 'bigint') {
+    return configOverride.maxPaymentBaseUnits;
   }
   if (
-    typeof config.maxPaymentUsd === 'number' &&
-    Number.isFinite(config.maxPaymentUsd)
+    typeof configOverride.maxPaymentUsd === 'number' &&
+    Number.isFinite(configOverride.maxPaymentUsd)
   ) {
-    const scaled = Math.floor(config.maxPaymentUsd * 1_000_000);
+    const scaled = Math.floor(configOverride.maxPaymentUsd * 1_000_000);
     return scaled > 0 ? BigInt(scaled) : undefined;
   }
   return undefined;
@@ -274,9 +270,22 @@ export async function createRuntimePaymentContext(
   }
 
   if (options.privateKey) {
+    if (!options.network) {
+      logWarning(
+        options.logger,
+        '[agent-kit-payments] Private key payment context requires options.network'
+      );
+      return {
+        fetchWithPayment: null,
+        signer: null,
+        walletAddress: null,
+        chainId: null,
+      };
+    }
+
     try {
       const signer = await createSigner(
-        (options.network ?? getAgentKitConfig().payments.network) as any,
+        options.network as any,
         options.privateKey as any
       );
       const fetchWithPayment = attachPreconnect(
@@ -301,7 +310,7 @@ export async function createRuntimePaymentContext(
     } catch (error) {
       logWarning(
         options.logger,
-        `[agent-kit] Failed to initialise paid fetch with private key: ${
+        `[agent-kit-payments] Failed to initialise paid fetch with private key: ${
           (error as Error)?.message ?? error
         }`
       );
@@ -317,7 +326,7 @@ export async function createRuntimePaymentContext(
   if (!options.runtime) {
     logWarning(
       options.logger,
-      '[agent-kit] Runtime payment context requires either a runtime or private key'
+      '[agent-kit-payments] Runtime payment context requires either a runtime or private key'
     );
     return {
       fetchWithPayment: null,
@@ -330,13 +339,11 @@ export async function createRuntimePaymentContext(
   const runtime = options.runtime;
   await runtime.ensureAccessToken();
 
-  const network =
-    options.network ?? getAgentKitConfig().payments.network ?? undefined;
-  const chainId = options.chainId ?? inferChainId(network);
+  const chainId = options.chainId ?? inferChainId(options.network);
   if (!chainId) {
     logWarning(
       options.logger,
-      '[agent-kit] Unable to derive chainId for runtime payments; provide options.chainId or options.network'
+      '[agent-kit-payments] Unable to derive chainId for runtime payments; provide options.chainId or options.network'
     );
     return {
       fetchWithPayment: null,
@@ -371,7 +378,7 @@ export async function createRuntimePaymentContext(
   } catch (error) {
     logWarning(
       options.logger,
-      `[agent-kit] Failed to initialise runtime-backed paid fetch: ${
+      `[agent-kit-payments] Failed to initialise runtime-backed paid fetch: ${
         (error as Error)?.message ?? error
       }`
     );

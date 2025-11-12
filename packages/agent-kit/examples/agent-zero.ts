@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createAgentApp } from '@lucid-agents/agent-kit-hono';
 import { AgentKitConfig, createAxLLMClient } from '@lucid-agents/agent-kit';
-import { paymentsFromEnv } from '@lucid-agents/agent-kit/utils';
+import { paymentsFromEnv } from '@lucid-agents/agent-kit-payments';
 import { flow } from '@ax-llm/ax';
 
 /**

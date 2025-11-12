@@ -1,6 +1,8 @@
+import {
+  createX402LLM,
+  type CreateX402LLMOptions,
+} from '@lucid-agents/agent-kit-payments';
 import type { Hex } from 'viem';
-
-import { createX402LLM, type CreateX402LLMOptions } from './x402';
 
 export type AxLLMClientOptions = {
   provider?: string;

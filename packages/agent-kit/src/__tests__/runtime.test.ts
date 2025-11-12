@@ -1,11 +1,11 @@
-import type { AgentRuntime } from '@lucid-dreams/agent-auth';
-import { afterEach, describe, expect, it, mock } from 'bun:test';
-
-import { resetAgentKitConfigForTesting } from '../config';
 import {
   createRuntimePaymentContext,
   type RuntimePaymentOptions,
-} from '../runtime';
+} from '@lucid-agents/agent-kit-payments';
+import type { AgentRuntime } from '@lucid-dreams/agent-auth';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
+
+import { resetAgentKitConfigForTesting } from '../config/config';
 
 type RuntimeStub = Pick<AgentRuntime, 'ensureAccessToken' | 'api'>;
 

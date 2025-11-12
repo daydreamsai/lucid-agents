@@ -2,11 +2,8 @@ import { definePackageConfig } from '../tsup.config.base';
 
 const entryPoints = {
   index: 'src/index.ts',
-  types: 'src/types.ts',
   utils: 'src/utils/index.ts',
-  'utils/axllm': 'src/utils/axllm.ts',
-  'utils/x402': 'src/utils/x402.ts',
-  erc8004: 'src/erc8004.ts',
+  'axllm/index': 'src/axllm/index.ts',
 };
 
 export default definePackageConfig({
@@ -18,6 +15,7 @@ export default definePackageConfig({
     '@ax-llm/ax',
     '@lucid-dreams/client',
     '@lucid-agents/agent-kit-identity',
+    '@lucid-agents/agent-kit-payments',
     'hono',
     'viem',
     'x402',

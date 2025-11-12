@@ -1,4 +1,5 @@
-import type { EntrypointDef, PaymentsConfig } from './types';
+import type { EntrypointDef } from '@lucid-agents/agent-kit';
+import type { PaymentsConfig } from './types';
 
 export function resolveEntrypointPrice(
   entrypoint: EntrypointDef,
