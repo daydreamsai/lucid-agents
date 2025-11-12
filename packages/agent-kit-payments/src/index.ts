@@ -13,10 +13,7 @@ export type {
 export type { PaymentRequirement } from './payments';
 export { resolveEntrypointPrice } from './pricing';
 export { validatePaymentsConfig } from './validation';
-export {
-  resolvePaymentRequirement,
-  paymentRequiredResponse,
-} from './payments';
+export { resolvePaymentRequirement, paymentRequiredResponse } from './payments';
 export {
   createRuntimePaymentContext,
   type RuntimePaymentContext,
@@ -34,4 +31,3 @@ export {
   type WrappedFetch,
   type X402Account,
 } from './x402';
-

@@ -22,20 +22,21 @@ This is the core runtime package. For building agents, use one of the adapter pa
 
 ```ts
 import { createAgentApp } from '@lucid-agents/agent-kit-hono';
-import type { EntrypointDef, AgentMeta } from '@lucid-agents/agent-kit/types';
+import type { EntrypointDef, AgentMeta } from '@lucid-agents/agent-kit';
 ```
 
 **TanStack Adapter:**
 
 ```ts
 import { createTanStackRuntime } from '@lucid-agents/agent-kit-tanstack';
-import type { EntrypointDef, AgentMeta } from '@lucid-agents/agent-kit/types';
+import type { EntrypointDef, AgentMeta } from '@lucid-agents/agent-kit';
 ```
 
 Subpath exports (shared across adapters):
 
-- `@lucid-agents/agent-kit/types` — public TypeScript interfaces and helper types
-- `@lucid-agents/agent-kit/utils` — focused helpers (`toJsonSchemaOrUndefined`, `paymentsFromEnv`, etc.)
+- `@lucid-agents/agent-kit` — main exports including types (EntrypointDef, AgentMeta, etc.)
+- `@lucid-agents/agent-kit/utils` — focused helpers (`toJsonSchemaOrUndefined`, etc.)
+- `@lucid-agents/agent-kit/axllm` — AxLLM client integration
 
 ## Core Concepts
 

@@ -168,7 +168,7 @@ function resolveMaxPaymentBaseUnits(
 ): bigint | undefined {
   if (typeof override === 'bigint') return override;
   if (!configOverride) return undefined;
-  
+
   if (typeof configOverride.maxPaymentBaseUnits === 'bigint') {
     return configOverride.maxPaymentBaseUnits;
   }
@@ -285,7 +285,7 @@ export async function createRuntimePaymentContext(
         chainId: null,
       };
     }
-    
+
     try {
       const signer = await createSigner(
         options.network as any,
@@ -378,13 +378,13 @@ export async function createRuntimePaymentContext(
       walletAddress: signer.account.address,
       chainId,
     };
-    } catch (error) {
-      logWarning(
-        options.logger,
-        `[agent-kit-payments] Failed to initialise runtime-backed paid fetch: ${
-          (error as Error)?.message ?? error
-        }`
-      );
+  } catch (error) {
+    logWarning(
+      options.logger,
+      `[agent-kit-payments] Failed to initialise runtime-backed paid fetch: ${
+        (error as Error)?.message ?? error
+      }`
+    );
     return {
       fetchWithPayment: null,
       signer: null,
