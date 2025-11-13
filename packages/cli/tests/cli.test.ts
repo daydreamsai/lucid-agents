@@ -140,7 +140,8 @@ describe('create-agent-kit CLI', () => {
     expect(agentSrc).toContain('process.env.AGENT_VERSION');
     expect(agentSrc).toContain('process.env.AGENT_DESCRIPTION');
     expect(agentSrc).toContain('key: "echo"');
-    expect(agentSrc).toContain('useConfigPayments: true');
+    expect(agentSrc).toContain('payments: {');
+    expect(agentSrc).toContain('process.env.PAYMENTS_FACILITATOR_URL');
     expect(agentSrc).not.toContain('{{');
 
     // .env has defaults from template.json
@@ -192,7 +193,8 @@ describe('create-agent-kit CLI', () => {
     expect(agentSrc).toContain('process.env.AGENT_VERSION');
     expect(agentSrc).toContain('process.env.AGENT_DESCRIPTION');
     expect(agentSrc).toContain('key: "echo"');
-    expect(agentSrc).toContain('useConfigPayments: true');
+    expect(agentSrc).toContain('payments: {');
+    expect(agentSrc).toContain('process.env.PAYMENTS_FACILITATOR_URL');
 
     // .env contains wizard answers
     expect(envFile).toContain('AGENT_NAME=quote-agent');
