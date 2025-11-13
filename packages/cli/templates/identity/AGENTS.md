@@ -305,7 +305,12 @@ const trustConfig = getTrustConfig(identity);
 const { app, addEntrypoint } = createAgentApp(
   { /* meta */ },
   {
-    useConfigPayments: true,
+    payments: {
+      facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL,
+      payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
+      network: process.env.PAYMENTS_NETWORK,
+      defaultPrice: process.env.PAYMENTS_DEFAULT_PRICE,
+    },
     trust: trustConfig, // Automatically populated
   }
 );

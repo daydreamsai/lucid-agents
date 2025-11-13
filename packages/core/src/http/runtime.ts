@@ -38,7 +38,6 @@ export type CreateAgentHttpOptions = {
   trust?: TrustConfig;
   entrypoints?: Iterable<EntrypointDef>;
   config?: AgentKitConfig;
-  useConfigPayments?: boolean;
   landingPage?: boolean;
 };
 
@@ -167,22 +166,8 @@ export function createAgentHttpRuntime(
   );
 
   const paymentsOption = opts?.payments;
-  const shouldUseConfiguredPayments =
-    paymentsOption === undefined &&
-    (opts?.useConfigPayments || Boolean(opts?.config?.payments));
-
   const resolvedPayments: PaymentsConfig | undefined =
-    paymentsOption === false
-      ? undefined
-      : (paymentsOption ??
-        (shouldUseConfiguredPayments
-          ? {
-              payTo: resolvedConfig.payments.payTo,
-              facilitatorUrl: resolvedConfig.payments.facilitatorUrl,
-              network: resolvedConfig.payments.network,
-              defaultPrice: resolvedConfig.payments.defaultPrice,
-            }
-          : undefined));
+    paymentsOption === false ? undefined : paymentsOption;
 
   let activePayments: PaymentsConfig | undefined = resolvedPayments;
 

@@ -271,7 +271,7 @@ addEntrypoint({
 **createAgentApp(meta, options?)**
 
 - `meta`: Object with `name`, `version`, `description`
-- `options.useConfigPayments`: Boolean to apply payment config to all entrypoints
+- `options.payments`: Payment configuration to enable paid entrypoints
 - Returns: `{ app, addEntrypoint, config, payments }`
 
 **addEntrypoint(definition)**

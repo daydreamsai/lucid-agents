@@ -279,7 +279,7 @@ async function main() {
       },
       {
         config: configOverrides,
-        useConfigPayments: true,
+        payments: configOverrides.payments,
         ap2: {
           roles: ['merchant', 'shopper'],
           description: 'Supports dual-role AP2 interactions',

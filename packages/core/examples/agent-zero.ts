@@ -180,7 +180,6 @@ const { app, addEntrypoint } = createAgentApp(
   },
   {
     config,
-    useConfigPayments: false,
     payments: {
       register: false,
       question: true,

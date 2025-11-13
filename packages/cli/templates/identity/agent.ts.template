@@ -22,15 +22,12 @@ const trustConfig = getTrustConfig(identity);
 
 // Compose features: payments + trust
 const appOptions = {
-  useConfigPayments: true,
   trust: trustConfig,
-  config: {
-    payments: {
-      facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL,
-      payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
-      network: process.env.PAYMENTS_NETWORK,
-      defaultPrice: process.env.PAYMENTS_DEFAULT_PRICE,
-    },
+  payments: {
+    facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL as `${string}://${string}`,
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+    network: process.env.PAYMENTS_NETWORK as any,
+    defaultPrice: process.env.PAYMENTS_DEFAULT_PRICE,
   },
 };
 

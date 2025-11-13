@@ -19,10 +19,7 @@ describe('Hono Solana Payments', () => {
         description: 'Agent accepting Solana payments',
       },
       {
-        config: {
-          payments: solanaPayments,
-        },
-        useConfigPayments: true,
+        payments: solanaPayments,
       }
     );
 
@@ -54,10 +51,7 @@ describe('Hono Solana Payments', () => {
         version: '1.0.0',
       },
       {
-        config: {
-          payments: solanaPayments,
-        },
-        useConfigPayments: true,
+        payments: solanaPayments,
       }
     );
 
@@ -93,7 +87,7 @@ describe('Hono Solana Payments', () => {
 
       const { app } = createAgentApp(
         { name: 'test', version: '1.0.0' },
-        { config: { payments: config }, useConfigPayments: true }
+        { payments: config }
       );
 
       expect(app).toBeDefined();
@@ -113,13 +107,10 @@ describe('Hono Solana Payments', () => {
       const { app, addEntrypoint } = createAgentApp(
         { name: 'test', version: '1.0.0' },
         {
-          config: {
-            payments: {
-              ...solanaPayments,
-              network,
-            },
+          payments: {
+            ...solanaPayments,
+            network,
           },
-          useConfigPayments: true,
         }
       );
 
@@ -142,9 +133,7 @@ describe('Hono Solana Payments', () => {
         description: 'Solana payment agent',
       },
       {
-        config: {
-          payments: solanaPayments,
-        },
+        payments: solanaPayments,
       }
     );
 
@@ -177,8 +166,7 @@ describe('Hono Solana Payments', () => {
     const { addEntrypoint } = createAgentApp(
       { name: 'test', version: '1.0.0' },
       {
-        config: { payments: invalidPayments },
-        useConfigPayments: true,
+        payments: invalidPayments,
       }
     );
 

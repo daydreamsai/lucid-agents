@@ -88,7 +88,12 @@ const { app, addEntrypoint } = createAgentApp(
         apiBaseUrl: 'https://api.example',
       },
     },
-    useConfigPayments: true, // apply the config payments to every entrypoint
+    payments: {
+      payTo: '0xabc0000000000000000000000000000000000000',
+      network: 'base-sepolia',
+      facilitatorUrl: 'https://facilitator.daydreams.systems',
+      defaultPrice: '1000',
+    },
     ap2: { roles: ['merchant', 'shopper'] },
     trust: {
       trustModels: ['feedback'],
@@ -270,7 +275,7 @@ Key shapes:
 - `EntrypointDef`: `{ key, description?, input?, output?, streaming?, price?, network?, handler?, stream? }`
 - `AgentContext`: `{ key, input, signal, headers, runId }`
 - `PaymentsConfig`: `{ payTo, facilitatorUrl, network, defaultPrice? }`
-- `CreateAgentAppOptions`: `{ config?, payments?, ap2?, trust?, entrypoints?, useConfigPayments? }`
+- `CreateAgentAppOptions`: `{ config?, payments?, ap2?, trust?, entrypoints? }`
 - `CreateAgentAppReturn`: `{ app, addEntrypoint, config, payments }`
 
 ## Utils
@@ -285,7 +290,7 @@ If payments are enabled, the invoke/stream routes are automatically paywalled:
 
 - Price resolution per entrypoint: `string | { invoke?, stream? }`, fallback to `defaultPrice`.
 - Optional per-entrypoint `network` overrides the global one.
-- Providing `useConfigPayments: true` applies the configured `payments` values to every entrypoint unless you override `price`/`network` directly on the entrypoint.
+- Pass `payments` option to enable payment enforcement. Entrypoints can override with explicit `price`/`network` values.
 
 Required env for `paymentsFromEnv`:
 
@@ -319,15 +324,12 @@ const { app, addEntrypoint } = createAgentApp(
     description: 'Agent accepting Solana USDC',
   },
   {
-    config: {
-      payments: {
-        payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana Base58 address
-        network: 'solana-devnet',
-        facilitatorUrl: 'https://facilitator.daydreams.systems',
-        defaultPrice: '10000', // 0.01 USDC
-      },
+    payments: {
+      payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana Base58 address
+      network: 'solana-devnet',
+      facilitatorUrl: 'https://facilitator.daydreams.systems',
+      defaultPrice: '10000', // 0.01 USDC
     },
-    useConfigPayments: true,
   }
 );
 ```

@@ -48,11 +48,10 @@ The runtime manages:
 
 - `meta` (`AgentMeta`) shapes the health check and manifest.
 - `options.config` applies runtime overrides for payments and wallet defaults. These overrides merge with environment variables and package defaults via `getAgentKitConfig`.
-- `options.payments` forces a `PaymentsConfig` for all routes. Pass `false` to explicitly disable paywalling even when config/env values exist.
+- `options.payments` sets payment configuration for entrypoints. Pass `false` to explicitly disable paywalling. If omitted and not disabled, entrypoints without explicit prices won't require payment.
 - `options.ap2` promotes an Agent Payments Protocol extension entry into the manifest.
 - `options.trust` pushes ERC-8004 trust metadata into the manifest.
 - `options.entrypoints` pre-registers entrypoints without additional calls.
-- `options.useConfigPayments` instructs the server to reuse resolved config defaults when `options.payments` is omitted.
 
 The return value exposes:
 
@@ -147,15 +146,12 @@ const { app, addEntrypoint } = createAgentApp(
     description: 'Agent accepting Solana USDC payments',
   },
   {
-    config: {
-      payments: {
-        payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
-        network: 'solana-devnet',
-        facilitatorUrl: 'https://facilitator.daydreams.systems',
-        defaultPrice: '10000', // 0.01 USDC (6 decimals)
-      },
+    payments: {
+      payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
+      network: 'solana-devnet',
+      facilitatorUrl: 'https://facilitator.daydreams.systems',
+      defaultPrice: '10000', // 0.01 USDC (6 decimals)
     },
-    useConfigPayments: true,
   }
 );
 
