@@ -47,13 +47,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Typecheck packages
-        run: |
-          bun x tsc --build packages/agent-kit-identity/tsconfig.json
-          bun x tsc -p packages/agent-kit-identity/tsconfig.json --noEmit
-          bun x tsc --build packages/create-agent-kit/tsconfig.json
-          bun x tsc -p packages/create-agent-kit/tsconfig.json --noEmit
-          bun x tsc --build packages/agent-kit/tsconfig.json
-          bun x tsc -p packages/agent-kit/tsconfig.json --noEmit
+        run: bun run type-check
 
       - name: Build packages
         run: bun run build:packages
