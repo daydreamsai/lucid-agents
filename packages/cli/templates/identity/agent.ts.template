@@ -2,7 +2,7 @@
 import {
   createAgentIdentity,
   getTrustConfig,
-} from "@lucid-agents/agent-kit-identity";
+} from "@lucid-agents/identity";
 
 {{ADAPTER_PRE_SETUP}}
 // Identity feature setup

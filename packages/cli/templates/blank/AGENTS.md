@@ -341,6 +341,6 @@ Common fixes:
 
 ## Additional Resources
 
-- [@lucid-agents/core documentation](../../../agent-kit/README.md)
+- [@lucid-agents/core documentation](../../../core/README.md)
 - [Agent Payments Protocol (AP2)](https://github.com/google-agentic-commerce/ap2)
 - [A2A Protocol](https://agent2agent.ai/)

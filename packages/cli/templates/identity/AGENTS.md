@@ -499,6 +499,6 @@ Ensure:
 ## Additional Resources
 
 - [ERC-8004 Specification](https://github.com/ethereum/ERCs/issues/8004)
-- [@lucid-agents/identity docs](../../../agent-kit-identity/README.md)
+- [@lucid-agents/identity docs](../../../identity/README.md)
 - [viem documentation](https://viem.sh/)
 - [Base network docs](https://docs.base.org/)

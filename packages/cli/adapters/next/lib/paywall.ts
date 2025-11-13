@@ -1,13 +1,7 @@
-import type {
-  AgentHttpRuntime,
-  EntrypointDef,
-  PaymentsConfig,
-} from '@lucid-agents/core';
-import {
-  resolveEntrypointPrice,
-  toJsonSchemaOrUndefined,
-  validatePaymentsConfig,
-} from '@lucid-agents/core';
+import type { AgentHttpRuntime } from '@lucid-agents/core';
+import { toJsonSchemaOrUndefined } from '@lucid-agents/core';
+import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
+import type { EntrypointDef, PaymentsConfig } from '@lucid-agents/types';
 import type {
   FacilitatorConfig,
   PaywallConfig,
@@ -58,7 +52,7 @@ function buildEntrypointRoutes({
   for (const entrypoint of entrypoints) {
     if (kind === 'stream' && !entrypoint.stream) continue;
     const network = entrypoint.network ?? payments.network;
-    const price = resolveEntrypointPrice(entrypoint, payments, kind);
+    const price = resolvePrice(entrypoint, payments, kind);
 
     validatePaymentsConfig(payments, network, entrypoint.key);
 

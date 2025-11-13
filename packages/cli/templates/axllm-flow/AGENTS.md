@@ -570,4 +570,4 @@ For long flows:
 
 - [@ax-llm/ax Flow documentation](https://github.com/dosco/ax)
 - [Chain-of-thought prompting](https://www.promptingguide.ai/techniques/cot)
-- [@lucid-agents/core docs](../../../agent-kit/README.md)
+- [@lucid-agents/core docs](../../../core/README.md)

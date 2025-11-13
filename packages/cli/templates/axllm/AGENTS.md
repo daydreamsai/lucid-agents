@@ -510,4 +510,4 @@ Ensure:
 - [@ax-llm/ax documentation](https://github.com/dosco/ax)
 - [OpenAI API reference](https://platform.openai.com/docs/api-reference)
 - [Anthropic API reference](https://docs.anthropic.com/claude/reference)
-- [@lucid-agents/core docs](../../../agent-kit/README.md)
+- [@lucid-agents/core docs](../../../core/README.md)

@@ -68,12 +68,13 @@ async function buildPackages() {
   // Align build order with scripts/build-all.ts so internal deps build first.
   const preferredOrder = [
     "@lucid-agents/x402-tanstack-start",
-    "@lucid-agents/agent-kit-identity",
-    "@lucid-agents/agent-kit-payments",
-    "@lucid-agents/agent-kit",
-    "@lucid-agents/agent-kit-hono",
-    "@lucid-agents/agent-kit-tanstack",
-    "@lucid-agents/create-agent-kit",
+    "@lucid-agents/types",
+    "@lucid-agents/identity",
+    "@lucid-agents/payments",
+    "@lucid-agents/core",
+    "@lucid-agents/hono",
+    "@lucid-agents/tanstack",
+    "@lucid-agents/cli",
   ];
 
   const packagesByName = new Map(packages.map((pkg) => [pkg.name, pkg]));

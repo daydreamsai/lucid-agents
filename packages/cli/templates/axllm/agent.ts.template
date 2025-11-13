@@ -1,5 +1,5 @@
 {{ADAPTER_IMPORTS}}
-import { createAxLLMClient } from "@lucid-agents/agent-kit/axllm";
+import { createAxLLMClient } from "@lucid-agents/core/axllm";
 
 {{ADAPTER_PRE_SETUP}}
 // Payment feature + LLM setup

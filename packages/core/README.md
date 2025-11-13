@@ -256,7 +256,7 @@ When a `PaymentsConfig` is active, `createAgentApp` automatically wraps invoke/s
 2. `PaymentsConfig.defaultPrice` (from inline config/env).
 3. No paywall if neither is defined.
 
-`resolveEntrypointPrice(entrypoint, payments, kind)` encapsulates the merge logic.
+`resolvePrice(entrypoint, payments, kind)` (from `@lucid-agents/payments`) encapsulates the merge logic.
 
 For authenticated wallet access, pair your agent with
 `@lucid-agents/agent-auth` and reuse the generated SDK surface:

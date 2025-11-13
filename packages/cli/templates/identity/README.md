@@ -119,6 +119,6 @@ await validationClient.createRequest({
 
 ### Learn more
 
-- [Agent Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/agent-kit/README.md)
-- [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/agent-kit-identity/README.md)
+- [Agent Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/core/README.md)
+- [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/identity/README.md)
 - [ERC-8004 Specification](https://eips.ethereum.org/EIPS/eip-8004)

@@ -4,8 +4,8 @@ import type { PaymentsConfig } from '@lucid-agents/types';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
-import type { EntrypointDef } from '../http/types';
-import { buildManifest } from '../index';
+import type { EntrypointDef } from '@lucid-agents/types';
+import { buildManifest } from '@lucid-agents/core';
 
 const meta = { name: 'tester', version: '0.0.1', description: 'test agent' };
 

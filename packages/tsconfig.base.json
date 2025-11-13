@@ -13,12 +13,27 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@lucid-agents/core": ["./agent-kit/src"],
-      "@lucid-agents/payments": ["./agent-kit-payments/src"],
-      "@lucid-agents/hono": ["./agent-kit-hono/src"],
-      "@lucid-agents/tanstack": ["./agent-kit-tanstack/src"],
-      "@lucid-agents/identity": ["./agent-kit-identity/src"],
-      "@lucid-agents/cli": ["./create-agent-kit/src"]
+      "@lucid-agents/types": [
+        "./types/src"
+      ],
+      "@lucid-agents/core": [
+        "./core/src"
+      ],
+      "@lucid-agents/payments": [
+        "./payments/src"
+      ],
+      "@lucid-agents/identity": [
+        "./identity/src"
+      ],
+      "@lucid-agents/hono": [
+        "./hono/src"
+      ],
+      "@lucid-agents/tanstack": [
+        "./tanstack/src"
+      ],
+      "@lucid-agents/cli": [
+        "./cli/src"
+      ]
     }
   }
 }
