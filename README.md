@@ -200,12 +200,12 @@ Lucid Agents is a TypeScript monorepo built for multi-runtime agent deployment.
 
 ### Core Packages
 
-#### [`@lucid-agents/agent-kit`](packages/agent-kit/README.md)
+#### [`@lucid-agents/core`](packages/core/README.md)
 
 Core agent runtime with entrypoints, manifests, and streaming support.
 
 ```typescript
-import { createRuntime } from '@lucid-agents/agent-kit';
+import { createRuntime } from '@lucid-agents/core';
 import { z } from 'zod';
 
 const runtime = createRuntime({
@@ -223,12 +223,12 @@ runtime.addEntrypoint({
 });
 ```
 
-#### [`@lucid-agents/agent-kit-hono`](packages/agent-kit-hono/README.md)
+#### [`@lucid-agents/hono`](packages/hono/README.md)
 
 Hono adapter for building traditional HTTP servers.
 
 ```typescript
-import { createAgentApp } from '@lucid-agents/agent-kit-hono';
+import { createAgentApp } from '@lucid-agents/hono';
 
 const { app, addEntrypoint } = createAgentApp({
   name: 'my-agent',
@@ -240,12 +240,12 @@ const { app, addEntrypoint } = createAgentApp({
 export default app; // Bun.serve or Hono serve
 ```
 
-#### [`@lucid-agents/agent-kit-tanstack`](packages/agent-kit-tanstack/README.md)
+#### [`@lucid-agents/tanstack`](packages/tanstack/README.md)
 
 TanStack Start adapter with UI and headless variants.
 
 ```typescript
-import { createTanStackRuntime } from '@lucid-agents/agent-kit-tanstack';
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
 export const { runtime, handlers } = createTanStackRuntime({
   name: 'my-agent',
@@ -253,12 +253,12 @@ export const { runtime, handlers } = createTanStackRuntime({
 });
 ```
 
-#### [`@lucid-agents/agent-kit-identity`](packages/agent-kit-identity/README.md)
+#### [`@lucid-agents/identity`](packages/identity/README.md)
 
 ERC-8004 toolkit for on-chain identity, reputation, and validation.
 
 ```typescript
-import { createAgentIdentity } from '@lucid-agents/agent-kit-identity';
+import { createAgentIdentity } from '@lucid-agents/identity';
 
 const identity = await createAgentIdentity({
   domain: 'my-agent.example.com',
@@ -266,12 +266,12 @@ const identity = await createAgentIdentity({
 });
 ```
 
-#### [`@lucid-agents/agent-kit-payments`](packages/agent-kit-payments/README.md)
+#### [`@lucid-agents/payments`](packages/payments/README.md)
 
 x402 payment utilities for multi-network payment handling.
 
 ```typescript
-import { paymentsFromEnv } from '@lucid-agents/agent-kit-payments';
+import { paymentsFromEnv } from '@lucid-agents/payments';
 
 const payments = paymentsFromEnv();
 // Auto-detects EVM vs Solana from PAYMENTS_RECEIVABLE_ADDRESS format
@@ -279,7 +279,7 @@ const payments = paymentsFromEnv();
 
 ### CLI Tool
 
-#### [`@lucid-agents/create-agent-kit`](packages/create-agent-kit/README.md)
+#### [`@lucid-agents/create-agent-kit`](packages/cli/README.md)
 
 CLI for scaffolding new agent projects with templates and interactive configuration.
 
@@ -304,11 +304,11 @@ Here's a complete example showing identity, payments, and LLM integration:
 
 ```typescript
 import { z } from 'zod';
-import { createAgentApp } from '@lucid-agents/agent-kit-hono';
+import { createAgentApp } from '@lucid-agents/hono';
 import {
   createAgentIdentity,
   getTrustConfig,
-} from '@lucid-agents/agent-kit-identity';
+} from '@lucid-agents/identity';
 import { AI } from '@ax-llm/ax';
 
 // 1. Create on-chain identity
