@@ -23,8 +23,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "clean": "rm -rf dist",
-    "prepare": "bun run build"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@solana/kit": "^2.1.1",

@@ -29,8 +29,7 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "type-check": "tsc -p tsconfig.json --noEmit",
-    "prepare": "bun run build"
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@ax-llm/ax": "catalog:",

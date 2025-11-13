@@ -31,7 +31,6 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "prepare": "bun run build",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write .",

@@ -6,7 +6,7 @@
 
 <div align="center">
   <a href="https://github.com/daydreamsai/lucid-agents/blob/master/LICENSE"><img src="https://img.shields.io/github/license/daydreamsai/lucid-agents?style=for-the-badge" alt="License"></a>
-  <a href="https://www.npmjs.com/package/@lucid-agents/create-agent-kit"><img src="https://img.shields.io/npm/v/@lucid-agents/create-agent-kit?style=for-the-badge" alt="NPM Version"></a>
+  <a href="https://www.npmjs.com/package/@lucid-agents/cli"><img src="https://img.shields.io/npm/v/@lucid-agents/cli?style=for-the-badge" alt="NPM Version"></a>
   <a href="https://github.com/daydreamsai/lucid-agents/actions"><img src="https://img.shields.io/github/actions/workflow/status/daydreamsai/lucid-agents/ci.yml?branch=master&style=for-the-badge" alt="CI Status"></a>
   <a href="https://bun.sh"><img src="https://img.shields.io/badge/runtime-bun-black?style=for-the-badge&logo=bun" alt="Bun"></a>
 </div>
@@ -436,65 +436,47 @@ bun run format
 
 ---
 
-## How to Contribute
+## Contributing
 
-We welcome contributions from the community! Here's how to get started:
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation.
 
-### Reporting Issues
+### Development Setup
 
-- **Bug Reports**: Use the [issue tracker](https://github.com/daydreamsai/lucid-agents/issues) with detailed reproduction steps
-- **Feature Requests**: Describe the use case and proposed API
-- **Questions**: Open a discussion or join our community channels
+1. **Fork and clone** the repository
 
-### Contributing Code
-
-1. **Fork the repository** and create a feature branch
+2. **Install dependencies:**
 
    ```bash
-   git checkout -b feature/your-feature-name
+   bun install
    ```
 
-2. **Make your changes** following our code standards:
-   - TypeScript strict mode
-   - ESM modules (`import`/`export`)
-   - Comprehensive tests for new features
-   - Update documentation (README, inline comments)
+3. **Build all packages** (required - must run in dependency order):
 
-3. **Create a changeset** for release notes:
+   ```bash
+   bun run build:packages
+   ```
+
+4. **Make your changes:**
+   - Add tests for new features
+   - Update documentation as needed
+
+5. **Run checks before submitting:**
+
+   ```bash
+   bun test              # All tests
+   bun run type-check    # TypeScript validation
+   bun run lint          # Code linting
+   ```
+
+6. **Create a changeset:**
 
    ```bash
    bun run changeset
    ```
 
-   Follow the prompts to:
-   - Select which packages are affected
-   - Choose the version bump type (major/minor/patch)
-   - Write a clear summary of your changes
+7. **Submit a pull request**
 
-   See [CONTRIBUTING.md](CONTRIBUTING.md#release-process) for detailed changeset guidelines.
-
-4. **Test your changes**:
-
-   ```bash
-   bun test
-   bun run build:packages
-   ```
-
-5. **Submit a pull request** with:
-   - Clear description of changes
-   - Link to related issues
-   - Screenshots for UI changes
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
-
-- Development workflow
-- Testing conventions
-- Release process with changesets
-- Code standards and best practices
-
-### Good First Issues
-
-Look for issues labeled [`good first issue`](https://github.com/daydreamsai/lucid-agents/labels/good%20first%20issue) if you're new to the project.
+For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
