@@ -31,6 +31,33 @@ import { resolveAutoRegister, validateIdentityConfig } from './validation';
 export type { BootstrapIdentityResult };
 
 /**
+ * Resolves chainId from parameter, env object, or process.env.
+ * Throws if chainId cannot be resolved.
+ */
+function resolveRequiredChainId(
+  chainId: number | undefined,
+  env: Record<string, string | undefined> | undefined,
+  context?: string
+): number {
+  const resolvedChainId =
+    chainId ??
+    (typeof env === 'object' && env?.CHAIN_ID
+      ? parseInt(env.CHAIN_ID)
+      : typeof process !== 'undefined' && process.env?.CHAIN_ID
+        ? parseInt(process.env.CHAIN_ID)
+        : undefined);
+
+  if (!resolvedChainId) {
+    const contextSuffix = context ? ` ${context}` : '';
+    throw new Error(
+      `[agent-kit-identity] CHAIN_ID is required${contextSuffix}. Provide it via chainId parameter or CHAIN_ID environment variable.`
+    );
+  }
+
+  return resolvedChainId;
+}
+
+/**
  * Options for creating agent identity with automatic registration.
  */
 export type CreateAgentIdentityOptions = {
@@ -201,21 +228,18 @@ export type AgentIdentity = BootstrapIdentityResult & {
 export async function createAgentIdentity(
   options: CreateAgentIdentityOptions
 ): Promise<AgentIdentity> {
-  // Validate runtime is provided
   if (!options.runtime) {
     throw new Error(
       'runtime is required for createAgentIdentity. Pass the AgentRuntime instance from createAgentHttpRuntime or createAgentRuntime.'
     );
   }
 
-  // Validate wallet is configured
   if (!options.runtime.wallets?.agent) {
     throw new Error(
       'runtime.wallets.agent is required for identity operations. Configure a wallet in the runtime config.'
     );
   }
 
-  // Validate configuration early
   validateIdentityConfig(options, options.env);
 
   const {
@@ -231,7 +255,6 @@ export async function createAgentIdentity(
     makeClients,
   } = options;
 
-  // Resolve autoRegister with case-insensitive parsing
   const autoRegister = resolveAutoRegister(options, env);
 
   const viemFactory =
@@ -242,21 +265,7 @@ export async function createAgentIdentity(
       walletHandle: runtime.wallets.agent,
     }));
 
-  // Resolve chainId - required for bootstrap
-  // Check env first, then fall back to process.env
-  const resolvedChainId =
-    chainId ??
-    (typeof env === 'object' && env?.CHAIN_ID
-      ? parseInt(env.CHAIN_ID)
-      : typeof process !== 'undefined' && process.env?.CHAIN_ID
-        ? parseInt(process.env.CHAIN_ID)
-        : undefined);
-
-  if (!resolvedChainId) {
-    throw new Error(
-      '[agent-kit-identity] CHAIN_ID is required. Provide it via chainId parameter or CHAIN_ID environment variable.'
-    );
-  }
+  const resolvedChainId = resolveRequiredChainId(chainId, env);
   const resolvedRegistryAddress =
     registryAddress ??
     (typeof env === 'object' && env?.IDENTITY_REGISTRY_ADDRESS
@@ -304,28 +313,16 @@ export async function createAgentIdentity(
   const resolvedDomain =
     domain ?? (typeof env === 'object' ? env?.AGENT_DOMAIN : undefined);
 
-  // Create registry clients if we have the necessary components
   let clients: RegistryClients | undefined;
 
   if (viemFactory) {
     try {
-      // Resolve chainId - required, no defaults
-      // Check env first, then fall back to process.env
-      const resolvedChainId =
-        chainId ??
-        (typeof env === 'object' && env?.CHAIN_ID
-          ? parseInt(env.CHAIN_ID)
-          : typeof process !== 'undefined' && process.env?.CHAIN_ID
-            ? parseInt(process.env.CHAIN_ID)
-            : undefined);
+      const resolvedChainId = resolveRequiredChainId(
+        chainId,
+        env,
+        'for registry clients'
+      );
 
-      if (!resolvedChainId) {
-        throw new Error(
-          '[agent-kit-identity] CHAIN_ID is required for registry clients. Provide it via chainId parameter or CHAIN_ID environment variable.'
-        );
-      }
-
-      // Resolve RPC_URL - required, no defaults
       const resolvedRpcUrl =
         rpcUrl ??
         (typeof env === 'object' && env?.RPC_URL
@@ -392,7 +389,6 @@ export async function createAgentIdentity(
     clients,
   };
 
-  // Log metadata JSON after successful registration
   if (identity.didRegister && identity.domain) {
     const log = logger ?? { info: console.log };
     const metadata = generateAgentMetadata(identity);
