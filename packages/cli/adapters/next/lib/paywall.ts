@@ -118,13 +118,13 @@ export function createNextPaywall({
   facilitator,
   paywall,
 }: CreateNextPaywallOptions): NextPaywallConfig {
-  const activePayments = payments ?? runtime.payments;
+  const activePayments = payments ?? runtime.payments?.config;
   if (!activePayments) {
     return { matcher: [] };
   }
 
   const normalizedBasePath = normalizeBasePath(basePath);
-  const entrypoints = runtime.snapshotEntrypoints();
+  const entrypoints = runtime.entrypoints.snapshot();
 
   const invokeRoutes = buildEntrypointRoutes({
     entrypoints,

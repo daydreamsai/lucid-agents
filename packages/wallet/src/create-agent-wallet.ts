@@ -14,6 +14,7 @@ import type {
   LucidWalletOptions,
   WalletConnector,
 } from '@lucid-agents/types/wallets';
+import type { AgentKitConfig } from '@lucid-agents/types/core';
 
 export const createAgentWallet = (
   options: AgentWalletFactoryOptions
@@ -80,3 +81,25 @@ const resolveLucidConnectorOptions = (
   accessToken: options.accessToken ?? null,
   authorizationContext: options.authorizationContext,
 });
+
+export type WalletsRuntime = {
+  agent?: AgentWalletHandle;
+  developer?: AgentWalletHandle;
+} | undefined;
+
+export function createWalletsRuntime(
+  config: AgentKitConfig
+): WalletsRuntime {
+  if (!config.wallets) {
+    return undefined;
+  }
+
+  return {
+    agent: config.wallets.agent
+      ? createAgentWallet(config.wallets.agent)
+      : undefined,
+    developer: config.wallets.developer
+      ? createAgentWallet(config.wallets.developer)
+      : undefined,
+  };
+}

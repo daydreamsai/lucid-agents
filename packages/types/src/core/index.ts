@@ -2,7 +2,7 @@ import type { Network, Resource } from 'x402/types';
 import type { z } from 'zod';
 
 import type { EntrypointPrice, SolanaAddress } from '../payments';
-import type { WalletsConfig } from '../wallets';
+import type { WalletsConfig, AgentWalletHandle } from '../wallets';
 import type { PaymentsConfig } from '../payments';
 import type { RegistrationEntry, TrustModel } from '../identity';
 
@@ -61,11 +61,17 @@ export type StreamEnvelopeBase = {
   metadata?: Record<string, unknown>;
 };
 
+/**
+ * Envelope sent at the start of a streaming run.
+ */
 export type StreamRunStartEnvelope = StreamEnvelopeBase & {
   kind: 'run-start';
   runId: string;
 };
 
+/**
+ * Envelope containing text content in a stream.
+ */
 export type StreamTextEnvelope = StreamEnvelopeBase & {
   kind: 'text';
   text: string;
@@ -73,6 +79,9 @@ export type StreamTextEnvelope = StreamEnvelopeBase & {
   role?: string;
 };
 
+/**
+ * Envelope containing incremental text deltas in a stream.
+ */
 export type StreamDeltaEnvelope = StreamEnvelopeBase & {
   kind: 'delta';
   delta: string;
@@ -81,17 +90,26 @@ export type StreamDeltaEnvelope = StreamEnvelopeBase & {
   role?: string;
 };
 
+/**
+ * Inline asset transfer where data is embedded directly in the envelope.
+ */
 export type StreamAssetInlineTransfer = {
   transfer: 'inline';
   data: string;
 };
 
+/**
+ * External asset transfer where data is referenced by URL.
+ */
 export type StreamAssetExternalTransfer = {
   transfer: 'external';
   href: string;
   expiresAt?: string;
 };
 
+/**
+ * Envelope containing asset data (images, files, etc.) in a stream.
+ */
 export type StreamAssetEnvelope = StreamEnvelopeBase & {
   kind: 'asset';
   assetId: string;
@@ -100,12 +118,18 @@ export type StreamAssetEnvelope = StreamEnvelopeBase & {
   sizeBytes?: number;
 } & (StreamAssetInlineTransfer | StreamAssetExternalTransfer);
 
+/**
+ * Envelope containing control messages for stream management.
+ */
 export type StreamControlEnvelope = StreamEnvelopeBase & {
   kind: 'control';
   control: string;
   payload?: unknown;
 };
 
+/**
+ * Envelope containing error information in a stream.
+ */
 export type StreamErrorEnvelope = StreamEnvelopeBase & {
   kind: 'error';
   code: string;
@@ -113,6 +137,9 @@ export type StreamErrorEnvelope = StreamEnvelopeBase & {
   retryable?: boolean;
 };
 
+/**
+ * Envelope sent at the end of a streaming run with final status and results.
+ */
 export type StreamRunEndEnvelope = StreamEnvelopeBase & {
   kind: 'run-end';
   runId: string;
@@ -123,6 +150,9 @@ export type StreamRunEndEnvelope = StreamEnvelopeBase & {
   error?: { code: string; message?: string };
 };
 
+/**
+ * Union type of all possible stream envelope types.
+ */
 export type StreamEnvelope =
   | StreamRunStartEnvelope
   | StreamTextEnvelope
@@ -132,11 +162,17 @@ export type StreamEnvelope =
   | StreamErrorEnvelope
   | StreamRunEndEnvelope;
 
+/**
+ * Stream envelope types that can be pushed during streaming (excludes run-start and run-end).
+ */
 export type StreamPushEnvelope = Exclude<
   StreamEnvelope,
   StreamRunStartEnvelope | StreamRunEndEnvelope
 >;
 
+/**
+ * Result object returned by streaming entrypoint handlers.
+ */
 export type StreamResult = {
   output?: unknown;
   usage?: Usage;
@@ -202,18 +238,48 @@ export type AgentKitConfig = {
   wallets?: WalletsConfig;
 };
 
+/**
+ * Configuration for an agent instance, including metadata, payments, and wallets.
+ */
+export type AgentConfig = {
+  meta: AgentMeta;
+  payments?: PaymentsConfig | false;
+  wallets?: {
+    agent?: AgentWalletHandle;
+    developer?: AgentWalletHandle;
+  };
+};
+
+/**
+ * Core agent interface providing entrypoint management.
+ */
+export type AgentCore = {
+  readonly config: AgentConfig;
+  addEntrypoint: (entrypoint: EntrypointDef) => void;
+  listEntrypoints: () => EntrypointDef[];
+};
+
 // AP2 (Agent Payments Protocol) types
+/**
+ * AP2 (Agent Payments Protocol) role types.
+ */
 export type AP2Role =
   | 'merchant'
   | 'shopper'
   | 'credentials-provider'
   | 'payment-processor';
 
+/**
+ * Parameters for AP2 extension configuration.
+ */
 export type AP2ExtensionParams = {
   roles: [AP2Role, ...AP2Role[]];
   [key: string]: unknown;
 };
 
+/**
+ * Descriptor for AP2 extension in agent manifest.
+ */
 export type AP2ExtensionDescriptor = {
   uri: 'https://github.com/google-agentic-commerce/ap2/tree/v0.1';
   description?: string;
@@ -221,6 +287,9 @@ export type AP2ExtensionDescriptor = {
   params: AP2ExtensionParams;
 };
 
+/**
+ * Configuration for AP2 (Agent Payments Protocol) extension.
+ */
 export type AP2Config = {
   roles: AP2Role[];
   description?: string;
@@ -228,6 +297,9 @@ export type AP2Config = {
 };
 
 // Manifest and Agent Card types
+/**
+ * Agent manifest structure describing entrypoints and capabilities.
+ */
 export type Manifest = {
   name: string;
   version: string;
@@ -244,6 +316,9 @@ export type Manifest = {
   >;
 };
 
+/**
+ * Payment method configuration for x402 protocol.
+ */
 export type PaymentMethod = {
   method: 'x402';
   payee: `0x${string}` | SolanaAddress;
@@ -253,6 +328,9 @@ export type PaymentMethod = {
   extensions?: { [vendor: string]: unknown };
 };
 
+/**
+ * Agent capabilities and feature flags.
+ */
 export type AgentCapabilities = {
   streaming?: boolean;
   pushNotifications?: boolean;
@@ -260,6 +338,10 @@ export type AgentCapabilities = {
   extensions?: Array<AP2ExtensionDescriptor | Record<string, unknown>>;
 };
 
+/**
+ * Agent Card structure following the Agent Card specification.
+ * Describes agent metadata, capabilities, skills, payments, and trust information.
+ */
 export type AgentCard = {
   name: string;
   description?: string;
@@ -289,8 +371,34 @@ export type AgentCard = {
   [key: string]: unknown;
 };
 
+/**
+ * Agent Card extended with entrypoint definitions from the manifest.
+ */
 export type AgentCardWithEntrypoints = AgentCard & {
   entrypoints: Manifest['entrypoints'];
+};
+
+/**
+ * Entrypoints runtime type.
+ * Returned by AgentRuntime.entrypoints.
+ */
+export type EntrypointsRuntime = {
+  add: (def: EntrypointDef) => void;
+  list: () => Array<{
+    key: string;
+    description?: string;
+    streaming: boolean;
+  }>;
+  snapshot: () => EntrypointDef[];
+};
+
+/**
+ * Manifest runtime type.
+ * Returned by AgentRuntime.manifest.
+ */
+export type ManifestRuntime = {
+  build: (origin: string) => AgentCardWithEntrypoints;
+  invalidate: () => void;
 };
 
 /**
@@ -308,24 +416,10 @@ export type AgentRuntime = {
    */
   agent: any;
   config: AgentKitConfig;
-  wallets?: {
-    agent?: any; // AgentWalletHandle from @lucid-agents/wallet
-    developer?: any; // AgentWalletHandle from @lucid-agents/wallet
-  };
-  payments: PaymentsConfig | undefined;
-  addEntrypoint: (def: EntrypointDef) => void;
-  listEntrypoints: () => Array<{
-    key: string;
-    description?: string;
-    streaming: boolean;
-  }>;
-  snapshotEntrypoints: () => EntrypointDef[];
-  buildManifestForOrigin: (origin: string) => AgentCardWithEntrypoints;
-  invalidateManifestCache: () => void;
-  evaluatePaymentRequirement: (
-    entrypoint: EntrypointDef,
-    kind: 'invoke' | 'stream'
-  ) => import('../payments').RuntimePaymentRequirement;
+  wallets?: import('../wallets').WalletsRuntime;
+  payments?: import('../payments').PaymentsRuntime;
+  entrypoints: EntrypointsRuntime;
+  manifest: ManifestRuntime;
 };
 
 /**

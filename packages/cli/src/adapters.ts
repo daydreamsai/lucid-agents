@@ -112,7 +112,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
 );
 
 const { runtime, handlers } = tanstack;`,
-      entrypointRegistration: `runtime.addEntrypoint({
+      entrypointRegistration: `runtime.entrypoints.add({
   key: "echo",
   description: "Echo input text",
   input: z.object({
@@ -150,7 +150,7 @@ export { agent, handlers, runtime };`,
 );
 
 const { runtime, handlers } = tanstack;`,
-      entrypointRegistration: `runtime.addEntrypoint({
+      entrypointRegistration: `runtime.entrypoints.add({
   key: "echo",
   description: "Echo input text",
   input: z.object({

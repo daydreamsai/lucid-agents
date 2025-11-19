@@ -1,11 +1,12 @@
 import type { Network } from 'x402/types';
-import type { EntrypointDef } from '@lucid-agents/types/core';
+import type { EntrypointDef, AgentCore } from '@lucid-agents/types/core';
 import type { EntrypointPrice } from '@lucid-agents/types/payments';
 import type {
   PaymentsConfig,
   PaymentRequirement,
   RuntimePaymentRequirement,
 } from '@lucid-agents/types/payments';
+import type { AgentKitConfig } from '@lucid-agents/types/core';
 import { resolvePrice } from './pricing';
 
 /**
@@ -148,3 +149,42 @@ export const paymentRequiredResponse = (
     }
   );
 };
+
+export function createPaymentsRuntime(
+  paymentsOption: PaymentsConfig | false | undefined,
+  agentConfig: AgentKitConfig
+): import('@lucid-agents/types/payments').PaymentsRuntime | undefined {
+  const config: PaymentsConfig | undefined =
+    paymentsOption === false
+      ? undefined
+      : (paymentsOption ?? agentConfig.payments);
+
+  if (!config) {
+    return undefined;
+  }
+
+  let isActive = false;
+
+  return {
+    get config() {
+      return config;
+    },
+    get isActive() {
+      return isActive;
+    },
+    requirements(entrypoint: EntrypointDef, kind: 'invoke' | 'stream') {
+      return evaluatePaymentRequirement(
+        entrypoint,
+        kind,
+        isActive ? config : undefined
+      );
+    },
+    activate(entrypoint: EntrypointDef) {
+      if (isActive || !config) return;
+
+      if (entrypointHasExplicitPrice(entrypoint)) {
+        isActive = true;
+      }
+    },
+  };
+}

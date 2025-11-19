@@ -19,7 +19,11 @@ export {
   type ServerOrchestratorWalletConnectorOptions,
 } from './server-orchestrator-connector';
 export { createPrivateKeySigner } from './private-key-signer';
-export { createAgentWallet } from './create-agent-wallet';
+export {
+  createAgentWallet,
+  createWalletsRuntime,
+  type WalletsRuntime,
+} from './create-agent-wallet';
 export { walletsFromEnv } from './env';
 
 // Export utilities

@@ -79,7 +79,7 @@ async function loadDashboardPayload(origin: string): Promise<DashboardPayload> {
     };
   });
 
-  const configPayments = runtime.payments;
+  const configPayments = runtime.payments?.config;
   const payments =
     configPayments !== false && configPayments !== undefined
       ? {

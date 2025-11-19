@@ -6,6 +6,7 @@ export {
   resolveActivePayments,
   resolvePaymentRequirement,
   paymentRequiredResponse,
+  createPaymentsRuntime,
 } from './payments';
 export {
   createRuntimePaymentContext,

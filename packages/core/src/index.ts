@@ -1,6 +1,5 @@
 // Core types and functions
 export {
-  type AgentConfig,
   AgentCore,
   createAgentCore,
   type InvokeContext,
@@ -17,6 +16,7 @@ export type {
   StreamPushEnvelope,
   StreamResult,
 } from './http/types';
+export type { AgentConfig } from '@lucid-agents/types/core';
 
 // Config management
 export {

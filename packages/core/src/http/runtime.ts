@@ -109,7 +109,7 @@ export function createAgentHttpRuntime(
   // Create core runtime first
   const runtime = createAgentRuntime(meta, opts as CreateAgentRuntimeOptions);
 
-  const activePayments = runtime.payments;
+  const activePayments = runtime.payments?.config;
 
   const faviconSvg = resolveFaviconSvg(meta);
   const faviconDataUrl = `data:image/svg+xml;base64,${Buffer.from(
@@ -173,16 +173,16 @@ export function createAgentHttpRuntime(
       return jsonResponse({ ok: true, version: meta.version });
     },
     entrypoints: async () => {
-      return jsonResponse({ items: runtime.listEntrypoints() });
+      return jsonResponse({ items: runtime.entrypoints.list() });
     },
     manifest: async req => {
       const origin = new URL(req.url).origin;
-      return jsonResponse(runtime.buildManifestForOrigin(origin));
+      return jsonResponse(runtime.manifest.build(origin));
     },
     landing: landingEnabled
       ? async req => {
           const origin = new URL(req.url).origin;
-          const entrypoints = runtime.snapshotEntrypoints();
+          const entrypoints = runtime.entrypoints.snapshot();
           const html = renderLandingPage({
             meta,
             origin,

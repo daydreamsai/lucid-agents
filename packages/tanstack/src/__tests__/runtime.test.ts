@@ -20,7 +20,7 @@ describe("createTanStackRuntime", () => {
       ],
     });
 
-    expect(typeof runtime.addEntrypoint).toBe("function");
+    expect(typeof runtime.entrypoints.add).toBe("function");
     expect(typeof handlers.invoke).toBe("function");
 
     const healthResponse = await handlers.health({

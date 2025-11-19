@@ -57,7 +57,7 @@ export function createAgentApp(
       path: invokePath,
       entrypoint,
       kind: 'invoke',
-      payments: runtime.payments,
+      payments: runtime.payments?.config,
     });
 
     app.post(
@@ -70,7 +70,7 @@ export function createAgentApp(
       path: streamPath,
       entrypoint,
       kind: 'stream',
-      payments: runtime.payments,
+      payments: runtime.payments?.config,
     });
 
     app.post(
@@ -100,9 +100,9 @@ export function createAgentApp(
   }
 
   const addEntrypoint = (def: EntrypointDef) => {
-    runtime.addEntrypoint(def);
+    runtime.entrypoints.add(def);
     const entrypoint = runtime
-      .snapshotEntrypoints()
+      .entrypoints.snapshot()
       .find(item => item.key === def.key);
     if (!entrypoint) {
       throw new Error(`Failed to register entrypoint "${def.key}"`);
@@ -110,7 +110,7 @@ export function createAgentApp(
     registerEntrypointRoutes(entrypoint);
   };
 
-  for (const entrypoint of runtime.snapshotEntrypoints()) {
+  for (const entrypoint of runtime.entrypoints.snapshot()) {
     registerEntrypointRoutes(entrypoint);
   }
 

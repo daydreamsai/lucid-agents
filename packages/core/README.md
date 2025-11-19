@@ -133,7 +133,7 @@ const { runtime, handlers } = createTanStackRuntime({
   description: 'Echoes whatever you pass in',
 });
 
-runtime.addEntrypoint({
+runtime.entrypoints.add({
   key: 'echo',
   description: 'Echo a message',
   input: z.object({ text: z.string() }),

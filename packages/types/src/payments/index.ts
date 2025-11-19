@@ -41,3 +41,17 @@ export type RuntimePaymentRequirement =
   | (Extract<PaymentRequirement, { required: true }> & {
       response: Response;
     });
+
+/**
+ * Payments runtime type.
+ * Returned by AgentRuntime.payments when payments are configured.
+ */
+export type PaymentsRuntime = {
+  readonly config: PaymentsConfig;
+  readonly isActive: boolean;
+  requirements: (
+    entrypoint: import('../core').EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ) => RuntimePaymentRequirement;
+  activate: (entrypoint: import('../core').EntrypointDef) => void;
+};

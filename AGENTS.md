@@ -97,6 +97,186 @@ The framework supports payment receiving on multiple blockchain networks:
 - Payment receiving: Any supported network (EVM or Solana)
 - These are independent: register identity on Base, receive payments on Solana
 
+## Code Structure Principles
+
+These principles guide how we organize and structure code across the monorepo. Follow them when writing new code or refactoring existing code.
+
+### 1. Single Source of Truth
+
+**One type definition per concept.** Avoid duplicate types like `PaymentsRuntimeInternal` vs `PaymentsRuntime`. If you need variations, use type composition or generics, not separate type definitions.
+
+**Bad:**
+
+```typescript
+// Internal type
+type PaymentsRuntimeInternal = { config: PaymentsConfig | undefined; activate: ... };
+// Public type
+type PaymentsRuntime = { config: PaymentsConfig; requirements: ... };
+```
+
+**Good:**
+
+```typescript
+// One type definition
+type PaymentsRuntime = {
+  config: PaymentsConfig;
+  isActive: boolean;
+  requirements: ...;
+  activate: ...;
+};
+```
+
+### 2. Encapsulation at the Right Level
+
+**Domain complexity belongs in the owning package.** The payments package should handle all payments-related complexity. The core runtime should use it directly without transformation layers.
+
+**Bad:**
+
+```typescript
+// In core runtime - wrapping payments runtime
+const paymentsRuntime = payments.config ? {
+  get config() { return payments.config!; },
+  get isActive() { return payments.isActive; },
+  requirements(...) { return evaluatePaymentRequirement(...); }
+} : undefined;
+```
+
+**Good:**
+
+```typescript
+// In payments package - returns complete runtime
+export function createPaymentsRuntime(...): PaymentsRuntime | undefined {
+  return {
+    config,
+    isActive,
+    requirements(...) { ... },
+    activate(...) { ... }
+  };
+}
+
+// In core runtime - use directly
+const payments = createPaymentsRuntime(...);
+return { payments };
+```
+
+### 3. Direct Exposure
+
+**Expose runtimes directly without unnecessary wrappers.** If the type matches what's needed, pass it through. Don't create intermediate objects or getters unless there's a clear need.
+
+**Bad:**
+
+```typescript
+return {
+  get payments() {
+    return payments.config ? { ...wrappedObject } : undefined;
+  },
+};
+```
+
+**Good:**
+
+```typescript
+return {
+  wallets,
+  payments,
+};
+```
+
+### 4. Consistency
+
+**Similar concepts should follow the same pattern.** If `wallets` is exposed directly, `payments` should be too. Consistency reduces cognitive load and makes the codebase easier to understand.
+
+**Example:**
+
+```typescript
+// Both follow the same pattern
+const wallets = createWalletsRuntime(config);
+const payments = createPaymentsRuntime(opts?.payments, config);
+
+return {
+  wallets, // Direct exposure
+  payments, // Direct exposure
+};
+```
+
+### 5. Public API Clarity
+
+**If something needs to be used by consumers, include it in the public type.** Don't hide methods or use type casts. The public API should be complete and type-safe.
+
+**Bad:**
+
+```typescript
+// Internal method not in public type
+payments.activate(def); // Type error or requires cast
+```
+
+**Good:**
+
+```typescript
+// Public type includes all needed methods
+type PaymentsRuntime = {
+  config: PaymentsConfig;
+  isActive: boolean;
+  requirements: ...;
+  activate: (entrypoint: EntrypointDef) => void; // Public method
+};
+```
+
+### 6. Simplicity Over Indirection
+
+**Avoid unnecessary getters, wrappers, and intermediate objects.** Prefer straightforward code. Add complexity only when there's a clear benefit.
+
+**Bad:**
+
+```typescript
+// Unnecessary wrapper
+const paymentsRuntime = {
+  get config() { return payments.config!; },
+  get isActive() { return payments.isActive; },
+  requirements(...) { return evaluate(...); }
+};
+```
+
+**Good:**
+
+```typescript
+// Direct use
+payments.requirements(...);
+```
+
+### 7. Domain Ownership
+
+**Each package should own its complexity.** The payments package creates and returns a complete `PaymentsRuntime` with all its methods. Consumers use it as-is without transformation.
+
+**Principle:** Each package should return what consumers need, and consumers should use it directly without transformation layers.
+
+### 8. No Premature Abstraction
+
+**Avoid layers like `sync()`, `resolvedConfig` vs `activeConfig`, etc.** Keep it simple until you actually need the complexity. YAGNI (You Aren't Gonna Need It) applies.
+
+**Bad:**
+
+```typescript
+// Multiple config states
+type PaymentsRuntime = {
+  config: PaymentsConfig | undefined;
+  resolvedConfig: PaymentsConfig | undefined;
+  activeConfig: PaymentsConfig | undefined;
+  sync: (agent: AgentCore) => void;
+};
+```
+
+**Good:**
+
+```typescript
+// Single config state
+type PaymentsRuntime = {
+  config: PaymentsConfig;
+  isActive: boolean;
+  activate: (entrypoint: EntrypointDef) => void;
+};
+```
+
 ## Monorepo Structure
 
 ```
@@ -550,6 +730,7 @@ bun run release  # version + publish
 ### General
 
 - **No emojis** - Do not use emojis in code, comments, or commit messages unless explicitly requested by the user
+- **Re-exports are banned** - Do not re-export types or values from other packages. Define types in the appropriate shared types package (`@lucid-agents/types`) or in the package where they are used. Re-exports create unnecessary coupling and make it unclear where types are actually defined.
 
 ### TypeScript
 

@@ -2,10 +2,7 @@ import type { AgentHttpRuntime } from '@lucid-agents/core';
 import { toJsonSchemaOrUndefined } from '@lucid-agents/core';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
-import {
-  resolvePrice,
-  validatePaymentsConfig,
-} from '@lucid-agents/payments';
+import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
 import type {
   FacilitatorConfig,
   PaywallConfig,
@@ -17,7 +14,10 @@ import {
   type TanStackRequestMiddleware,
 } from '@lucid-agents/x402-tanstack-start';
 
-type RuntimeLike = Pick<AgentHttpRuntime, 'snapshotEntrypoints' | 'payments'>;
+type RuntimeLike = {
+  payments?: { config: PaymentsConfig };
+  entrypoints: { snapshot: () => EntrypointDef[] };
+};
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
@@ -128,13 +128,13 @@ export function createTanStackPaywall({
   paywall,
   middlewareFactory = paymentMiddleware,
 }: CreateTanStackPaywallOptions): TanStackPaywall {
-  const activePayments = payments ?? runtime.payments;
+  const activePayments = payments ?? runtime.payments?.config;
   if (!activePayments) {
     return {};
   }
 
   const normalizedBasePath = normalizeBasePath(basePath);
-  const entrypoints = runtime.snapshotEntrypoints();
+  const entrypoints = runtime.entrypoints.snapshot();
   const resolvedFacilitator: FacilitatorConfig =
     facilitator ??
     ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);

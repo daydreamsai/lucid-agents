@@ -30,8 +30,10 @@ describe("createTanStackPaywall", () => {
 
   function createRuntime(paymentsConfig?: PaymentsConfig) {
     return {
-      payments: paymentsConfig,
-      snapshotEntrypoints: () => entrypoints,
+      payments: paymentsConfig ? { config: paymentsConfig } : undefined,
+      entrypoints: {
+        snapshot: () => entrypoints,
+      },
     } as const;
   }
 
