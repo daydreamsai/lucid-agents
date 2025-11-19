@@ -36,9 +36,9 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
       preSetup: ``,
       appCreation: `const { app, runtime, addEntrypoint } = createAgentApp(
   {
-    name: process.env.AGENT_NAME || "Agent",
-    version: process.env.AGENT_VERSION || "1.0.0",
-    description: process.env.AGENT_DESCRIPTION || "An AI agent",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   typeof appOptions !== 'undefined' ? appOptions : {}
 );`,
@@ -70,9 +70,9 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
       preSetup: ``,
       appCreation: `const { app, runtime, addEntrypoint } = createAgentApp(
   {
-    name: process.env.AGENT_NAME || "Agent",
-    version: process.env.AGENT_VERSION || "1.0.0",
-    description: process.env.AGENT_DESCRIPTION || "An AI agent",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   typeof appOptions !== 'undefined' ? appOptions : {}
 );`,
@@ -104,9 +104,9 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
       preSetup: ``,
       appCreation: `const tanstack = createTanStackRuntime(
   {
-    name: process.env.AGENT_NAME || "Agent",
-    version: process.env.AGENT_VERSION || "1.0.0",
-    description: process.env.AGENT_DESCRIPTION || "An AI agent",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   typeof appOptions !== 'undefined' ? appOptions : {}
 );
@@ -142,9 +142,9 @@ export { agent, handlers, runtime };`,
       preSetup: ``,
       appCreation: `const tanstack = createTanStackRuntime(
   {
-    name: process.env.AGENT_NAME || "Agent",
-    version: process.env.AGENT_VERSION || "1.0.0",
-    description: process.env.AGENT_DESCRIPTION || "An AI agent",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   typeof appOptions !== 'undefined' ? appOptions : {}
 );
@@ -180,9 +180,9 @@ export { agent, handlers, runtime };`,
       preSetup: ``,
       appCreation: `const runtime = createAgentHttpRuntime(
   {
-    name: process.env.AGENT_NAME || "Agent",
-    version: process.env.AGENT_VERSION || "1.0.0",
-    description: process.env.AGENT_DESCRIPTION || "An AI agent",
+    name: process.env.AGENT_NAME,
+    version: process.env.AGENT_VERSION,
+    description: process.env.AGENT_DESCRIPTION,
   },
   typeof appOptions !== 'undefined' ? appOptions : {}
 );
