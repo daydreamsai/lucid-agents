@@ -12,24 +12,7 @@
 
 # Agent-to-Agent (A2A) Client Support and Agent Card Refactoring
 
-Implements bidirectional A2A communication, refactors Agent Card generation to immutable composition pattern, separates AP2 into its own extension package, and adds practical trading agent templates.
-
-## Facilitating Agent Example
-
-**New Example: `packages/a2a/examples/full-integration.ts`** demonstrates the **facilitating agent pattern**, a core A2A use case where an agent acts as both client and server.
-
-The example shows a three-agent composition:
-- **Agent 1 (Worker)**: Does the actual work (echo, process, stream)
-- **Agent 2 (Facilitator)**: Acts as both server and client
-  - **Server**: Receives calls from Agent 3
-  - **Client**: Calls Agent 1 to perform work, then returns results
-- **Agent 3 (Client)**: Initiates requests
-
-**Flow:** Agent 3 → Agent 2 → Agent 1 → Agent 2 → Agent 3
-
-This demonstrates that agents can orchestrate other agents, enabling complex agent compositions and supply chains. The facilitating agent pattern is essential for building agent ecosystems where agents work together to accomplish tasks.
-
-Run the example: `bun run examples/full-integration.ts` (from `packages/a2a`)
+Implements bidirectional A2A communication, refactors Agent Card generation to immutable composition pattern, separates AP2 into its own extension package, and demonstrates the 'facilitating agent pattern' where agents act simultaneously as clients and servers to facilitate agentic supply chain actions, e.g a trading signal agent buys data from a trading data agent, serves signals to a trading portfolio manager agent.
 
 ## New Features
 
@@ -78,6 +61,23 @@ Run the example: `bun run examples/full-integration.ts` (from `packages/a2a`)
 - **Standardized `tsconfig.build.json`** - All packages now use build-specific TypeScript configuration
 - **Fixed Build Order** - Added `@lucid-agents/a2a` and `@lucid-agents/ap2` to build sequence
 - **External Dependencies** - All workspace dependencies properly marked as external in tsup configs
+
+## Facilitating Agent Example
+
+**New Example: `packages/a2a/examples/full-integration.ts`** demonstrates the **facilitating agent pattern**, a core A2A use case where an agent acts as both client and server.
+
+The example shows a three-agent composition:
+- **Agent 1 (Worker)**: Does the actual work (echo, process, stream)
+- **Agent 2 (Facilitator)**: Acts as both server and client
+  - **Server**: Receives calls from Agent 3
+  - **Client**: Calls Agent 1 to perform work, then returns results
+- **Agent 3 (Client)**: Initiates requests
+
+**Flow:** Agent 3 → Agent 2 → Agent 1 → Agent 2 → Agent 3
+
+This demonstrates that agents can orchestrate other agents, enabling complex agent compositions and supply chains. The facilitating agent pattern is essential for building agent ecosystems where agents work together to accomplish tasks.
+
+Run the example: `bun run examples/full-integration.ts` (from `packages/a2a`)
 
 ## Breaking Changes
 
