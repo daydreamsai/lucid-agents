@@ -1,5 +1,12 @@
 # @lucid-agents/wallet
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [ae09320]
+  - @lucid-agents/types@1.3.0
+
 ## 0.2.0
 
 ### Minor Changes
