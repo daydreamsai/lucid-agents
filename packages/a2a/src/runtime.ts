@@ -5,7 +5,15 @@ import type {
 } from '@lucid-agents/types/a2a';
 
 import { buildAgentCard, fetchAgentCard } from './card';
-import { invokeAgent, streamAgent, fetchAndInvoke } from './client';
+import {
+  invokeAgent,
+  streamAgent,
+  fetchAndInvoke,
+  sendMessage,
+  getTask,
+  subscribeTask,
+  fetchAndSendMessage,
+} from './client';
 
 /**
  * Creates A2A runtime from an AgentRuntime.
@@ -33,6 +41,10 @@ export function createA2ARuntime(
       invoke: invokeAgent,
       stream: streamAgent,
       fetchAndInvoke,
+      sendMessage,
+      getTask,
+      subscribeTask,
+      fetchAndSendMessage,
     },
   };
 

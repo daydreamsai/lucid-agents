@@ -22,7 +22,11 @@
 import { z } from 'zod';
 import { createAgentApp } from '@lucid-agents/hono';
 import { createAgentRuntime } from '@lucid-agents/core';
-import { createA2ARuntime, fetchAndInvoke } from '../src/index';
+import {
+  createA2ARuntime,
+  fetchAndInvoke,
+  waitForTask,
+} from '../src/index';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
 
 // Helper to start a simple HTTP server
@@ -63,11 +67,16 @@ async function main() {
     app: app1,
     addEntrypoint: addEntrypoint1,
     runtime: runtime1,
-  } = createAgentApp({
-    name: 'worker-agent',
-    version: '1.0.0',
-    description: 'Worker agent that processes tasks',
-  });
+  } = createAgentApp(
+    {
+      name: 'worker-agent',
+      version: '1.0.0',
+      description: 'Worker agent that processes tasks',
+    },
+    {
+      payments: false, // No payments for A2A example
+    }
+  );
 
   // Add echo entrypoint
   addEntrypoint1({
@@ -147,11 +156,16 @@ async function main() {
     app: app2,
     addEntrypoint: addEntrypoint2,
     runtime: runtime2,
-  } = createAgentApp({
-    name: 'facilitator-agent',
-    version: '1.0.0',
-    description: 'Facilitator agent that proxies requests to worker agent',
-  });
+  } = createAgentApp(
+    {
+      name: 'facilitator-agent',
+      version: '1.0.0',
+      description: 'Facilitator agent that proxies requests to worker agent',
+    },
+    {
+      payments: false, // No payments for A2A example
+    }
+  );
 
   // Create A2A runtime for Agent 2 to call Agent 1
   const a2a2ForAgent1 = createA2ARuntime(runtime2);
@@ -166,18 +180,36 @@ async function main() {
       console.log(
         `[Agent 2] Facilitator echo handler called with: "${ctx.input.text}"`
       );
-      // Agent 2 calls Agent 1 (we'll fetch Agent 1's card first)
       const agent1Url = 'http://localhost:8787';
       const agent1Card = await a2a2ForAgent1.fetchCard(agent1Url);
-      const result = await a2a2ForAgent1.client.invoke(agent1Card, 'echo', {
-        text: ctx.input.text,
-      });
+
+      const { taskId } = await a2a2ForAgent1.client.sendMessage(
+        agent1Card,
+        'echo',
+        {
+          text: ctx.input.text,
+        }
+      );
+      console.log(`[Agent 2] Created task ${taskId} for Agent 1`);
+
+      const task = await waitForTask(
+        a2a2ForAgent1.client,
+        agent1Card,
+        taskId
+      );
+
+      if (task.status === 'failed') {
+        throw new Error(
+          `Task failed: ${task.error?.message || 'Unknown error'}`
+        );
+      }
+
       console.log(
-        `[Agent 2] Got result from Agent 1: ${JSON.stringify(result.output)}`
+        `[Agent 2] Got result from Agent 1: ${JSON.stringify(task.result?.output)}`
       );
       return {
-        output: result.output,
-        usage: result.usage,
+        output: task.result?.output,
+        usage: task.result?.usage,
       };
     },
   });
@@ -193,15 +225,34 @@ async function main() {
       );
       const agent1Url = 'http://localhost:8787';
       const agent1Card = await a2a2ForAgent1.fetchCard(agent1Url);
-      const result = await a2a2ForAgent1.client.invoke(agent1Card, 'process', {
-        data: ctx.input.data,
-      });
+
+      const { taskId } = await a2a2ForAgent1.client.sendMessage(
+        agent1Card,
+        'process',
+        {
+          data: ctx.input.data,
+        }
+      );
+      console.log(`[Agent 2] Created task ${taskId} for Agent 1`);
+
+      const task = await waitForTask(
+        a2a2ForAgent1.client,
+        agent1Card,
+        taskId
+      );
+
+      if (task.status === 'failed') {
+        throw new Error(
+          `Task failed: ${task.error?.message || 'Unknown error'}`
+        );
+      }
+
       console.log(
-        `[Agent 2] Got result from Agent 1: ${JSON.stringify(result.output)}`
+        `[Agent 2] Got result from Agent 1: ${JSON.stringify(task.result?.output)}`
       );
       return {
-        output: result.output,
-        usage: result.usage,
+        output: task.result?.output,
+        usage: task.result?.usage,
       };
     },
   });
@@ -238,16 +289,44 @@ async function main() {
     const card1 = a2a1.buildCard(server1.url);
     const card2 = a2a2ForAgent1.buildCard(server2.url);
 
+    // Build full manifest from runtime (includes AP2 if payments enabled)
+    const manifest1 = runtime1.manifest.build(server1.url);
+    const manifest2 = runtime2.manifest.build(server2.url);
+
     console.log('Agent 1 (Worker) Card:');
-    console.log(`  Name: ${card1.name}`);
-    console.log(`  URL: ${card1.url}`);
-    console.log(`  Skills: ${card1.skills.map(s => s.id).join(', ')}`);
+    console.log(`  Name: ${manifest1.name}`);
+    console.log(`  Description: ${manifest1.description || 'N/A'}`);
+    console.log(`  Version: ${manifest1.version}`);
+    console.log(`  URL: ${manifest1.url}`);
+    console.log(`  Skills: ${manifest1.skills.map(s => s.id).join(', ')}`);
+    // Show AP2 extensions if present
+    if (manifest1.capabilities?.extensions?.length) {
+      const ap2Ext = manifest1.capabilities.extensions.find(
+        ext => 'uri' in ext && ext.uri?.includes('ap2')
+      );
+      if (ap2Ext && 'params' in ap2Ext) {
+        const roles = (ap2Ext.params as { roles?: string[] })?.roles || [];
+        console.log(`  AP2 Roles: ${roles.join(', ')}`);
+      }
+    }
     console.log('');
 
     console.log('Agent 2 (Facilitator) Card:');
-    console.log(`  Name: ${card2.name}`);
-    console.log(`  URL: ${card2.url}`);
-    console.log(`  Skills: ${card2.skills.map(s => s.id).join(', ')}`);
+    console.log(`  Name: ${manifest2.name}`);
+    console.log(`  Description: ${manifest2.description || 'N/A'}`);
+    console.log(`  Version: ${manifest2.version}`);
+    console.log(`  URL: ${manifest2.url}`);
+    console.log(`  Skills: ${manifest2.skills.map(s => s.id).join(', ')}`);
+    // Show AP2 extensions if present
+    if (manifest2.capabilities?.extensions?.length) {
+      const ap2Ext = manifest2.capabilities.extensions.find(
+        ext => 'uri' in ext && ext.uri?.includes('ap2')
+      );
+      if (ap2Ext && 'params' in ap2Ext) {
+        const roles = (ap2Ext.params as { roles?: string[] })?.roles || [];
+        console.log(`  AP2 Roles: ${roles.join(', ')}`);
+      }
+    }
     console.log('');
 
     // ============================================================================
@@ -256,11 +335,25 @@ async function main() {
     console.log('STEP 5: Fetching Agent Cards via HTTP');
     console.log('-'.repeat(80));
 
-    // Agent 3 fetches Agent 2's card (the facilitator)
+    // Agent 3 fetches Agent 2's card (the facilitator) - demonstrates agent meta discovery
     const fetchedCard2 = await a2a3.fetchCard(server2.url);
     console.log(`Agent 3 fetched Agent 2 Card from ${server2.url}:`);
-    console.log(`  Name: ${fetchedCard2.name}`);
-    console.log(`  Skills: ${fetchedCard2.skills.map(s => s.id).join(', ')}`);
+    console.log('  Agent Meta (discovered via A2A):');
+    console.log(`    Name: ${fetchedCard2.name}`);
+    console.log(`    Description: ${fetchedCard2.description || 'N/A'}`);
+    console.log(`    Version: ${fetchedCard2.version}`);
+    console.log(`    URL: ${fetchedCard2.url}`);
+    console.log(`    Skills: ${fetchedCard2.skills.map(s => s.id).join(', ')}`);
+    // Show AP2 extensions if present (from fetched card)
+    if (fetchedCard2.capabilities?.extensions?.length) {
+      const ap2Ext = fetchedCard2.capabilities.extensions.find(
+        ext => 'uri' in ext && ext.uri?.includes('ap2')
+      );
+      if (ap2Ext && 'params' in ap2Ext) {
+        const roles = (ap2Ext.params as { roles?: string[] })?.roles || [];
+        console.log(`    AP2 Roles: ${roles.join(', ')}`);
+      }
+    }
     console.log('');
 
     // ============================================================================
@@ -275,35 +368,76 @@ async function main() {
     console.log('-'.repeat(80));
     console.log('');
 
-    // Agent 3 calls Agent 2's echo entrypoint
+    // Agent 3 calls Agent 2's echo entrypoint using task-based operations
     // Agent 2 receives it and calls Agent 1 internally, then returns result
     console.log('6.1: Agent 3 -> Agent 2 -> Agent 1 (echo)');
     console.log(
-      '  Flow: Agent 3 calls Agent 2, Agent 2 calls Agent 1, result flows back'
+      '  Flow: Agent 3 creates task on Agent 2, Agent 2 creates task on Agent 1, results flow back'
     );
-    const echoResult = await a2a3.client.invoke(fetchedCard2, 'echo', {
-      text: 'Hello from Agent 3 through Agent 2!',
-    });
+
+    // Create task on Agent 2 (returns immediately with taskId)
+    const echoTaskResponse = await a2a3.client.sendMessage(
+      fetchedCard2,
+      'echo',
+      {
+        text: 'Hello from Agent 3 through Agent 2!',
+      }
+    );
     console.log(
-      `  Final result at Agent 3: ${JSON.stringify(echoResult.output)}`
+      `  Task created: ${echoTaskResponse.taskId} (status: ${echoTaskResponse.status})`
     );
-    console.log(`  Usage: ${JSON.stringify(echoResult.usage)}`);
+
+    const echoTask = await waitForTask(
+      a2a3.client,
+      fetchedCard2,
+      echoTaskResponse.taskId
+    );
+
+    if (echoTask.status === 'failed') {
+      throw new Error(
+        `Task failed: ${echoTask.error?.message || 'Unknown error'}`
+      );
+    }
+
+    console.log(
+      `  Final result at Agent 3: ${JSON.stringify(echoTask.result?.output)}`
+    );
+    console.log(`  Usage: ${JSON.stringify(echoTask.result?.usage)}`);
     console.log('');
 
-    // Agent 3 calls Agent 2's process entrypoint
-    // Agent 2 receives it and calls Agent 1 internally, then returns result
     console.log('6.2: Agent 3 -> Agent 2 -> Agent 1 (process)');
     console.log(
-      '  Flow: Agent 3 calls Agent 2, Agent 2 calls Agent 1, result flows back'
+      '  Flow: Agent 3 creates task on Agent 2, Agent 2 creates task on Agent 1, results flow back'
     );
-    const processResult = await a2a3.client.invoke(fetchedCard2, 'process', {
-      data: [10, 20, 30],
-    });
-    console.log(
-      `  Final result at Agent 3: ${JSON.stringify(processResult.output)}`
+
+    const processTaskResponse = await a2a3.client.sendMessage(
+      fetchedCard2,
+      'process',
+      {
+        data: [10, 20, 30],
+      }
     );
     console.log(
-      `  Sum: ${(processResult.output as { result: number })?.result}`
+      `  Task created: ${processTaskResponse.taskId} (status: ${processTaskResponse.status})`
+    );
+
+    const processTask = await waitForTask(
+      a2a3.client,
+      fetchedCard2,
+      processTaskResponse.taskId
+    );
+
+    if (processTask.status === 'failed') {
+      throw new Error(
+        `Task failed: ${processTask.error?.message || 'Unknown error'}`
+      );
+    }
+
+    console.log(
+      `  Final result at Agent 3: ${JSON.stringify(processTask.result?.output)}`
+    );
+    console.log(
+      `  Sum: ${(processTask.result?.output as { result: number })?.result}`
     );
     console.log('');
 
@@ -324,8 +458,10 @@ async function main() {
     console.log('A2A Functionality Tested:');
     console.log('  ✓ Build Agent Card');
     console.log('  ✓ Fetch Agent Card');
-    console.log('  ✓ Invoke entrypoint through facilitator (synchronous)');
-    console.log('  ✓ Agent composition (agent calling agent calling agent)');
+    console.log('  ✓ Task-based operations (create task, poll status)');
+    console.log(
+      '  ✓ Agent composition via tasks (agent calling agent calling agent)'
+    );
     console.log('');
     console.log(
       'This demonstrates that agents can act as both clients and servers,'
