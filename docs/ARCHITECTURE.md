@@ -278,7 +278,7 @@ Adapters integrate the core runtime with specific web frameworks.
 **Provides:**
 
 - Interactive project wizard
-- Template system (blank, axllm, identity, axllm-flow, trading-*)
+- Template system (blank, axllm, identity, axllm-flow, trading-\*)
 - Adapter selection (hono, tanstack-ui, tanstack-headless, express)
 - Merge system (combines adapter + template)
 
@@ -360,41 +360,53 @@ Packages must build in dependency order:
 
 ```mermaid
 graph LR
-    A[1. x402-tanstack-start] --> B[2. agent-kit-identity]
-    A --> C[2. agent-kit-payments]
-    B --> D[3. agent-kit]
-    C --> D
-    D --> E[4. agent-kit-hono]
-    D --> F[4. agent-kit-tanstack]
-    E --> G[5. create-agent-kit]
+    A[1. types] --> B[2. identity]
+    A --> C[2. payments]
+    A --> D[2. wallet]
+    A --> E[2. a2a]
+    A --> F[2. ap2]
+    B --> G[3. core]
+    C --> G
+    D --> G
+    E --> G
     F --> G
+    G --> H[4. hono]
+    G --> I[4. tanstack]
+    G --> J[4. express]
+    H --> K[5. cli]
+    I --> K
+    J --> K
 
-    style A fill:#b39ddb
+    style A fill:#4fc3f7
     style B fill:#90caf9
     style C fill:#a5d6a7
-    style D fill:#ffcc80
-    style E fill:#ce93d8
-    style F fill:#ce93d8
-    style G fill:#ef9a9a
+    style D fill:#a5d6a7
+    style E fill:#a5d6a7
+    style F fill:#a5d6a7
+    style G fill:#ffb74d
+    style H fill:#ba68c8
+    style I fill:#ba68c8
+    style J fill:#ba68c8
+    style K fill:#e57373
 ```
 
-Note: agent-kit-payments is now a leaf package that can build before agent-kit, eliminating the previous circular dependency.
+Note: All extension packages (identity, payments, wallet, a2a, ap2) are independent and can build in parallel. Core depends on all extensions, and adapters depend on core.
 
 ## Package Responsibilities
 
-| Package              | Responsibility                                               |
-| -------------------- | ------------------------------------------------------------ |
-| `@lucid-agents/types` | Shared type definitions (zero dependencies)                  |
+| Package                  | Responsibility                                               |
+| ------------------------ | ------------------------------------------------------------ |
+| `@lucid-agents/types`    | Shared type definitions (zero dependencies)                  |
 | `@lucid-agents/identity` | ERC-8004 on-chain identity, registries, trust models         |
 | `@lucid-agents/payments` | x402 protocol, EntrypointDef, pricing, payment client/server |
-| `@lucid-agents/wallet` | Wallet connectors and helpers for agent operations           |
-| `@lucid-agents/a2a` | A2A protocol implementation, Agent Cards, task operations     |
-| `@lucid-agents/ap2` | AP2 extension for Agent Cards                                |
-| `@lucid-agents/core` | Core runtime, HTTP handlers, SSE, manifest, config, UI     |
-| `@lucid-agents/hono` | Hono framework integration, middleware wiring                |
+| `@lucid-agents/wallet`   | Wallet connectors and helpers for agent operations           |
+| `@lucid-agents/a2a`      | A2A protocol implementation, Agent Cards, task operations    |
+| `@lucid-agents/ap2`      | AP2 extension for Agent Cards                                |
+| `@lucid-agents/core`     | Core runtime, HTTP handlers, SSE, manifest, config, UI       |
+| `@lucid-agents/hono`     | Hono framework integration, middleware wiring                |
 | `@lucid-agents/tanstack` | TanStack framework integration, middleware wiring            |
-| `@lucid-agents/express` | Express framework integration, middleware wiring             |
-| `@lucid-agents/cli` | CLI tool, templates, project scaffolding                     |
+| `@lucid-agents/express`  | Express framework integration, middleware wiring             |
+| `@lucid-agents/cli`      | CLI tool, templates, project scaffolding                     |
 
 ## Extension Independence
 

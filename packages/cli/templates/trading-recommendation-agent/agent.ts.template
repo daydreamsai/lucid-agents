@@ -85,7 +85,7 @@ addEntrypoint({
       );
 
       // Wait for task to complete by polling
-      let task: Task;
+      let task: Task | undefined;
       const maxWaitMs = 30000;
       const startTime = Date.now();
 
@@ -107,17 +107,17 @@ addEntrypoint({
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      if (!task! || task!.status === 'failed') {
+      if (!task || task.status === 'failed') {
         throw new Error(
-          `Task failed: ${task!.error?.message || 'Unknown error'}`
+          `Task failed: ${task?.error?.message || 'Unknown error'}`
         );
       }
 
-      if (task!.status !== 'completed' || !task!.result) {
+      if (task.status !== 'completed' || !task.result) {
         throw new Error('Task did not complete in time');
       }
 
-      marketData = task!.result.output;
+      marketData = task.result.output;
     } catch (error) {
       throw new Error(`Failed to fetch market data: ${(error as Error).message}`);
     }

@@ -265,7 +265,7 @@ addEntrypoint({
     const agent1Card = await a2a.fetchCard('http://agent1:8787');
     const { taskId } = await a2a.client.sendMessage(agent1Card, 'process', ctx.input);
     const task = await waitForTask(a2a.client, agent1Card, taskId);
-    
+
     // Return Agent 1's result to Agent 3
     return { output: task.result?.output, usage: task.result?.usage };
   },

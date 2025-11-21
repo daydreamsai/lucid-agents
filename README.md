@@ -495,7 +495,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 - **ERC-8004 Specification**: [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004) - On-chain agent identity standard
 - **x402 Protocol**: [x402 GitHub](https://github.com/paywithx402) - HTTP-native payment protocol
-- **A2A Protocol**: [Agent-to-Agent Communication](https://agents.md/) - Agent discovery and communication
+- **A2A Protocol**: [Agent-to-Agent Communication](https://a2a-protocol.org/) - Agent discovery and communication protocol
 
 ### Technologies
 
