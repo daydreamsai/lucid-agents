@@ -16,6 +16,42 @@ Implements bidirectional A2A communication, refactors Agent Card generation to i
 
 ## New Features
 
+### A2A Protocol Task-Based Operations
+
+Implements A2A Protocol task-based operations alongside existing direct invocation. Tasks enable long-running operations, status tracking, and multi-turn conversations.
+
+**New HTTP Endpoints:**
+- `POST /tasks` - Create task (returns `{ taskId, status: 'running' }` immediately)
+- `GET /tasks/{taskId}` - Get task status and result
+- `GET /tasks/{taskId}/subscribe` - SSE stream for task updates
+
+**New A2A Client Methods:**
+- `sendMessage(card, skillId, input)` - Creates task and returns taskId immediately
+- `getTask(card, taskId)` - Retrieves task status and result
+- `subscribeTask(card, taskId, emit)` - Subscribes to task updates via SSE
+- `fetchAndSendMessage(baseUrl, skillId, input)` - Convenience: fetch card + send message
+- `waitForTask(client, card, taskId)` - Utility to poll for task completion
+
+**Task Lifecycle:**
+1. Client creates task via `POST /tasks` → receives `{ taskId, status: 'running' }`
+2. Task executes asynchronously (handler runs in background)
+3. Task status updates automatically: `running` → `completed`/`failed`
+4. Client polls `GET /tasks/{taskId}` or subscribes via SSE for updates
+5. When complete, task contains `result: { output, usage, model }` or `error: { code, message }`
+
+**Backward Compatible:**
+- Direct invocation (`/entrypoints/{key}/invoke`) remains fully supported
+- Existing code using `client.invoke()` continues to work
+- Both approaches can be used side-by-side
+
+**Task Storage:**
+- In-memory `Map<taskId, Task>` in core runtime
+- Tasks persist for agent lifetime (no automatic expiration)
+
+**Adapters:**
+- Hono: Task routes registered automatically
+- TanStack (headless & ui): Task route files created
+
 ### A2A Client Support (`@lucid-agents/a2a`)
 
 - **New `@lucid-agents/a2a` package** - Complete A2A protocol implementation

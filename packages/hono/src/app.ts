@@ -83,6 +83,15 @@ export function createAgentApp(
 
   app.get('/favicon.svg', c => runtime.handlers.favicon(c.req.raw));
 
+  // Task routes (A2A Protocol task-based operations)
+  app.post('/tasks', c => runtime.handlers.tasks(c.req.raw));
+  app.get('/tasks/:taskId', c =>
+    runtime.handlers.getTask(c.req.raw, { taskId: c.req.param('taskId') })
+  );
+  app.get('/tasks/:taskId/subscribe', c =>
+    runtime.handlers.subscribeTask(c.req.raw, { taskId: c.req.param('taskId') })
+  );
+
   if (runtime.handlers.landing && opts?.landingPage !== false) {
     app.get('/', c => runtime.handlers.landing!(c.req.raw));
   } else {
@@ -91,8 +100,8 @@ export function createAgentApp(
 
   const addEntrypoint = (def: EntrypointDef) => {
     runtime.entrypoints.add(def);
-    const entrypoint = runtime
-      .entrypoints.snapshot()
+    const entrypoint = runtime.entrypoints
+      .snapshot()
       .find((item: EntrypointDef) => item.key === def.key);
     if (!entrypoint) {
       throw new Error(`Failed to register entrypoint "${def.key}"`);

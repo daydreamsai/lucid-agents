@@ -1,6 +1,10 @@
 {{ADAPTER_IMPORTS}}
 
-import { fetchAndInvoke } from '@lucid-agents/a2a';
+import {
+  fetchAndSendMessage,
+  type Task,
+  type TaskStatus,
+} from '@lucid-agents/a2a';
 import { createRuntimePaymentContext } from '@lucid-agents/payments';
 
 {{ADAPTER_PRE_SETUP}}
@@ -59,7 +63,7 @@ addEntrypoint({
       }
     }
 
-    // Buy market data from data agent
+    // Buy market data from data agent using task-based operations
     let marketData: any;
     let dataPrice: string | undefined;
 
@@ -72,15 +76,48 @@ addEntrypoint({
       const entrypoint = dataCard?.entrypoints?.getMarketData;
       dataPrice = entrypoint?.pricing?.invoke;
 
-      // Call data agent with payment-enabled fetch
-      const result = await fetchAndInvoke(
+      // Create task on data agent (returns immediately with taskId)
+      const taskResponse = await fetchAndSendMessage(
         DATA_AGENT_URL,
         'getMarketData',
         { symbol, timeframe: '1h' },
         fetchWithPayment
       );
 
-      marketData = result.output;
+      // Wait for task to complete by polling
+      let task: Task;
+      const maxWaitMs = 30000;
+      const startTime = Date.now();
+
+      while (Date.now() - startTime < maxWaitMs) {
+        if (!dataCard || !runtime.a2a) {
+          throw new Error('A2A runtime not available');
+        }
+        task = await runtime.a2a.client.getTask(
+          dataCard,
+          taskResponse.taskId,
+          fetchWithPayment
+        );
+
+        if (task.status === 'completed' || task.status === 'failed') {
+          break;
+        }
+
+        // Poll every 100ms
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (!task! || task!.status === 'failed') {
+        throw new Error(
+          `Task failed: ${task!.error?.message || 'Unknown error'}`
+        );
+      }
+
+      if (task!.status !== 'completed' || !task!.result) {
+        throw new Error('Task did not complete in time');
+      }
+
+      marketData = task!.result.output;
     } catch (error) {
       throw new Error(`Failed to fetch market data: ${(error as Error).message}`);
     }
