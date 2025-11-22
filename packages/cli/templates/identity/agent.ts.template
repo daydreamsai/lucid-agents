@@ -1,65 +1,75 @@
 {{ADAPTER_IMPORTS}}
+import { http } from "@lucid-agents/http";
+import { wallets } from "@lucid-agents/wallet";
 import { walletsFromEnv } from "@lucid-agents/wallet";
+import { identity } from "@lucid-agents/identity";
 import { createAgentIdentity, getTrustConfig } from "@lucid-agents/identity";
 
 {{ADAPTER_PRE_SETUP}}
-// Configure wallets for identity operations
-const appOptions = {
-  config: {
-    wallets: walletsFromEnv(),
-  },
-};
+// Add extensions for HTTP, wallets, and identity
+appBuilder.use(http());
+appBuilder.use(wallets({ config: { wallets: walletsFromEnv() } }));
+appBuilder.use(identity({
+  domain: process.env.AGENT_DOMAIN,
+  autoRegister: process.env.REGISTER_IDENTITY === "true",
+  rpcUrl: process.env.RPC_URL,
+  chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID) : undefined,
+}));
 
 {{ADAPTER_POST_SETUP}}
 // Identity feature setup
-// Note: Requires runtime.wallets.agent to be configured
-// All other options (domain, autoRegister, rpcUrl, chainId) are read from process.env if not provided
-const identity = await createAgentIdentity({
+// Note: The identity extension has already been configured above
+// This section creates the on-chain identity using the runtime's wallets
+const identityResult = await createAgentIdentity({
   runtime,
+  domain: process.env.AGENT_DOMAIN,
+  autoRegister: process.env.REGISTER_IDENTITY === "true",
+  rpcUrl: process.env.RPC_URL,
+  chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID) : undefined,
 });
 
-if (identity.didRegister) {
+if (identityResult.didRegister) {
   console.log("Registered agent on-chain!");
-  console.log("Transaction:", identity.transactionHash);
+  console.log("Transaction:", identityResult.transactionHash);
 
   // IMPORTANT: After registration, you MUST host the ERC-8004 metadata at the tokenURI
   // The tokenURI points to: https://{domain}/.well-known/agent-metadata.json
   // This metadata is what gets stored on-chain and allows others to verify your agent's identity
   const { generateAgentMetadata } = await import("@lucid-agents/identity");
-  const metadata = generateAgentMetadata(identity, {
+  const metadata = generateAgentMetadata(identityResult, {
     name: process.env.AGENT_NAME,
     description: process.env.AGENT_DESCRIPTION,
   });
 
   console.log("\n⚠️  IMPORTANT: Host this metadata at:");
-  console.log(`   https://${identity.domain}/.well-known/agent-metadata.json\n`);
+  console.log(`   https://${identityResult.domain}/.well-known/agent-metadata.json\n`);
   console.log(JSON.stringify(metadata, null, 2));
   console.log("\nWhy? The ERC-8004 registry stores this URL as the tokenURI.");
   console.log("Anyone querying the registry will fetch this metadata to verify your agent's identity.");
   console.log("Without hosting this file, your agent's on-chain identity cannot be verified.\n");
-} else if (identity.trust) {
+} else if (identityResult.trust) {
   console.log("Found existing registration");
-  console.log("Agent ID:", identity.record?.agentId);
+  console.log("Agent ID:", identityResult.record?.agentId);
 
   // Even if already registered, verify metadata is hosted
-  if (identity.record?.tokenURI) {
-    console.log("Token URI:", identity.record.tokenURI);
+  if (identityResult.record?.tokenURI) {
+    console.log("Token URI:", identityResult.record.tokenURI);
     console.log("Ensure metadata is hosted at the tokenURI location.");
   }
 }
 
-const trustConfig = getTrustConfig(identity);
+const trustConfig = getTrustConfig(identityResult);
 
 // Example: Query validation summary (read operation)
 // This demonstrates that the validation client is configured with the agent wallet
-if (identity.clients?.validation && identity.record?.agentId) {
+if (identityResult.clients?.validation && identityResult.record?.agentId) {
   console.log(
     "Fetching validation summary for agent ID:",
-    identity.record.agentId.toString()
+    identityResult.record.agentId.toString()
   );
   try {
-    const summary = await identity.clients.validation.getSummary(
-      identity.record.agentId
+    const summary = await identityResult.clients.validation.getSummary(
+      identityResult.record.agentId
     );
     console.log("Validation summary:", {
       count: summary.count.toString(),
@@ -70,8 +80,8 @@ if (identity.clients?.validation && identity.record?.agentId) {
   }
 } else {
   console.log("Validation client or agent ID not available:", {
-    hasValidationClient: !!identity.clients?.validation,
-    hasAgentId: !!identity.record?.agentId,
+    hasValidationClient: !!identityResult.clients?.validation,
+    hasAgentId: !!identityResult.record?.agentId,
   });
 }
 
@@ -87,9 +97,9 @@ if (identity.clients?.validation && identity.record?.agentId) {
 //
 // Note: This example uses a placeholder validator address for demonstration.
 // In production, replace this with the actual validator contract address.
-if (identity.clients?.validation && identity.record?.agentId) {
+if (identityResult.clients?.validation && identityResult.record?.agentId) {
   try {
-    const agentId = identity.record.agentId;
+    const agentId = identityResult.record.agentId;
 
     // Placeholder validator address (replace with actual validator contract address in production)
     const validatorAddress =
@@ -107,7 +117,7 @@ if (identity.clients?.validation && identity.record?.agentId) {
     console.log("Request URI:", requestUri);
 
     // requestHash will be computed automatically from requestUri
-    const txHash = await identity.clients.validation.createRequest({
+    const txHash = await identityResult.clients.validation.createRequest({
       validatorAddress,
       agentId,
       requestUri,
@@ -130,7 +140,7 @@ if (identity.clients?.validation && identity.record?.agentId) {
 }
 
 // Export identity feature clients
-export const identityClient = identity.clients?.identity;
-export const reputationClient = identity.clients?.reputation;
-export const validationClient = identity.clients?.validation;
+export const identityClient = identityResult.clients?.identity;
+export const reputationClient = identityResult.clients?.reputation;
+export const validationClient = identityResult.clients?.validation;
 

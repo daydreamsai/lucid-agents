@@ -1,4 +1,4 @@
-import type { AgentHttpRuntime } from '@lucid-agents/core';
+import type { AgentRuntime } from '@lucid-agents/types/core';
 import { toJsonSchemaOrUndefined } from '@lucid-agents/core';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
@@ -12,7 +12,7 @@ import type {
 import {
   paymentMiddleware,
   type TanStackRequestMiddleware,
-} from '@lucid-agents/x402-tanstack-start';
+} from './x402-paywall';
 
 type RuntimeLike = {
   payments?: { config: PaymentsConfig };

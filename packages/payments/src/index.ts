@@ -32,3 +32,4 @@ export {
   ZERO_ADDRESS,
   type Hex,
 } from './crypto';
+export { payments } from './extension';

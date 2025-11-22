@@ -183,7 +183,7 @@ All fields are optional. If `url` is not provided, it defaults to the agent's or
 - `/.well-known/agent.json` — Manifest with schemas and pricing (if configured)
   - Alias: `/.well-known/agent-card.json` (A2A preferred well-known path)
   - Includes `skills[]` for A2A, back-compat `entrypoints` block, and `payments[]` when configured.
-  - Includes `capabilities.extensions` entry advertising AP2 when `ap2` or `payments` are configured.
+  - Includes `capabilities.extensions` entry advertising AP2 when explicitly configured via `ap2()` extension.
 - `/entrypoints/:key/invoke` — POST `{ input }` → `{ run_id, status, output?, usage?, model? }`
 - `/entrypoints/:key/stream` — POST `{ input }` → SSE stream
   - Events: `run-start`, `delta`, `text`, `asset`, `control`, `error`, `run-end`

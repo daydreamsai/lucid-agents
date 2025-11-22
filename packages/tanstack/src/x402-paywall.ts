@@ -337,3 +337,4 @@ export type TanStackRequestMiddleware = ReturnType<
 
 export type { Money, Network, RouteConfig, RoutesConfig } from "x402/types";
 export type { Address as SolanaChainAddress } from "@solana/kit";
+

@@ -8,20 +8,19 @@ import express, {
 import { Readable } from 'node:stream';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { TLSSocket } from 'node:tls';
-import type { AgentHttpRuntime, EntrypointDef } from '@lucid-agents/core';
-import type { AgentMeta } from '@lucid-agents/types/core';
-import type { CreateAgentAppReturn } from '@lucid-agents/types/core';
-import {
-  createAgentHttpRuntime,
-  type CreateAgentHttpOptions,
-} from '@lucid-agents/core';
+import type { EntrypointDef } from '@lucid-agents/core';
+import type {
+  AgentRuntime,
+  CreateAgentAppReturn,
+} from '@lucid-agents/types/core';
+import { AppBuilder } from '@lucid-agents/core';
 import { withPayments } from './paywall';
 
 type NodeRequestInit = RequestInit & { duplex?: 'half' };
 
 const METHODS_WITHOUT_BODY = new Set(['GET', 'HEAD']);
 
-export type CreateAgentAppOptions = CreateAgentHttpOptions & {
+export type CreateAgentAppOptions = {
   /**
    * Hook called before mounting agent routes.
    * Register global middleware here (logging, security headers, etc).
@@ -35,15 +34,26 @@ export type CreateAgentAppOptions = CreateAgentHttpOptions & {
 };
 
 export function createAgentApp(
-  meta: AgentMeta,
+  runtimeOrBuilder: AgentRuntime | AppBuilder,
   opts?: CreateAgentAppOptions
 ): CreateAgentAppReturn<
   Express,
-  AgentHttpRuntime,
-  AgentHttpRuntime['agent'],
-  AgentHttpRuntime['config']
+  AgentRuntime,
+  AgentRuntime['agent'],
+  AgentRuntime['config']
 > {
-  const runtime = createAgentHttpRuntime(meta, opts);
+  // Build runtime if builder is provided
+  const runtime: AgentRuntime =
+    runtimeOrBuilder instanceof AppBuilder
+      ? runtimeOrBuilder.build()
+      : runtimeOrBuilder;
+
+  // Require HTTP extension - runtime must have handlers
+  if (!runtime.handlers) {
+    throw new Error(
+      'HTTP extension is required. Use app.use(http()) when building the runtime.'
+    );
+  }
   const app = express();
 
   opts?.beforeMount?.(app);
@@ -91,7 +101,7 @@ export function createAgentApp(
   );
   app.get('/favicon.svg', createRouteHandler(runtime.handlers.favicon));
 
-  if (runtime.handlers.landing && opts?.landingPage !== false) {
+  if (runtime.handlers.landing) {
     app.get('/', createRouteHandler(runtime.handlers.landing));
   } else {
     app.get('/', (_req, res) => {
@@ -122,7 +132,12 @@ export function createAgentApp(
     agent: runtime.agent,
     addEntrypoint,
     config: runtime.config,
-  };
+  } as CreateAgentAppReturn<
+    Express,
+    AgentRuntime,
+    AgentRuntime['agent'],
+    AgentRuntime['config']
+  >;
 }
 
 function createRouteHandler(

@@ -1,11 +1,11 @@
 import type {
   AgentConfig,
   AgentContext,
+  EntrypointDef,
+  StreamResult,
   Usage,
 } from '@lucid-agents/types/core';
 import { z } from 'zod';
-
-import type { EntrypointDef, StreamResult } from '../http/types';
 
 export type InvokeContext = {
   signal: AbortSignal;

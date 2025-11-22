@@ -2,13 +2,15 @@ import {
   createRuntimePaymentContext,
   type RuntimePaymentOptions,
 } from '@lucid-agents/payments';
+import { payments } from '@lucid-agents/payments';
 import type { AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import { wallets } from '@lucid-agents/wallet';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 
 import { resetAgentKitConfigForTesting } from '../config/config';
-import { createAgentRuntime } from '../runtime';
+import { createApp } from '../runtime';
 
 const makeRuntimeStub = (): {
   runtime: Pick<AgentRuntime, 'wallets'>;
@@ -203,7 +205,7 @@ describe('runtime Solana payments', () => {
   });
 });
 
-describe('createAgentRuntime payments activation', () => {
+describe('createApp payments activation', () => {
   afterEach(() => {
     resetAgentKitConfigForTesting();
   });
@@ -215,12 +217,9 @@ describe('createAgentRuntime payments activation', () => {
   };
 
   it('starts with payments undefined when no priced entrypoints', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.config).toBeDefined();
@@ -229,12 +228,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('activates payments when priced entrypoint is added', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.isActive).toBe(false);
@@ -256,12 +252,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('does not activate payments when non-priced entrypoint is added', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.isActive).toBe(false);
@@ -279,12 +272,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('activates payments when entrypoint with price object is added', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     runtime.entrypoints.add({
       key: 'streaming',
@@ -301,12 +291,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('keeps payments active after first activation', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     runtime.entrypoints.add({
       key: 'paid1',
@@ -344,12 +331,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('does not activate payments when payments are explicitly disabled', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: false,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: false }))
+      .build();
 
     runtime.entrypoints.add({
       key: 'paid',
@@ -360,25 +344,20 @@ describe('createAgentRuntime payments activation', () => {
     });
 
     expect(runtime.payments).toBeUndefined();
-    expect(runtime.agent.config.payments).toBe(false);
+    expect(runtime.agent.config.payments).toBeUndefined();
   });
 
   it('activates payments when entrypoints provided in options', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-        entrypoints: [
-          {
-            key: 'paid',
-            description: 'Paid endpoint',
-            price: '1000',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { result: 'ok' } }),
-          },
-        ],
-      }
-    );
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.use(payments({ config: paymentsConfig }));
+    builder.addEntrypoint({
+      key: 'paid',
+      description: 'Paid endpoint',
+      price: '1000',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { result: 'ok' } }),
+    });
+    const runtime = builder.build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.config).toBeDefined();
@@ -387,20 +366,15 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('does not activate payments when entrypoints without prices provided in options', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-        entrypoints: [
-          {
-            key: 'free',
-            description: 'Free endpoint',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { result: 'ok' } }),
-          },
-        ],
-      }
-    );
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.use(payments({ config: paymentsConfig }));
+    builder.addEntrypoint({
+      key: 'free',
+      description: 'Free endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { result: 'ok' } }),
+    });
+    const runtime = builder.build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.isActive).toBe(false);
@@ -408,12 +382,9 @@ describe('createAgentRuntime payments activation', () => {
   });
 
   it('syncs runtime.payments?.config and agent.config.payments', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     runtime.entrypoints.add({
       key: 'paid',
@@ -438,11 +409,10 @@ describe('createAgentRuntime wallets', () => {
   });
 
   it('creates wallets from config when provided', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        config: {
-          wallets: {
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(
+        wallets({
+          config: {
             agent: {
               type: 'local' as const,
               privateKey:
@@ -454,9 +424,9 @@ describe('createAgentRuntime wallets', () => {
                 '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd',
             },
           },
-        },
-      }
-    );
+        })
+      )
+      .build();
 
     expect(runtime.wallets).toBeDefined();
     expect(runtime.wallets?.agent).toBeDefined();
@@ -464,20 +434,19 @@ describe('createAgentRuntime wallets', () => {
   });
 
   it('creates only agent wallet when only agent provided', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        config: {
-          wallets: {
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(
+        wallets({
+          config: {
             agent: {
               type: 'local' as const,
               privateKey:
                 '0x1234567890123456789012345678901234567890123456789012345678901234',
             },
           },
-        },
-      }
-    );
+        })
+      )
+      .build();
 
     expect(runtime.wallets).toBeDefined();
     expect(runtime.wallets?.agent).toBeDefined();
@@ -485,20 +454,19 @@ describe('createAgentRuntime wallets', () => {
   });
 
   it('creates only developer wallet when only developer provided', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        config: {
-          wallets: {
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(
+        wallets({
+          config: {
             developer: {
               type: 'local' as const,
               privateKey:
                 '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd',
             },
           },
-        },
-      }
-    );
+        })
+      )
+      .build();
 
     expect(runtime.wallets).toBeDefined();
     expect(runtime.wallets?.agent).toBeUndefined();
@@ -506,7 +474,7 @@ describe('createAgentRuntime wallets', () => {
   });
 
   it('has undefined wallets when no wallet config provided', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     expect(runtime.wallets).toBeUndefined();
   });
@@ -526,18 +494,15 @@ describe('createAgentRuntime config resolution', () => {
       },
     };
 
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        config: customConfig,
-      }
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build(
+      customConfig
     );
 
     expect(runtime.config.payments?.payTo).toBe('0xCustomAddress');
   });
 
   it('returns resolved config', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     expect(runtime.config).toBeDefined();
     expect(typeof runtime.config).toBe('object');
@@ -550,25 +515,20 @@ describe('createAgentRuntime entrypoints', () => {
   });
 
   it('initializes entrypoints from options', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        entrypoints: [
-          {
-            key: 'echo',
-            description: 'Echo endpoint',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { text: 'echo' } }),
-          },
-          {
-            key: 'reverse',
-            description: 'Reverse endpoint',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { text: 'reverse' } }),
-          },
-        ],
-      }
-    );
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.addEntrypoint({
+      key: 'echo',
+      description: 'Echo endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { text: 'echo' } }),
+    });
+    builder.addEntrypoint({
+      key: 'reverse',
+      description: 'Reverse endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { text: 'reverse' } }),
+    });
+    const runtime = builder.build();
 
     const entrypoints = runtime.entrypoints.list();
     expect(entrypoints).toHaveLength(2);
@@ -576,25 +536,24 @@ describe('createAgentRuntime entrypoints', () => {
   });
 
   it('activates payments when initial entrypoints have prices', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: {
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.use(
+      payments({
+        config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
           network: 'base-sepolia',
         },
-        entrypoints: [
-          {
-            key: 'paid',
-            description: 'Paid endpoint',
-            price: '1000',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { result: 'ok' } }),
-          },
-        ],
-      }
+      })
     );
+    builder.addEntrypoint({
+      key: 'paid',
+      description: 'Paid endpoint',
+      price: '1000',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { result: 'ok' } }),
+    });
+    const runtime = builder.build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.config).toBeDefined();
@@ -602,24 +561,23 @@ describe('createAgentRuntime entrypoints', () => {
   });
 
   it('does not activate payments when initial entrypoints have no prices', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: {
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.use(
+      payments({
+        config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
           network: 'base-sepolia',
         },
-        entrypoints: [
-          {
-            key: 'free',
-            description: 'Free endpoint',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { result: 'ok' } }),
-          },
-        ],
-      }
+      })
     );
+    builder.addEntrypoint({
+      key: 'free',
+      description: 'Free endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { result: 'ok' } }),
+    });
+    const runtime = builder.build();
 
     expect(runtime.payments).toBeDefined();
     expect(runtime.payments?.isActive).toBe(false);
@@ -633,7 +591,7 @@ describe('createAgentRuntime manifest', () => {
   });
 
   it('builds manifest with correct origin', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     const manifest = runtime.manifest.build('https://example.com');
     expect(manifest).toBeDefined();
@@ -641,7 +599,7 @@ describe('createAgentRuntime manifest', () => {
   });
 
   it('caches manifest for same origin', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     const manifest1 = runtime.manifest.build('https://example.com');
     const manifest2 = runtime.manifest.build('https://example.com');
@@ -650,7 +608,7 @@ describe('createAgentRuntime manifest', () => {
   });
 
   it('builds different manifests for different origins', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     const manifest1 = runtime.manifest.build('https://example.com');
     const manifest2 = runtime.manifest.build('https://other.com');
@@ -665,12 +623,9 @@ describe('createAgentRuntime manifest', () => {
       network: 'base-sepolia',
     };
 
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: paymentsConfig,
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(payments({ config: paymentsConfig }))
+      .build();
 
     runtime.entrypoints.add({
       key: 'paid',
@@ -686,7 +641,7 @@ describe('createAgentRuntime manifest', () => {
   });
 
   it('invalidates manifest cache when entrypoint is added', () => {
-    const runtime = createAgentRuntime({ name: 'test', version: '1.0.0' }, {});
+    const runtime = createApp({ name: 'test', version: '1.0.0' }).build();
 
     const manifest1 = runtime.manifest.build('https://example.com');
     const initialEntrypointCount = Object.keys(
@@ -712,33 +667,34 @@ describe('createAgentRuntime integration', () => {
   });
 
   it('handles full flow: config → wallets → payments → entrypoints → manifest', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
+    const builder = createApp({ name: 'test', version: '1.0.0' });
+    builder.use(
+      wallets({
         config: {
-          wallets: {
-            agent: {
-              type: 'local' as const,
-              privateKey:
-                '0x1234567890123456789012345678901234567890123456789012345678901234',
-            },
+          agent: {
+            type: 'local' as const,
+            privateKey:
+              '0x1234567890123456789012345678901234567890123456789012345678901234',
           },
         },
-        payments: {
+      })
+    );
+    builder.use(
+      payments({
+        config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
           network: 'base-sepolia',
         },
-        entrypoints: [
-          {
-            key: 'free',
-            description: 'Free endpoint',
-            input: z.object({ text: z.string() }),
-            handler: async () => ({ output: { result: 'ok' } }),
-          },
-        ],
-      }
+      })
     );
+    builder.addEntrypoint({
+      key: 'free',
+      description: 'Free endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { result: 'ok' } }),
+    });
+    const runtime = builder.build();
 
     // Wallets created
     expect(runtime.wallets?.agent).toBeDefined();
@@ -771,16 +727,17 @@ describe('createAgentRuntime integration', () => {
   });
 
   it('handles mixed priced and free entrypoints', () => {
-    const runtime = createAgentRuntime(
-      { name: 'test', version: '1.0.0' },
-      {
-        payments: {
-          payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
-          facilitatorUrl: 'https://facilitator.test',
-          network: 'base-sepolia',
-        },
-      }
-    );
+    const runtime = createApp({ name: 'test', version: '1.0.0' })
+      .use(
+        payments({
+          config: {
+            payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+            facilitatorUrl: 'https://facilitator.test',
+            network: 'base-sepolia',
+          },
+        })
+      )
+      .build();
 
     // Add free entrypoint first
     runtime.entrypoints.add({

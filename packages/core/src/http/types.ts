@@ -1,4 +1,3 @@
-// Re-export HTTP-related types from shared types package
 export type {
   EntrypointDef,
   EntrypointHandler,

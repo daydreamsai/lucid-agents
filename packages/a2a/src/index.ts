@@ -17,3 +17,4 @@ export {
   waitForTask,
 } from './client';
 export { createA2ARuntime } from './runtime';
+export { a2a } from './extension';

@@ -97,11 +97,13 @@ async function buildPackages() {
     // Core - depends on all extensions
     '@lucid-agents/core', // Depends on payments, identity, a2a, ap2, types, wallet
 
+    // HTTP extension - depends on core
+    '@lucid-agents/http', // Depends on core, types, payments
+
     // Adapters - depend on core and extensions
     '@lucid-agents/hono', // Depends on core, payments, types
     '@lucid-agents/express', // Depends on core, payments, types
-    '@lucid-agents/x402-tanstack-start', // No internal dependencies
-    '@lucid-agents/tanstack', // Depends on core, payments, types, x402-tanstack-start
+    '@lucid-agents/tanstack', // Depends on core, payments, types
 
     // CLI - no dependencies on other packages
     '@lucid-agents/cli',

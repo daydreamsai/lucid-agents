@@ -39,6 +39,7 @@
   "devDependencies": {
     "@lucid-agents/hono": "workspace:*",
     "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }

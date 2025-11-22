@@ -125,7 +125,5 @@ export type PaymentMandate = {
 };
 
 export const AP2_EXTENSION_URI = 'https://github.com/google-agentic-commerce/ap2/tree/v0.1' as const;
-
-// Re-export types from types package
 export type { AP2Config, AP2ExtensionDescriptor, AP2ExtensionParams, AP2Role } from '@lucid-agents/types/ap2';
 

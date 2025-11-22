@@ -1,4 +1,15 @@
-// Core types and functions
+export {
+  type AxLLMClient,
+  type AxLLMClientOptions,
+  createAxLLMClient,
+} from './axllm';
+export {
+  configureAgentKit,
+  getActiveInstanceConfig,
+  getAgentKitConfig,
+  resetAgentKitConfigForTesting,
+  setActiveInstanceConfig,
+} from './config/config';
 export {
   AgentCore,
   createAgentCore,
@@ -8,6 +19,10 @@ export {
   ZodValidationError,
 } from './core/agent';
 export type { Network } from './core/types';
+export { AppBuilder } from './extensions/builder';
+export { createApp } from './runtime';
+export * from './utils';
+export { validateAgentMetadata } from './validation';
 export type {
   EntrypointDef,
   EntrypointHandler,
@@ -15,39 +30,5 @@ export type {
   StreamEnvelope,
   StreamPushEnvelope,
   StreamResult,
-} from './http/types';
+} from '@lucid-agents/types/core';
 export type { AgentConfig } from '@lucid-agents/types/core';
-
-// Config management
-export {
-  configureAgentKit,
-  getActiveInstanceConfig,
-  getAgentKitConfig,
-  resetAgentKitConfigForTesting,
-  setActiveInstanceConfig,
-} from './config/config';
-
-// Core runtime
-export { createAgentRuntime, type CreateAgentRuntimeOptions } from './runtime';
-
-// HTTP runtime
-export {
-  type AxLLMClient,
-  type AxLLMClientOptions,
-  createAxLLMClient,
-} from './axllm';
-export {
-  type AgentHttpHandlers,
-  type AgentHttpRuntime,
-  type CreateAgentHttpOptions,
-  createAgentHttpRuntime,
-} from './http/runtime';
-export {
-  createSSEStream,
-  type SSEStreamRunner,
-  type SSEStreamRunnerContext,
-  type SSEWriteOptions,
-  writeSSE,
-} from './http/sse';
-export * from './utils';
-export { validateAgentMetadata } from './validation';

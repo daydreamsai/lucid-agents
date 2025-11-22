@@ -25,6 +25,7 @@ export {
   type WalletsRuntime,
 } from './create-agent-wallet';
 export { walletsFromEnv } from './env';
+export { wallets } from './extension';
 
 // Export utilities
 export * from './utils';

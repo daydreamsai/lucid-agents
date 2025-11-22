@@ -1,14 +1,19 @@
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '../app';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { createAgentApp } from '../app';
 
 describe('@lucid-agents/express', () => {
   it('creates an Express app and registers entrypoints', () => {
-    const { app, addEntrypoint } = createAgentApp({
+    const runtime = createApp({
       name: 'express-agent',
       version: '1.0.0',
       description: 'Test agent',
-    });
+    })
+      .use(http())
+      .build();
+    const { app, addEntrypoint } = createAgentApp(runtime);
 
     expect(typeof app).toBe('function');
 

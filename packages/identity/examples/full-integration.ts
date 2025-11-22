@@ -8,15 +8,17 @@
  *
  * Prerequisites:
  * 1. Install @lucid-agents/core: bun add @lucid-agents/core
- * 2. Create a .env file with required variables:
+ * 2. Install @lucid-agents/wallet: bun add @lucid-agents/wallet
+ * 3. Create a .env file with required variables:
  *    - AGENT_DOMAIN=your-agent.example.com
  *    - RPC_URL=https://sepolia.base.org
  *    - CHAIN_ID=84532
  *    - AGENT_WALLET_PRIVATE_KEY=0x...
- * 3. Run: bun run examples/full-integration.ts
+ * 4. Run: bun run examples/full-integration.ts
  */
 
-import { createAgentRuntime } from '@lucid-agents/core';
+import { createApp } from '@lucid-agents/core';
+import { wallets } from '@lucid-agents/wallet';
 import { walletsFromEnv } from '@lucid-agents/wallet';
 
 import { createAgentIdentity } from '../src/index';
@@ -33,19 +35,14 @@ async function main() {
   console.log('STEP 0: Creating Agent Runtime');
   console.log('-'.repeat(80));
 
-  // Create a minimal runtime with wallet configuration
-  const runtime = createAgentRuntime(
-    {
-      name: 'test-agent',
-      version: '1.0.0',
-      description: 'ERC-8004 integration test agent',
-    },
-    {
-      config: {
-        wallets: walletsFromEnv(),
-      },
-    }
-  );
+  // Create a minimal runtime with wallet configuration using extensions
+  const runtime = createApp({
+    name: 'test-agent',
+    version: '1.0.0',
+    description: 'ERC-8004 integration test agent',
+  })
+    .use(wallets({ config: { wallets: walletsFromEnv() } }))
+    .build();
 
   console.log('Runtime created with wallet configuration');
 

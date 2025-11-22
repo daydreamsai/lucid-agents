@@ -2,7 +2,11 @@ import {
   configureAgentKit,
   getAgentKitConfig,
   resetAgentKitConfigForTesting,
+  createApp,
 } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { wallets } from '@lucid-agents/wallet';
 import { createAgentApp } from '@lucid-agents/hono';
 import { paymentsFromEnv } from '@lucid-agents/payments';
 import { afterEach, describe, expect, it } from 'bun:test';
@@ -19,26 +23,25 @@ describe('AgentKit config management', () => {
   });
 
   it('allows scoped config per app instance without global mutation', () => {
-    const result1 = createAgentApp(
-      { name: 'config-test-1', version: '0.0.0', description: 'Test agent' },
-      {
-        payments: {
-          facilitatorUrl: 'https://facilitator.test' as any,
-          payTo: '0x1230000000000000000000000000000000000000',
-          network: 'base' as any,
-        },
-        config: {
-          payments: {
-            facilitatorUrl: 'https://facilitator.test' as any,
-            payTo: '0x1230000000000000000000000000000000000000',
-            network: 'base' as any,
-          },
-        },
-      }
-    );
+    const paymentsConfig1 = {
+      facilitatorUrl: 'https://facilitator.test' as any,
+      payTo: '0x1230000000000000000000000000000000000000',
+      network: 'base' as any,
+    };
+    const runtime1 = createApp({
+      name: 'config-test-1',
+      version: '0.0.0',
+      description: 'Test agent',
+    })
+      .use(http())
+      .use(payments({ config: paymentsConfig1 }))
+      .build({
+        payments: paymentsConfig1,
+      });
+    const result1 = createAgentApp(runtime1);
 
     // App instance has the scoped config
-    expect(result1.config.payments.facilitatorUrl).toBe(
+    expect(result1.config.payments?.facilitatorUrl).toBe(
       'https://facilitator.test'
     );
 
@@ -49,35 +52,34 @@ describe('AgentKit config management', () => {
     );
 
     // Create a second agent with different config
-    const result2 = createAgentApp(
-      { name: 'config-test-2', version: '0.0.0', description: 'Test agent 2' },
-      {
-        payments: {
-          facilitatorUrl: 'https://facilitator2.test' as any,
-          payTo: '0x4560000000000000000000000000000000000000',
-          network: 'optimism' as any,
-        },
-        config: {
-          payments: {
-            facilitatorUrl: 'https://facilitator2.test' as any,
-            payTo: '0x4560000000000000000000000000000000000000',
-            network: 'optimism' as any,
-          },
-        },
-      }
-    );
+    const paymentsConfig2 = {
+      facilitatorUrl: 'https://facilitator2.test' as any,
+      payTo: '0x4560000000000000000000000000000000000000',
+      network: 'optimism' as any,
+    };
+    const runtime2 = createApp({
+      name: 'config-test-2',
+      version: '0.0.0',
+      description: 'Test agent 2',
+    })
+      .use(http())
+      .use(payments({ config: paymentsConfig2 }))
+      .build({
+        payments: paymentsConfig2,
+      });
+    const result2 = createAgentApp(runtime2);
 
     // Each agent has its own config (no cross-contamination)
-    expect(result1.config.payments.facilitatorUrl).toBe(
+    expect(result1.config.payments?.facilitatorUrl).toBe(
       'https://facilitator.test'
     );
-    expect(result2.config.payments.facilitatorUrl).toBe(
+    expect(result2.config.payments?.facilitatorUrl).toBe(
       'https://facilitator2.test'
     );
-    expect(result1.config.payments.payTo).toBe(
+    expect(result1.config.payments?.payTo).toBe(
       '0x1230000000000000000000000000000000000000'
     );
-    expect(result2.config.payments.payTo).toBe(
+    expect(result2.config.payments?.payTo).toBe(
       '0x4560000000000000000000000000000000000000'
     );
   });
@@ -113,20 +115,25 @@ describe('AgentKit config management', () => {
     const globalConfig = getAgentKitConfig();
     expect(globalConfig.wallets?.agent?.privateKey).toBe(globalPrivateKey);
 
-    const { config } = createAgentApp(
-      {
-        name: 'config-test-wallet',
-        version: '0.0.0',
-        description: 'Config test wallet agent',
-      },
-      {
-        config: {
-          wallets: {
+    const runtime = createApp({
+      name: 'config-test-wallet',
+      version: '0.0.0',
+      description: 'Config test wallet agent',
+    })
+      .use(http())
+      .use(
+        wallets({
+          config: {
             agent: { type: 'local', privateKey: instancePrivateKey },
           },
+        })
+      )
+      .build({
+        wallets: {
+          agent: { type: 'local', privateKey: instancePrivateKey },
         },
-      }
-    );
+      });
+    const { config } = createAgentApp(runtime);
 
     // The config should have the wallet configuration
     expect(config.wallets?.agent?.privateKey).toBe(instancePrivateKey);
