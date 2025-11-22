@@ -1,9 +1,5 @@
-import {
-  createAgentHttpRuntime,
-  type AgentHttpRuntime,
-  type CreateAgentHttpOptions,
-} from '@lucid-agents/core';
-import type { AgentMeta } from '@lucid-agents/types/core';
+import { AgentBuilder } from '@lucid-agents/core';
+import type { AgentRuntime } from '@lucid-agents/types/core';
 
 export type TanStackRequestHandler = (ctx: {
   request: Request;
@@ -30,7 +26,7 @@ export type TanStackHandlers = {
 };
 
 export type TanStackRuntime = {
-  runtime: AgentHttpRuntime;
+  runtime: AgentRuntime;
   handlers: TanStackHandlers;
 };
 
@@ -47,8 +43,14 @@ function adaptRouteHandler<P extends Record<string, string>>(
 }
 
 export function createTanStackHandlers(
-  runtime: AgentHttpRuntime
+  runtime: AgentRuntime
 ): TanStackHandlers {
+  if (!runtime.handlers) {
+    throw new Error(
+      'HTTP extension is required. Use app.use(http()) when building the runtime.'
+    );
+  }
+
   const { handlers } = runtime;
   return {
     health: adaptRequestHandler(handlers.health),
@@ -68,11 +70,12 @@ export function createTanStackHandlers(
   };
 }
 
-export function createTanStackRuntime(
-  meta: AgentMeta,
-  opts: CreateAgentHttpOptions = {}
-): TanStackRuntime {
-  const runtime = createAgentHttpRuntime(meta, opts);
+export async function createTanStackRuntime(
+  agent: AgentBuilder
+): Promise<TanStackRuntime> {
+  // Build the agent runtime
+  const runtime: AgentRuntime = await agent.build();
+
   return {
     runtime,
     handlers: createTanStackHandlers(runtime),

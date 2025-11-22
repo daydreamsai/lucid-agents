@@ -1,10 +1,10 @@
 import type { Express, RequestHandler } from 'express';
 import { paymentMiddleware } from 'x402-express';
 import type { FacilitatorConfig } from 'x402/types';
+import { z } from 'zod';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
-import { toJsonSchemaOrUndefined } from '@lucid-agents/core/utils';
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
@@ -37,8 +37,8 @@ export function withPayments({
   if (!price) return false;
   if (!payments.payTo) return false;
 
-  const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
-  const responseSchema = toJsonSchemaOrUndefined(entrypoint.output);
+  const requestSchema = entrypoint.input ? z.toJSONSchema(entrypoint.input) : undefined;
+  const responseSchema = entrypoint.output ? z.toJSONSchema(entrypoint.output) : undefined;
 
   const description =
     entrypoint.description ??

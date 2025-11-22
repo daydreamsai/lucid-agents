@@ -142,7 +142,7 @@ handler: async (ctx) => {
   // ctx.key - the entrypoint key
   // ctx.input - the parsed and validated input
   // ctx.signal - AbortSignal for cancellation
-  // ctx.headers - Request headers
+  // ctx.metadata - Protocol-specific metadata (e.g., { headers } for HTTP)
   // ctx.runId - Unique run identifier
 
   console.log(`Processing request for ${ctx.key} with run ID ${ctx.runId}`);

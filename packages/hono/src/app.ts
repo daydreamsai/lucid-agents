@@ -1,17 +1,12 @@
 import { Hono } from 'hono';
 import type {
-  AgentMeta,
   EntrypointDef,
   CreateAgentAppReturn,
+  AgentRuntime,
 } from '@lucid-agents/types/core';
 import { withPayments } from './paywall';
-import {
-  createAgentHttpRuntime,
-  type CreateAgentHttpOptions,
-  type AgentHttpRuntime,
-} from '@lucid-agents/core';
 
-export type CreateAgentAppOptions = CreateAgentHttpOptions & {
+export type CreateAgentAppOptions = {
   /**
    * Hook called before mounting agent routes.
    * Use this to register custom middleware that should run before agent handlers.
@@ -24,16 +19,23 @@ export type CreateAgentAppOptions = CreateAgentHttpOptions & {
   afterMount?: (app: Hono) => void;
 };
 
-export function createAgentApp(
-  meta: AgentMeta,
+export async function createAgentApp(
+  runtime: AgentRuntime,
   opts?: CreateAgentAppOptions
-): CreateAgentAppReturn<
-  Hono,
-  AgentHttpRuntime,
-  ReturnType<typeof createAgentHttpRuntime>['agent'],
-  ReturnType<typeof createAgentHttpRuntime>['config']
+): Promise<
+  CreateAgentAppReturn<
+    Hono,
+    AgentRuntime,
+    AgentRuntime['agent'],
+    AgentRuntime['config']
+  >
 > {
-  const runtime = createAgentHttpRuntime(meta, opts);
+  // Require HTTP extension - runtime must have handlers
+  if (!runtime.handlers) {
+    throw new Error(
+      'HTTP extension is required. Use app.use(http()) when building the runtime.'
+    );
+  }
   const app = new Hono();
 
   // Allow custom middleware before agent routes
@@ -73,7 +75,6 @@ export function createAgentApp(
     );
   };
 
-  // Core routes
   app.get('/health', c => runtime.handlers.health(c.req.raw));
   app.get('/entrypoints', c => runtime.handlers.entrypoints(c.req.raw));
   app.get('/.well-known/agent.json', c => runtime.handlers.manifest(c.req.raw));
@@ -96,7 +97,7 @@ export function createAgentApp(
     runtime.handlers.subscribeTask(c.req.raw, { taskId: c.req.param('taskId') })
   );
 
-  if (runtime.handlers.landing && opts?.landingPage !== false) {
+  if (runtime.handlers.landing) {
     app.get('/', c => runtime.handlers.landing!(c.req.raw));
   } else {
     app.get('/', c => c.text('Landing disabled', 404));
@@ -122,9 +123,9 @@ export function createAgentApp(
 
   const result: CreateAgentAppReturn<
     Hono,
-    AgentHttpRuntime,
-    ReturnType<typeof createAgentHttpRuntime>['agent'],
-    ReturnType<typeof createAgentHttpRuntime>['config']
+    AgentRuntime,
+    AgentRuntime['agent'],
+    AgentRuntime['config']
   > = {
     app,
     runtime,

@@ -49,9 +49,7 @@ function normalizeOrigin(value: unknown): string {
 
 async function loadDashboardPayload(origin: string): Promise<DashboardPayload> {
   const resolvedOrigin = normalizeOrigin(origin);
-  const manifest = ensureSerializable(
-    agent.resolveManifest(resolvedOrigin, BASE_PATH)
-  );
+  const manifest = ensureSerializable(runtime.manifest.build(resolvedOrigin));
   const manifestEntrypoints = manifest.entrypoints || [];
 
   const rawEntrypoints = agent.listEntrypoints();

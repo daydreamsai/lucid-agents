@@ -6,9 +6,17 @@ This guide helps AI coding agents understand and work with the lucid-agents mono
 
 This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI agents. It provides:
 
-- **@lucid-agents/agent-kit** - Core framework for creating agent HTTP servers
-- **@lucid-agents/agent-kit-identity** - ERC-8004 identity and trust layer
-- **@lucid-agents/create-agent-kit** - CLI for scaffolding new agent projects
+- **@lucid-agents/core** - Protocol-agnostic agent runtime with extension system
+- **@lucid-agents/http** - HTTP extension for request/response handling
+- **@lucid-agents/identity** - ERC-8004 identity and trust layer
+- **@lucid-agents/payments** - x402 payment utilities
+- **@lucid-agents/wallet** - Wallet SDK for agent and developer wallets
+- **@lucid-agents/a2a** - A2A Protocol client for agent-to-agent communication
+- **@lucid-agents/ap2** - AP2 (Agent Payments Protocol) extension
+- **@lucid-agents/hono** - Hono HTTP server adapter
+- **@lucid-agents/express** - Express HTTP server adapter
+- **@lucid-agents/tanstack** - TanStack Start adapter
+- **@lucid-agents/cli** - CLI for scaffolding new agent projects
 
 **Tech Stack:**
 
@@ -23,23 +31,33 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 ### Package Dependencies
 
 ```
-create-agent-kit (CLI tool)
+cli (scaffolding tool)
     ↓ scaffolds projects using
-agent-kit-hono OR agent-kit-tanstack (adapter frameworks)
+hono OR express OR tanstack (adapters)
     ↓ both use
-agent-kit (core runtime)
-    ↓ optionally uses
-agent-kit-identity (ERC-8004 integration)
+core (protocol-agnostic runtime)
+    ↓ uses extensions
+http, identity, payments, wallet, a2a, ap2 (extensions)
 ```
+
+### Extension System
+
+The framework uses an extension-based architecture where features are added via composable extensions:
+
+- **http** (`@lucid-agents/http`) - HTTP request/response handling, streaming, SSE
+- **wallets** (`@lucid-agents/wallet`) - Wallet management for agents
+- **payments** (`@lucid-agents/payments`) - x402 payment verification and pricing
+- **identity** (`@lucid-agents/identity`) - ERC-8004 on-chain identity and trust
+- **a2a** (`@lucid-agents/a2a`) - Agent-to-agent communication protocol
+- **ap2** (`@lucid-agents/ap2`) - Agent Payments Protocol extension
 
 ### Adapter System
 
 The framework supports multiple runtime adapters:
 
-- **Hono** (`@lucid-agents/agent-kit-hono`) - Traditional HTTP server
-- **Express** (`@lucid-agents/agent-kit-express`) - Node.js/Express server with x402 middleware
-- **TanStack Start UI** (`@lucid-agents/agent-kit-tanstack`) - Full-stack React with dashboard
-- **TanStack Start Headless** - API-only variant
+- **Hono** (`@lucid-agents/hono`) - Traditional HTTP server
+- **Express** (`@lucid-agents/express`) - Node.js/Express server with x402 middleware
+- **TanStack Start** (`@lucid-agents/tanstack`) - Full-stack React with dashboard (UI) or API-only (headless)
 
 Templates are adapter-agnostic and work with any compatible adapter.
 
@@ -282,55 +300,77 @@ type PaymentsRuntime = {
 ```
 /
 ├── packages/
-│   ├── agent-kit/          # Core runtime (shared)
+│   ├── core/               # Protocol-agnostic runtime
 │   │   ├── src/
-│   │   │   ├── config.ts         # Config management
-│   │   │   ├── manifest.ts       # Manifest generation
-│   │   │   ├── runtime.ts        # Core runtime logic
-│   │   │   ├── types.ts          # Core types
-│   │   │   └── utils/            # Helper utilities
-│   │   └── AGENTS.md             # Package-specific guide
+│   │   │   ├── core/            # AgentCore, entrypoint management
+│   │   │   ├── extensions/      # AgentBuilder, extension system
+│   │   │   ├── config/          # Config management
+│   │   │   └── utils/           # Helper utilities
+│   │   └── AGENTS.md            # Package-specific guide
 │   │
-│   ├── agent-kit-hono/     # Hono adapter
+│   ├── http/               # HTTP extension
 │   │   ├── src/
-│   │   │   ├── app.ts            # createAgentApp() for Hono
-│   │   │   └── paywall.ts        # x402 Hono middleware
+│   │   │   ├── extension.ts     # HTTP extension definition
+│   │   │   ├── invoke.ts        # HTTP invocation logic
+│   │   │   ├── stream.ts        # HTTP streaming logic
+│   │   │   └── sse.ts           # Server-Sent Events
 │   │   └── examples/
 │   │
-│   ├── agent-kit-express/  # Express adapter
+│   ├── wallet/             # Wallet SDK
 │   │   ├── src/
-│   │   │   ├── app.ts            # createAgentApp() for Express
-│   │   │   └── paywall.ts        # x402 Express middleware
-│   │   └── __tests__/            # Adapter smoke tests
-│   │
-│   ├── agent-kit-tanstack/ # TanStack adapter
-│   │   ├── src/
-│   │   │   ├── runtime.ts        # createTanStackRuntime()
-│   │   │   └── paywall.ts        # x402 TanStack middleware
+│   │   │   └── env.ts           # Wallet config from env
 │   │   └── examples/
 │   │
-│   ├── agent-kit-identity/ # ERC-8004 identity
+│   ├── payments/           # x402 payment utilities
 │   │   ├── src/
-│   │   │   ├── init.ts           # createAgentIdentity()
-│   │   │   ├── registries/       # Registry clients
-│   │   │   └── utils/            # Identity utilities
+│   │   │   └── extension.ts     # Payments extension
 │   │   └── examples/
 │   │
-│   └── create-agent-kit/   # CLI scaffolding tool
+│   ├── identity/           # ERC-8004 identity
+│   │   ├── src/
+│   │   │   ├── init.ts          # createAgentIdentity()
+│   │   │   ├── extension.ts     # Identity extension
+│   │   │   ├── registries/      # Registry clients
+│   │   │   └── utils/           # Identity utilities
+│   │   └── examples/
+│   │
+│   ├── a2a/                # A2A Protocol client
+│   │   ├── src/
+│   │   │   ├── extension.ts     # A2A extension
+│   │   │   └── client.ts        # A2A client
+│   │   └── examples/
+│   │
+│   ├── ap2/                # AP2 extension
+│   │   └── src/
+│   │       └── extension.ts     # AP2 extension
+│   │
+│   ├── hono/               # Hono adapter
+│   │   ├── src/
+│   │   │   ├── app.ts           # createAgentApp() for Hono
+│   │   │   └── paywall.ts       # x402 Hono middleware
+│   │   └── examples/
+│   │
+│   ├── express/            # Express adapter
+│   │   ├── src/
+│   │   │   ├── app.ts           # createAgentApp() for Express
+│   │   │   └── paywall.ts       # x402 Express middleware
+│   │   └── __tests__/
+│   │
+│   ├── tanstack/           # TanStack adapter
+│   │   ├── src/
+│   │   │   ├── runtime.ts       # createTanStackRuntime()
+│   │   │   └── paywall.ts       # x402 TanStack middleware
+│   │   └── examples/
+│   │
+│   └── cli/                # CLI scaffolding tool
 │       ├── src/
-│       │   ├── index.ts          # CLI implementation
-│       │   └── adapters.ts       # Adapter definitions
-│       ├── adapters/             # Runtime frameworks
-│       │   ├── hono/             # Hono base files
-│       │   ├── express/          # Express base files
-│       │   └── tanstack/         # TanStack base files
-│       │       ├── ui/           # Full UI variant
-│       │       └── headless/     # API-only variant
-│       └── templates/            # Project templates
-│           ├── blank/            # Minimal agent
-│           ├── axllm/            # LLM-powered agent
-│           ├── axllm-flow/       # Multi-step workflows
-│           └── identity/         # Identity-enabled agent
+│       │   ├── index.ts         # CLI implementation
+│       │   └── adapters.ts      # Adapter definitions
+│       └── templates/           # Project templates
+│           ├── blank/           # Minimal agent
+│           ├── axllm/           # LLM-powered agent
+│           ├── axllm-flow/      # Multi-step workflows
+│           └── identity/        # Identity-enabled agent
 │
 ├── scripts/
 │   ├── build-packages.ts   # Build script
@@ -386,50 +426,45 @@ bun run dev
 
 ### Hono Adapter
 
-**createAgentApp(meta, options?)**
+**createAgentApp(runtimeOrBuilder)**
 
 ```typescript
-import { createAgentApp } from '@lucid-agents/agent-kit-hono';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { paymentsFromEnv } from '@lucid-agents/payments';
+import { createAgentApp } from '@lucid-agents/hono';
 
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'my-agent',
-    version: '0.1.0',
-    description: 'Agent description',
-  },
-  {
-    config: {
-      payments: {
-        /* x402 config */
-      },
-      wallet: {
-        /* wallet config */
-      },
-    },
-    useConfigPayments: true,
-    ap2: { roles: ['merchant'] },
-    trust: {
-      /* ERC-8004 config */
-    },
-  }
-);
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '0.1.0',
+  description: 'Agent description',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+const { app, addEntrypoint } = createAgentApp(runtime);
 ```
 
 ### Express Adapter
 
-**createAgentApp(meta, options?)**
+**createAgentApp(runtimeOrBuilder)**
 
 ```typescript
-import { createAgentApp } from '@lucid-agents/agent-kit-express';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '@lucid-agents/express';
 
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'my-agent',
-    version: '0.1.0',
-    description: 'Agent description',
-  },
-  typeof appOptions !== 'undefined' ? appOptions : {}
-);
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '0.1.0',
+  description: 'Agent description',
+})
+  .use(http())
+  .build();
+
+const { app, addEntrypoint } = createAgentApp(runtime);
 
 // Express apps need to listen on a port
 const server = app.listen(process.env.PORT ?? 3000);
@@ -437,30 +472,28 @@ const server = app.listen(process.env.PORT ?? 3000);
 
 ### TanStack Adapter
 
-**createTanStackRuntime(meta, options?)**
+**createTanStackRuntime(runtimeOrBuilder)**
 
 ```typescript
-import { createTanStackRuntime } from '@lucid-agents/agent-kit-tanstack';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
-const { runtime, handlers } = createTanStackRuntime(
-  {
-    name: 'my-agent',
-    version: '0.1.0',
-    description: 'Agent description',
-  },
-  {
-    config: {
-      payments: { /* x402 config */ },
-    },
-    useConfigPayments: true,
-  }
-);
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '0.1.0',
+  description: 'Agent description',
+})
+  .use(http())
+  .build();
+
+const { runtime: tanStackRuntime, handlers } = createTanStackRuntime(runtime);
 
 // Use runtime.addEntrypoint() instead of addEntrypoint()
-runtime.addEntrypoint({ ... });
+tanStackRuntime.addEntrypoint({ ... });
 
 // Export for TanStack routes
-export { runtime, handlers };
+export { runtime: tanStackRuntime, handlers };
 ```
 
 **addEntrypoint(definition)**
@@ -484,20 +517,31 @@ addEntrypoint({
 **paymentsFromEnv()**
 
 ```typescript
-import { paymentsFromEnv } from '@lucid-agents/agent-kit';
+import { paymentsFromEnv } from '@lucid-agents/payments';
 
 const payments = paymentsFromEnv();
 // Returns PaymentsConfig or undefined
 ```
 
-### agent-kit-identity Core Functions
+### Identity Functions
 
 **createAgentIdentity(options)**
 
 ```typescript
-import { createAgentIdentity } from '@lucid-agents/agent-kit-identity';
+import { createApp } from '@lucid-agents/core';
+import { wallets } from '@lucid-agents/wallet';
+import { walletsFromEnv } from '@lucid-agents/wallet';
+import { createAgentIdentity } from '@lucid-agents/identity';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(wallets({ config: { wallets: walletsFromEnv() } }))
+  .build();
 
 const identity = await createAgentIdentity({
+  runtime,
   domain: 'agent.example.com',
   autoRegister: true, // Register if not exists
 });
@@ -512,40 +556,40 @@ const identity = await createAgentIdentity({
 **getTrustConfig(identity)**
 
 ```typescript
-import { getTrustConfig } from '@lucid-agents/agent-kit-identity';
+import { getTrustConfig } from '@lucid-agents/identity';
 
 const trustConfig = getTrustConfig(identity);
 // Returns TrustConfig for agent manifest
 ```
 
-### create-agent-kit CLI
+### CLI
 
 **Interactive Mode**
 
 ```bash
-bunx @lucid-agents/create-agent-kit my-agent
+bunx @lucid-agents/cli my-agent
 ```
 
 **With Adapter Selection**
 
 ```bash
 # Hono adapter (traditional HTTP server)
-bunx @lucid-agents/create-agent-kit my-agent --adapter=hono
+bunx @lucid-agents/cli my-agent --adapter=hono
 
 # Express adapter (Node-style HTTP server)
-bunx @lucid-agents/create-agent-kit my-agent --adapter=express
+bunx @lucid-agents/cli my-agent --adapter=express
 
 # TanStack UI (full dashboard)
-bunx @lucid-agents/create-agent-kit my-agent --adapter=tanstack-ui
+bunx @lucid-agents/cli my-agent --adapter=tanstack-ui
 
 # TanStack Headless (API only)
-bunx @lucid-agents/create-agent-kit my-agent --adapter=tanstack-headless
+bunx @lucid-agents/cli my-agent --adapter=tanstack-headless
 ```
 
 **Non-Interactive Mode**
 
 ```bash
-bunx @lucid-agents/create-agent-kit my-agent \
+bunx @lucid-agents/cli my-agent \
   --adapter=tanstack-ui \
   --template=identity \
   --non-interactive \

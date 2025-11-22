@@ -6,13 +6,15 @@
 
 ## Highlights
 
+- Protocol-agnostic core runtime - not tied to any specific protocol (HTTP, WebSocket, etc.)
+- Extension-based architecture - add features via `.use()` method
 - Type-safe entrypoints with optional Zod input and output schemas.
-- Automatic `/health`, `/entrypoints`, and AgentCard manifest routes.
-- Built-in Server-Sent Events (SSE) streaming helpers.
-- Optional x402 monetization and per-entrypoint pricing/network overrides.
+- Automatic manifest building with extension hooks.
 - Shared runtime configuration with environment + runtime overrides.
-- ERC-8004 trust and AP2 manifest integration out of the box.
+- ERC-8004 trust and AP2 manifest integration via extensions.
 - Utilities for x402-enabled LLM calls, agent wallets, and identity registries.
+
+**Note:** HTTP-specific functionality (handlers, invoke, stream) is provided by the `@lucid-agents/http` extension, not the core package.
 
 ## Install & Import
 
@@ -42,42 +44,63 @@ import type { EntrypointDef, AgentMeta } from '@lucid-agents/core';
 Subpath exports (shared across adapters):
 
 - `@lucid-agents/core` — main exports including types (EntrypointDef, AgentMeta, etc.)
-- `@lucid-agents/core/utils` — focused helpers (`toJsonSchemaOrUndefined`, etc.)
+- `@lucid-agents/core/utils` — focused helpers
 - `@lucid-agents/core/axllm` — AxLLM client integration
 
 ## Core Concepts
 
 ### Core Runtime
 
-This package provides the core runtime logic. Adapter packages like `@lucid-agents/hono` and `@lucid-agents/tanstack` wrap this runtime with framework-specific implementations.
+This package provides the core runtime logic via an extension-based API. Use `createAgent()` to build a runtime with extensions, then pass it to adapter packages like `@lucid-agents/hono` and `@lucid-agents/tanstack`.
 
-The runtime manages:
+**Extension System:**
 
-- `meta` (`AgentMeta`) shapes the health check and manifest.
-- `options.config` applies runtime overrides for payments and wallet defaults. These overrides merge with environment variables and package defaults via `getAgentKitConfig`.
-- `options.payments` sets payment configuration for entrypoints. Pass `false` to explicitly disable paywalling. If omitted and not disabled, entrypoints without explicit prices won't require payment.
-- `options.ap2` promotes an Agent Payments Protocol extension entry into the manifest.
-- `options.trust` pushes ERC-8004 trust metadata into the manifest.
-- `options.entrypoints` pre-registers entrypoints without additional calls.
+The runtime uses a modular extension system where features are added via `.use()`:
 
-The return value exposes:
+- `http()` — adds HTTP request handlers (required for HTTP adapters)
+- `payments()` — adds x402 payment support
+- `wallets()` — adds wallet management
+- `identity()` — adds ERC-8004 identity and trust config
+- `a2a()` — adds A2A Protocol support
+- `ap2()` — adds AP2 extension metadata
 
-- `app` — the underlying server instance (Hono or Express) you can serve with Bun/Node platforms.
-- `addEntrypoint(def)` — register more entrypoints at runtime.
-- `config` — the resolved `AgentKitConfig` after env and runtime overrides.
-- `payments` — the active `PaymentsConfig` (if paywalling is enabled) or `undefined`.
+**Building a Runtime:**
+
+```ts
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+  description: 'My agent',
+})
+  .use(http())
+  .use(payments({ ... }))
+  .use(identity({ ... }))
+  .build();
+```
+
+**Using with Adapters:**
+
+- `createAgentApp(runtime)` — returns Hono or Express app instance
+- `createTanStackRuntime(runtime)` — returns TanStack runtime and handlers
+- `runtime.entrypoints.add(def)` — register entrypoints at runtime
 
 **Example with Hono Adapter:**
 
 ```ts
 import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { createAgentApp } from '@lucid-agents/hono';
 
-const { app, addEntrypoint } = createAgentApp({
+const agent = await createAgent({
   name: 'hello-agent',
   version: '0.1.0',
   description: 'Echoes whatever you pass in',
-});
+})
+  .use(http())
+  .build();
+
+const { app, addEntrypoint } = createAgentApp(runtime);
 
 addEntrypoint({
   key: 'echo',
@@ -98,13 +121,19 @@ export default app;
 
 ```ts
 import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { createAgentApp } from '@lucid-agents/express';
 
-const { app, addEntrypoint } = createAgentApp({
+const agent = await createAgent({
   name: 'hello-agent',
   version: '0.1.0',
   description: 'Echoes whatever you pass in',
-});
+})
+  .use(http())
+  .build();
+
+const { app, addEntrypoint } = createAgentApp(runtime);
 
 addEntrypoint({
   key: 'echo',
@@ -125,13 +154,19 @@ app.listen(process.env.PORT ?? 3000);
 
 ```ts
 import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
-const { runtime, handlers } = createTanStackRuntime({
+const agent = await createAgent({
   name: 'hello-agent',
   version: '0.1.0',
   description: 'Echoes whatever you pass in',
-});
+})
+  .use(http())
+  .build();
+
+const { runtime, handlers } = createTanStackRuntime(appRuntime);
 
 runtime.entrypoints.add({
   key: 'echo',
@@ -288,7 +323,16 @@ console.log(paymentsFromEnv()); // reuse inside handlers
 
 ## Payments & Monetization
 
-When a `PaymentsConfig` is active, `createAgentApp` automatically wraps invoke/stream routes with the `x402-hono` middleware via `withPayments`. Pricing:
+The `payments()` extension enables receiving payments via the x402 protocol. When payments are configured, the adapter automatically wraps invoke/stream routes with x402 payment middleware.
+
+**To receive payments, you need:**
+
+1. **Payments extension** - Add `.use(payments({ config: {...} }))` to enable payment processing
+2. **AP2 extension (optional)** - Add `.use(ap2({ roles: ['merchant'] }))` to advertise payment capabilities in the manifest
+
+**Important:** Payments and AP2 are independent extensions. The payments extension handles payment processing, while AP2 advertises payment roles in the manifest for discovery. If you want to participate in the AP2 ecosystem (advertise as merchant/shopper), you must explicitly add the AP2 extension.
+
+### Pricing
 
 - Each entrypoint must explicitly define its `price` (string or `{ invoke?, stream? }` object)
 - If no price is set, the entrypoint is free (no paywall)
@@ -340,15 +384,25 @@ console.log('paid response', await paidResponse?.json());
 
 ## Manifest, AP2, and Discovery
 
-`buildManifest({ meta, registry, origin, payments, ap2, trust })` powers the well-known endpoints. It produces an A2A-compatible AgentCard that includes:
+The manifest is automatically generated by `createAgentApp` using the A2A protocol base card and enhancement functions for payments, identity, and AP2 extensions. It produces an A2A-compatible AgentCard that includes:
 
 - `skills[]` mirroring entrypoints and their schemas.
 - `capabilities.streaming` when any entrypoint offers SSE.
-- `payments[]` with x402 metadata when monetization is active.
-- AP2 extension entries when `ap2` is supplied or when payments are enabled (defaults to a required merchant role).
+- `payments[]` with x402 metadata when monetization is active (via `payments()` extension).
+- AP2 extension entries when explicitly configured (via `ap2()` extension) - **required for AP2 ecosystem participation**.
 - Trust metadata (`registrations`, `trustModels`, validation URIs) from `TrustConfig`.
 
-The manifest is automatically generated by `createAgentApp` using the A2A protocol base card and enhancement functions for payments, identity, and AP2 extensions.
+**Note:** Payments and AP2 are separate extensions:
+
+- **Payments extension** (`payments()`) - Handles actual payment processing via x402 protocol
+- **AP2 extension** (`ap2()`) - Advertises payment roles (merchant/shopper) in the manifest for discovery
+
+If you want to receive payments AND advertise payment capabilities, you need both extensions:
+
+```ts
+.use(payments({ config: {...} }))
+.use(ap2({ roles: ['merchant'] }))
+```
 
 ## Trust & Identity (ERC-8004)
 

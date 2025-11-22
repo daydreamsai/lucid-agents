@@ -101,67 +101,27 @@ curl -X POST http://localhost:3000/entrypoints/echo/invoke \
 Lucid Agents is a TypeScript monorepo built for multi-runtime agent deployment with a layered architecture:
 
 - **Layer 0: Types** - Shared type definitions (`@lucid-agents/types`)
-- **Layer 1: Extensions** - Optional capabilities (identity, payments, wallet, a2a, ap2)
-- **Layer 2: Core** - Framework-agnostic agent runtime (`@lucid-agents/core`)
+- **Layer 1: Extensions** - Optional capabilities (http, identity, payments, wallet, a2a, ap2)
+- **Layer 2: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`)
 - **Layer 3: Adapters** - Framework integrations (hono, tanstack, express, next)
 - **Layer 4: Developer Tools** - CLI scaffolding and templates
 
 > For detailed architecture documentation including dependency graphs, request flows, and extension system design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-### Package Structure
+### Packages
 
-```
-/
-├── packages/
-│   ├── core/              # Core runtime and types
-│   │   ├── src/core/           # Agent runtime, manifest generation
-│   │   ├── src/http/           # HTTP utilities, task handlers
-│   │   └── src/axllm/          # LLM integration helpers
-│   │
-│   ├── a2a/              # A2A Protocol client
-│   │   ├── src/client.ts       # Agent-to-agent client (invoke, stream, tasks)
-│   │   ├── src/card.ts         # Agent Card building and fetching
-│   │   └── src/runtime.ts      # A2A runtime integration
-│   │
-│   ├── ap2/              # AP2 (Agent Payments Protocol) extension
-│   │   ├── src/runtime.ts      # AP2 runtime
-│   │   └── src/manifest.ts     # Agent Card AP2 enhancement
-│   │
-│   ├── wallet/           # Wallet SDK
-│   │   ├── src/connectors/     # Wallet connectors (local, server)
-│   │   └── src/factory.ts     # Wallet factory
-│   │
-│   ├── hono/         # Hono HTTP server adapter
-│   │   ├── src/app.ts          # createAgentApp() for Hono
-│   │   └── src/paywall.ts      # x402 payment middleware
-│   │
-│   ├── tanstack/     # TanStack Start adapter
-│   │   ├── src/runtime.ts      # createTanStackRuntime()
-│   │   └── src/paywall.ts      # TanStack payment middleware
-│   │
-│   ├── express/       # Express adapter
-│   │   ├── src/app.ts          # createAgentApp() for Express
-│   │   └── src/paywall.ts      # Express payment middleware
-│   │
-│   ├── next/         # Next.js adapter
-│   │   ├── app/                # Next.js App Router routes
-│   │   ├── components/         # Dashboard UI components
-│   │   └── lib/                # Agent setup and utilities
-│   │
-│   ├── identity/     # ERC-8004 identity toolkit
-│   │   ├── src/init.ts         # createAgentIdentity()
-│   │   ├── src/registries/     # Identity/Reputation/Validation clients
-│   │   └── src/utils/          # Signature helpers, CAIP-10
-│   │
-│   ├── payments/     # x402 payment utilities
-│   │   ├── src/payments.ts     # Multi-network payment config
-│   │   └── src/x402.ts         # x402 protocol helpers
-│   │
-│   └── cli/       # CLI scaffolding tool
-│       ├── src/index.ts        # Interactive CLI
-│       ├── adapters/           # Runtime frameworks (hono, tanstack, express, next)
-│       └── templates/          # Project templates (blank, axllm, identity, trading-*)
-```
+- **`@lucid-agents/types`** - Shared type definitions used across all packages
+- **`@lucid-agents/core`** - Protocol-agnostic agent runtime with extension system
+- **`@lucid-agents/http`** - HTTP extension for request/response handling, streaming, and SSE
+- **`@lucid-agents/wallet`** - Wallet SDK for agent and developer wallet management
+- **`@lucid-agents/payments`** - x402 payment utilities for multi-network payment handling
+- **`@lucid-agents/identity`** - ERC-8004 identity toolkit for on-chain agent identity
+- **`@lucid-agents/a2a`** - A2A Protocol client for agent-to-agent communication
+- **`@lucid-agents/ap2`** - AP2 (Agent Payments Protocol) extension for Agent Cards
+- **`@lucid-agents/hono`** - Hono HTTP server adapter
+- **`@lucid-agents/express`** - Express HTTP server adapter
+- **`@lucid-agents/tanstack`** - TanStack Start adapter (UI and headless variants)
+- **`@lucid-agents/cli`** - CLI scaffolding tool for creating new agent projects
 
 ### Key Concepts
 
@@ -202,19 +162,22 @@ Lucid Agents is a TypeScript monorepo built for multi-runtime agent deployment w
 
 #### [`@lucid-agents/core`](packages/core/README.md)
 
-Core agent runtime with entrypoints, manifests, and streaming support.
+Protocol-agnostic agent runtime with extension system.
 
 ```typescript
-import { createRuntime } from '@lucid-agents/core';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { z } from 'zod';
 
-const runtime = createRuntime({
+const app = await createApp({
   name: 'my-agent',
   version: '1.0.0',
   description: 'My first agent',
-});
+})
+  .use(http())
+  .build();
 
-runtime.addEntrypoint({
+app.entrypoints.add({
   key: 'greet',
   input: z.object({ name: z.string() }),
   async handler({ input }) {
@@ -228,16 +191,22 @@ runtime.addEntrypoint({
 Hono adapter for building traditional HTTP servers.
 
 ```typescript
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { createAgentApp } from '@lucid-agents/hono';
 
-const { app, addEntrypoint } = createAgentApp({
+const app = await createApp({
   name: 'my-agent',
   version: '1.0.0',
-});
+})
+  .use(http())
+  .build();
+
+const { app: agentApp, addEntrypoint } = createAgentApp(app);
 
 // Add entrypoints...
 
-export default app; // Bun.serve or Hono serve
+export default agentApp; // Bun.serve or Hono serve
 ```
 
 #### [`@lucid-agents/tanstack`](packages/tanstack/README.md)
@@ -245,12 +214,37 @@ export default app; // Bun.serve or Hono serve
 TanStack Start adapter with UI and headless variants.
 
 ```typescript
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
-export const { runtime, handlers } = createTanStackRuntime({
+const app = await createApp({
   name: 'my-agent',
   version: '1.0.0',
-});
+})
+  .use(http())
+  .build();
+
+export const { runtime: tanStackRuntime, handlers } =
+  await createTanStackRuntime(app);
+```
+
+#### [`@lucid-agents/http`](packages/http/README.md)
+
+HTTP extension for request/response handling, streaming, and Server-Sent Events.
+
+```typescript
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+
+const app = await createApp({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http({ landingPage: true }))
+  .build();
+
+// Access HTTP handlers via app.handlers
 ```
 
 #### [`@lucid-agents/identity`](packages/identity/README.md)
@@ -258,9 +252,20 @@ export const { runtime, handlers } = createTanStackRuntime({
 ERC-8004 toolkit for on-chain identity, reputation, and validation.
 
 ```typescript
+import { createApp } from '@lucid-agents/core';
+import { wallets } from '@lucid-agents/wallet';
+import { walletsFromEnv } from '@lucid-agents/wallet';
 import { createAgentIdentity } from '@lucid-agents/identity';
 
+const app = await createApp({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(wallets({ config: { wallets: walletsFromEnv() } }))
+  .build();
+
 const identity = await createAgentIdentity({
+  runtime: app,
   domain: 'my-agent.example.com',
   autoRegister: true, // Register on-chain if not exists
 });
@@ -271,9 +276,17 @@ const identity = await createAgentIdentity({
 x402 payment utilities for multi-network payment handling.
 
 ```typescript
+import { createApp } from '@lucid-agents/core';
+import { payments } from '@lucid-agents/payments';
 import { paymentsFromEnv } from '@lucid-agents/payments';
 
-const payments = paymentsFromEnv();
+const app = await createApp({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
 // Auto-detects EVM vs Solana from PAYMENTS_RECEIVABLE_ADDRESS format
 ```
 
@@ -282,24 +295,26 @@ const payments = paymentsFromEnv();
 A2A Protocol client for agent-to-agent communication.
 
 ```typescript
-import { fetchAndInvoke, sendMessage, waitForTask } from '@lucid-agents/a2a';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { a2a } from '@lucid-agents/a2a';
 
-// Direct invocation
-const result = await fetchAndInvoke('https://other-agent.com', 'skillId', {
-  input: 'data',
-});
+const app = await createApp({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(a2a())
+  .build();
 
-// Task-based operations
-const { taskId } = await sendMessage(
-  card,
+// Access A2A client via app.a2a
+const result = await app.a2a.client.invoke(
+  'https://other-agent.com',
   'skillId',
-  { input: 'data' },
-  undefined,
   {
-    contextId: 'conversation-123',
+    input: 'data',
   }
 );
-const task = await waitForTask(client, card, taskId);
 ```
 
 #### [`@lucid-agents/ap2`](packages/ap2/README.md)
@@ -307,10 +322,15 @@ const task = await waitForTask(client, card, taskId);
 AP2 (Agent Payments Protocol) extension for Agent Cards.
 
 ```typescript
-import { createAP2Runtime, createAgentCardWithAP2 } from '@lucid-agents/ap2';
+import { createApp } from '@lucid-agents/core';
+import { ap2 } from '@lucid-agents/ap2';
 
-const ap2Runtime = createAP2Runtime({ roles: ['merchant'] });
-const cardWithAP2 = createAgentCardWithAP2(baseCard, ap2Runtime.config);
+const app = await createApp({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(ap2({ roles: ['merchant'] }))
+  .build();
 ```
 
 #### [`@lucid-agents/wallet`](packages/wallet/README.md)
@@ -349,47 +369,40 @@ Each package contains detailed API documentation, environment variable reference
 
 ## Example: Full-Featured Agent
 
-Here's a complete example showing identity, payments, and LLM integration:
+Here's a complete example showing identity, payments, and LLM integration with streaming:
 
 ```typescript
 import { z } from 'zod';
+import { createApp } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { wallets } from '@lucid-agents/wallet';
+import { walletsFromEnv } from '@lucid-agents/wallet';
+import { payments } from '@lucid-agents/payments';
+import { paymentsFromEnv } from '@lucid-agents/payments';
+import { identity, identityFromEnv } from '@lucid-agents/identity';
 import { createAgentApp } from '@lucid-agents/hono';
-import { createAgentIdentity, getTrustConfig } from '@lucid-agents/identity';
 import { AI } from '@ax-llm/ax';
 
-// 1. Create on-chain identity
-const identity = await createAgentIdentity({
-  domain: 'my-agent.example.com',
-  autoRegister: true,
-});
-
-// 2. Initialize LLM
+// 1. Initialize LLM
 const ai = new AI({
   provider: 'openai',
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 3. Create agent with payments and identity
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'ai-assistant',
-    version: '1.0.0',
-    description: 'AI assistant with on-chain reputation',
-    image: 'https://my-agent.example.com/og-image.png',
-  },
-  {
-    config: {
-      payments: {
-        payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS!,
-        network: 'base-sepolia',
-        facilitatorUrl: 'https://facilitator.daydreams.systems',
-        defaultPrice: '5000', // 0.005 USDC per request
-      },
-    },
-    useConfigPayments: true,
-    trust: getTrustConfig(identity),
-  }
-);
+// 2. Build app with all extensions (identity extension handles ERC-8004 registration automatically)
+const app = await createApp({
+  name: 'ai-assistant',
+  version: '1.0.0',
+  description: 'AI assistant with on-chain identity and streaming responses',
+  image: 'https://my-agent.example.com/og-image.png',
+})
+  .use(http())
+  .use(wallets({ config: { wallets: walletsFromEnv() } }))
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(identity({ config: identityFromEnv() }))
+  .build();
+
+const { app: agentApp, addEntrypoint } = createAgentApp(app);
 
 // 4. Add paid entrypoint with streaming
 addEntrypoint({
@@ -431,18 +444,18 @@ addEntrypoint({
 });
 
 const port = Number(process.env.PORT ?? 3000);
-app.listen(port, () => {
+agentApp.listen(port, () => {
   console.log(`agent listening on http://localhost:${port}`);
 });
 ```
 
 **Features demonstrated:**
 
-- On-chain identity registration (ERC-8004)
+- On-chain identity registration (ERC-8004) - automatically handled by identity extension
 - Automatic x402 payment verification
 - Streaming LLM responses via SSE
 - Type-safe input/output schemas
-- Trust metadata in manifest
+- Trust metadata in manifest for verifiable agent identity
 - Open Graph tags for discovery
 
 ---

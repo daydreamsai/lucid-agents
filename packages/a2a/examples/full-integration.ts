@@ -21,8 +21,10 @@
 
 import { z } from 'zod';
 import { createAgentApp } from '@lucid-agents/hono';
-import { createAgentRuntime } from '@lucid-agents/core';
-import { createA2ARuntime, fetchAndInvoke, waitForTask } from '../src/index';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { a2a } from '@lucid-agents/a2a';
+import { waitForTask } from '../src/index';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
 
 // Helper to start a simple HTTP server
@@ -59,20 +61,19 @@ async function main() {
   console.log('STEP 1: Creating Agent 1 (Worker Agent)');
   console.log('-'.repeat(80));
 
+  const agentBuilder1 = createAgent({
+    name: 'worker-agent',
+    version: '1.0.0',
+    description: 'Worker agent that processes tasks',
+  })
+    .use(http())
+    .use(a2a());
+
   const {
     app: app1,
     addEntrypoint: addEntrypoint1,
     runtime: runtime1,
-  } = createAgentApp(
-    {
-      name: 'worker-agent',
-      version: '1.0.0',
-      description: 'Worker agent that processes tasks',
-    },
-    {
-      payments: false, // No payments for A2A example
-    }
-  );
+  } = await createAgentApp(await agentBuilder1.build());
 
   // Add echo entrypoint
   addEntrypoint1({
@@ -148,23 +149,25 @@ async function main() {
   console.log('    - Client: Calls Agent 1 to do the work');
   console.log('-'.repeat(80));
 
+  const agentBuilder2 = createAgent({
+    name: 'facilitator-agent',
+    version: '1.0.0',
+    description: 'Facilitator agent that proxies requests to worker agent',
+  })
+    .use(http())
+    .use(a2a());
+
   const {
     app: app2,
     addEntrypoint: addEntrypoint2,
     runtime: runtime2,
-  } = createAgentApp(
-    {
-      name: 'facilitator-agent',
-      version: '1.0.0',
-      description: 'Facilitator agent that proxies requests to worker agent',
-    },
-    {
-      payments: false, // No payments for A2A example
-    }
-  );
+  } = await createAgentApp(await agentBuilder2.build());
 
-  // Create A2A runtime for Agent 2 to call Agent 1
-  const a2a2ForAgent1 = createA2ARuntime(runtime2);
+  // Get A2A runtime from Agent 2 (now available via extension)
+  const a2a2ForAgent1 = runtime2.a2a;
+  if (!a2a2ForAgent1) {
+    throw new Error('A2A runtime not available on Agent 2');
+  }
 
   // Add facilitator entrypoints that call Agent 1
   addEntrypoint2({
@@ -255,13 +258,18 @@ async function main() {
   console.log('STEP 3: Creating Agent 3 (Client Agent)');
   console.log('-'.repeat(80));
 
-  const { runtime: runtime3 } = createAgentRuntime({
+  const agent3 = await createAgent({
     name: 'client-agent',
     version: '1.0.0',
     description: 'Client agent that calls facilitator agent',
-  });
+  })
+    .use(a2a())
+    .build();
 
-  const a2a3: A2ARuntime = createA2ARuntime(runtime3);
+  const a2a3: A2ARuntime | undefined = agent3.a2a;
+  if (!a2a3) {
+    throw new Error('A2A runtime not available on Agent 3');
+  }
   console.log('Agent 3 ready');
   console.log('');
 
@@ -272,7 +280,10 @@ async function main() {
     console.log('STEP 4: Building Agent Cards');
     console.log('-'.repeat(80));
 
-    const a2a1: A2ARuntime = createA2ARuntime(runtime1);
+    const a2a1: A2ARuntime | undefined = runtime1.a2a;
+    if (!a2a1) {
+      throw new Error('A2A runtime not available on Agent 1');
+    }
 
     const card1 = a2a1.buildCard(server1.url);
     const card2 = a2a2ForAgent1.buildCard(server2.url);

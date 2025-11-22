@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { paymentMiddleware } from 'x402-hono';
 import type { FacilitatorConfig } from 'x402/types';
-import { toJsonSchemaOrUndefined } from './utils';
+import { z } from 'zod';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
@@ -36,8 +36,12 @@ export function withPayments({
 
   if (!price) return false;
   if (!payments.payTo) return false;
-  const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
-  const responseSchema = toJsonSchemaOrUndefined(entrypoint.output);
+  const requestSchema = entrypoint.input
+    ? z.toJSONSchema(entrypoint.input, { unrepresentable: 'any' })
+    : undefined;
+  const responseSchema = entrypoint.output
+    ? z.toJSONSchema(entrypoint.output, { unrepresentable: 'any' })
+    : undefined;
 
   const description =
     entrypoint.description ??

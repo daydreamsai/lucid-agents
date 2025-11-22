@@ -61,6 +61,13 @@ function pruneConfig(config: AgentKitConfig): AgentKitConfig {
   const next: AgentKitConfig = { ...config };
 
   if (!hasDefinedValue(next.payments)) {
+    // Debug: log what's being pruned
+    if (next.payments) {
+      console.log(
+        '[DEBUG] pruneConfig: payments config exists but hasDefinedValue returned false',
+        next.payments
+      );
+    }
     next.payments = undefined;
   }
 

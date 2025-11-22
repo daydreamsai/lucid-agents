@@ -1,14 +1,3 @@
-import { z } from 'zod';
-
-export function toJsonSchemaOrUndefined(s?: z.ZodTypeAny) {
-  if (!s) return undefined;
-  try {
-    return z.toJSONSchema(s);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Checks if a value has any defined (non-null, non-undefined, non-empty) properties.
  * Generic utility for runtime validation.

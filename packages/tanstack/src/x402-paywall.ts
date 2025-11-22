@@ -3,7 +3,7 @@ import {
   type RequestServerOptions,
   type RequestServerResult,
 } from "@tanstack/react-start";
-import type { Address as SolanaAddress } from "@solana/kit";
+import type { SolanaAddress } from "@lucid-agents/types/payments";
 import { Address, getAddress } from "viem";
 import { exact } from "x402/schemes";
 import { getPaywallHtml } from "x402/paywall";
@@ -336,4 +336,5 @@ export type TanStackRequestMiddleware = ReturnType<
 >;
 
 export type { Money, Network, RouteConfig, RoutesConfig } from "x402/types";
-export type { Address as SolanaChainAddress } from "@solana/kit";
+export type { SolanaAddress as SolanaChainAddress } from "@lucid-agents/types/payments";
+

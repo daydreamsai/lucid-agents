@@ -12,3 +12,13 @@ export {
   type CreateTanStackPaywallOptions,
   type TanStackPaywall,
 } from "./paywall";
+
+export {
+  paymentMiddleware,
+  type TanStackRequestMiddleware,
+  type Money,
+  type Network,
+  type RouteConfig,
+  type RoutesConfig,
+  type SolanaChainAddress,
+} from "./x402-paywall";

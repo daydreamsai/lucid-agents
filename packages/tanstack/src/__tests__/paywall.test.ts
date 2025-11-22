@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { PaymentsConfig } from "@lucid-agents/types/payments";
 import { createTanStackPaywall } from "../paywall";
 import type { RoutesConfig } from "x402/types";
-import type { TanStackRequestMiddleware } from "@lucid-agents/x402-tanstack-start";
+import type { TanStackRequestMiddleware } from "../x402-paywall";
 
 describe("createTanStackPaywall", () => {
   const payments: PaymentsConfig = {
@@ -53,7 +53,7 @@ describe("createTanStackPaywall", () => {
       _paywall
     ) => {
       return (() => Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import("@lucid-agents/x402-tanstack-start").paymentMiddleware;
+    }) satisfies typeof import("../x402-paywall").paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (payTo, routes, facilitator, paywall) => {
       capturedRoutes.push(routes as RoutesConfig);

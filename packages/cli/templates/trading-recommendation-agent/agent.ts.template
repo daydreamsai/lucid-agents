@@ -51,10 +51,10 @@ addEntrypoint({
 
     // Create payment-enabled fetch if wallet is available
     let fetchWithPayment: typeof fetch | undefined;
-    if (runtime.wallets?.agent) {
+    if (agent.wallets?.agent) {
       try {
         const paymentContext = await createRuntimePaymentContext({
-          runtime,
+          runtime: agent,
           network: process.env.PAYMENTS_NETWORK || 'base-sepolia',
         });
         fetchWithPayment = paymentContext.fetchWithPayment;
@@ -69,7 +69,7 @@ addEntrypoint({
 
     try {
       // Fetch data agent card to get pricing
-      const dataCard = await runtime.a2a?.fetchCard(
+      const dataCard = await agent.a2a?.fetchCard(
         DATA_AGENT_URL,
         fetchWithPayment
       );
@@ -90,10 +90,10 @@ addEntrypoint({
       const startTime = Date.now();
 
       while (Date.now() - startTime < maxWaitMs) {
-        if (!dataCard || !runtime.a2a) {
+        if (!dataCard || !agent.a2a) {
           throw new Error('A2A runtime not available');
         }
-        task = await runtime.a2a.client.getTask(
+        task = await agent.a2a.client.getTask(
           dataCard,
           taskResponse.taskId,
           fetchWithPayment
@@ -213,10 +213,10 @@ addEntrypoint({
 
     // Create payment-enabled fetch
     let fetchWithPayment: typeof fetch | undefined;
-    if (runtime.wallets?.agent) {
+    if (agent.wallets?.agent) {
       try {
         const paymentContext = await createRuntimePaymentContext({
-          runtime,
+          runtime: agent,
           network: process.env.PAYMENTS_NETWORK || 'base-sepolia',
         });
         fetchWithPayment = paymentContext.fetchWithPayment;

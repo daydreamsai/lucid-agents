@@ -37,17 +37,22 @@ describe('EntrypointDef type inference', () => {
       },
     });
 
-    const result = await core.invoke(
-      'chat',
-      {
+    // Test that handler receives properly typed input
+    const entrypoint = core.getEntrypoint('chat');
+    expect(entrypoint).toBeDefined();
+    if (!entrypoint?.handler) {
+      throw new Error('Handler not found');
+    }
+
+    const result = await entrypoint.handler({
+      key: 'chat',
+      input: {
         message: 'hello',
         count: 5,
       },
-      {
-        signal: new AbortController().signal,
-        headers: new Headers(),
-      }
-    );
+      signal: new AbortController().signal,
+      metadata: { headers: new Headers() },
+    });
 
     expect(result.output).toEqual({
       response: 'Received: hello',
@@ -81,14 +86,19 @@ describe('EntrypointDef type inference', () => {
       },
     });
 
-    const result = await core.invoke(
-      'generate',
-      { prompt: 'test' },
-      {
-        signal: new AbortController().signal,
-        headers: new Headers(),
-      }
-    );
+    // Test that handler receives properly typed input and returns properly typed output
+    const entrypoint = core.getEntrypoint('generate');
+    expect(entrypoint).toBeDefined();
+    if (!entrypoint?.handler) {
+      throw new Error('Handler not found');
+    }
+
+    const result = await entrypoint.handler({
+      key: 'generate',
+      input: { prompt: 'test' },
+      signal: new AbortController().signal,
+      metadata: { headers: new Headers() },
+    });
 
     expect(result.output).toHaveProperty('text');
     expect(result.output).toHaveProperty('tokens');
@@ -122,17 +132,22 @@ describe('EntrypointDef type inference', () => {
       },
     });
 
-    const result = await core.invoke(
-      'analyze',
-      {
+    // Test that handler receives properly typed complex nested input
+    const entrypoint = core.getEntrypoint('analyze');
+    expect(entrypoint).toBeDefined();
+    if (!entrypoint?.handler) {
+      throw new Error('Handler not found');
+    }
+
+    const result = await entrypoint.handler({
+      key: 'analyze',
+      input: {
         user: { name: 'Alice', age: 30 },
         preferences: ['coding', 'music'],
       },
-      {
-        signal: new AbortController().signal,
-        headers: new Headers(),
-      }
-    );
+      signal: new AbortController().signal,
+      metadata: { headers: new Headers() },
+    });
 
     expect(result.output).toEqual({
       summary: 'Alice (30) likes coding',

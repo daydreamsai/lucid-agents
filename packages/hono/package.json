@@ -42,6 +42,8 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }

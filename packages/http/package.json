@@ -1,0 +1,48 @@
+{
+  "name": "@lucid-agents/http",
+  "version": "1.7.0",
+  "description": "HTTP extension for agent runtime",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/http"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/types": "workspace:*",
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "hono": "catalog:"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

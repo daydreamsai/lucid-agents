@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { createTanStackPaywall } from '../paywall';
 import type { RoutesConfig } from 'x402/types';
-import type { TanStackRequestMiddleware } from '@lucid-agents/x402-tanstack-start';
+import type { TanStackRequestMiddleware } from '../x402-paywall';
 
 describe('TanStack Solana Payments', () => {
   const solanaPayments: PaymentsConfig = {
@@ -42,7 +42,7 @@ describe('TanStack Solana Payments', () => {
   // - Mocking facilitator's supported() call
   // - Creating full HTTP request/response cycle
   // - Mocking payment signature validation
-  // The core validation logic is in @lucid-agents/x402-tanstack-start (lines 143-179)
+  // The core validation logic is in ../x402-paywall.ts (lines 143-179)
 
   it('creates paywall middleware for Solana network', () => {
     const runtime = createRuntime(solanaPayments);
@@ -51,7 +51,7 @@ describe('TanStack Solana Payments', () => {
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('@lucid-agents/x402-tanstack-start').paymentMiddleware;
+    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
       payTo,
@@ -145,7 +145,7 @@ describe('TanStack Solana Payments', () => {
 
       const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
         return (() => Promise.resolve(new Response())) as any;
-      }) satisfies typeof import('@lucid-agents/x402-tanstack-start').paymentMiddleware;
+      }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
       const spyingFactory: typeof middlewareFactory = (
         payTo,
@@ -185,7 +185,7 @@ describe('TanStack Solana Payments', () => {
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('@lucid-agents/x402-tanstack-start').paymentMiddleware;
+    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
       payTo,
@@ -229,7 +229,7 @@ describe('TanStack Solana Payments', () => {
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('@lucid-agents/x402-tanstack-start').paymentMiddleware;
+    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
       payTo,

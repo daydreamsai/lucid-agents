@@ -46,10 +46,10 @@ export const Route = createFileRoute('/')({
   loader: async () => {
     'use server';
     const agentModule = await import('@/lib/agent');
-    const { agent } = agentModule;
+    const { agent, runtime } = agentModule;
 
     // Get manifest to extract schemas
-    const manifest = agent.resolveManifest('http://localhost', '/api/agent');
+    const manifest = runtime.manifest.build('http://localhost');
     const manifestEntrypoints = manifest.entrypoints || [];
 
     const rawEntrypoints = agent.listEntrypoints();

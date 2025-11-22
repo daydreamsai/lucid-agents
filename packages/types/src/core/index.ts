@@ -1,5 +1,5 @@
 import type { Network, Resource } from 'x402/types';
-import type { z } from 'zod';
+import { z, type z as ZType } from 'zod';
 
 import type { EntrypointPrice, SolanaAddress } from '../payments';
 import type { WalletsConfig, AgentWalletHandle } from '../wallets';
@@ -56,10 +56,24 @@ export type AgentContext = {
   key: string;
   input: unknown;
   signal: AbortSignal;
-  headers: Headers;
+  metadata?: Record<string, unknown>;
   runId?: string;
   runtime?: AgentRuntime;
 };
+
+/**
+ * Error thrown when input or output validation fails.
+ */
+export class ZodValidationError extends Error {
+  constructor(
+    public readonly kind: 'input' | 'output',
+    public readonly issues: z.ZodError['issues']
+  ) {
+    super(
+      kind === 'input' ? 'Invalid input provided' : 'Invalid output produced'
+    );
+  }
+}
 
 /**
  * Stream envelope types for SSE responses.
@@ -395,6 +409,23 @@ export type AgentRuntime = {
   payments?: import('../payments').PaymentsRuntime;
   a2a?: import('../a2a').A2ARuntime;
   ap2?: import('../ap2').AP2Runtime;
+  handlers?: {
+    health: (req: Request) => Promise<Response>;
+    entrypoints: (req: Request) => Promise<Response>;
+    manifest: (req: Request) => Promise<Response>;
+    landing?: (req: Request) => Promise<Response>;
+    favicon: (req: Request) => Promise<Response>;
+    invoke: (req: Request, params: { key: string }) => Promise<Response>;
+    stream: (req: Request, params: { key: string }) => Promise<Response>;
+    tasks: (req: Request) => Promise<Response>;
+    getTask: (req: Request, params: { taskId: string }) => Promise<Response>;
+    listTasks: (req: Request) => Promise<Response>;
+    cancelTask: (req: Request, params: { taskId: string }) => Promise<Response>;
+    subscribeTask: (
+      req: Request,
+      params: { taskId: string }
+    ) => Promise<Response>;
+  };
   entrypoints: EntrypointsRuntime;
   manifest: ManifestRuntime;
 };
@@ -418,3 +449,71 @@ export type CreateAgentAppReturn<
   addEntrypoint: (def: EntrypointDef) => void;
   config: TConfig;
 };
+
+/**
+ * Build context provided to extensions during build.
+ */
+export type BuildContext = {
+  meta: AgentMeta;
+  config: AgentKitConfig;
+  runtime: Partial<AgentRuntime>;
+};
+
+/**
+ * Extension interface. Each extension contributes a runtime slice.
+ */
+export interface Extension<R extends Record<string, unknown> = {}> {
+  /**
+   * Unique name of the extension (for debugging and conflict detection).
+   */
+  name: string;
+
+  /**
+   * Builds the extension's runtime slice.
+   * Called during AgentBuilder.build() to construct the runtime.
+   */
+  build: (ctx: BuildContext) => R;
+
+  /**
+   * Optional hook called when an entrypoint is added to the runtime.
+   * Useful for extensions that need to activate/enable themselves per entrypoint.
+   */
+  onEntrypointAdded?: (
+    entrypoint: EntrypointDef,
+    runtime: AgentRuntime
+  ) => void;
+
+  /**
+   * Optional hook called after all extensions are built.
+   * Useful for final setup that requires the complete runtime.
+   * Can be async for initialization that requires async operations.
+   */
+  onBuild?: (runtime: AgentRuntime) => void | Promise<void>;
+
+  /**
+   * Optional hook called when building the manifest/agent card.
+   * Can modify the card before it's returned.
+   */
+  onManifestBuild?: (
+    card: AgentCardWithEntrypoints,
+    runtime: AgentRuntime
+  ) => AgentCardWithEntrypoints;
+}
+
+/**
+ * Type utility to convert a union of types to an intersection.
+ * Used for merging extension runtime types.
+ */
+export type UnionToIntersection<U> = (
+  U extends any ? (k: U) => void : never
+) extends (k: infer I) => void
+  ? I
+  : never;
+
+/**
+ * Type utility to extract the runtime type from an array of extensions.
+ * Merges all extension runtime slices into a single type.
+ */
+export type AppRuntime<Es extends Extension[]> = UnionToIntersection<
+  Es[number] extends Extension<infer R> ? R : never
+>;

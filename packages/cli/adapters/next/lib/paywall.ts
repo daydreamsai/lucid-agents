@@ -1,7 +1,6 @@
-import type { AgentHttpRuntime } from '@lucid-agents/core';
-import { toJsonSchemaOrUndefined } from '@lucid-agents/core';
+import { z } from 'zod';
 import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
-import type { EntrypointDef } from '@lucid-agents/types/core';
+import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import type {
   FacilitatorConfig,
@@ -14,7 +13,7 @@ import { paymentMiddleware } from 'x402-next';
 const DEFAULT_BASE_PATH = '/api/agent';
 
 export type CreateNextPaywallOptions = {
-  runtime: Pick<AgentHttpRuntime, 'snapshotEntrypoints' | 'payments'>;
+  runtime: Pick<AgentRuntime, 'entrypoints' | 'payments'>;
   basePath?: string;
   payments?: PaymentsConfig;
   facilitator?: FacilitatorConfig;
@@ -59,10 +58,14 @@ function buildEntrypointRoutes({
 
     if (!network || !price) continue;
 
-    const requestSchema = toJsonSchemaOrUndefined(entrypoint.input);
+    const requestSchema = entrypoint.input
+      ? z.toJSONSchema(entrypoint.input)
+      : undefined;
     const responseSchema =
       kind === 'invoke'
-        ? toJsonSchemaOrUndefined(entrypoint.output)
+        ? entrypoint.output
+          ? z.toJSONSchema(entrypoint.output)
+          : undefined
         : undefined;
     const description =
       entrypoint.description ??

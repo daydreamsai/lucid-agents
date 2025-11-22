@@ -26,6 +26,11 @@
       "import": "./dist/ap2/index.js",
       "default": "./dist/ap2/index.js"
     },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js",
+      "default": "./dist/http/index.js"
+    },
     "./identity": {
       "types": "./dist/identity/index.d.ts",
       "import": "./dist/identity/index.js",

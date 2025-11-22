@@ -22,18 +22,18 @@ bun add @lucid-agents/a2a
 ### Building Agent Cards
 
 ```typescript
-import { createA2ARuntime } from '@lucid-agents/a2a';
-import { createAgentRuntime } from '@lucid-agents/core';
+import { createAgent } from '@lucid-agents/core';
+import { a2a } from '@lucid-agents/a2a';
 
-const runtime = createAgentRuntime({
+const agent = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
-});
-
-const a2a = createA2ARuntime(runtime);
+})
+  .use(a2a())
+  .build();
 
 // Build Agent Card
-const card = a2a.buildCard('https://my-agent.example.com');
+const card = runtime.a2a.buildCard('https://my-agent.example.com');
 console.log(card.name); // 'my-agent'
 console.log(card.skills); // Array of skills/entrypoints
 ```
@@ -42,7 +42,7 @@ console.log(card.skills); // Array of skills/entrypoints
 
 ```typescript
 // Fetch another agent's card
-const otherAgentCard = await a2a.fetchCard('https://other-agent.example.com');
+const otherAgentCard = await runtime.a2a.fetchCard('https://other-agent.example.com');
 
 // Find a specific skill
 import { findSkill } from '@lucid-agents/a2a';
@@ -53,7 +53,7 @@ const echoSkill = findSkill(otherAgentCard, 'echo');
 
 ```typescript
 // Synchronous invocation
-const result = await a2a.client.invoke(otherAgentCard, 'echo', {
+const result = await runtime.a2a.client.invoke(otherAgentCard, 'echo', {
   text: 'Hello, agent!',
 });
 
@@ -65,7 +65,7 @@ console.log(result.usage); // { total_tokens: 10 }
 
 ```typescript
 // Create a task (returns immediately)
-const { taskId } = await a2a.client.sendMessage(
+const { taskId } = await runtime.a2a.client.sendMessage(
   otherAgentCard,
   'process',
   { data: [1, 2, 3] },
@@ -74,12 +74,12 @@ const { taskId } = await a2a.client.sendMessage(
 );
 
 // Get task status
-const task = await a2a.client.getTask(otherAgentCard, taskId);
+const task = await runtime.a2a.client.getTask(otherAgentCard, taskId);
 console.log(task.status); // 'running' | 'completed' | 'failed' | 'cancelled'
 
 // Wait for task completion
 import { waitForTask } from '@lucid-agents/a2a';
-const completedTask = await waitForTask(a2a.client, otherAgentCard, taskId);
+const completedTask = await waitForTask(runtime.a2a.client, otherAgentCard, taskId);
 console.log(completedTask.result?.output);
 ```
 
@@ -89,7 +89,7 @@ console.log(completedTask.result?.output);
 const contextId = 'conversation-123';
 
 // First message
-const { taskId: task1 } = await a2a.client.sendMessage(
+const { taskId: task1 } = await runtime.a2a.client.sendMessage(
   otherAgentCard,
   'chat',
   { message: 'Hello' },
@@ -98,7 +98,7 @@ const { taskId: task1 } = await a2a.client.sendMessage(
 );
 
 // Second message in same conversation
-const { taskId: task2 } = await a2a.client.sendMessage(
+const { taskId: task2 } = await runtime.a2a.client.sendMessage(
   otherAgentCard,
   'chat',
   { message: 'How are you?' },
@@ -107,7 +107,7 @@ const { taskId: task2 } = await a2a.client.sendMessage(
 );
 
 // List all tasks in conversation
-const conversationTasks = await a2a.client.listTasks(otherAgentCard, {
+const conversationTasks = await runtime.a2a.client.listTasks(otherAgentCard, {
   contextId,
 });
 console.log(`Found ${conversationTasks.tasks.length} tasks in conversation`);

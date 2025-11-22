@@ -9,15 +9,6 @@ import type {
 import type { BuildAgentCardOptions } from '@lucid-agents/types/a2a';
 import { z } from 'zod';
 
-function toJsonSchemaOrUndefined(s?: z.ZodTypeAny) {
-  if (!s) return undefined;
-  try {
-    return z.toJSONSchema(s);
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Builds base Agent Card following A2A protocol.
  * Does NOT include payments, identity, or AP2 extensions.
@@ -36,8 +27,8 @@ export function buildAgentCard({
     const manifestEntry: Manifest['entrypoints'][string] = {
       description: e.description,
       streaming: Boolean(e.stream),
-      input_schema: toJsonSchemaOrUndefined(e.input),
-      output_schema: toJsonSchemaOrUndefined(e.output),
+      input_schema: e.input ? z.toJSONSchema(e.input) : undefined,
+      output_schema: e.output ? z.toJSONSchema(e.output) : undefined,
     };
     // Note: pricing is NOT added here - that's payments package responsibility
     entrypoints[e.key] = manifestEntry;
@@ -52,8 +43,8 @@ export function buildAgentCard({
     inputModes: defaultInputModes,
     outputModes: defaultOutputModes,
     streaming: Boolean(e.stream),
-    x_input_schema: toJsonSchemaOrUndefined(e.input),
-    x_output_schema: toJsonSchemaOrUndefined(e.output),
+    x_input_schema: e.input ? z.toJSONSchema(e.input) : undefined,
+    x_output_schema: e.output ? z.toJSONSchema(e.output) : undefined,
   }));
 
   const capabilities: AgentCapabilities = {

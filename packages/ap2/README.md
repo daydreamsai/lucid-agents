@@ -42,23 +42,29 @@ const ap2Runtime = createAP2Runtime({
 ### Integration with Agent Runtime
 
 ```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { ap2 } from '@lucid-agents/ap2';
 import { createAgentApp } from '@lucid-agents/hono';
-import { createAP2Runtime } from '@lucid-agents/ap2';
 
-const { app, runtime } = createAgentApp(
-  {
-    name: 'my-agent',
-    version: '1.0.0',
-  },
-  {
-    // AP2 is automatically enabled when payments are configured
-    payments: {
+// AP2 must be explicitly configured - no auto-detection
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({
+    config: {
       payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS!,
       network: 'base-sepolia',
       facilitatorUrl: 'https://facilitator.example.com',
     },
-  }
-);
+  }))
+  .use(ap2({ roles: ['merchant'] })) // Explicitly add AP2 extension
+  .build();
+
+const { app } = createAgentApp(runtime);
 
 // AP2 runtime is available via runtime.ap2
 if (runtime.ap2) {
@@ -109,12 +115,27 @@ console.log(AP2_EXTENSION_URI); // 'https://ap2.daydreams.systems'
 
 - **`merchant`**: Agent accepts payments for its services
 - **`shopper`**: Agent makes payments to other agents
+- **`credentials-provider`**: Agent provides payment credentials
+- **`payment-processor`**: Agent processes payments
 
 An agent can have multiple roles (e.g., both `merchant` and `shopper`).
 
-## Auto-Enablement
+## Payments vs AP2
 
-When payments are configured in the agent runtime, the `merchant` role is automatically added to the AP2 extension. This ensures that payment-enabled agents are discoverable by other agents.
+**Payments extension** (`@lucid-agents/payments`) and **AP2 extension** (`@lucid-agents/ap2`) are independent:
+
+- **Payments extension** - Handles actual payment processing via x402 protocol
+- **AP2 extension** - Advertises payment roles in the manifest for discovery
+
+**To receive payments:** Use the `payments()` extension.
+
+**To participate in AP2 ecosystem:** Explicitly add the `ap2()` extension with appropriate roles (e.g., `merchant` for accepting payments).
+
+**Common pattern:** If you're accepting payments and want to be discoverable in the AP2 ecosystem, use both:
+```typescript
+.use(payments({ config: {...} }))  // Enable payment processing
+.use(ap2({ roles: ['merchant'] }))  // Advertise merchant role
+```
 
 ## Related Packages
 

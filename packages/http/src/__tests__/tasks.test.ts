@@ -5,32 +5,112 @@ import type {
   Task,
   TaskStatus,
 } from '@lucid-agents/types/a2a';
-import { afterEach, describe, expect, it } from 'bun:test';
+import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 
-import { resetAgentKitConfigForTesting } from '../config/config';
-import { createAgentHttpRuntime } from '../http/runtime';
+import { http } from '../index';
+import type { InvokeResult } from '../invoke';
+import { ZodValidationError } from '@lucid-agents/types/core';
 
-const makeTestRuntime = () => {
-  return createAgentHttpRuntime(
-    {
-      name: 'test-agent',
-      version: '1.0.0',
-      description: 'Test agent',
+const meta = {
+  name: 'test-agent',
+  version: '1.0.0',
+  description: 'Test agent',
+};
+
+const makeMockRuntime = (
+  entrypoints: Map<string, EntrypointDef>,
+  invokeFn?: (
+    key: string,
+    input: unknown,
+    options: any
+  ) => Promise<InvokeResult>
+): AgentRuntime => {
+  const defaultInvoke = async (
+    key: string,
+    input: unknown,
+    options: any
+  ): Promise<InvokeResult> => {
+    const entrypoint = entrypoints.get(key);
+    if (!entrypoint || !entrypoint.handler) {
+      throw new Error(`Entrypoint ${key} not found or has no handler`);
+    }
+
+    // Call the actual handler from the entrypoint
+    const ctx = {
+      key,
+      input,
+      signal: options.signal,
+      metadata: {
+      headers: options.headers || new Headers(),
+      },
+      runId: options.runId,
+      runtime: options.runtime,
+    };
+
+    return await entrypoint.handler(ctx as any);
+  };
+
+  return {
+    agent: {
+      config: { meta },
+      getEntrypoint: (key: string) => entrypoints.get(key),
+      invoke: invokeFn || defaultInvoke,
     },
-    {}
-  );
+    config: {},
+    entrypoints: {
+      add: (def: EntrypointDef) => {
+        entrypoints.set(def.key, def);
+      },
+      list: () =>
+        Array.from(entrypoints.values()).map(e => ({
+          key: e.key,
+          description: e.description,
+          streaming: !!e.streaming,
+        })),
+      snapshot: () => Array.from(entrypoints.values()),
+    },
+    manifest: {
+      build: () => ({
+        name: meta.name,
+        version: meta.version,
+        entrypoints: {},
+      }),
+      invalidate: () => {},
+    },
+  } as AgentRuntime;
+};
+
+const makeTestHandlers = (
+  invokeFn?: (
+    key: string,
+    input: unknown,
+    options: any
+  ) => Promise<InvokeResult>
+) => {
+  const entrypoints = new Map<string, EntrypointDef>();
+  const ext = http();
+  ext.build({
+    meta,
+    config: {},
+    runtime: {},
+  });
+  const runtime = makeMockRuntime(entrypoints, invokeFn);
+  ext.onBuild?.(runtime);
+  // Handlers are attached to runtime in onBuild
+  return {
+    handlers: (runtime as any).handlers!,
+    runtime,
+    entrypoints,
+  };
 };
 
 describe('Task Operations', () => {
-  afterEach(() => {
-    resetAgentKitConfigForTesting();
-  });
-
   describe('POST /tasks - Create Task', () => {
     it('creates a task and returns taskId with running status', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -58,7 +138,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const response = await runtime.handlers.tasks(request);
+      const response = await handlers.tasks(request);
       expect(response.status).toBe(200);
 
       const data = (await response.json()) as {
@@ -71,10 +151,10 @@ describe('Task Operations', () => {
     });
 
     it('fires async execution and returns immediately', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers, entrypoints } = makeTestHandlers();
       let handlerCalled = false;
 
-      runtime.entrypoints.add({
+      entrypoints.set('slow', {
         key: 'slow',
         description: 'Slow endpoint',
         input: z.object({ text: z.string() }),
@@ -105,7 +185,7 @@ describe('Task Operations', () => {
       });
 
       const startTime = Date.now();
-      const response = await runtime.handlers.tasks(request);
+      const response = await handlers.tasks(request);
       const elapsed = Date.now() - startTime;
 
       expect(elapsed).toBeLessThan(50);
@@ -123,7 +203,7 @@ describe('Task Operations', () => {
     });
 
     it('returns 404 if skillId not found', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers } = makeTestHandlers();
 
       const requestBody: SendMessageRequest = {
         message: {
@@ -139,7 +219,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const response = await runtime.handlers.tasks(request);
+      const response = await handlers.tasks(request);
       expect(response.status).toBe(404);
 
       const data = await response.json();
@@ -150,7 +230,7 @@ describe('Task Operations', () => {
     });
 
     it('returns 400 if request body is invalid', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers } = makeTestHandlers();
 
       const request = new Request('http://localhost/tasks', {
         method: 'POST',
@@ -158,15 +238,15 @@ describe('Task Operations', () => {
         body: JSON.stringify({ invalid: 'data' }),
       });
 
-      const response = await runtime.handlers.tasks(request);
+      const response = await handlers.tasks(request);
       expect(response.status).toBe(400);
     });
   });
 
   describe('GET /tasks/{taskId} - Get Task Status', () => {
     it('returns task with running status immediately after creation', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -196,7 +276,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       // Get task status immediately (should be running)
@@ -204,7 +284,7 @@ describe('Task Operations', () => {
         method: 'GET',
       });
 
-      const getResponse = await runtime.handlers.getTask(getRequest, {
+      const getResponse = await handlers.getTask(getRequest, {
         taskId,
       });
       expect(getResponse.status).toBe(200);
@@ -219,8 +299,8 @@ describe('Task Operations', () => {
     });
 
     it('returns task with completed status after handler finishes', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -250,7 +330,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       // Wait for task to complete
@@ -261,7 +341,7 @@ describe('Task Operations', () => {
         method: 'GET',
       });
 
-      const getResponse = await runtime.handlers.getTask(getRequest, {
+      const getResponse = await handlers.getTask(getRequest, {
         taskId,
       });
       expect(getResponse.status).toBe(200);
@@ -275,8 +355,8 @@ describe('Task Operations', () => {
     });
 
     it('returns task with failed status if handler throws error', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('failing', {
         key: 'failing',
         description: 'Failing endpoint',
         input: z.object({ text: z.string() }),
@@ -301,7 +381,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       // Wait for task to fail
@@ -312,7 +392,7 @@ describe('Task Operations', () => {
         method: 'GET',
       });
 
-      const getResponse = await runtime.handlers.getTask(getRequest, {
+      const getResponse = await handlers.getTask(getRequest, {
         taskId,
       });
       expect(getResponse.status).toBe(200);
@@ -325,14 +405,14 @@ describe('Task Operations', () => {
     });
 
     it('returns 404 if taskId not found', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers } = makeTestHandlers();
       const fakeTaskId = randomUUID();
 
       const request = new Request(`http://localhost/tasks/${fakeTaskId}`, {
         method: 'GET',
       });
 
-      const response = await runtime.handlers.getTask(request, {
+      const response = await handlers.getTask(request, {
         taskId: fakeTaskId,
       });
       expect(response.status).toBe(404);
@@ -347,8 +427,8 @@ describe('Task Operations', () => {
 
   describe('GET /tasks/{taskId}/subscribe - Task Subscription (SSE)', () => {
     it('streams status updates for task', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -378,7 +458,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       // Subscribe to task updates
@@ -389,12 +469,9 @@ describe('Task Operations', () => {
         }
       );
 
-      const subscribeResponse = await runtime.handlers.subscribeTask(
-        subscribeRequest,
-        {
-          taskId,
-        }
-      );
+      const subscribeResponse = await handlers.subscribeTask(subscribeRequest, {
+        taskId,
+      });
       expect(subscribeResponse.status).toBe(200);
       expect(subscribeResponse.headers.get('Content-Type')).toContain(
         'text/event-stream'
@@ -454,8 +531,8 @@ describe('Task Operations', () => {
 
   describe('Task Lifecycle', () => {
     it('handles concurrent task execution', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -485,7 +562,7 @@ describe('Task Operations', () => {
           body: JSON.stringify(requestBody),
         });
 
-        return runtime.handlers.tasks(request);
+        return handlers.tasks(request);
       });
 
       const responses = await Promise.all(taskPromises);
@@ -508,7 +585,7 @@ describe('Task Operations', () => {
           method: 'GET',
         });
 
-        const getResponse = await runtime.handlers.getTask(getRequest, {
+        const getResponse = await handlers.getTask(getRequest, {
           taskId,
         });
         const task = (await getResponse.json()) as Task;
@@ -519,8 +596,8 @@ describe('Task Operations', () => {
 
   describe('GET /tasks - List Tasks', () => {
     it('returns all tasks without filters', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -549,7 +626,7 @@ describe('Task Operations', () => {
           body: JSON.stringify(requestBody),
         });
 
-        const response = await runtime.handlers.tasks(request);
+        const response = await handlers.tasks(request);
         const data = (await response.json()) as { taskId: string };
         return data.taskId;
       };
@@ -563,7 +640,7 @@ describe('Task Operations', () => {
         method: 'GET',
       });
 
-      const listResponse = await runtime.handlers.listTasks(listRequest);
+      const listResponse = await handlers.listTasks(listRequest);
       expect(listResponse.status).toBe(200);
 
       const listData = (await listResponse.json()) as {
@@ -577,8 +654,8 @@ describe('Task Operations', () => {
     });
 
     it('filters tasks by contextId', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -608,7 +685,7 @@ describe('Task Operations', () => {
           body: JSON.stringify(requestBody),
         });
 
-        const response = await runtime.handlers.tasks(request);
+        const response = await handlers.tasks(request);
         const data = (await response.json()) as { taskId: string };
         return data.taskId;
       };
@@ -629,7 +706,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const listResponse = await runtime.handlers.listTasks(listRequest);
+      const listResponse = await handlers.listTasks(listRequest);
       expect(listResponse.status).toBe(200);
 
       const listData = (await listResponse.json()) as {
@@ -645,8 +722,8 @@ describe('Task Operations', () => {
     });
 
     it('filters tasks by status', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -675,7 +752,7 @@ describe('Task Operations', () => {
           body: JSON.stringify(requestBody),
         });
 
-        const response = await runtime.handlers.tasks(request);
+        const response = await handlers.tasks(request);
         const data = (await response.json()) as { taskId: string };
         return data.taskId;
       };
@@ -692,7 +769,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const listResponse = await runtime.handlers.listTasks(listRequest);
+      const listResponse = await handlers.listTasks(listRequest);
       expect(listResponse.status).toBe(200);
 
       const listData = (await listResponse.json()) as {
@@ -705,8 +782,8 @@ describe('Task Operations', () => {
     });
 
     it('supports pagination with limit and offset', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -735,7 +812,7 @@ describe('Task Operations', () => {
           body: JSON.stringify(requestBody),
         });
 
-        const response = await runtime.handlers.tasks(request);
+        const response = await handlers.tasks(request);
         const data = (await response.json()) as { taskId: string };
         return data.taskId;
       };
@@ -753,7 +830,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const listResponse = await runtime.handlers.listTasks(listRequest);
+      const listResponse = await handlers.listTasks(listRequest);
       expect(listResponse.status).toBe(200);
 
       const listData = (await listResponse.json()) as {
@@ -769,10 +846,10 @@ describe('Task Operations', () => {
 
   describe('POST /tasks/{taskId}/cancel - Cancel Task', () => {
     it('cancels a running task', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers, entrypoints } = makeTestHandlers();
       let taskAborted = false;
 
-      runtime.entrypoints.add({
+      entrypoints.set('slow', {
         key: 'slow',
         description: 'Slow endpoint',
         input: z.object({ delay: z.number() }),
@@ -809,7 +886,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       await new Promise(resolve => setTimeout(resolve, 50));
@@ -821,7 +898,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const cancelResponse = await runtime.handlers.cancelTask(cancelRequest, {
+      const cancelResponse = await handlers.cancelTask(cancelRequest, {
         taskId,
       });
       expect(cancelResponse.status).toBe(200);
@@ -836,7 +913,7 @@ describe('Task Operations', () => {
         method: 'GET',
       });
 
-      const getResponse = await runtime.handlers.getTask(getRequest, {
+      const getResponse = await handlers.getTask(getRequest, {
         taskId,
       });
       const task = (await getResponse.json()) as Task;
@@ -844,7 +921,7 @@ describe('Task Operations', () => {
     });
 
     it('returns 404 for non-existent task', async () => {
-      const runtime = makeTestRuntime();
+      const { handlers } = makeTestHandlers();
 
       const cancelRequest = new Request(
         'http://localhost/tasks/non-existent/cancel',
@@ -853,7 +930,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const cancelResponse = await runtime.handlers.cancelTask(cancelRequest, {
+      const cancelResponse = await handlers.cancelTask(cancelRequest, {
         taskId: 'non-existent',
       });
       expect(cancelResponse.status).toBe(404);
@@ -865,8 +942,8 @@ describe('Task Operations', () => {
     });
 
     it('returns 400 for non-running task', async () => {
-      const runtime = makeTestRuntime();
-      runtime.entrypoints.add({
+      const { handlers, entrypoints } = makeTestHandlers();
+      entrypoints.set('echo', {
         key: 'echo',
         description: 'Echo endpoint',
         input: z.object({ text: z.string() }),
@@ -894,7 +971,7 @@ describe('Task Operations', () => {
         body: JSON.stringify(requestBody),
       });
 
-      const createResponse = await runtime.handlers.tasks(createRequest);
+      const createResponse = await handlers.tasks(createRequest);
       const { taskId } = (await createResponse.json()) as { taskId: string };
 
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -906,7 +983,7 @@ describe('Task Operations', () => {
         }
       );
 
-      const cancelResponse = await runtime.handlers.cancelTask(cancelRequest, {
+      const cancelResponse = await handlers.cancelTask(cancelRequest, {
         taskId,
       });
       expect(cancelResponse.status).toBe(400);

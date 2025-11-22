@@ -12,7 +12,7 @@ export default defineConfig({
     '@lucid-agents/core',
     '@lucid-agents/payments',
     '@lucid-agents/types',
-    '@lucid-agents/x402-tanstack-start',
+    '@tanstack/react-start',
     '@tanstack/start',
     '@tanstack/react-router',
     'viem',

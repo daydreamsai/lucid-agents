@@ -1,13 +1,16 @@
 {{ADAPTER_IMPORTS}}
+import { http } from "@lucid-agents/http";
 
 {{ADAPTER_PRE_SETUP}}
-const appOptions = {
-  payments: {
+
+if (process.env.PAYMENTS_RECEIVABLE_ADDRESS) {
+  const { payments } = await import("@lucid-agents/payments");
+  agent.use(payments({
     facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL as `${string}://${string}`,
-    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
     network: process.env.PAYMENTS_NETWORK as any,
-  },
-};
+  }));
+}
 
 {{ADAPTER_POST_SETUP}}
 
@@ -15,26 +18,26 @@ const appOptions = {
  * Example entrypoint that demonstrates direct invocation and task-based operations.
  *
  * Direct Invocation (synchronous):
- * - Use `runtime.a2a?.client.invoke(card, skillId, input)` for immediate results
+ * - Use `agent.a2a?.client.invoke(card, skillId, input)` for immediate results
  * - Returns result immediately, blocks until handler completes
  * - Good for short-running operations
  *
  * Task-Based Operations (asynchronous):
- * - Use `runtime.a2a?.client.sendMessage(card, skillId, input)` to create a task
+ * - Use `agent.a2a?.client.sendMessage(card, skillId, input)` to create a task
  * - Returns taskId immediately, task runs asynchronously
- * - Poll `runtime.a2a?.client.getTask(card, taskId)` to get result
- * - Or subscribe via `runtime.a2a?.client.subscribeTask(card, taskId, emit)` for SSE updates
+ * - Poll `agent.a2a?.client.getTask(card, taskId)` to get result
+ * - Or subscribe via `agent.a2a?.client.subscribeTask(card, taskId, emit)` for SSE updates
  * - Good for long-running operations or when you need task status tracking
  *
  * Example (Task-Based):
  * ```typescript
  * // Create task
- * const { taskId } = await runtime.a2a?.client.sendMessage(card, 'process', input);
+ * const { taskId } = await agent.a2a?.client.sendMessage(card, 'process', input);
  *
  * // Poll for completion
  * let task;
  * while (true) {
- *   task = await runtime.a2a?.client.getTask(card, taskId);
+ *   task = await agent.a2a?.client.getTask(card, taskId);
  *   if (task.status === 'completed' || task.status === 'failed') break;
  *   await new Promise(resolve => setTimeout(resolve, 100));
  * }

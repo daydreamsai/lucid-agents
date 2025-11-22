@@ -81,7 +81,7 @@ async function buildPackages() {
   }
 
   // Build order: base packages → extensions → core → adapters → CLI
-  // Extensions (wallet, payments, identity, a2a, ap2) only depend on types and wallet.
+  // Extensions (wallet, payments, identity, a2a, ap2, http) only depend on types.
   // Core depends on all extensions, so extensions must build first.
   const preferredOrder = [
     // Base layer - no internal dependencies
@@ -93,6 +93,7 @@ async function buildPackages() {
     '@lucid-agents/identity', // Depends on types only
     '@lucid-agents/a2a', // Depends on types only
     '@lucid-agents/ap2', // Depends on types only
+    '@lucid-agents/http', // Depends on types only
 
     // Core - depends on all extensions
     '@lucid-agents/core', // Depends on payments, identity, a2a, ap2, types, wallet
@@ -100,8 +101,7 @@ async function buildPackages() {
     // Adapters - depend on core and extensions
     '@lucid-agents/hono', // Depends on core, payments, types
     '@lucid-agents/express', // Depends on core, payments, types
-    '@lucid-agents/x402-tanstack-start', // No internal dependencies
-    '@lucid-agents/tanstack', // Depends on core, payments, types, x402-tanstack-start
+    '@lucid-agents/tanstack', // Depends on core, payments, types
 
     // CLI - no dependencies on other packages
     '@lucid-agents/cli',
