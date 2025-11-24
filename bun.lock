@@ -25,7 +25,7 @@
     },
     "packages/a2a": {
       "name": "@lucid-agents/a2a",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "zod": "catalog:",
@@ -40,7 +40,7 @@
     },
     "packages/ap2": {
       "name": "@lucid-agents/ap2",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
       },
@@ -51,7 +51,7 @@
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -66,7 +66,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -86,7 +86,6 @@
       },
       "devDependencies": {
         "@lucid-agents/eslint-config": "workspace:*",
-        "@lucid-agents/hono": "workspace:*",
         "@lucid-agents/prettier-config": "workspace:*",
         "tsup": "catalog:",
         "typescript": "catalog:",
@@ -96,9 +95,36 @@
       "name": "@lucid-agents/eslint-config",
       "version": "1.0.0",
     },
+    "packages/examples": {
+      "name": "@lucid-agents/examples",
+      "version": "0.1.0",
+      "dependencies": {
+        "@ax-llm/ax": "^14.0.37",
+        "@lucid-agents/a2a": "workspace:*",
+        "@lucid-agents/core": "workspace:*",
+        "@lucid-agents/hono": "workspace:*",
+        "@lucid-agents/http": "workspace:*",
+        "@lucid-agents/identity": "workspace:*",
+        "@lucid-agents/payments": "workspace:*",
+        "@lucid-agents/types": "workspace:*",
+        "@lucid-agents/wallet": "workspace:*",
+        "@lucid-dreams/agent-auth": "latest",
+        "viem": "^2.38.5",
+        "x402": "^0.7.1",
+        "x402-fetch": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@lucid-agents/eslint-config": "workspace:*",
+        "@lucid-agents/prettier-config": "workspace:*",
+        "bun-types": "latest",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -117,7 +143,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -137,7 +163,7 @@
     },
     "packages/http": {
       "name": "@lucid-agents/http",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -147,12 +173,15 @@
       "devDependencies": {
         "tsup": "catalog:",
         "typescript": "catalog:",
-        "zod": "^4.1.12",
+        "zod": "catalog:",
+      },
+      "peerDependencies": {
+        "zod": "^4.0.0",
       },
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -167,7 +196,7 @@
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -187,7 +216,7 @@
     },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -205,7 +234,7 @@
     },
     "packages/types": {
       "name": "@lucid-agents/types",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "devDependencies": {
         "tsup": "catalog:",
         "typescript": "catalog:",
@@ -218,7 +247,7 @@
     },
     "packages/wallet": {
       "name": "@lucid-agents/wallet",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "viem": "^2.38.5",
@@ -452,6 +481,8 @@
     "@lucid-agents/core": ["@lucid-agents/core@workspace:packages/core"],
 
     "@lucid-agents/eslint-config": ["@lucid-agents/eslint-config@workspace:packages/eslint-config"],
+
+    "@lucid-agents/examples": ["@lucid-agents/examples@workspace:packages/examples"],
 
     "@lucid-agents/express": ["@lucid-agents/express@workspace:packages/express"],
 
@@ -2082,6 +2113,8 @@
     "@eslint/eslintrc/ignore": ["ignore@5.3.2", "", {}, "sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g=="],
 
     "@isaacs/cliui/strip-ansi": ["strip-ansi@7.1.2", "", { "dependencies": { "ansi-regex": "^6.0.1" } }, "sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA=="],
+
+    "@lucid-agents/examples/bun-types": ["bun-types@1.3.3", "", { "dependencies": { "@types/node": "*" } }, "sha512-z3Xwlg7j2l9JY27x5Qn3Wlyos8YAp0kKRlrePAOjgjMGS5IG6E7Jnlx736vH9UVI4wUICwwhC9anYL++XeOgTQ=="],
 
     "@lucid-dreams/client/x402-fetch": ["x402-fetch@0.7.0", "", { "dependencies": { "viem": "^2.21.26", "x402": "^0.7.0", "zod": "^3.24.2" } }, "sha512-HS7v6wsIVrU8TvAGBwRmA3I+ZXbanPraA3OMj90y6Hn1Mej1wAELOK4VpGh6zI8d6w5E464BnGu9o0FE+8DRAA=="],
 
