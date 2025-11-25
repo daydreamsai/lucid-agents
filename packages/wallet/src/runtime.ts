@@ -1,46 +1,61 @@
 import {
   LocalEoaWalletConnector,
+  createPrivateKeySigner,
   type LocalEoaWalletConnectorOptions,
-} from './local-eoa-connector';
-import { createPrivateKeySigner } from './private-key-signer';
+} from './connectors/local-eoa-connector';
 import {
   ServerOrchestratorWalletConnector,
   type ServerOrchestratorWalletConnectorOptions,
-} from './server-orchestrator-connector';
+} from './connectors/server-orchestrator-connector';
+import {
+  ThirdwebWalletConnector,
+  type ThirdwebWalletConnectorOptions,
+} from './connectors/thirdweb-connector';
 import type {
-  AgentWalletFactoryOptions,
+  AgentWalletConfig,
   AgentWalletHandle,
   DeveloperWalletConfig,
   DeveloperWalletHandle,
   LocalWalletOptions,
   LucidWalletOptions,
+  SignerWalletOptions,
+  ThirdwebWalletOptions,
   WalletConnector,
   WalletsConfig,
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 
 export const createAgentWallet = (
-  options: AgentWalletFactoryOptions
+  options: AgentWalletConfig
 ): AgentWalletHandle => {
   if (options.type === 'local') {
     return buildLocalWallet(options);
+  }
+  if (options.type === 'signer') {
+    return buildSignerWallet(options);
+  }
+  if (options.type === 'thirdweb') {
+    return buildThirdwebWallet(options);
   }
   return buildLucidWallet(options);
 };
 
 const buildLocalWallet = (options: LocalWalletOptions): AgentWalletHandle => {
-  const signer =
-    options.signer ??
-    (options.privateKey ? createPrivateKeySigner(options.privateKey) : null);
-
-  if (!signer) {
-    throw new Error(
-      'Local wallet configuration requires either a signer or privateKey'
-    );
-  }
+  const signer = createPrivateKeySigner(options.privateKey);
 
   const connector = new LocalEoaWalletConnector(
     resolveLocalConnectorOptions(options, signer)
+  );
+
+  return {
+    kind: 'local',
+    connector,
+  };
+};
+
+const buildSignerWallet = (options: SignerWalletOptions): AgentWalletHandle => {
+  const connector = new LocalEoaWalletConnector(
+    resolveLocalConnectorOptions(options, options.signer)
   );
 
   return {
@@ -79,7 +94,7 @@ export const createDeveloperWallet = (
 };
 
 const resolveLocalConnectorOptions = (
-  options: LocalWalletOptions,
+  options: LocalWalletOptions | SignerWalletOptions,
   signer: LocalEoaWalletConnectorOptions['signer']
 ): LocalEoaWalletConnectorOptions => ({
   signer,
@@ -87,8 +102,10 @@ const resolveLocalConnectorOptions = (
   caip2: options.caip2 ?? null,
   chain: options.chain ?? null,
   chainType: options.chainType ?? null,
-  provider: options.provider ?? (options.privateKey ? 'local' : undefined),
+  provider:
+    options.provider ?? (options.type === 'local' ? 'local' : undefined),
   label: options.label ?? null,
+  walletClient: options.walletClient ?? null,
 });
 
 const buildLucidWallet = (options: LucidWalletOptions): AgentWalletHandle => {
@@ -102,6 +119,33 @@ const buildLucidWallet = (options: LucidWalletOptions): AgentWalletHandle => {
     setAccessToken: token => connector.setAccessToken(token),
   };
 };
+
+const buildThirdwebWallet = (
+  options: ThirdwebWalletOptions
+): AgentWalletHandle => {
+  const connector = new ThirdwebWalletConnector(
+    resolveThirdwebConnectorOptions(options)
+  );
+
+  return {
+    kind: 'thirdweb',
+    connector,
+  };
+};
+
+const resolveThirdwebConnectorOptions = (
+  options: ThirdwebWalletOptions
+): ThirdwebWalletConnectorOptions => ({
+  secretKey: options.secretKey,
+  clientId: options.clientId,
+  walletLabel: options.walletLabel,
+  chainId: options.chainId,
+  address: options.address ?? null,
+  caip2: options.caip2 ?? null,
+  chain: options.chain ?? null,
+  chainType: options.chainType ?? null,
+  label: options.label ?? null,
+});
 
 const resolveLucidConnectorOptions = (
   options: LucidWalletOptions

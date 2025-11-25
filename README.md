@@ -349,6 +349,47 @@ const wallet = await createAgentWallet({
   type: 'local',
   privateKey: process.env.AGENT_WALLET_PRIVATE_KEY,
 });
+
+// Or use a thirdweb Engine wallet with the same connector interface
+const agent = await createAgent({
+  name: 'thirdweb-agent',
+  version: '0.1.0',
+})
+  .use(http())
+  .use(
+    wallets({
+      config: {
+        agent: {
+          type: 'thirdweb',
+          secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+          clientId: process.env.AGENT_WALLET_CLIENT_ID,
+          walletLabel: 'agent-wallet',
+          chainId: 84532, // Base Sepolia
+        },
+      },
+    })
+  )
+  .build();
+
+const connector = agent.wallets?.agent?.connector;
+const capabilities = connector?.getCapabilities?.();
+if (!connector?.getWalletClient || !capabilities?.walletClient) {
+  throw new Error('thirdweb wallet client not available');
+}
+
+const walletClient = (await connector.getWalletClient())?.client;
+if (!walletClient) {
+  throw new Error('Wallet client not initialized');
+}
+
+await walletClient.writeContract({
+  account: walletClient.account,
+  chain: walletClient.chain,
+  address: USDC_ADDRESS,
+  abi: erc20Abi,
+  functionName: 'transfer',
+  args: ['0xEA4b0D5ebF46C22e4c7E6b6164706447e67B9B1D', 10_000n], // 0.01 USDC
+});
 ```
 
 ### CLI Tool

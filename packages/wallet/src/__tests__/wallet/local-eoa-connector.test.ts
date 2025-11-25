@@ -5,7 +5,7 @@ import type {
   LocalEoaSigner,
 } from '@lucid-agents/types/wallets';
 
-import { LocalEoaWalletConnector } from '../../local-eoa-connector';
+import { LocalEoaWalletConnector } from '../../connectors/local-eoa-connector';
 
 const baseChallenge: AgentChallengeResponse['challenge'] = {
   id: 'challenge-1',
@@ -100,5 +100,81 @@ describe('LocalEoaWalletConnector', () => {
 
     expect(signature).toBe('0xtyped');
     expect(typedDataInvoked).toBe(true);
+  });
+
+  it('exposes capabilities correctly', () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+    };
+
+    const connector = new LocalEoaWalletConnector({ signer });
+    const capabilities = connector.getCapabilities();
+
+    expect(capabilities).toEqual({ signer: true, walletClient: true });
+  });
+
+  it('returns signer via getSigner()', async () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+    };
+
+    const connector = new LocalEoaWalletConnector({ signer });
+    const returnedSigner = await connector.getSigner();
+
+    expect(returnedSigner).toBe(signer);
+  });
+
+  it('builds wallet client from signer with walletClient config', async () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+      async getAddress() {
+        return '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6';
+      },
+    };
+
+    const connector = new LocalEoaWalletConnector({
+      signer,
+      walletClient: {
+        chainId: 84532,
+        chainName: 'Base Sepolia',
+        rpcUrl: 'https://base-sepolia.g.alchemy.com/v2/test',
+      },
+    });
+
+    const walletClient = await connector.getWalletClient();
+    expect(walletClient).toBeDefined();
+    expect(walletClient?.account?.address).toBe(
+      '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6'
+    );
+  });
+
+  it('caches wallet client on subsequent calls', async () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+      async getAddress() {
+        return '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C9';
+      },
+    };
+
+    const connector = new LocalEoaWalletConnector({
+      signer,
+      walletClient: {
+        chainId: 84532,
+        rpcUrl: 'https://base-sepolia.g.alchemy.com/v2/test',
+      },
+    });
+
+    const client1 = await connector.getWalletClient();
+    const client2 = await connector.getWalletClient();
+
+    expect(client1).toBe(client2);
   });
 });

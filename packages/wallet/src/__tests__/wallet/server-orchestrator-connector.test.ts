@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 
 import type { AgentChallengeResponse } from '@lucid-agents/types/wallets';
 
-import { ServerOrchestratorWalletConnector } from '../../server-orchestrator-connector';
+import { ServerOrchestratorWalletConnector } from '../../connectors/server-orchestrator-connector';
 
 const baseChallenge: AgentChallengeResponse["challenge"] = {
   id: "challenge-1",

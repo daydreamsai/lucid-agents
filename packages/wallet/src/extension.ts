@@ -1,7 +1,7 @@
 import type { BuildContext, Extension } from '@lucid-agents/types/core';
 import type { WalletsConfig, WalletsRuntime } from '@lucid-agents/types/wallets';
 
-import { createWalletsRuntime } from './create-agent-wallet';
+import { createWalletsRuntime } from './runtime';
 
 export function wallets(
   options?: { config?: WalletsConfig }

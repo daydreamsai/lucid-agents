@@ -36,6 +36,9 @@
     "@lucid-agents/types": "workspace:*",
     "viem": "^2.38.5"
   },
+  "peerDependencies": {
+    "thirdweb": "^5.84.0"
+  },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:"

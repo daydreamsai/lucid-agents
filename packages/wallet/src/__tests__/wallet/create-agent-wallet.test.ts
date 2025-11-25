@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 
-import { LocalEoaWalletConnector } from '../../local-eoa-connector';
-import { ServerOrchestratorWalletConnector } from '../../server-orchestrator-connector';
-import { createAgentWallet } from '../../create-agent-wallet';
+import { LocalEoaWalletConnector } from '../../connectors/local-eoa-connector';
+import { ServerOrchestratorWalletConnector } from '../../connectors/server-orchestrator-connector';
+import { ThirdwebWalletConnector } from '../../connectors/thirdweb-connector';
+import { createAgentWallet } from '../../runtime';
 
 describe("createAgentWallet", () => {
   afterEach(() => {
@@ -37,6 +38,31 @@ describe("createAgentWallet", () => {
     expect(handle.kind).toBe("lucid");
     expect(handle.connector).toBeInstanceOf(ServerOrchestratorWalletConnector);
     expect(typeof handle.setAccessToken).toBe("function");
+  });
+
+  it("builds a thirdweb wallet from config", () => {
+    const handle = createAgentWallet({
+      type: "thirdweb",
+      secretKey: "test-secret-key",
+      clientId: "test-client-id",
+      walletLabel: "test-wallet",
+      chainId: 84532, // Base Sepolia
+    });
+
+    expect(handle.kind).toBe("thirdweb");
+    expect(handle.connector).toBeInstanceOf(ThirdwebWalletConnector);
+  });
+
+  it("builds a thirdweb wallet with minimal config", () => {
+    const handle = createAgentWallet({
+      type: "thirdweb",
+      secretKey: "test-secret-key",
+      walletLabel: "test-wallet",
+      chainId: 84532,
+    });
+
+    expect(handle.kind).toBe("thirdweb");
+    expect(handle.connector).toBeInstanceOf(ThirdwebWalletConnector);
   });
 });
 

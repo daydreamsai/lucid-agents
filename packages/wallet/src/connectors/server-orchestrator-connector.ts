@@ -1,6 +1,7 @@
 import type {
   AgentChallengeResponse,
   FetchExecutor,
+  WalletCapabilities,
   WalletConnector,
   WalletMetadata,
 } from '@lucid-agents/types/wallets';
@@ -140,6 +141,10 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
 
   async getAddress(): Promise<string | null> {
     return this.cachedMetadata?.address ?? null;
+  }
+
+  getCapabilities(): WalletCapabilities | undefined {
+    return undefined;
   }
 
   private buildHeaders(token: string): HeadersInit {

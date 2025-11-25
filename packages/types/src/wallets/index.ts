@@ -36,7 +36,20 @@ export interface WalletConnector extends ChallengeSigner {
   getWalletMetadata(): Promise<WalletMetadata | null>;
   supportsCaip2?(caip2: string): boolean | Promise<boolean>;
   getAddress?(): Promise<string | null>;
+  getCapabilities?(): WalletCapabilities | null | undefined;
+  getSigner?(): Promise<LocalEoaSigner | null>;
+  getWalletClient?<TClient = unknown>(): Promise<TClient | null>;
 }
+
+/**
+ * Optional capabilities a wallet connector can expose beyond the base surface.
+ * `signer` indicates the connector can provide a `LocalEoaSigner`.
+ * `walletClient` indicates the connector can provide a contract-ready wallet client (e.g., viem).
+ */
+export type WalletCapability = 'signer' | 'walletClient';
+
+export type WalletCapabilities = Partial<Record<WalletCapability, true>>;
+
 
 /**
  * Options for configuring local wallet metadata.
@@ -48,15 +61,34 @@ export interface LocalWalletMetadataOptions {
   chainType?: string | null;
   provider?: string | null;
   label?: string | null;
+  walletClient?: LocalWalletClientConfig | null;
+}
+
+export interface LocalWalletClientConfig {
+  rpcUrl?: string | null;
+  chainId?: number | null;
+  chainName?: string | null;
+  nativeCurrency?: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  } | null;
 }
 
 /**
  * Local wallet configuration using a private key.
  */
-export type LocalWalletWithPrivateKeyOptions = LocalWalletMetadataOptions & {
+export type LocalWalletOptions = LocalWalletMetadataOptions & {
   type: 'local';
   privateKey: string;
-  signer?: never;
+};
+
+/**
+ * Wallet configuration using a custom signer.
+ */
+export type SignerWalletOptions = LocalWalletMetadataOptions & {
+  type: 'signer';
+  signer: LocalEoaSigner;
 };
 
 /**
@@ -73,16 +105,37 @@ export interface LucidWalletOptions {
 }
 
 /**
- * Configuration for an agent wallet. Can be local (with private key) or Lucid (server-orchestrated).
+ * Configuration for thirdweb Engine server wallet connector.
+ */
+export interface ThirdwebWalletOptions {
+  type: 'thirdweb';
+  secretKey: string;
+  clientId?: string;
+  walletLabel: string;
+  chainId: number;
+  address?: string | null;
+  caip2?: string | null;
+  chain?: string | null;
+  chainType?: string | null;
+  label?: string | null;
+}
+
+/**
+ * Configuration for an agent wallet. Can be local (with private key), signer (with custom signer), Lucid (server-orchestrated), or thirdweb.
  */
 export type AgentWalletConfig =
-  | LocalWalletWithPrivateKeyOptions
-  | LucidWalletOptions;
+  | LocalWalletOptions
+  | SignerWalletOptions
+  | LucidWalletOptions
+  | ThirdwebWalletOptions;
 
 /**
  * Configuration for a developer wallet. Must be a local wallet with private key.
  */
-export type DeveloperWalletConfig = LocalWalletWithPrivateKeyOptions;
+export type DeveloperWalletConfig = LocalWalletMetadataOptions & {
+  type: 'local';
+  privateKey: string;
+};
 
 /**
  * Configuration for agent and developer wallets.
@@ -91,27 +144,6 @@ export type WalletsConfig = {
   agent?: AgentWalletConfig;
   developer?: DeveloperWalletConfig;
 };
-
-/**
- * Local wallet configuration using a custom signer implementation.
- */
-export type LocalWalletWithSignerOptions = LocalWalletMetadataOptions & {
-  type: 'local';
-  signer: LocalEoaSigner;
-  privateKey?: never;
-};
-
-/**
- * Local wallet configuration options. Can use either a private key or a custom signer.
- */
-export type LocalWalletOptions =
-  | LocalWalletWithSignerOptions
-  | LocalWalletWithPrivateKeyOptions;
-
-/**
- * Options for creating an agent wallet. Supports both local and Lucid wallet types.
- */
-export type AgentWalletFactoryOptions = LocalWalletOptions | LucidWalletOptions;
 
 /**
  * Interface for signing messages and transactions with an EOA (Externally Owned Account) wallet.
@@ -179,7 +211,7 @@ export type FetchExecutor = (
 /**
  * Type of agent wallet implementation.
  */
-export type AgentWalletKind = 'local' | 'lucid';
+export type AgentWalletKind = 'local' | 'signer' | 'lucid' | 'thirdweb';
 
 /**
  * Handle to an agent wallet instance with its connector and optional access token management.
