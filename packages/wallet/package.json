@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/wallet",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Wallet connectors and helpers for Lucid agents",
   "repository": {
     "type": "git",
