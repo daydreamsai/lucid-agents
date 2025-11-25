@@ -19,7 +19,14 @@
  * 2. Run: bun run examples/full-integration.ts
  */
 
-import { a2a, waitForTask } from '@lucid-agents/a2a';
+import {
+  a2a,
+  fetchAgentCard,
+  findSkill,
+  hasCapability,
+  supportsPayments,
+  waitForTask,
+} from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
@@ -74,7 +81,7 @@ async function main() {
     runtime: runtime1,
   } = await createAgentApp(await agentBuilder1.build());
 
-  // Add echo entrypoint
+  // Add echo entrypoint with tags for discovery
   addEntrypoint1({
     key: 'echo',
     description: 'Echoes back the input text',
@@ -345,32 +352,78 @@ async function main() {
     console.log('');
 
     // ============================================================================
-    // STEP 5: Fetch Agent Cards via HTTP
+    // STEP 5: Real-World Agent Discovery
     // ============================================================================
-    console.log('STEP 5: Fetching Agent Cards via HTTP');
+    console.log('STEP 5: Real-World Agent Discovery');
     console.log('-'.repeat(80));
+    console.log('Demonstrates how an agent discovers and calls another agent:');
+    console.log('  1. Fetch agent card from URL');
+    console.log('  2. Check capabilities (streaming, payments, etc.)');
+    console.log('  3. Find skill by tags (search/discovery)');
+    console.log('  4. Call the discovered skill');
+    console.log('-'.repeat(80));
+    console.log('');
 
-    // Agent 3 fetches Agent 2's card (the facilitator) - demonstrates agent meta discovery
-    const fetchedCard2 = await a2a3.fetchCard(server2.url);
-    console.log(`Agent 3 fetched Agent 2 Card from ${server2.url}:`);
-    console.log('  Agent Meta (discovered via A2A):');
-    console.log(`    Name: ${fetchedCard2.name}`);
-    console.log(`    Description: ${fetchedCard2.description || 'N/A'}`);
-    console.log(`    Version: ${fetchedCard2.version}`);
-    console.log(`    URL: ${fetchedCard2.url}`);
-    console.log(`    Skills: ${fetchedCard2.skills.map(s => s.id).join(', ')}`);
-    // Show AP2 extensions if present (from fetched card)
-    if (fetchedCard2.capabilities?.extensions?.length) {
-      const ap2Ext = fetchedCard2.capabilities.extensions.find(
-        ext =>
-          'uri' in ext && typeof ext.uri === 'string' && ext.uri.includes('ap2')
+    // 5.1: Fetch agent card from URL (real-world discovery)
+    console.log('5.1: Fetching Agent Card from URL');
+    const agentUrl = server2.url;
+    const discoveredCard = await fetchAgentCard(agentUrl);
+    console.log(`  Fetched card from: ${agentUrl}`);
+    console.log(`  Agent Name: ${discoveredCard.name}`);
+    console.log(
+      `  Protocol Version: ${discoveredCard.protocolVersion || '1.0'}`
+    );
+    console.log(`  Description: ${discoveredCard.description || 'N/A'}`);
+    console.log(`  Version: ${discoveredCard.version}`);
+    if (discoveredCard.supportedInterfaces?.length) {
+      console.log(
+        `  Supported Interfaces: ${discoveredCard.supportedInterfaces.map(i => i.protocolBinding).join(', ')}`
       );
-      if (ap2Ext && 'params' in ap2Ext) {
-        const roles = (ap2Ext.params as { roles?: string[] })?.roles || [];
-        console.log(`    AP2 Roles: ${roles.join(', ')}`);
-      }
     }
     console.log('');
+
+    // 5.2: Check capabilities
+    console.log('5.2: Checking Agent Capabilities');
+    const supportsStreaming = hasCapability(discoveredCard, 'streaming');
+    const supportsPushNotifications = hasCapability(
+      discoveredCard,
+      'pushNotifications'
+    );
+    const hasPayments = supportsPayments(discoveredCard);
+    console.log(`  Streaming: ${supportsStreaming ? '✓' : '✗'}`);
+    console.log(
+      `  Push Notifications: ${supportsPushNotifications ? '✓' : '✗'}`
+    );
+    console.log(`  Payments: ${hasPayments ? '✓' : '✗'}`);
+    console.log('');
+
+    // 5.3: Discover skills by tags
+    console.log('5.3: Discovering Skills by Tags');
+    console.log('  Available skills:');
+    discoveredCard.skills?.forEach(skill => {
+      console.log(`    - ${skill.id}: ${skill.description || 'N/A'}`);
+      if (skill.tags?.length) {
+        console.log(`      Tags: ${skill.tags.join(', ')}`);
+      }
+    });
+    console.log('');
+
+    // 5.4: Find and call a skill
+    console.log('5.4: Finding Skill and Calling It');
+    // Find echo skill (could search by tags like "echo", "text", "utility")
+    const echoSkill = findSkill(discoveredCard, 'echo');
+    if (!echoSkill) {
+      throw new Error('Echo skill not found');
+    }
+    console.log(`  Found skill: ${echoSkill.id}`);
+    console.log(`  Description: ${echoSkill.description || 'N/A'}`);
+    if (echoSkill.tags?.length) {
+      console.log(`  Tags: ${echoSkill.tags.join(', ')}`);
+    }
+    console.log('');
+
+    // Use the discovered card for subsequent calls
+    const fetchedCard2 = discoveredCard;
 
     // ============================================================================
     // STEP 6: A2A Composition - Agent 3 -> Agent 2 -> Agent 1

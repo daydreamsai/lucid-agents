@@ -1,4 +1,5 @@
 import type {
+  AgentCard,
   AgentCardWithEntrypoints,
   AgentCapabilities,
   AgentMeta,
@@ -54,9 +55,16 @@ export function buildAgentCard({
   };
 
   const card: AgentCardWithEntrypoints = {
+    protocolVersion: '1.0',
     name: meta.name,
     description: meta.description,
     url: origin.endsWith('/') ? origin : `${origin}/`,
+    supportedInterfaces: [
+      {
+        url: origin.endsWith('/') ? origin : `${origin}/`,
+        protocolBinding: 'HTTP+JSON',
+      },
+    ],
     version: meta.version,
     provider: undefined,
     capabilities,
@@ -72,27 +80,81 @@ export function buildAgentCard({
 
 /**
  * Fetches Agent Card from another agent's well-known endpoint.
+ * Tries multiple well-known paths for compatibility with different agent implementations.
+ *
+ * Per ERC-8004, the endpoint may already be a full URL to the agent card.
+ * Per A2A spec section 5.3, the recommended discovery path is /.well-known/agent-card.json.
  */
 export async function fetchAgentCard(
   baseUrl: string,
   fetchImpl?: FetchFunction
-): Promise<AgentCardWithEntrypoints> {
+): Promise<AgentCard> {
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL('/.well-known/agent-card.json', baseUrl);
-  const response = await fetchFn(url.toString());
+  // Try multiple well-known paths for agent card discovery
+  // Order: spec-recommended first, then alternatives, then legacy
+  const normalizedBase = baseUrl.replace(/\/$/, '');
+  const agentcardUrls: string[] = [];
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch Agent Card: ${response.status} ${response.statusText}`
-    );
+  // If baseUrl is already a full URL (starts with http:// or https://), try it directly first
+  // Per ERC-8004, endpoint may already be full URL to agent card
+  if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
+    agentcardUrls.push(baseUrl);
   }
 
-  const json = await response.json();
-  return parseAgentCard(json);
+  // Spec-recommended discovery path (A2A Protocol section 5.3)
+  agentcardUrls.push(`${normalizedBase}/.well-known/agent-card.json`);
+  // Alternative well-known path
+  agentcardUrls.push(`${normalizedBase}/.well-known/agent.json`);
+  // Legacy path
+  agentcardUrls.push(`${normalizedBase}/agentcard.json`);
+
+  let lastError: Error | null = null;
+
+  for (const agentcardUrl of agentcardUrls) {
+    try {
+      // Try to construct URL - if it fails, the URL might be malformed
+      let url: URL;
+      try {
+        url = new URL(agentcardUrl);
+      } catch {
+        // If baseUrl wasn't absolute, try relative to it
+        url = new URL(agentcardUrl, baseUrl);
+      }
+
+      const response = await fetchFn(url.toString());
+
+      if (response.ok) {
+        const json = await response.json();
+        const card = parseAgentCard(json);
+        const { entrypoints, ...agentCard } = card;
+        return agentCard;
+      }
+
+      if (response.status !== 404) {
+        lastError = new Error(
+          `Failed to fetch Agent Card: ${response.status} ${response.statusText}`
+        );
+      }
+    } catch (error) {
+      if (!lastError) {
+        lastError =
+          error instanceof Error
+            ? error
+            : new Error('Failed to fetch Agent Card');
+      }
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      `Failed to fetch Agent Card from any well-known path. Tried: ${agentcardUrls.join(', ')}`
+    )
+  );
 }
 
 /**
@@ -157,8 +219,61 @@ export function parseAgentCard(json: unknown): AgentCardWithEntrypoints {
  * Finds a skill by ID in an Agent Card.
  */
 export function findSkill(
-  card: AgentCardWithEntrypoints,
+  card: AgentCard,
   skillId: string
-): AgentCardWithEntrypoints['skills'][number] | undefined {
+): AgentCard['skills'][number] | undefined {
   return card.skills?.find(skill => skill.id === skillId);
+}
+
+/**
+ * Checks if an agent supports a specific capability.
+ *
+ * @param card - Agent card
+ * @param capability - Capability to check ('streaming' | 'pushNotifications' | 'stateTransitionHistory')
+ * @returns true if the capability is supported
+ */
+export function hasCapability(
+  card: AgentCard | null,
+  capability: keyof AgentCapabilities
+): boolean {
+  if (!card?.capabilities) {
+    return false;
+  }
+  return Boolean(card.capabilities[capability]);
+}
+
+/**
+ * Checks if an agent has a specific skill tag.
+ *
+ * @param card - Agent card
+ * @param tag - Skill tag to check
+ * @returns true if the agent has the tag
+ */
+export function hasSkillTag(card: AgentCard | null, tag: string): boolean {
+  if (!card?.skills) {
+    return false;
+  }
+  return card.skills.some(skill =>
+    skill.tags?.some(t => t.toLowerCase() === tag.toLowerCase())
+  );
+}
+
+/**
+ * Checks if an agent supports payments.
+ *
+ * @param card - Agent card
+ * @returns true if the agent has payment methods configured
+ */
+export function supportsPayments(card: AgentCard | null): boolean {
+  return Boolean(card?.payments && card.payments.length > 0);
+}
+
+/**
+ * Checks if an agent has trust/identity information.
+ *
+ * @param card - Agent card
+ * @returns true if the agent has trust models or registrations
+ */
+export function hasTrustInfo(card: AgentCard | null): boolean {
+  return Boolean(card?.trustModels?.length || card?.registrations?.length);
 }

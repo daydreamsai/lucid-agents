@@ -3,6 +3,10 @@ export {
   fetchAgentCard,
   parseAgentCard,
   findSkill,
+  hasCapability,
+  hasSkillTag,
+  supportsPayments,
+  hasTrustInfo,
 } from './card';
 export {
   invokeAgent,

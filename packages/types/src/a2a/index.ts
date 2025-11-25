@@ -76,16 +76,35 @@ export type AgentCapabilities = {
 };
 
 /**
+ * Agent Interface declaration (protocol binding + URL).
+ */
+export type AgentInterface = {
+  url: string;
+  protocolBinding: string;
+};
+
+/**
  * Agent Card structure following the Agent Card specification.
  * Describes agent metadata, capabilities, skills, payments, and trust information.
  */
 export type AgentCard = {
+  /** Protocol version (default: "1.0") */
+  protocolVersion?: string;
   name: string;
   description?: string;
+  /** DEPRECATED: Use supportedInterfaces instead */
   url?: string;
+  /** Ordered list of supported interfaces (first is preferred) */
+  supportedInterfaces?: AgentInterface[];
   provider?: { organization?: string; url?: string };
   version?: string;
+  /** Documentation URL */
+  documentationUrl?: string;
   capabilities?: AgentCapabilities;
+  /** Security schemes map */
+  securitySchemes?: Record<string, unknown>;
+  /** Security requirements */
+  security?: unknown[];
   defaultInputModes?: string[];
   defaultOutputModes?: string[];
   skills?: Array<{
@@ -96,9 +115,18 @@ export type AgentCard = {
     examples?: string[];
     inputModes?: string[];
     outputModes?: string[];
+    security?: unknown[];
     [key: string]: unknown;
   }>;
   supportsAuthenticatedExtendedCard?: boolean;
+  /** JWS signatures for card verification */
+  signatures?: Array<{
+    protected: string;
+    signature: string;
+    header?: Record<string, unknown>;
+  }>;
+  /** Icon URL */
+  iconUrl?: string;
   payments?: PaymentMethod[];
   registrations?: RegistrationEntry[];
   trustModels?: TrustModel[];
@@ -232,7 +260,7 @@ export type A2AClient = {
    * Invokes an agent's entrypoint using the Agent Card.
    */
   invoke: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     skillId: string,
     input: unknown,
     fetch?: FetchFunction
@@ -242,7 +270,7 @@ export type A2AClient = {
    * Streams from an agent's entrypoint using the Agent Card.
    */
   stream: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     skillId: string,
     input: unknown,
     emit: StreamEmit,
@@ -264,7 +292,7 @@ export type A2AClient = {
    * Creates a task and returns the taskId immediately.
    */
   sendMessage: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     skillId: string,
     input: unknown,
     fetch?: FetchFunction,
@@ -275,7 +303,7 @@ export type A2AClient = {
    * Gets the status of a task.
    */
   getTask: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     taskId: string,
     fetch?: FetchFunction
   ) => Promise<Task>;
@@ -284,7 +312,7 @@ export type A2AClient = {
    * Subscribes to task updates via SSE.
    */
   subscribeTask: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     taskId: string,
     emit: (chunk: TaskUpdateEvent) => Promise<void> | void,
     fetch?: FetchFunction
@@ -304,7 +332,7 @@ export type A2AClient = {
    * Lists tasks with optional filtering.
    */
   listTasks: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     filters?: ListTasksRequest,
     fetch?: FetchFunction
   ) => Promise<ListTasksResponse>;
@@ -313,7 +341,7 @@ export type A2AClient = {
    * Cancels a running task.
    */
   cancelTask: (
-    card: AgentCardWithEntrypoints,
+    card: AgentCard,
     taskId: string,
     fetch?: FetchFunction
   ) => Promise<Task>;
@@ -341,10 +369,7 @@ export type A2ARuntime = {
   /**
    * Fetches another agent's Agent Card.
    */
-  fetchCard: (
-    baseUrl: string,
-    fetch?: FetchFunction
-  ) => Promise<AgentCardWithEntrypoints>;
+  fetchCard: (baseUrl: string, fetch?: FetchFunction) => Promise<AgentCard>;
 
   /**
    * Client utilities for calling other agents.

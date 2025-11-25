@@ -409,8 +409,12 @@ describe('Task-based A2A Client Methods', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
+      // fetchAgentCard tries multiple URLs, so we need to handle all of them
       const responses = new Map<string, Response>([
-        ['https://agent.example.com/.well-known/agent-card.json', cardResponse],
+        ['https://agent.example.com', new Response('Not Found', { status: 404 })], // First attempt
+        ['https://agent.example.com/.well-known/agent-card.json', cardResponse], // Spec path (succeeds)
+        ['https://agent.example.com/.well-known/agent.json', new Response('Not Found', { status: 404 })], // Alternative
+        ['https://agent.example.com/agentcard.json', new Response('Not Found', { status: 404 })], // Legacy
         ['https://agent.example.com/tasks', taskResponse],
       ]);
 
@@ -425,14 +429,26 @@ describe('Task-based A2A Client Methods', () => {
       expect(result.taskId).toBe(taskId);
       expect(result.status).toBe('running');
 
-      // Verify both fetches were called
-      expect(fetchFn).toHaveBeenCalledTimes(2);
+      // fetchAgentCard tries multiple URLs before succeeding, then tasks endpoint is called
+      expect(fetchFn).toHaveBeenCalledTimes(3); // 2 card attempts + 1 tasks call
     });
 
     it('throws error if card fetch fails', async () => {
+      // Return 404 for all possible agent card URLs that fetchAgentCard tries
+      // Note: fetchAgentCard tries baseUrl as-is first (may have trailing slash), then normalized versions
       const responses = new Map<string, Response>([
+        ['https://agent.example.com', new Response('Not Found', { status: 404 })], // First attempt (as-is)
+        ['https://agent.example.com/', new Response('Not Found', { status: 404 })], // If baseUrl has trailing slash
         [
           'https://agent.example.com/.well-known/agent-card.json',
+          new Response('Not Found', { status: 404 }),
+        ],
+        [
+          'https://agent.example.com/.well-known/agent.json',
+          new Response('Not Found', { status: 404 }),
+        ],
+        [
+          'https://agent.example.com/agentcard.json',
           new Response('Not Found', { status: 404 }),
         ],
       ]);
