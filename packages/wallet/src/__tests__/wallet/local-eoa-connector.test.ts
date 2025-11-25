@@ -147,16 +147,14 @@ describe('LocalEoaWalletConnector', () => {
       },
     });
 
-    const walletHandle = await connector.getWalletClient();
-    expect(walletHandle).toBeDefined();
-    expect(walletHandle?.kind).toBe('viem');
-    expect(walletHandle?.client).toBeDefined();
-    expect(walletHandle?.client.account?.address).toBe(
+    const walletClient = await connector.getWalletClient();
+    expect(walletClient).toBeDefined();
+    expect(walletClient?.account?.address).toBe(
       '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6'
     );
   });
 
-  it('caches wallet client handle on subsequent calls', async () => {
+  it('caches wallet client on subsequent calls', async () => {
     const signer: LocalEoaSigner = {
       async signMessage() {
         return '0xsigned';
@@ -174,9 +172,9 @@ describe('LocalEoaWalletConnector', () => {
       },
     });
 
-    const handle1 = await connector.getWalletClient();
-    const handle2 = await connector.getWalletClient();
+    const client1 = await connector.getWalletClient();
+    const client2 = await connector.getWalletClient();
 
-    expect(handle1).toBe(handle2);
+    expect(client1).toBe(client2);
   });
 });

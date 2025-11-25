@@ -195,13 +195,12 @@ const connector = agent.wallets?.agent?.connector;
 const capabilities = connector?.getCapabilities?.();
 
 if (capabilities?.walletClient && connector?.getWalletClient) {
-  const walletHandle = await connector.getWalletClient();
-  const walletClient = walletHandle?.client;
+  const walletClient = await connector.getWalletClient();
   // Use viem wallet client (thirdweb engine, future connectors, etc.)
 }
 
-const walletHandle = await connector.getWalletClient();
-if (!walletHandle) throw new Error('Wallet client unavailable');
+const walletClient = await connector.getWalletClient();
+if (!walletClient) throw new Error('Wallet client unavailable');
 
 const signer = await connector.getSigner?.();
 // Use LocalEoaSigner for x402, identity, or custom signing.
@@ -340,9 +339,7 @@ interface WalletConnector {
   supportsCaip2?(caip2: string): boolean | Promise<boolean>;
   getCapabilities?(): WalletCapabilities | null | undefined;
   getSigner?(): Promise<LocalEoaSigner | null>;
-  getWalletClient?<
-    TClient = unknown,
-  >(): Promise<WalletClientHandle<TClient> | null>;
+  getWalletClient?<TClient = unknown>(): Promise<TClient | null>;
 }
 ```
 

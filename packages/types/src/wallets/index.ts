@@ -38,9 +38,7 @@ export interface WalletConnector extends ChallengeSigner {
   getAddress?(): Promise<string | null>;
   getCapabilities?(): WalletCapabilities | null | undefined;
   getSigner?(): Promise<LocalEoaSigner | null>;
-  getWalletClient?<
-    TClient = unknown,
-  >(): Promise<WalletClientHandle<TClient> | null>;
+  getWalletClient?<TClient = unknown>(): Promise<TClient | null>;
 }
 
 /**
@@ -52,15 +50,6 @@ export type WalletCapability = 'signer' | 'walletClient';
 
 export type WalletCapabilities = Partial<Record<WalletCapability, true>>;
 
-/**
- * Descriptor for a connector-managed wallet client.
- * `kind` identifies the client runtime (e.g., "viem") and `client`
- * is the raw client instance for that runtime.
- */
-export interface WalletClientHandle<TClient = unknown> {
-  kind: string;
-  client: TClient;
-}
 
 /**
  * Options for configuring local wallet metadata.

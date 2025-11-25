@@ -14,7 +14,6 @@
 
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import type { WalletClientHandle } from '@lucid-agents/types/wallets';
 import { wallets } from '@lucid-agents/wallet';
 import { baseSepolia as thirdwebBaseSepolia } from 'thirdweb/chains';
 import type { WalletClient } from 'viem';
@@ -125,13 +124,11 @@ async function main() {
       );
     }
 
-    const walletHandle =
-      (await connector.getWalletClient()) as WalletClientHandle<WalletClient> | null;
-    if (!walletHandle?.client) {
+    const walletClient =
+      (await connector.getWalletClient()) as WalletClient | null;
+    if (!walletClient) {
       throw new Error('Wallet connector did not return a wallet client');
     }
-
-    const walletClient = walletHandle.client;
     const chainForReads = walletClient.chain;
 
     // Create public client for reading

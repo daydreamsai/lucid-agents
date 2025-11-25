@@ -3,7 +3,6 @@ import type {
   LocalEoaSigner,
   TypedDataPayload,
   WalletCapabilities,
-  WalletClientHandle,
   WalletConnector,
   WalletMetadata,
   ThirdwebWalletOptions,
@@ -193,17 +192,12 @@ export class ThirdwebWalletConnector implements WalletConnector {
     return this.metadata.caip2.toLowerCase() === caip2.toLowerCase();
   }
 
-  async getWalletClient<
-    TClient = WalletClient,
-  >(): Promise<WalletClientHandle<TClient> | null> {
+  async getWalletClient<TClient = WalletClient>(): Promise<TClient | null> {
     await this.initialize();
     if (!this.viemWalletClient) {
       return null;
     }
-    return {
-      kind: 'viem',
-      client: this.viemWalletClient as unknown as TClient,
-    };
+    return this.viemWalletClient as unknown as TClient;
   }
 
   async getSigner(): Promise<LocalEoaSigner> {

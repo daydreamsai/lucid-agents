@@ -4,7 +4,6 @@ import type {
   LocalWalletClientConfig,
   TypedDataPayload,
   WalletCapabilities,
-  WalletClientHandle,
   WalletConnector,
   WalletMetadata,
 } from '@lucid-agents/types/wallets';
@@ -33,9 +32,8 @@ export class LocalEoaWalletConnector implements WalletConnector {
     signer: true,
     walletClient: true,
   };
-  private walletClientHandle: WalletClientHandle<WalletClient> | null = null;
-  private walletClientPromise: Promise<WalletClientHandle<WalletClient> | null> | null =
-    null;
+  private walletClient: WalletClient | null = null;
+  private walletClientPromise: Promise<WalletClient | null> | null = null;
 
   constructor(options: LocalEoaWalletConnectorOptions) {
     if (!options?.signer) {
@@ -96,11 +94,9 @@ export class LocalEoaWalletConnector implements WalletConnector {
     return this.capabilities;
   }
 
-  async getWalletClient<
-    TClient = WalletClient,
-  >(): Promise<WalletClientHandle<TClient> | null> {
-    if (this.walletClientHandle) {
-      return this.walletClientHandle as WalletClientHandle<TClient>;
+  async getWalletClient<TClient = WalletClient>(): Promise<TClient | null> {
+    if (this.walletClient) {
+      return this.walletClient as TClient;
     }
 
     if (!this.walletClientPromise) {
@@ -108,9 +104,9 @@ export class LocalEoaWalletConnector implements WalletConnector {
     }
 
     try {
-      const handle = await this.walletClientPromise;
-      this.walletClientHandle = handle;
-      return handle as WalletClientHandle<TClient> | null;
+      const client = await this.walletClientPromise;
+      this.walletClient = client;
+      return client as TClient | null;
     } finally {
       this.walletClientPromise = null;
     }
@@ -151,7 +147,7 @@ export class LocalEoaWalletConnector implements WalletConnector {
     }
   }
 
-  private async buildWalletClient(): Promise<WalletClientHandle<WalletClient> | null> {
+  private async buildWalletClient(): Promise<WalletClient | null> {
     const chain = this.resolveChainConfig();
     const transport = http(this.resolveRpcUrl());
     const address = await this.getAddress();
@@ -166,20 +162,21 @@ export class LocalEoaWalletConnector implements WalletConnector {
 
   private resolveChainConfig(): Chain {
     const rpcUrl = this.resolveRpcUrl();
-    const isLocalhostFallback = rpcUrl === 'http://localhost:8545' && !this.walletClientConfig?.rpcUrl;
-    
+    const isLocalhostFallback =
+      rpcUrl === 'http://localhost:8545' && !this.walletClientConfig?.rpcUrl;
+
     const chainId =
       this.walletClientConfig?.chainId ??
       this.extractChainIdFromMetadata() ??
       (isLocalhostFallback ? 31337 : null);
-    
+
     if (chainId === null) {
       throw new Error(
         'chainId must be explicitly provided in walletClient config when using a custom RPC URL. ' +
-        'For localhost development, chainId defaults to 31337 (Hardhat/Anvil standard).'
+          'For localhost development, chainId defaults to 31337 (Hardhat/Anvil standard).'
       );
     }
-    
+
     const chainName =
       this.walletClientConfig?.chainName ??
       this.metadata?.chain ??
@@ -302,7 +299,7 @@ const createViemWalletClientFromSigner = async ({
   chain: Chain;
   transport: Transport;
   address?: string | null;
-}): Promise<WalletClientHandle<WalletClient>> => {
+}): Promise<WalletClient> => {
   const resolvedAddress =
     address ?? (signer.getAddress ? await signer.getAddress() : null);
 
@@ -357,10 +354,7 @@ const createViemWalletClientFromSigner = async ({
     transport,
   });
 
-  return {
-    kind: 'viem',
-    client,
-  };
+  return client as WalletClient;
 };
 
 const normalizePrivateKey = (key: string): `0x${string}` => {
