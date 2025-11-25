@@ -5,18 +5,19 @@
 
 ## Summary
 
-- Thirdweb Engine wallets now expose the same signer/wallet client surface as local or Lucid wallets. The connector returns a viem wallet client via `getWalletClient()` and reuses it for `signChallenge`, so x402, identity, and custom contract calls all share the Engine-managed key.
-- The thirdweb example was rewritten to rely on the configured connector (no manual Engine re-initialisation) and demonstrates sending 0.01 USDC directly through the SDK-managed wallet client.
-- Documentation clarifies that configuring `wallets({ agent: { type: 'thirdweb', ... } })` is all that’s required.
+- Implemented the first thirdweb Engine wallet connector inside the wallets extension. It lazily builds the Engine account → viem wallet, exposes `getWalletClient()` / `getSigner()`, and wires those into the existing `WalletConnector` façade so payments, identity, and contract calls reuse the Engine-managed key.
+- Added a generic signer connector (and runtime wiring) so all connectors share the same `LocalEoaSigner` surface.
+- Created `packages/examples/src/wallet/thirdweb-engine-wallets.ts`, a minimal end-to-end script showing how to configure `wallets({ agent: { type: 'thirdweb', ... } })`, sign the facilitator challenge, and send 0.01 USDC through the SDK-managed wallet client.
+- Documentation (`docs/WALLETS.md`, `README.md`) now covers the thirdweb setup flow, the new connector methods, and the example usage.
 
 ## Breaking Changes
 
-None. Existing thirdweb configurations continue to work, but the connector now provides additional capabilities (exposed signer + wallet client) that were previously unavailable.
+None. This PR adds the thirdweb connector; existing wallets continue to behave the same.
 
 ## Migration Notes
 
-- No code changes required if you already configure `type: 'thirdweb'`.
-- If you previously re-created Engine clients manually, replace that code with `const walletClient = await agent.wallets.agent.connector.getWalletClient();` so you reuse the SDK-managed signer for transfers or other contract interactions.
+- New capability – Configure `wallets({ agent: { type: 'thirdweb', ... } })` to opt into the thirdweb connector and call `const walletClient = await agent.wallets.agent.connector.getWalletClient();` when you need to send transactions.
+- Local/Lucid wallets are unchanged.
 
 ### Usage Example
 
