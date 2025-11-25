@@ -36,6 +36,30 @@ export interface WalletConnector extends ChallengeSigner {
   getWalletMetadata(): Promise<WalletMetadata | null>;
   supportsCaip2?(caip2: string): boolean | Promise<boolean>;
   getAddress?(): Promise<string | null>;
+  getCapabilities?(): WalletCapabilities | null | undefined;
+  getSigner?(): Promise<LocalEoaSigner | null>;
+  getWalletClient?<
+    TClient = unknown,
+  >(): Promise<WalletClientHandle<TClient> | null>;
+}
+
+/**
+ * Optional capabilities a wallet connector can expose beyond the base surface.
+ * `signer` indicates the connector can provide a `LocalEoaSigner`.
+ * `walletClient` indicates the connector can provide a contract-ready wallet client (e.g., viem).
+ */
+export type WalletCapability = 'signer' | 'walletClient';
+
+export type WalletCapabilities = Partial<Record<WalletCapability, true>>;
+
+/**
+ * Descriptor for a connector-managed wallet client.
+ * `kind` identifies the client runtime (e.g., "viem") and `client`
+ * is the raw client instance for that runtime.
+ */
+export interface WalletClientHandle<TClient = unknown> {
+  kind: string;
+  client: TClient;
 }
 
 /**
@@ -48,6 +72,18 @@ export interface LocalWalletMetadataOptions {
   chainType?: string | null;
   provider?: string | null;
   label?: string | null;
+  walletClient?: LocalWalletClientConfig | null;
+}
+
+export interface LocalWalletClientConfig {
+  rpcUrl?: string | null;
+  chainId?: number | null;
+  chainName?: string | null;
+  nativeCurrency?: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  } | null;
 }
 
 /**

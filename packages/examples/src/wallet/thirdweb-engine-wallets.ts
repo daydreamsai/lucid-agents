@@ -14,8 +14,10 @@
 
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { ThirdwebWalletConnector, wallets } from '@lucid-agents/wallet';
+import type { WalletClientHandle } from '@lucid-agents/types/wallets';
+import { wallets } from '@lucid-agents/wallet';
 import { baseSepolia as thirdwebBaseSepolia } from 'thirdweb/chains';
+import type { WalletClient } from 'viem';
 import {
   createPublicClient,
   encodeFunctionData,
@@ -38,9 +40,9 @@ async function main() {
         config: {
           agent: {
             type: 'thirdweb',
-            secretKey: process.env.THIRDWEB_SECRET_KEY!,
-            clientId: process.env.THIRDWEB_CLIENT_ID,
-            walletLabel: process.env.THIRDWEB_WALLET_LABEL || 'agent-wallet',
+            secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+            clientId: process.env.AGENT_WALLET_CLIENT_ID,
+            walletLabel: process.env.AGENT_WALLET_LABEL || 'agent-wallet',
             chainId: thirdwebBaseSepolia.id, // 84532
           },
         },
@@ -111,8 +113,25 @@ async function main() {
   const USDC_DECIMALS = 6; // USDC has 6 decimals
 
   try {
-    const connector = agent.wallets.agent?.connector as ThirdwebWalletConnector;
-    const walletClient = await connector.getWalletClient();
+    const connector = agent.wallets.agent?.connector;
+    if (!connector) {
+      throw new Error('Agent wallet connector not available');
+    }
+
+    const capabilities = connector.getCapabilities?.();
+    if (!capabilities?.walletClient || !connector.getWalletClient) {
+      throw new Error(
+        'Configured wallet does not expose a contract-ready wallet client'
+      );
+    }
+
+    const walletHandle =
+      (await connector.getWalletClient()) as WalletClientHandle<WalletClient> | null;
+    if (!walletHandle?.client) {
+      throw new Error('Wallet connector did not return a wallet client');
+    }
+
+    const walletClient = walletHandle.client;
     const chainForReads = walletClient.chain;
 
     // Create public client for reading

@@ -1,8 +1,8 @@
 import {
   LocalEoaWalletConnector,
+  createPrivateKeySigner,
   type LocalEoaWalletConnectorOptions,
 } from './connectors/local-eoa-connector';
-import { createPrivateKeySigner } from './private-key-signer';
 import {
   ServerOrchestratorWalletConnector,
   type ServerOrchestratorWalletConnectorOptions,
@@ -105,6 +105,7 @@ const resolveLocalConnectorOptions = (
   provider:
     options.provider ?? (options.type === 'local' ? 'local' : undefined),
   label: options.label ?? null,
+  walletClient: options.walletClient ?? null,
 });
 
 const buildLucidWallet = (options: LucidWalletOptions): AgentWalletHandle => {

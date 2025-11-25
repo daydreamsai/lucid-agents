@@ -361,8 +361,8 @@ const agent = await createAgent({
       config: {
         agent: {
           type: 'thirdweb',
-          secretKey: process.env.THIRDWEB_SECRET_KEY!,
-          clientId: process.env.THIRDWEB_CLIENT_ID,
+          secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+          clientId: process.env.AGENT_WALLET_CLIENT_ID,
           walletLabel: 'agent-wallet',
           chainId: 84532, // Base Sepolia
         },
@@ -371,8 +371,16 @@ const agent = await createAgent({
   )
   .build();
 
-const connector = agent.wallets?.agent?.connector as ThirdwebWalletConnector;
-const walletClient = await connector.getWalletClient();
+const connector = agent.wallets?.agent?.connector;
+const capabilities = connector?.getCapabilities?.();
+if (!connector?.getWalletClient || !capabilities?.walletClient) {
+  throw new Error('thirdweb wallet client not available');
+}
+
+const walletClient = (await connector.getWalletClient())?.client;
+if (!walletClient) {
+  throw new Error('Wallet client not initialized');
+}
 
 await walletClient.writeContract({
   account: walletClient.account,

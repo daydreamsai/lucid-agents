@@ -5,19 +5,29 @@
 
 ## Summary
 
-- Added a brand-new thirdweb Engine wallet connector to the wallets extension. It spins up the Engine-managed account, exposes `getWalletClient()` / `getSigner()`, and plugs into the standard `WalletConnector` API so x402, identity, and contract calls share the same Engine key material.
-- Introduced a new signer connector that unifies all connectors on the shared `LocalEoaSigner` surface, giving thirdweb the same runtime affordances as local/Lucid wallets without extra wiring.
-- Added `packages/examples/src/wallet/thirdweb-engine-wallets.ts`, an end-to-end script that configures `wallets({ agent: { type: 'thirdweb', ... } })`, signs the facilitator challenge, and transfers 0.01 USDC via the connector-managed viem client.
-- Updated `docs/WALLETS.md` and the root `README.md` with thirdweb configuration guidance and instructions for reusing the exposed wallet client—no manual Engine client creation required.
+- Added thirdweb Engine wallet connector that integrates with thirdweb Engine server wallets. The connector lazily initializes the Engine account, converts it to a viem wallet client, and exposes it via the shared `WalletConnector` API.
+- Introduced shared wallet client abstraction with capability detection. All connectors now expose optional `getCapabilities()`, `getSigner()`, and `getWalletClient()` methods, enabling uniform access to signers and contract-ready wallet clients across connector types.
+- Enhanced local EOA connectors to automatically build viem wallet clients from signers. Configure `walletClient` (chain ID, RPC URL, chain name) on local wallet options to enable `getWalletClient()` support.
+- Standardized environment variable naming to use `AGENT_WALLET_*` prefix for all wallet types, including thirdweb.
+- Reorganized code structure: moved `createPrivateKeySigner` and wallet client creation helpers into `local-eoa-connector.ts` where they belong.
+- Added comprehensive unit tests for capability detection, signer access, and wallet client creation.
+- Updated documentation with unified wallet client usage patterns and environment variable configuration.
 
 ## Breaking Changes
 
-None. This PR adds the thirdweb connector; existing wallets continue to behave the same.
+- **Environment variable configuration now requires `AGENT_WALLET_TYPE`**. The `walletsFromEnv()` helper will throw an error if `AGENT_WALLET_TYPE` is not set. Previously, the type could be inferred from available variables.
 
 ## Migration Notes
 
-- New capability – Configure `wallets({ agent: { type: 'thirdweb', ... } })` to opt into the thirdweb connector and call `const walletClient = await agent.wallets.agent.connector.getWalletClient();` when you need to send transactions.
-- Local/Lucid wallets are unchanged.
+- **Set `AGENT_WALLET_TYPE` explicitly**: Update your environment variables to include `AGENT_WALLET_TYPE=local`, `AGENT_WALLET_TYPE=thirdweb`, or `AGENT_WALLET_TYPE=lucid`.
+- **Use unified wallet client API**: All connectors now support `getWalletClient()` when configured. Check capabilities before calling:
+  ```ts
+  const capabilities = connector.getCapabilities?.();
+  if (capabilities?.walletClient) {
+    const walletHandle = await connector.getWalletClient();
+    const walletClient = walletHandle?.client;
+  }
+  ```
 
 ### Usage Example
 
@@ -29,8 +39,8 @@ const agent = await createAgent(meta)
       config: {
         agent: {
           type: 'thirdweb',
-          secretKey: process.env.THIRDWEB_SECRET_KEY!,
-          clientId: process.env.THIRDWEB_CLIENT_ID,
+          secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+          clientId: process.env.AGENT_WALLET_CLIENT_ID,
           walletLabel: 'agent-wallet',
           chainId: 84532,
         },
@@ -39,15 +49,19 @@ const agent = await createAgent(meta)
   )
   .build();
 
-const connector = agent.wallets?.agent?.connector as ThirdwebWalletConnector;
-const walletClient = await connector.getWalletClient();
+const connector = agent.wallets?.agent?.connector;
+const capabilities = connector?.getCapabilities?.();
+if (capabilities?.walletClient && connector?.getWalletClient) {
+  const walletHandle = await connector.getWalletClient();
+  const walletClient = walletHandle?.client;
 
-await walletClient.writeContract({
-  account: walletClient.account,
-  chain: walletClient.chain,
-  address: USDC_ADDRESS,
-  abi: erc20Abi,
-  functionName: 'transfer',
-  args: ['0xEA4b0D5ebF46C22e4c7E6b6164706447e67B9B1D', 10_000n], // 0.01 USDC
-});
+  await walletClient.writeContract({
+    account: walletClient.account,
+    chain: walletClient.chain,
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'transfer',
+    args: ['0xEA4b0D5ebF46C22e4c7E6b6164706447e67B9B1D', 10_000n],
+  });
+}
 ```

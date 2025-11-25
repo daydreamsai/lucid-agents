@@ -26,18 +26,10 @@ Local wallets use a private key for signing. They're simple and work offline.
 **Configuration:**
 
 ```typescript
-import { wallets } from '@lucid-agents/wallet';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
 const agent = await createAgent({ ... })
-  .use(wallets({
-    config: {
-      agent: {
-        type: 'local',
-        privateKey: process.env.PRIVATE_KEY,
-        provider: 'local',
-      },
-    },
-  }))
+  .use(wallets({ config: walletsFromEnv() }))
   .build();
 ```
 
@@ -46,7 +38,12 @@ const agent = await createAgent({ ... })
 ```bash
 AGENT_WALLET_TYPE=local
 AGENT_WALLET_PRIVATE_KEY=0x...
+AGENT_WALLET_RPC_URL=https://base-sepolia.g.alchemy.com/v2/...
+AGENT_WALLET_CHAIN_ID=84532
+AGENT_WALLET_CHAIN_NAME=Base Sepolia
 ```
+
+`CHAIN_ID`, `CHAIN_NAME`, and `RPC_URL` are optional but recommended so the connector can build a viem wallet client that speaks to the correct network. Developer wallets support the same `DEVELOPER_WALLET_CHAIN_ID`, `DEVELOPER_WALLET_CHAIN_NAME`, and `DEVELOPER_WALLET_RPC_URL` overrides.
 
 ### Local Wallets (Custom Signer)
 
@@ -141,9 +138,9 @@ const agent = await createAgent({
       config: {
         agent: {
           type: 'thirdweb',
-          secretKey: process.env.THIRDWEB_SECRET_KEY!,
-          clientId: process.env.THIRDWEB_CLIENT_ID,
-          walletLabel: process.env.THIRDWEB_WALLET_LABEL || 'agent-wallet',
+          secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+          clientId: process.env.AGENT_WALLET_CLIENT_ID,
+          walletLabel: process.env.AGENT_WALLET_LABEL || 'agent-wallet',
           chainId: baseSepolia.id, // 84532
         },
       },
@@ -160,13 +157,13 @@ console.log('Wallet address:', address);
 
 ```bash
 # Required
-THIRDWEB_SECRET_KEY=your_secret_key
-THIRDWEB_CHAIN_ID=84532  # Base Sepolia
+AGENT_WALLET_TYPE=thirdweb
+AGENT_WALLET_SECRET_KEY=your_secret_key
+AGENT_WALLET_CHAIN_ID=84532  # Base Sepolia
 
 # Optional
-THIRDWEB_CLIENT_ID=your_client_id  # Required for JWT secret keys
-THIRDWEB_WALLET_LABEL=agent-wallet
-AGENT_WALLET_TYPE=thirdweb  # Can also use AGENT_WALLET_ prefix
+AGENT_WALLET_CLIENT_ID=your_client_id  # Required for JWT secret keys
+AGENT_WALLET_LABEL=agent-wallet
 ```
 
 ### Using Environment Variables
@@ -183,11 +180,34 @@ const agent = await createAgent({ ... })
 
 The following environment variables are supported:
 
-- `THIRDWEB_SECRET_KEY` or `AGENT_WALLET_SECRET_KEY` - Required
-- `THIRDWEB_CLIENT_ID` or `AGENT_WALLET_CLIENT_ID` - Optional (required for JWT)
-- `THIRDWEB_WALLET_LABEL` or `AGENT_WALLET_LABEL` - Optional (defaults to `agent-wallet`)
-- `THIRDWEB_CHAIN_ID` or `AGENT_WALLET_CHAIN_ID` - Required (defaults to `84532` for Base Sepolia)
 - `AGENT_WALLET_TYPE=thirdweb` - Set wallet type to thirdweb
+- `AGENT_WALLET_SECRET_KEY` - Required (thirdweb Engine secret key)
+- `AGENT_WALLET_CHAIN_ID` - Required (defaults to `84532` for Base Sepolia)
+- `AGENT_WALLET_CLIENT_ID` - Optional (required for JWT secret keys)
+- `AGENT_WALLET_LABEL` - Optional (defaults to `agent-wallet`)
+
+### Connector Capabilities & Wallet Clients
+
+All connectors implement the base `WalletConnector` surface (challenge signing, metadata, address lookup). Some connectors expose additional capabilities that you can detect at runtime:
+
+```ts
+const connector = agent.wallets?.agent?.connector;
+const capabilities = connector?.getCapabilities?.();
+
+if (capabilities?.walletClient && connector?.getWalletClient) {
+  const walletHandle = await connector.getWalletClient();
+  const walletClient = walletHandle?.client;
+  // Use viem wallet client (thirdweb engine, future connectors, etc.)
+}
+
+const walletHandle = await connector.getWalletClient();
+if (!walletHandle) throw new Error('Wallet client unavailable');
+
+const signer = await connector.getSigner?.();
+// Use LocalEoaSigner for x402, identity, or custom signing.
+```
+
+Local EOA connectors automatically synthesize a viem wallet client the first time `getWalletClient()` is called. Configure `walletClient` (chain ID, RPC URL, currency metadata) on the wallet definition to point at the correct network. If omitted, the connector falls back to a localhost RPC target (http://localhost:8545) and a generic chain profile.
 
 ## Generic Signer Connector
 
@@ -318,6 +338,11 @@ interface WalletConnector {
   getWalletMetadata(): Promise<WalletMetadata | null>;
   getAddress?(): Promise<string | null>;
   supportsCaip2?(caip2: string): boolean | Promise<boolean>;
+  getCapabilities?(): WalletCapabilities | null | undefined;
+  getSigner?(): Promise<LocalEoaSigner | null>;
+  getWalletClient?<
+    TClient = unknown,
+  >(): Promise<WalletClientHandle<TClient> | null>;
 }
 ```
 

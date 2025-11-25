@@ -11,6 +11,7 @@ export {
 
 export {
   LocalEoaWalletConnector,
+  createPrivateKeySigner,
   type LocalEoaWalletConnectorOptions,
 } from './connectors/local-eoa-connector';
 export {
@@ -22,7 +23,6 @@ export {
   ThirdwebWalletConnector,
   type ThirdwebWalletConnectorOptions,
 } from './connectors/thirdweb-connector';
-export { createPrivateKeySigner } from './private-key-signer';
 export {
   createSignerConnector,
   type CompatibleWallet,
@@ -35,6 +35,4 @@ export {
 export type { WalletsRuntime } from '@lucid-agents/types/wallets';
 export { walletsFromEnv } from './env';
 export { wallets } from './extension';
-
-// Export utilities
 export * from './utils';

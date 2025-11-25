@@ -1,7 +1,9 @@
 import type {
   AgentWalletConfig,
   DeveloperWalletConfig,
+  LocalWalletClientConfig,
   LocalWalletOptions,
+  LucidWalletOptions,
   ThirdwebWalletOptions,
   WalletsConfig,
 } from '@lucid-agents/types/wallets';
@@ -45,7 +47,9 @@ export function resolveWalletsFromEnv(
   env?: EnvRecord
 ): WalletsConfig | undefined {
   if (!env) return undefined;
-  const agent = resolveAgentWalletFromEnv(env);
+  const agent = env.AGENT_WALLET_TYPE
+    ? resolveAgentWalletFromEnv(env)
+    : undefined;
   const developer = resolveDeveloperWalletFromEnv(env);
   if (!agent && !developer) {
     return undefined;
@@ -64,73 +68,96 @@ export function resolveAgentWalletFromEnv(
   env: EnvRecord
 ): AgentWalletConfig | undefined {
   const type = env.AGENT_WALLET_TYPE?.toLowerCase();
-  const privateKey = env.AGENT_WALLET_PRIVATE_KEY;
 
-  if (type === 'local' || (privateKey && !type)) {
-    if (!privateKey) {
-      return undefined;
-    }
-    return {
-      type: 'local',
-      privateKey,
-      ...extractLocalMetadata(env, 'AGENT_WALLET_'),
-    };
-  }
-
-  if (type === 'thirdweb' || env.THIRDWEB_SECRET_KEY) {
-    const secretKey = env.THIRDWEB_SECRET_KEY ?? env.AGENT_WALLET_SECRET_KEY;
-    const clientId = env.THIRDWEB_CLIENT_ID ?? env.AGENT_WALLET_CLIENT_ID;
-    const walletLabel =
-      env.THIRDWEB_WALLET_LABEL ?? env.AGENT_WALLET_LABEL ?? 'agent-wallet';
-    const chainIdStr =
-      env.THIRDWEB_CHAIN_ID ?? env.AGENT_WALLET_CHAIN_ID ?? '84532'; // Default to base-sepolia
-
-    if (!secretKey) {
-      return undefined;
-    }
-
-    const chainId = parseInt(chainIdStr, 10);
-    if (isNaN(chainId)) {
-      return undefined;
-    }
-
-    return {
-      type: 'thirdweb',
-      secretKey,
-      clientId,
-      walletLabel,
-      chainId,
-      ...extractThirdwebMetadata(env),
-    };
-  }
-
-  if (type === 'lucid' || env.AGENT_WALLET_AGENT_REF) {
-    const baseUrl =
-      env.AGENT_WALLET_BASE_URL ??
-      env.LUCID_BASE_URL ??
-      env.LUCID_API_URL ??
-      undefined;
-    const agentRef = env.AGENT_WALLET_AGENT_REF;
-    if (!baseUrl || !agentRef) {
-      return undefined;
-    }
-
-    const headers = parseHeaderRecord(env.AGENT_WALLET_HEADERS);
-    const authorizationContext = parseJsonObject(
-      env.AGENT_WALLET_AUTHORIZATION_CONTEXT
+  if (!type) {
+    throw new Error(
+      'AGENT_WALLET_TYPE environment variable is required. Set it to "local", "thirdweb", or "lucid".'
     );
-
-    return {
-      type: 'lucid',
-      baseUrl,
-      agentRef,
-      headers,
-      accessToken: env.AGENT_WALLET_ACCESS_TOKEN ?? undefined,
-      authorizationContext,
-    };
   }
 
-  return undefined;
+  if (type === 'local') {
+    return parseLocalWalletFromEnv(env);
+  }
+  if (type === 'thirdweb') {
+    return parseThirdwebWalletFromEnv(env);
+  }
+  if (type === 'lucid') {
+    return parseLucidWalletFromEnv(env);
+  }
+
+  throw new Error(
+    `Invalid AGENT_WALLET_TYPE: "${type}". Must be one of: "local", "thirdweb", "lucid".`
+  );
+}
+
+function parseLocalWalletFromEnv(
+  env: EnvRecord
+): LocalWalletOptions | undefined {
+  const privateKey = env.AGENT_WALLET_PRIVATE_KEY;
+  if (!privateKey) {
+    return undefined;
+  }
+
+  return {
+    type: 'local',
+    privateKey,
+    ...extractLocalMetadata(env, 'AGENT_WALLET_'),
+  };
+}
+
+function parseThirdwebWalletFromEnv(
+  env: EnvRecord
+): ThirdwebWalletOptions | undefined {
+  const secretKey = env.AGENT_WALLET_SECRET_KEY;
+  const clientId = env.AGENT_WALLET_CLIENT_ID;
+  const walletLabel = env.AGENT_WALLET_LABEL ?? 'agent-wallet';
+  const chainIdStr = env.AGENT_WALLET_CHAIN_ID ?? '84532';
+
+  if (!secretKey) {
+    return undefined;
+  }
+
+  const chainId = parseInt(chainIdStr, 10);
+  if (isNaN(chainId)) {
+    return undefined;
+  }
+
+  return {
+    type: 'thirdweb',
+    secretKey,
+    clientId,
+    walletLabel,
+    chainId,
+    ...extractThirdwebMetadata(env),
+  };
+}
+
+function parseLucidWalletFromEnv(
+  env: EnvRecord
+): LucidWalletOptions | undefined {
+  const baseUrl =
+    env.AGENT_WALLET_BASE_URL ??
+    env.LUCID_BASE_URL ??
+    env.LUCID_API_URL ??
+    undefined;
+  const agentRef = env.AGENT_WALLET_AGENT_REF;
+  if (!baseUrl || !agentRef) {
+    return undefined;
+  }
+
+  const headers = parseHeaderRecord(env.AGENT_WALLET_HEADERS);
+  const authorizationContext = parseJsonObject(
+    env.AGENT_WALLET_AUTHORIZATION_CONTEXT
+  );
+
+  return {
+    type: 'lucid',
+    baseUrl,
+    agentRef,
+    headers,
+    accessToken: env.AGENT_WALLET_ACCESS_TOKEN ?? undefined,
+    authorizationContext,
+  };
 }
 
 export function resolveDeveloperWalletFromEnv(
@@ -168,7 +195,39 @@ function extractLocalMetadata(
     }
   }
 
+  const walletClient = extractLocalWalletClientConfig(env, prefix);
+  if (walletClient) {
+    metadata.walletClient = walletClient;
+  }
+
   return metadata;
+}
+
+function extractLocalWalletClientConfig(
+  env: EnvRecord,
+  prefix: string
+): LocalWalletClientConfig | undefined {
+  const rpcUrl = env[`${prefix}RPC_URL`]?.trim();
+  const chainIdRaw = env[`${prefix}CHAIN_ID`]?.trim();
+  const chainName = env[`${prefix}CHAIN_NAME`]?.trim();
+
+  const config: LocalWalletClientConfig = {};
+  if (rpcUrl) {
+    config.rpcUrl = rpcUrl;
+  }
+
+  if (chainIdRaw) {
+    const parsed = Number(chainIdRaw);
+    if (!Number.isNaN(parsed)) {
+      config.chainId = parsed;
+    }
+  }
+
+  if (chainName) {
+    config.chainName = chainName;
+  }
+
+  return Object.keys(config).length ? config : undefined;
 }
 
 function extractThirdwebMetadata(
@@ -183,12 +242,10 @@ function extractThirdwebMetadata(
     LABEL: 'label',
   };
 
-  // Check both THIRDWEB_ and AGENT_WALLET_ prefixes
   for (const [envKey, targetKey] of Object.entries(map)) {
-    const value =
-      env[`THIRDWEB_${envKey}`] ?? env[`AGENT_WALLET_${envKey}`] ?? undefined;
-    if (value && value.trim()) {
-      metadata[targetKey] = value.trim() as never;
+    const value = env[`AGENT_WALLET_${envKey}`]?.trim();
+    if (value) {
+      metadata[targetKey] = value as never;
     }
   }
 
@@ -217,8 +274,6 @@ function parseJsonObject(
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
-  } catch {
-    // ignore parse errors
-  }
+  } catch {}
   return undefined;
 }

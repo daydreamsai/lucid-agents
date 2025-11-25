@@ -2,6 +2,8 @@ import type {
   AgentChallengeResponse,
   LocalEoaSigner,
   TypedDataPayload,
+  WalletCapabilities,
+  WalletClientHandle,
   WalletConnector,
   WalletMetadata,
   ThirdwebWalletOptions,
@@ -37,6 +39,10 @@ export class ThirdwebWalletConnector implements WalletConnector {
   private viemWalletClient: WalletClient | null = null;
   private initializationPromise: Promise<void> | null = null;
   private signer: LocalEoaSigner | null = null;
+  private readonly capabilities: WalletCapabilities = {
+    signer: true,
+    walletClient: true,
+  };
 
   constructor(options: ThirdwebWalletConnectorOptions) {
     if (!options?.secretKey) {
@@ -74,8 +80,6 @@ export class ThirdwebWalletConnector implements WalletConnector {
     }
 
     this.initializationPromise = (async () => {
-      // Dynamic import to avoid requiring thirdweb as a dependency
-      // Using type assertions since thirdweb is a peer dependency
       let thirdweb: any;
       let viemAdapterModule: any;
       let chainsModule: any;
@@ -94,7 +98,6 @@ export class ThirdwebWalletConnector implements WalletConnector {
       const { createThirdwebClient, Engine } = thirdweb;
       const { viemAdapter } = viemAdapterModule;
 
-      // Get chain from chainId
       const chains = chainsModule;
       const chain = Object.values(chains).find(
         (c: any) => c?.id === this.options.chainId
@@ -106,39 +109,32 @@ export class ThirdwebWalletConnector implements WalletConnector {
         );
       }
 
-      // Step 1: Create thirdweb client
       const client = createThirdwebClient({
         secretKey: this.options.secretKey,
         clientId: this.options.clientId,
       });
 
-      // Step 2: Create/get server wallet using Engine
       const serverWalletData = await Engine.createServerWallet({
         client,
         label: this.options.walletLabel,
       });
 
-      // Step 3: Create server wallet instance - this returns an Account
       const account = Engine.serverWallet({
         client,
         address: serverWalletData.address,
-        chain, // Required for signing
+        chain,
       });
 
-      // Step 4: Create a Wallet wrapper from the Account
       const wallet = {
         ...account,
         getAccount: () => account,
       } as any;
 
-      // Step 5: Convert Wallet to viem wallet client using thirdweb adapter
       this.viemWalletClient = await viemAdapter.wallet.toViem({
         client,
         chain,
         wallet,
       });
-
-      // Update metadata with actual address
       if (serverWalletData.address) {
         this.metadata.address = serverWalletData.address;
       }
@@ -178,21 +174,16 @@ export class ThirdwebWalletConnector implements WalletConnector {
   }
 
   async getWalletMetadata(): Promise<WalletMetadata | null> {
-    // Try to initialize to get the actual address
     try {
       await this.initialize();
-    } catch {
-      // If initialization fails, return metadata with configured address
-    }
+    } catch {}
     return this.metadata;
   }
 
   async getAddress(): Promise<string | null> {
     try {
       await this.initialize();
-    } catch {
-      // If initialization fails, return configured address
-    }
+    } catch {}
     return this.metadata.address;
   }
 
@@ -202,9 +193,17 @@ export class ThirdwebWalletConnector implements WalletConnector {
     return this.metadata.caip2.toLowerCase() === caip2.toLowerCase();
   }
 
-  async getWalletClient(): Promise<WalletClient | null> {
+  async getWalletClient<
+    TClient = WalletClient,
+  >(): Promise<WalletClientHandle<TClient> | null> {
     await this.initialize();
-    return this.viemWalletClient;
+    if (!this.viemWalletClient) {
+      return null;
+    }
+    return {
+      kind: 'viem',
+      client: this.viemWalletClient as unknown as TClient,
+    };
   }
 
   async getSigner(): Promise<LocalEoaSigner> {
@@ -213,6 +212,10 @@ export class ThirdwebWalletConnector implements WalletConnector {
       throw new Error('Thirdweb wallet client not initialized');
     }
     return this.signer;
+  }
+
+  getCapabilities(): WalletCapabilities {
+    return this.capabilities;
   }
 }
 
