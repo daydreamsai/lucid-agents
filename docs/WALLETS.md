@@ -94,6 +94,8 @@ thirdweb server wallets are managed by thirdweb Engine - no private key manageme
 bun add thirdweb
 ```
 
+> **Note:** The thirdweb Engine wallet connector requires `thirdweb` version `^5.84.0` or higher so the Engine APIs used by the connector are available. Make sure your project depends on at least that version.
+
 ### Creating a Server Wallet
 
 The SDK will automatically create the wallet if it doesn't exist when you first use it. You can also create it manually:
