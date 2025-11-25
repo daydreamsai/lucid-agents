@@ -258,7 +258,7 @@
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "thirdweb": "^5.0.0",
+        "thirdweb": "^5.84.0",
       },
     },
   },
