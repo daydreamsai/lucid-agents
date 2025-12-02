@@ -26,9 +26,17 @@ export function payments(options?: {
       let config = options?.config;
 
       if (config !== false && config !== undefined && options?.policies) {
-        const policyGroups = policiesFromConfig(options.policies);
-        if (policyGroups) {
-          config = { ...config, policyGroups };
+        try {
+          const policyGroups = policiesFromConfig(options.policies);
+          if (policyGroups) {
+            config = { ...config, policyGroups };
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to load policies from config: ${message}`, {
+            cause: error,
+          });
         }
       }
 
