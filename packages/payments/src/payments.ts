@@ -5,8 +5,11 @@ import type {
   PaymentsConfig,
   PaymentRequirement,
   RuntimePaymentRequirement,
+  PaymentPolicyGroup,
 } from '@lucid-agents/types/payments';
 import { resolvePrice } from './pricing';
+import { createSpendingTracker, type SpendingTracker } from './spending-tracker';
+import { createRateLimiter, type RateLimiter } from './rate-limiter';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -161,12 +164,52 @@ export function createPaymentsRuntime(
 
   let isActive = false;
 
+  // Create trackers if policy groups are configured
+  const policyGroups = config.policyGroups;
+  let spendingTracker: SpendingTracker | undefined;
+  let rateLimiter: RateLimiter | undefined;
+
+  if (policyGroups && policyGroups.length > 0) {
+    // Check if any group needs spending tracking
+    const needsSpendingTracker = policyGroups.some(
+      group => group.spendingLimits?.global?.maxTotalUsd !== undefined ||
+               Object.values(group.spendingLimits?.perTarget || {}).some(
+                 limit => limit.maxTotalUsd !== undefined
+               ) ||
+               Object.values(group.spendingLimits?.perEndpoint || {}).some(
+                 limit => limit.maxTotalUsd !== undefined
+               )
+    );
+
+    // Check if any group needs rate limiting
+    const needsRateLimiter = policyGroups.some(
+      group => group.rateLimits !== undefined
+    );
+
+    if (needsSpendingTracker) {
+      spendingTracker = createSpendingTracker();
+    }
+
+    if (needsRateLimiter) {
+      rateLimiter = createRateLimiter();
+    }
+  }
+
   return {
     get config() {
       return config;
     },
     get isActive() {
       return isActive;
+    },
+    get spendingTracker() {
+      return spendingTracker;
+    },
+    get rateLimiter() {
+      return rateLimiter;
+    },
+    get policyGroups() {
+      return policyGroups;
     },
     requirements(entrypoint: EntrypointDef, kind: 'invoke' | 'stream') {
       return evaluatePaymentRequirement(

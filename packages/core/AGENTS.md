@@ -293,6 +293,93 @@ handler: async ctx => {
 };
 ```
 
+### Payment Policy Enforcement
+
+The payments extension supports policy groups for controlling payment behavior:
+
+- **Spending Limits**: Per-request and total spending limits (global, per-target, or per-endpoint)
+- **Recipient Controls**: Whitelist/blacklist of addresses or domains
+- **Rate Limiting**: Limit number of payments per time window
+- **Stateful Tracking**: In-memory tracking of spending and rate limits (resets on restart)
+
+All policies are evaluated before payment is made. If any policy group fails, the payment is blocked.
+
+#### Policy Groups Configuration
+
+```ts
+import { payments } from '@lucid-agents/payments';
+import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
+
+const policyGroups: PaymentPolicyGroup[] = [
+  {
+    name: 'Daily Spending Limit',
+    spendingLimits: {
+      global: {
+        maxPaymentUsd: 10.0, // Max $10 per individual payment
+        maxTotalUsd: 100.0, // Max $100 total per day
+        windowMs: 24 * 60 * 60 * 1000, // 24 hours
+      },
+    },
+  },
+  {
+    name: 'API Usage Policy',
+    spendingLimits: {
+      perTarget: {
+        'https://trusted-api.example.com': {
+          maxPaymentUsd: 5.0,
+          maxTotalUsd: 50.0,
+        },
+      },
+    },
+    allowedRecipients: ['https://trusted-api.example.com'],
+    rateLimits: {
+      maxPayments: 100,
+      windowMs: 60 * 60 * 1000, // Per hour
+    },
+  },
+];
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(
+    payments({
+      config: {
+        ...paymentsFromEnv(),
+        policyGroups,
+      },
+    })
+  )
+  .build();
+```
+
+#### Policy Hierarchy
+
+Spending limits follow a hierarchy (most specific wins):
+
+1. **Endpoint-level**: Full endpoint URL (e.g., `https://agent.example.com/entrypoints/process/invoke`)
+2. **Target-level**: Agent domain/URL (e.g., `https://agent.example.com`)
+3. **Global**: Applies to all payments
+
+All policy groups must pass for a payment to be allowed. The first violation blocks the payment.
+
+#### Environment Variable Configuration
+
+Policy groups can also be configured via environment variables:
+
+```bash
+# JSON configuration (recommended for complex policies)
+PAYMENT_POLICY_GROUPS_JSON='[{"name":"Daily Limit","spendingLimits":{"global":{"maxTotalUsd":100.0}}}]'
+
+# Or individual policy groups via env vars
+PAYMENT_POLICY_GROUP_0_NAME="Daily Limit"
+PAYMENT_POLICY_GROUP_0_GLOBAL_MAX_TOTAL_USD=100.0
+PAYMENT_POLICY_GROUP_0_GLOBAL_WINDOW_MS=86400000
+```
+
+See [`packages/core/examples/policy-agent.ts`](../core/examples/policy-agent.ts) for a complete example.
+
 ### Convenience Functions
 
 The A2A client provides convenience functions:
