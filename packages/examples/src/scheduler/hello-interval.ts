@@ -42,6 +42,7 @@ import {
   createMemoryStore,
 } from '@lucid-agents/scheduler';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
+import { a2a } from '@lucid-agents/a2a';
 import { z } from 'zod';
 
 async function main() {
@@ -57,6 +58,7 @@ async function main() {
   })
     .use(http())
     .use(payments({ config: paymentsFromEnv() }))
+    .use(a2a())
     .build();
 
   const { app, addEntrypoint } = await createAgentApp(serviceAgent);
@@ -113,6 +115,7 @@ async function main() {
     description: 'Scheduler client that pays for agent calls',
   })
     .use(wallets({ config: walletsFromEnv() }))
+    .use(a2a())
     .build();
 
   const paymentContext = await createRuntimePaymentContext({
