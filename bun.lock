@@ -25,7 +25,7 @@
     },
     "packages/a2a": {
       "name": "@lucid-agents/a2a",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "zod": "catalog:",
@@ -40,7 +40,7 @@
     },
     "packages/ap2": {
       "name": "@lucid-agents/ap2",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
       },
@@ -51,7 +51,7 @@
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "1.9.0",
+      "version": "1.9.2",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -66,7 +66,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "1.9.0",
+      "version": "1.9.2",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -97,7 +97,7 @@
     },
     "packages/examples": {
       "name": "@lucid-agents/examples",
-      "version": "0.1.1",
+      "version": "0.1.3",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
@@ -106,6 +106,7 @@
         "@lucid-agents/http": "workspace:*",
         "@lucid-agents/identity": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
+        "@lucid-agents/scheduler": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
         "@lucid-dreams/agent-auth": "latest",
@@ -125,7 +126,7 @@
     },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.3.1",
+      "version": "0.3.3",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -144,7 +145,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.7.1",
+      "version": "0.7.3",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -164,7 +165,7 @@
     },
     "packages/http": {
       "name": "@lucid-agents/http",
-      "version": "1.9.0",
+      "version": "1.9.2",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -182,7 +183,7 @@
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "1.9.0",
+      "version": "1.9.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -197,7 +198,7 @@
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "1.9.0",
+      "version": "1.9.2",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -215,9 +216,21 @@
       "name": "@lucid-agents/prettier-config",
       "version": "1.0.0",
     },
+    "packages/scheduler": {
+      "name": "@lucid-agents/scheduler",
+      "version": "0.0.0",
+      "dependencies": {
+        "@lucid-agents/a2a": "workspace:*",
+        "@lucid-agents/types": "workspace:*",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.6.1",
+      "version": "0.6.3",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -235,7 +248,7 @@
     },
     "packages/types": {
       "name": "@lucid-agents/types",
-      "version": "1.5.0",
+      "version": "1.5.1",
       "devDependencies": {
         "tsup": "catalog:",
         "typescript": "catalog:",
@@ -248,7 +261,7 @@
     },
     "packages/wallet": {
       "name": "@lucid-agents/wallet",
-      "version": "0.4.0",
+      "version": "0.5.1",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "viem": "^2.38.5",
@@ -543,6 +556,8 @@
     "@lucid-agents/payments": ["@lucid-agents/payments@workspace:packages/payments"],
 
     "@lucid-agents/prettier-config": ["@lucid-agents/prettier-config@workspace:packages/prettier-config"],
+
+    "@lucid-agents/scheduler": ["@lucid-agents/scheduler@workspace:packages/scheduler"],
 
     "@lucid-agents/tanstack": ["@lucid-agents/tanstack@workspace:packages/tanstack"],
 
