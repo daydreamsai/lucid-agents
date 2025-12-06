@@ -21,6 +21,7 @@
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/identity": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "@lucid-dreams/agent-auth": "latest",
