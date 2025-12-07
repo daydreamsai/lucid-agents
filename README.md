@@ -362,6 +362,7 @@ Payment analytics and reporting with CSV/JSON export for accounting systems.
 import { createAgent } from '@lucid-agents/core';
 import { analytics } from '@lucid-agents/analytics';
 import { getSummary, exportToCSV } from '@lucid-agents/analytics';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 
 const agent = await createAgent({
   name: 'my-agent',

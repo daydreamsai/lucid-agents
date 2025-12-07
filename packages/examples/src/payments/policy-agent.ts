@@ -405,7 +405,7 @@ addEntrypoint({
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ item }),
+            body: JSON.stringify({ input: { item } }),
           }
         );
 
