@@ -1,7 +1,10 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
-import type { PaymentRecord, PaymentDirection } from '@lucid-agents/types/payments';
+import type {
+  PaymentRecord,
+  PaymentDirection,
+} from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
 
 /**
@@ -43,7 +46,9 @@ export class SQLitePaymentStorage implements PaymentStorage {
     `);
   }
 
-  async recordPayment(record: Omit<PaymentRecord, 'id' | 'timestamp'>): Promise<void> {
+  async recordPayment(
+    record: Omit<PaymentRecord, 'id' | 'timestamp'>
+  ): Promise<void> {
     if (record.amount <= 0n) {
       return;
     }
@@ -70,7 +75,7 @@ export class SQLitePaymentStorage implements PaymentStorage {
     windowMs?: number
   ): Promise<bigint> {
     let query = `
-      SELECT SUM(CAST(amount AS TEXT)) as total
+      SELECT amount
       FROM payments
       WHERE group_name = ? AND scope = ? AND direction = ?
     `;
@@ -82,11 +87,12 @@ export class SQLitePaymentStorage implements PaymentStorage {
       params.push(Date.now() - windowMs);
     }
 
-    const result = this.db.prepare(query).get(...params) as {
-      total: string | null;
-    };
+    const rows = this.db.prepare(query).all(...params) as Array<{
+      amount: string;
+    }>;
 
-    return Promise.resolve(result.total ? BigInt(result.total) : 0n);
+    const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
+    return Promise.resolve(total);
   }
 
   async getAllRecords(
@@ -126,14 +132,16 @@ export class SQLitePaymentStorage implements PaymentStorage {
       timestamp: number;
     }>;
 
-    return Promise.resolve(rows.map(row => ({
-      id: row.id,
-      groupName: row.group_name,
-      scope: row.scope,
-      direction: row.direction as PaymentDirection,
-      amount: BigInt(row.amount),
-      timestamp: row.timestamp,
-    })));
+    return Promise.resolve(
+      rows.map(row => ({
+        id: row.id,
+        groupName: row.group_name,
+        scope: row.scope,
+        direction: row.direction as PaymentDirection,
+        amount: BigInt(row.amount),
+        timestamp: row.timestamp,
+      }))
+    );
   }
 
   async clear(): Promise<void> {
