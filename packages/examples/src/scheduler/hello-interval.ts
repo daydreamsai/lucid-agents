@@ -27,22 +27,22 @@
  *   NETWORK                      - Network (e.g., base-sepolia)
  */
 
+import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import {
+  createRuntimePaymentContext,
   payments,
   paymentsFromEnv,
-  createRuntimePaymentContext,
 } from '@lucid-agents/payments';
-import { wallets } from '@lucid-agents/wallet';
 import {
+  createMemoryStore,
   createSchedulerRuntime,
   createSchedulerWorker,
-  createMemoryStore,
 } from '@lucid-agents/scheduler';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
-import { a2a } from '@lucid-agents/a2a';
+import { wallets } from '@lucid-agents/wallet';
 import { z } from 'zod';
 
 async function main() {
