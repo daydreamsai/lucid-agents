@@ -59,6 +59,18 @@ export type IncomingLimitsConfig = {
 export type PaymentDirection = 'outgoing' | 'incoming';
 
 /**
+ * Payment record stored in the database.
+ */
+export type PaymentRecord = {
+  id?: number;
+  groupName: string;
+  scope: string;
+  direction: PaymentDirection;
+  amount: bigint;
+  timestamp: number;
+};
+
+/**
  * Rate limiting configuration for a policy group.
  */
 export type RateLimitConfig = {

@@ -1,19 +1,4 @@
-/**
- * Payment direction: outgoing (agent pays) or incoming (agent receives).
- */
-export type PaymentDirection = 'outgoing' | 'incoming';
-
-/**
- * Payment record stored in the database.
- */
-export type PaymentRecord = {
-  id?: number;
-  groupName: string;
-  scope: string;
-  direction: PaymentDirection;
-  amount: bigint;
-  timestamp: number;
-};
+import type { PaymentDirection, PaymentRecord } from '@lucid-agents/types/payments';
 
 /**
  * Interface for payment data storage.

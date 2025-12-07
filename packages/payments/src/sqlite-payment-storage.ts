@@ -1,11 +1,8 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
-import type {
-  PaymentStorage,
-  PaymentRecord,
-  PaymentDirection,
-} from './payment-storage';
+import type { PaymentRecord, PaymentDirection } from '@lucid-agents/types/payments';
+import type { PaymentStorage } from './payment-storage';
 
 /**
  * SQLite payment storage implementation.

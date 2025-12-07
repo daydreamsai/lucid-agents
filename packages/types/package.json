@@ -36,6 +36,11 @@
       "import": "./dist/identity/index.js",
       "default": "./dist/identity/index.js"
     },
+    "./analytics": {
+      "types": "./dist/analytics/index.d.ts",
+      "import": "./dist/analytics/index.js",
+      "default": "./dist/analytics/index.js"
+    },
     "./payments": {
       "types": "./dist/payments/index.d.ts",
       "import": "./dist/payments/index.js",

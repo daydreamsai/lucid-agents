@@ -1,5 +1,10 @@
-import type { PaymentTracker, PaymentRecord } from '@lucid-agents/payments';
-import type { AnalyticsSummary, Transaction, AnalyticsData } from './types';
+import type { PaymentTracker } from '@lucid-agents/payments';
+import type { PaymentRecord } from '@lucid-agents/types/payments';
+import type {
+  AnalyticsSummary,
+  Transaction,
+  AnalyticsData,
+} from '@lucid-agents/types/analytics';
 
 /**
  * Formats a BigInt amount (in base units with 6 decimals) to a human-friendly USDC string.

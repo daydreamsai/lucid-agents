@@ -1,9 +1,9 @@
 import { Pool } from 'pg';
 import type {
-  PaymentStorage,
   PaymentRecord,
   PaymentDirection,
-} from './payment-storage';
+} from '@lucid-agents/types/payments';
+import type { PaymentStorage } from './payment-storage';
 
 /**
  * Postgres payment storage implementation.
@@ -48,7 +48,9 @@ export class PostgresPaymentStorage implements PaymentStorage {
     }
   }
 
-  async recordPayment(record: Omit<PaymentRecord, 'id' | 'timestamp'>): Promise<void> {
+  async recordPayment(
+    record: Omit<PaymentRecord, 'id' | 'timestamp'>
+  ): Promise<void> {
     if (record.amount <= 0n) {
       return;
     }
@@ -72,10 +74,7 @@ export class PostgresPaymentStorage implements PaymentStorage {
         ]
       );
     } catch (error) {
-      console.error(
-        '[PostgresPaymentStorage] Error recording payment:',
-        error
-      );
+      console.error('[PostgresPaymentStorage] Error recording payment:', error);
       throw error;
     }
   }

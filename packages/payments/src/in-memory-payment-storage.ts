@@ -1,8 +1,5 @@
-import type {
-  PaymentStorage,
-  PaymentRecord,
-  PaymentDirection,
-} from './payment-storage';
+import type { PaymentRecord, PaymentDirection } from '@lucid-agents/types/payments';
+import type { PaymentStorage } from './payment-storage';
 
 type PaymentEntry = {
   amount: bigint;

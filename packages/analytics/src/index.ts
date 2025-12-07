@@ -12,5 +12,5 @@ export type {
   AnalyticsSummary,
   Transaction,
   AnalyticsData,
-} from './types';
+} from '@lucid-agents/types/analytics';
 

@@ -32,12 +32,10 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lucid-agents/types": "workspace:*",
-    "@lucid-agents/payments": "workspace:*"
+    "@lucid-agents/types": "workspace:*"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:"
   }
 }
-

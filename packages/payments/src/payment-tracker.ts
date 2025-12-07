@@ -1,4 +1,5 @@
-import type { PaymentStorage, PaymentDirection } from './payment-storage';
+import type { PaymentDirection } from '@lucid-agents/types/payments';
+import type { PaymentStorage } from './payment-storage';
 import { createSQLitePaymentStorage } from './sqlite-payment-storage';
 
 /**

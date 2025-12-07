@@ -42,7 +42,6 @@
       "name": "@lucid-agents/analytics",
       "version": "0.1.0",
       "dependencies": {
-        "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/types": "workspace:*",
       },
       "devDependencies": {

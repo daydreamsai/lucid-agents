@@ -39,11 +39,7 @@ export {
 } from './crypto';
 export { payments } from './extension';
 export { createPaymentTracker, type PaymentTracker } from './payment-tracker';
-export type {
-  PaymentStorage,
-  PaymentRecord,
-  PaymentDirection,
-} from './payment-storage';
+export type { PaymentStorage } from './payment-storage';
 export {
   createSQLitePaymentStorage,
   type SQLitePaymentStorage,
