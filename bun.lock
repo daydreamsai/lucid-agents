@@ -220,7 +220,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@types/better-sqlite3": "^7.6.12",
+        "@types/better-sqlite3": "^7.6.13",
         "@types/pg": "^8.11.10",
         "tsup": "catalog:",
         "typescript": "catalog:",

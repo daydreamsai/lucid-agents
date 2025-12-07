@@ -44,7 +44,7 @@
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.11.10"
   }
 }
