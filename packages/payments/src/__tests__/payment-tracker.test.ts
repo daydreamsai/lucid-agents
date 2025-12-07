@@ -1,11 +1,13 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import { createPaymentTracker } from '../payment-tracker';
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 
 describe('PaymentTracker', () => {
   let tracker: ReturnType<typeof createPaymentTracker>;
 
   beforeEach(() => {
-    tracker = createPaymentTracker();
+    const storage = createInMemoryPaymentStorage();
+    tracker = createPaymentTracker(storage);
   });
 
   describe('checkOutgoingLimit', () => {
@@ -34,21 +36,45 @@ describe('PaymentTracker', () => {
     });
 
     it('should track outgoing payments across multiple requests', () => {
-      const result1 = tracker.checkOutgoingLimit('group1', 'global', 100.0, undefined, 50_000_000n);
+      const result1 = tracker.checkOutgoingLimit(
+        'group1',
+        'global',
+        100.0,
+        undefined,
+        50_000_000n
+      );
       expect(result1.allowed).toBe(true);
       tracker.recordOutgoing('group1', 'global', 50_000_000n);
 
-      const result2 = tracker.checkOutgoingLimit('group1', 'global', 100.0, undefined, 30_000_000n);
+      const result2 = tracker.checkOutgoingLimit(
+        'group1',
+        'global',
+        100.0,
+        undefined,
+        30_000_000n
+      );
       expect(result2.allowed).toBe(true);
       tracker.recordOutgoing('group1', 'global', 30_000_000n);
 
-      const result3 = tracker.checkOutgoingLimit('group1', 'global', 100.0, undefined, 25_000_000n);
+      const result3 = tracker.checkOutgoingLimit(
+        'group1',
+        'global',
+        100.0,
+        undefined,
+        25_000_000n
+      );
       expect(result3.allowed).toBe(false);
     });
 
     it('should enforce time window limits', () => {
       const windowMs = 1000;
-      const result1 = tracker.checkOutgoingLimit('group1', 'global', 100.0, windowMs, 50_000_000n);
+      const result1 = tracker.checkOutgoingLimit(
+        'group1',
+        'global',
+        100.0,
+        windowMs,
+        50_000_000n
+      );
       expect(result1.allowed).toBe(true);
       tracker.recordOutgoing('group1', 'global', 50_000_000n);
     });
@@ -58,8 +84,15 @@ describe('PaymentTracker', () => {
       const globalTotal = tracker.getOutgoingTotal('group1', 'global');
       expect(globalTotal).toBe(50_000_000n);
 
-      tracker.recordOutgoing('group1', 'https://target.example.com', 30_000_000n);
-      const targetTotal = tracker.getOutgoingTotal('group1', 'https://target.example.com');
+      tracker.recordOutgoing(
+        'group1',
+        'https://target.example.com',
+        30_000_000n
+      );
+      const targetTotal = tracker.getOutgoingTotal(
+        'group1',
+        'https://target.example.com'
+      );
       expect(targetTotal).toBe(30_000_000n);
 
       expect(tracker.getOutgoingTotal('group1', 'global')).toBe(50_000_000n);
@@ -134,4 +167,3 @@ describe('PaymentTracker', () => {
     });
   });
 });
-

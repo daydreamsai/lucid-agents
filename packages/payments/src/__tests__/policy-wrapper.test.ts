@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'bun:test';
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
 import { wrapBaseFetchWithPolicy } from '../policy-wrapper';
 import { createPaymentTracker } from '../payment-tracker';
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createRateLimiter } from '../rate-limiter';
 
 type FetchLike = (
@@ -16,7 +17,8 @@ describe('wrapBaseFetchWithPolicy', () => {
   let policyGroups: PaymentPolicyGroup[];
 
   beforeEach(() => {
-    paymentTracker = createPaymentTracker();
+    const storage = createInMemoryPaymentStorage();
+    paymentTracker = createPaymentTracker(storage);
     rateLimiter = createRateLimiter();
     policyGroups = [
       {
@@ -53,17 +55,14 @@ describe('wrapBaseFetchWithPolicy', () => {
 
   it('should block 402 responses that violate policies', async () => {
     baseFetch = async () => {
-      return new Response(
-        JSON.stringify({ error: 'Payment required' }),
-        {
-          status: 402,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Price': '15.0', // 15 USDC (over 10 USDC limit)
-            'X-Pay-To': '0x123...',
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: 'Payment required' }), {
+        status: 402,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Price': '15.0', // 15 USDC (over 10 USDC limit)
+          'X-Pay-To': '0x123...',
+        },
+      });
     };
 
     const wrappedFetch = wrapBaseFetchWithPolicy(
@@ -82,17 +81,14 @@ describe('wrapBaseFetchWithPolicy', () => {
 
   it('should allow 402 responses that pass policies', async () => {
     baseFetch = async () => {
-      return new Response(
-        JSON.stringify({ error: 'Payment required' }),
-        {
-          status: 402,
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Price': '5.0', // 5 USDC (under 10 USDC limit)
-            'X-Pay-To': '0x123...',
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: 'Payment required' }), {
+        status: 402,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Price': '5.0', // 5 USDC (under 10 USDC limit)
+          'X-Pay-To': '0x123...',
+        },
+      });
     };
 
     const wrappedFetch = wrapBaseFetchWithPolicy(
@@ -112,16 +108,13 @@ describe('wrapBaseFetchWithPolicy', () => {
       callCount++;
       if (callCount === 1) {
         // First call: 402 payment required
-        return new Response(
-          JSON.stringify({ error: 'Payment required' }),
-          {
-            status: 402,
-            headers: {
-              'X-Price': '5.0',
-              'X-Pay-To': '0x123...',
-            },
-          }
-        );
+        return new Response(JSON.stringify({ error: 'Payment required' }), {
+          status: 402,
+          headers: {
+            'X-Price': '5.0',
+            'X-Pay-To': '0x123...',
+          },
+        });
       }
       // Second call: successful payment
       return new Response(JSON.stringify({ ok: true }), {
@@ -162,16 +155,13 @@ describe('wrapBaseFetchWithPolicy', () => {
     ];
 
     baseFetch = async () => {
-      return new Response(
-        JSON.stringify({ error: 'Payment required' }),
-        {
-          status: 402,
-          headers: {
-            'X-Price': '1.0',
-            'X-Pay-To': '0x123...',
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: 'Payment required' }), {
+        status: 402,
+        headers: {
+          'X-Price': '1.0',
+          'X-Pay-To': '0x123...',
+        },
+      });
     };
 
     const wrappedFetch = wrapBaseFetchWithPolicy(
@@ -193,7 +183,8 @@ describe('wrapBaseFetchWithPolicy', () => {
     });
 
     it('should use endpoint URL scope when perEndpoint limit matches', async () => {
-      const endpointUrl = 'https://agent.example.com/entrypoints/process/invoke';
+      const endpointUrl =
+        'https://agent.example.com/entrypoints/process/invoke';
       policyGroups = [
         {
           name: 'endpoint-policy',
@@ -238,7 +229,10 @@ describe('wrapBaseFetchWithPolicy', () => {
       await wrappedFetch(endpointUrl, { method: 'GET' });
       await wrappedFetch(endpointUrl, { method: 'GET' });
 
-      const total = paymentTracker.getOutgoingTotal('endpoint-policy', endpointUrl);
+      const total = paymentTracker.getOutgoingTotal(
+        'endpoint-policy',
+        endpointUrl
+      );
       expect(total).toBeDefined();
       expect(Number(total) / 1_000_000).toBe(5.0);
     });
@@ -291,13 +285,17 @@ describe('wrapBaseFetchWithPolicy', () => {
       await wrappedFetch(endpointUrl, { method: 'GET' });
 
       const normalizedKey = targetUrl.trim().toLowerCase().replace(/\/+$/, '');
-      const total = paymentTracker.getOutgoingTotal('target-policy', normalizedKey);
+      const total = paymentTracker.getOutgoingTotal(
+        'target-policy',
+        normalizedKey
+      );
       expect(total).toBeDefined();
       expect(Number(total) / 1_000_000).toBe(5.0);
     });
 
     it('should use global scope when only global limit exists', async () => {
-      const endpointUrl = 'https://agent.example.com/entrypoints/process/invoke';
+      const endpointUrl =
+        'https://agent.example.com/entrypoints/process/invoke';
       policyGroups = [
         {
           name: 'global-policy',
@@ -400,14 +398,19 @@ describe('wrapBaseFetchWithPolicy', () => {
       await wrappedFetch(endpointUrl, { method: 'GET' });
       await wrappedFetch(endpointUrl, { method: 'GET' });
 
-      const endpointTotal = paymentTracker.getOutgoingTotal('multi-policy', endpointUrl);
+      const endpointTotal = paymentTracker.getOutgoingTotal(
+        'multi-policy',
+        endpointUrl
+      );
       expect(endpointTotal).toBeDefined();
       expect(Number(endpointTotal) / 1_000_000).toBe(5.0);
 
       const normalizedTarget = targetUrl.toLowerCase().replace(/\/+$/, '');
-      const targetTotal = paymentTracker.getOutgoingTotal('multi-policy', normalizedTarget);
+      const targetTotal = paymentTracker.getOutgoingTotal(
+        'multi-policy',
+        normalizedTarget
+      );
       expect(targetTotal).toBe(0n);
     });
   });
 });
-

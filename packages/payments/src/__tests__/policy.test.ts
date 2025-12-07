@@ -7,6 +7,7 @@ import {
   evaluatePolicyGroups,
 } from '../policy';
 import { createPaymentTracker } from '../payment-tracker';
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createRateLimiter } from '../rate-limiter';
 
 describe('Policy Evaluation', () => {
@@ -14,7 +15,8 @@ describe('Policy Evaluation', () => {
   let rateLimiter: ReturnType<typeof createRateLimiter>;
 
   beforeEach(() => {
-    paymentTracker = createPaymentTracker();
+    const storage = createInMemoryPaymentStorage();
+    paymentTracker = createPaymentTracker(storage);
     rateLimiter = createRateLimiter();
   });
 
@@ -71,7 +73,11 @@ describe('Policy Evaluation', () => {
         allowedRecipients: ['https://allowed.example.com'],
       };
 
-      const result = evaluateRecipient(group, undefined, 'not-allowed.example.com');
+      const result = evaluateRecipient(
+        group,
+        undefined,
+        'not-allowed.example.com'
+      );
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('whitelist');
     });
@@ -197,7 +203,8 @@ describe('Policy Evaluation', () => {
         },
       };
 
-      const endpointUrl = 'https://target.example.com/entrypoints/process/invoke';
+      const endpointUrl =
+        'https://target.example.com/entrypoints/process/invoke';
       const result = evaluateOutgoingLimits(
         group,
         paymentTracker,
@@ -267,4 +274,3 @@ describe('Policy Evaluation', () => {
     });
   });
 });
-
