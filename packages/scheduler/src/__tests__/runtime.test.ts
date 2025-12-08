@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
-import { createSchedulerRuntime } from './runtime';
-import { createMemoryStore } from './store/memory';
+import { createSchedulerRuntime } from '../runtime';
+import { createMemoryStore } from '../store/memory';
 import type {
   InvokeArgs,
   Job,
@@ -8,7 +8,7 @@ import type {
   PaymentContext,
   SchedulerStore,
   WalletRef,
-} from './types';
+} from '../types';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
 import type { A2AClient, A2ARuntime } from '@lucid-agents/types/a2a';
 import type { AgentRuntime } from '@lucid-agents/types/core';

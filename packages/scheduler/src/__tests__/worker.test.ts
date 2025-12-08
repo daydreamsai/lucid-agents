@@ -1,6 +1,6 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { createSchedulerWorker } from './worker';
-import type { OperationResult, SchedulerRuntime } from './types';
+import { createSchedulerWorker } from '../worker';
+import type { OperationResult, SchedulerRuntime } from '../types';
 
 function createMockRuntime(
   overrides: Partial<SchedulerRuntime> = {}

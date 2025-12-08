@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { createMemoryStore } from './memory';
-import type { Hire, Job } from '../types';
+import { createMemoryStore } from '../../store/memory';
+import type { Hire, Job } from '../../types';
 
 const createMockHire = (overrides: Partial<Hire> = {}): Hire => ({
   id: `hire-${Math.random().toString(36).slice(2)}`,

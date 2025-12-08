@@ -279,11 +279,12 @@ The scheduler worker automatically executes scheduled hires:
 - `packages/scheduler/src/extension.ts` - Scheduler extension
 - `packages/scheduler/src/runtime.ts` - Scheduler runtime
 - `packages/scheduler/src/worker.ts` - Background worker
-- `packages/scheduler/src/store.ts` - In-memory store
+- `packages/scheduler/src/store/memory.ts` - In-memory store
+- `packages/scheduler/src/types.ts` - Type definitions
 - `packages/scheduler/README.md` - Package documentation
 - `packages/scheduler/src/__tests__/runtime.test.ts` - Runtime tests
 - `packages/scheduler/src/__tests__/worker.test.ts` - Worker tests
-- `packages/scheduler/src/__tests__/store.test.ts` - Store tests
+- `packages/scheduler/src/__tests__/store/memory.test.ts` - Store tests
 
 **A2A Package:**
 
