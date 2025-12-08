@@ -372,6 +372,14 @@ export type A2ARuntime = {
   fetchCard: (baseUrl: string, fetch?: FetchFunction) => Promise<AgentCard>;
 
   /**
+   * Fetches another agent's Agent Card with entrypoints.
+   */
+  fetchCardWithEntrypoints: (
+    baseUrl: string,
+    fetch?: FetchFunction
+  ) => Promise<AgentCardWithEntrypoints>;
+
+  /**
    * Client utilities for calling other agents.
    */
   client: A2AClient;

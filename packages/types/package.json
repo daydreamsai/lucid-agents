@@ -36,10 +36,20 @@
       "import": "./dist/identity/index.js",
       "default": "./dist/identity/index.js"
     },
+    "./analytics": {
+      "types": "./dist/analytics/index.d.ts",
+      "import": "./dist/analytics/index.js",
+      "default": "./dist/analytics/index.js"
+    },
     "./payments": {
       "types": "./dist/payments/index.d.ts",
       "import": "./dist/payments/index.js",
       "default": "./dist/payments/index.js"
+    },
+    "./scheduler": {
+      "types": "./dist/scheduler/index.d.ts",
+      "import": "./dist/scheduler/index.js",
+      "default": "./dist/scheduler/index.js"
     },
     "./wallets": {
       "types": "./dist/wallets/index.d.ts",

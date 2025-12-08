@@ -4,12 +4,13 @@ High-level architecture overview of the Lucid Agents SDK.
 
 ## Package Structure
 
-The SDK is organized into four architectural layers:
+The SDK is organized into five architectural layers:
 
 ```mermaid
 graph TB
-    subgraph "Layer 0: Types"
+    subgraph "Layer 0: Base Packages"
         types["@lucid-agents/types<br/>Shared type definitions"]
+        cli["@lucid-agents/cli<br/>CLI scaffolding tool<br/>(no runtime deps)"]
     end
 
     subgraph "Layer 1: Extensions"
@@ -18,6 +19,9 @@ graph TB
         wallet["@lucid-agents/wallet<br/>Wallet connectors"]
         a2a["@lucid-agents/a2a<br/>A2A protocol support"]
         ap2["@lucid-agents/ap2<br/>AP2 extension"]
+        analytics["@lucid-agents/analytics<br/>Payment analytics"]
+        http["@lucid-agents/http<br/>HTTP extension"]
+        scheduler["@lucid-agents/scheduler<br/>Scheduled tasks"]
         future["Future extensions<br/>(monitoring, etc.)"]
     end
 
@@ -28,12 +32,11 @@ graph TB
     subgraph "Layer 3: Adapters"
         hono["@lucid-agents/hono<br/>Hono framework adapter"]
         tanstack["@lucid-agents/tanstack<br/>TanStack Start adapter"]
-        express["Future: Express adapter"]
+        express["@lucid-agents/express<br/>Express adapter"]
     end
 
-    subgraph "Layer 4: Developer Tools"
-        cli["@lucid-agents/cli<br/>CLI scaffolding tool"]
-        templates["Templates<br/>(blank, axllm, identity, etc.)"]
+    subgraph "Layer 4: Examples"
+        examples["@lucid-agents/examples<br/>Integration examples"]
     end
 
     types --> identity
@@ -41,6 +44,9 @@ graph TB
     types --> wallet
     types --> a2a
     types --> ap2
+    types --> analytics
+    types --> http
+    types --> scheduler
     types --> core
 
     core --> identity
@@ -48,14 +54,18 @@ graph TB
     core --> wallet
     core --> a2a
     core --> ap2
+    core --> analytics
+    core --> http
+    core --> scheduler
 
     hono --> core
     tanstack --> core
-    express -.-> core
+    express --> core
 
-    cli --> hono
-    cli --> tanstack
-    cli --> templates
+    examples --> core
+    examples --> hono
+    examples --> tanstack
+    examples --> express
 
     style identity fill:#e1f5ff
     style payments fill:#e1f5ff
@@ -63,7 +73,7 @@ graph TB
     style core fill:#fff4e1
     style hono fill:#e8f5e9
     style tanstack fill:#e8f5e9
-    style express fill:#f0f0f0,stroke-dasharray: 5 5
+    style express fill:#e8f5e9
     style cli fill:#f3e5f5
     style templates fill:#f3e5f5
 ```
@@ -72,29 +82,34 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph "Types Foundation"
+    subgraph "Layer 0: Base Packages"
         types[types]
+        cli[cli]
     end
 
-    subgraph "Extensions (Independent)"
+    subgraph "Layer 1: Extensions (Independent)"
         identity[identity]
         payments[payments]
         wallet[wallet]
         a2a[a2a]
         ap2[ap2]
+        analytics[analytics]
+        http[http]
+        scheduler[scheduler]
     end
 
-    subgraph "Core Runtime"
+    subgraph "Layer 2: Core Runtime"
         core[core]
     end
 
-    subgraph "Framework Adapters"
+    subgraph "Layer 3: Framework Adapters"
         hono[hono]
         tanstack[tanstack]
+        express[express]
     end
 
-    subgraph "Developer Tools"
-        cli[cli]
+    subgraph "Layer 4: Examples"
+        examples[examples]
     end
 
     types --> identity
@@ -102,6 +117,9 @@ graph LR
     types --> wallet
     types --> a2a
     types --> ap2
+    types --> analytics
+    types --> http
+    types --> scheduler
     types --> core
 
     payments --> core
@@ -109,23 +127,34 @@ graph LR
     wallet --> core
     a2a --> core
     ap2 --> core
+    analytics --> core
+    http --> core
+    scheduler --> core
 
     core --> hono
     core --> tanstack
+    core --> express
 
-    hono --> cli
-    tanstack --> cli
+    examples --> core
+    examples --> hono
+    examples --> tanstack
+    examples --> express
 
     style types fill:#4fc3f7
+    style cli fill:#4fc3f7
     style identity fill:#81c784
     style payments fill:#81c784
     style wallet fill:#81c784
     style a2a fill:#81c784
     style ap2 fill:#81c784
+    style analytics fill:#81c784
+    style http fill:#81c784
+    style scheduler fill:#81c784
     style core fill:#ffb74d
     style hono fill:#ba68c8
     style tanstack fill:#ba68c8
-    style cli fill:#e57373
+    style express fill:#ba68c8
+    style examples fill:#e57373
 ```
 
 Note: Dependencies are one-directional. @lucid-agents/core imports from extensions (both types and runtime functions). All packages import shared types from @lucid-agents/types. This pure DAG structure eliminates circular dependencies.
@@ -207,6 +236,49 @@ Extensions add optional capabilities. They are independent and don't depend on e
 
 **Dependencies:** `@lucid-agents/types`
 
+---
+
+### @lucid-agents/analytics
+
+**Purpose:** Payment analytics and reporting
+
+**Provides:**
+
+- Payment summary statistics (outgoing, incoming, net)
+- Transaction history and filtering
+- CSV/JSON export for accounting systems
+- Time-windowed analytics
+
+**Dependencies:** `@lucid-agents/types`, `viem`
+
+---
+
+### @lucid-agents/http
+
+**Purpose:** HTTP extension for request/response handling
+
+**Provides:**
+
+- HTTP request/response handling
+- Server-Sent Events (SSE) streaming
+- HTTP invocation utilities
+
+**Dependencies:** `@lucid-agents/types`
+
+---
+
+### @lucid-agents/scheduler
+
+**Purpose:** Scheduled task execution
+
+**Provides:**
+
+- Task scheduling and execution
+- Interval-based tasks
+- Cron-like scheduling
+
+**Dependencies:** `@lucid-agents/types`
+
 ## Layer 2: Core
 
 ### @lucid-agents/core
@@ -223,7 +295,7 @@ Extensions add optional capabilities. They are independent and don't depend on e
 - Configuration management
 - Landing page UI
 
-**Dependencies:** `@lucid-agents/payments`, `@lucid-agents/identity`, `@lucid-agents/wallet`, `@lucid-agents/a2a`, `@lucid-agents/ap2`
+**Dependencies:** `@lucid-agents/payments`, `@lucid-agents/identity`, `@lucid-agents/wallet`, `@lucid-agents/a2a`, `@lucid-agents/ap2`, `@lucid-agents/analytics`, `@lucid-agents/http`, `@lucid-agents/scheduler`
 
 ## Layer 3: Adapters
 
@@ -269,7 +341,21 @@ Adapters integrate the core runtime with specific web frameworks.
 
 **Dependencies:** `@lucid-agents/core`, `express`, `x402-express`
 
-## Layer 4: Developer Tools
+## Layer 0: Base Packages
+
+### @lucid-agents/types
+
+**Purpose:** Shared type definitions (foundational package)
+
+**Provides:**
+
+- All shared TypeScript type definitions
+- Zero dependencies on other @lucid-agents packages
+- Single source of truth for type contracts
+
+**Dependencies:** External only (zod, x402)
+
+---
 
 ### @lucid-agents/cli
 
@@ -282,7 +368,7 @@ Adapters integrate the core runtime with specific web frameworks.
 - Adapter selection (hono, tanstack-ui, tanstack-headless, express)
 - Merge system (combines adapter + template)
 
-**Dependencies:** All @lucid-agents packages
+**Dependencies:** None (no runtime dependencies on other @lucid-agents packages; only generates code that references them)
 
 ## Developer Flow
 
@@ -360,53 +446,69 @@ Packages must build in dependency order:
 
 ```mermaid
 graph LR
-    A[1. types] --> B[2. identity]
-    A --> C[2. payments]
-    A --> D[2. wallet]
-    A --> E[2. a2a]
-    A --> F[2. ap2]
-    B --> G[3. core]
-    C --> G
-    D --> G
-    E --> G
-    F --> G
-    G --> H[4. hono]
-    G --> I[4. tanstack]
-    G --> J[4. express]
-    H --> K[5. cli]
+    A[Layer 0: types] --> B[Layer 1: identity]
+    A --> C[Layer 1: payments]
+    A --> D[Layer 1: wallet]
+    A --> E[Layer 1: a2a]
+    A --> F[Layer 1: ap2]
+    A --> G[Layer 1: analytics]
+    A --> H[Layer 1: http]
+    A --> I[Layer 1: scheduler]
+    A --> J[Layer 0: cli]
+    B --> K[Layer 2: core]
+    C --> K
+    D --> K
+    E --> K
+    F --> K
+    G --> K
+    H --> K
     I --> K
-    J --> K
+    K --> L[Layer 3: hono]
+    K --> M[Layer 3: tanstack]
+    K --> N[Layer 3: express]
+    K --> O[Layer 4: examples]
+    L --> O
+    M --> O
+    N --> O
 
     style A fill:#4fc3f7
+    style J fill:#4fc3f7
     style B fill:#90caf9
-    style C fill:#a5d6a7
-    style D fill:#a5d6a7
-    style E fill:#a5d6a7
-    style F fill:#a5d6a7
-    style G fill:#ffb74d
-    style H fill:#ba68c8
-    style I fill:#ba68c8
-    style J fill:#ba68c8
-    style K fill:#e57373
+    style C fill:#90caf9
+    style D fill:#90caf9
+    style E fill:#90caf9
+    style F fill:#90caf9
+    style G fill:#90caf9
+    style H fill:#90caf9
+    style I fill:#90caf9
+    style K fill:#ffb74d
+    style L fill:#ba68c8
+    style M fill:#ba68c8
+    style N fill:#ba68c8
+    style O fill:#e57373
 ```
 
-Note: All extension packages (identity, payments, wallet, a2a, ap2) are independent and can build in parallel. Core depends on all extensions, and adapters depend on core.
+Note: Layer 0 packages (types, cli) have no internal dependencies. Layer 1 extensions are independent and can build in parallel. Core depends on all extensions, adapters depend on core, and examples depend on all packages.
 
 ## Package Responsibilities
 
-| Package                  | Responsibility                                               |
-| ------------------------ | ------------------------------------------------------------ |
-| `@lucid-agents/types`    | Shared type definitions (zero dependencies)                  |
-| `@lucid-agents/identity` | ERC-8004 on-chain identity, registries, trust models         |
-| `@lucid-agents/payments` | x402 protocol, EntrypointDef, pricing, payment client/server |
-| `@lucid-agents/wallet`   | Wallet connectors and helpers for agent operations           |
-| `@lucid-agents/a2a`      | A2A protocol implementation, Agent Cards, task operations    |
-| `@lucid-agents/ap2`      | AP2 extension for Agent Cards                                |
-| `@lucid-agents/core`     | Core runtime, HTTP handlers, SSE, manifest, config, UI       |
-| `@lucid-agents/hono`     | Hono framework integration, middleware wiring                |
-| `@lucid-agents/tanstack` | TanStack framework integration, middleware wiring            |
-| `@lucid-agents/express`  | Express framework integration, middleware wiring             |
-| `@lucid-agents/cli`      | CLI tool, templates, project scaffolding                     |
+| Package                   | Layer | Responsibility                                               |
+| ------------------------- | ----- | ------------------------------------------------------------ |
+| `@lucid-agents/types`     | 0     | Shared type definitions (zero dependencies)                  |
+| `@lucid-agents/cli`       | 0     | CLI tool, templates, project scaffolding (no runtime deps)   |
+| `@lucid-agents/identity`  | 1     | ERC-8004 on-chain identity, registries, trust models         |
+| `@lucid-agents/payments`  | 1     | x402 protocol, EntrypointDef, pricing, payment client/server |
+| `@lucid-agents/wallet`    | 1     | Wallet connectors and helpers for agent operations           |
+| `@lucid-agents/a2a`       | 1     | A2A protocol implementation, Agent Cards, task operations    |
+| `@lucid-agents/ap2`       | 1     | AP2 extension for Agent Cards                                |
+| `@lucid-agents/analytics` | 1     | Payment analytics and reporting                              |
+| `@lucid-agents/http`      | 1     | HTTP extension for request/response handling                 |
+| `@lucid-agents/scheduler` | 1     | Scheduled task execution                                     |
+| `@lucid-agents/core`      | 2     | Core runtime, HTTP handlers, SSE, manifest, config, UI       |
+| `@lucid-agents/hono`      | 3     | Hono framework integration, middleware wiring                |
+| `@lucid-agents/tanstack`  | 3     | TanStack framework integration, middleware wiring            |
+| `@lucid-agents/express`   | 3     | Express framework integration, middleware wiring             |
+| `@lucid-agents/examples`  | 4     | Integration examples and test scenarios                      |
 
 ## Extension Independence
 
@@ -418,6 +520,9 @@ graph TB
         wallet[@lucid-agents/wallet<br/>Wallet connectors]
         a2a[@lucid-agents/a2a<br/>A2A protocol]
         ap2[@lucid-agents/ap2<br/>AP2 extension]
+        analytics[@lucid-agents/analytics<br/>Payment analytics]
+        http[@lucid-agents/http<br/>HTTP extension]
+        scheduler[@lucid-agents/scheduler<br/>Scheduled tasks]
     end
 
     subgraph "Core"
@@ -429,12 +534,18 @@ graph TB
     wallet -.->|optional| core
     a2a -.->|optional| core
     ap2 -.->|optional| core
+    analytics -.->|optional| core
+    http -.->|optional| core
+    scheduler -.->|optional| core
 
     style identity fill:#90caf9
     style payments fill:#a5d6a7
     style wallet fill:#a5d6a7
     style a2a fill:#a5d6a7
     style ap2 fill:#a5d6a7
+    style analytics fill:#a5d6a7
+    style http fill:#a5d6a7
+    style scheduler fill:#a5d6a7
     style core fill:#ffcc80
 ```
 
@@ -465,12 +576,13 @@ All packages import from @lucid-agents/types, creating a clean dependency DAG:
 ```mermaid
 graph TD
     types[@lucid-agents/types]
+    cli[@lucid-agents/cli]
     identity[@lucid-agents/identity]
     payments[@lucid-agents/payments]
     core[@lucid-agents/core]
     hono[@lucid-agents/hono]
     tanstack[@lucid-agents/tanstack]
-    cli[@lucid-agents/cli]
+    examples[@lucid-agents/examples]
 
     types --> identity
     types --> payments
@@ -479,8 +591,9 @@ graph TD
     payments --> core
     core --> hono
     core --> tanstack
-    hono --> cli
-    tanstack --> cli
+    core --> examples
+    hono --> examples
+    tanstack --> examples
 ```
 
 **Benefits:**
@@ -535,10 +648,11 @@ graph TB
 
 The Lucid Agents SDK follows a **layered, modular architecture**:
 
-1. **Extensions** - Independent capabilities (identity, payments)
-2. **Core** - Framework-agnostic runtime
-3. **Adapters** - Framework-specific integrations
-4. **Tools** - Developer experience (CLI, templates)
+1. **Layer 0: Base Packages** - Types and CLI (no internal dependencies)
+2. **Layer 1: Extensions** - Independent capabilities (identity, payments, wallet, a2a, ap2, analytics, http, scheduler)
+3. **Layer 2: Core** - Framework-agnostic runtime
+4. **Layer 3: Adapters** - Framework-specific integrations (hono, tanstack, express)
+5. **Layer 4: Examples** - Integration examples and test scenarios
 
 This enables:
 

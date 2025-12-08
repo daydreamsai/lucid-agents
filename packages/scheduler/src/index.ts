@@ -1,3 +1,4 @@
+export { scheduler } from './extension';
 export { createSchedulerRuntime } from './runtime';
 export { createSchedulerWorker } from './worker';
 export { createMemoryStore } from './store/memory';
@@ -13,8 +14,8 @@ export type {
   PaymentContext,
   Schedule,
   SchedulerRuntime,
-  SchedulerRuntimeOptions,
   SchedulerStore,
   WalletRef,
   WalletResolver,
-} from './types';
+} from '@lucid-agents/types/scheduler';
+export type { SchedulerExtensionOptions } from './extension';

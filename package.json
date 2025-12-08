@@ -11,7 +11,7 @@
       "@ax-llm/ax": "^14.0.31",
       "hono": "4.10.1",
       "express": "^4.19.2",
-      "viem": "latest",
+      "viem": "^2.41.2",
       "x402": "latest",
       "x402-fetch": "latest",
       "tsup": "^8.5.0"

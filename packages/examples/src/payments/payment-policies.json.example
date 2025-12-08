@@ -1,7 +1,7 @@
 [
   {
-    "name": "Daily Spending Limit",
-    "spendingLimits": {
+    "name": "Daily Outgoing Limit",
+    "outgoingLimits": {
       "global": {
         "maxPaymentUsd": 0.1,
         "maxTotalUsd": 1.0,
@@ -11,7 +11,7 @@
   },
   {
     "name": "API Usage Policy",
-    "spendingLimits": {
+    "outgoingLimits": {
       "global": {
         "maxPaymentUsd": 0.05
       },

@@ -5,7 +5,11 @@ import type {
   CreateA2ARuntimeOptions,
 } from '@lucid-agents/types/a2a';
 
-import { buildAgentCard, fetchAgentCard } from './card';
+import {
+  buildAgentCard,
+  fetchAgentCard,
+  fetchAgentCardWithEntrypoints,
+} from './card';
 import {
   invokeAgent,
   streamAgent,
@@ -38,6 +42,13 @@ export function createA2ARuntime(
 
     async fetchCard(baseUrl: string, fetchImpl?: FetchFunction) {
       return fetchAgentCard(baseUrl, fetchImpl);
+    },
+
+    async fetchCardWithEntrypoints(
+      baseUrl: string,
+      fetchImpl?: FetchFunction
+    ) {
+      return fetchAgentCardWithEntrypoints(baseUrl, fetchImpl);
     },
 
     client: {

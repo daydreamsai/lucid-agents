@@ -323,7 +323,7 @@ console.log(paymentsFromEnv()); // reuse inside handlers
 
 ## Payments & Monetization
 
-The `payments()` extension enables receiving payments via the x402 protocol. When payments are configured, the adapter automatically wraps invoke/stream routes with x402 payment middleware.
+The `payments()` extension enables receiving payments via the x402 protocol and provides bi-directional payment tracking with persistent storage. When payments are configured, the adapter automatically wraps invoke/stream routes with x402 payment middleware.
 
 **To receive payments, you need:**
 
@@ -331,6 +331,17 @@ The `payments()` extension enables receiving payments via the x402 protocol. Whe
 2. **AP2 extension (optional)** - Add `.use(ap2({ roles: ['merchant'] }))` to advertise payment capabilities in the manifest
 
 **Important:** Payments and AP2 are independent extensions. The payments extension handles payment processing, while AP2 advertises payment roles in the manifest for discovery. If you want to participate in the AP2 ecosystem (advertise as merchant/shopper), you must explicitly add the AP2 extension.
+
+### Payment Tracking & Policies
+
+The payments extension provides:
+
+- **Bi-directional tracking** - Track both outgoing payments (agent pays) and incoming payments (agent receives)
+- **Persistent storage** - Multiple storage backends (SQLite, In-Memory, Postgres) for different deployment scenarios
+- **Payment policies** - Enforce limits and controls on both outgoing and incoming payments
+- **Automatic recording** - Payments are automatically tracked when using `fetchWithPayment` or when receiving payments
+
+See [`@lucid-agents/payments` documentation](../payments/README.md) for complete examples, storage options, and API reference.
 
 ### Pricing
 

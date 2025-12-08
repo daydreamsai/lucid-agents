@@ -16,16 +16,8 @@ import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
-import {
-  createRuntimePaymentContext,
-  payments,
-  paymentsFromEnv,
-} from '@lucid-agents/payments';
-import {
-  createMemoryStore,
-  createSchedulerRuntime,
-  createSchedulerWorker,
-} from '@lucid-agents/scheduler';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { createSchedulerWorker, scheduler } from '@lucid-agents/scheduler';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
 import { wallets } from '@lucid-agents/wallet';
 import { z } from 'zod';
@@ -86,7 +78,7 @@ async function main() {
   const agentA = await startAgent('hello-agent-A', 8787);
   const agentB = await startAgent('hello-agent-B', 8788);
 
-  console.log('\n[example] Creating scheduler client (payer)...');
+  console.log('\n[example] Creating scheduler agent...');
   const schedulerWalletPrivateKey = process.env.AGENT_WALLET_PRIVATE_KEY;
   if (!schedulerWalletPrivateKey) {
     throw new Error(
@@ -94,10 +86,10 @@ async function main() {
     );
   }
 
-  const schedulerClient = await createAgent({
-    name: 'scheduler-client',
+  const schedulerAgent = await createAgent({
+    name: 'scheduler-agent',
     version: '1.0.0',
-    description: 'Scheduler client that pays for agent calls',
+    description: 'Agent that schedules calls to other agents',
   })
     .use(
       wallets({
@@ -107,43 +99,30 @@ async function main() {
       })
     )
     .use(a2a())
+    .use(payments({ config: paymentsFromEnv() }))
+    .use(scheduler())
     .build();
 
-  const paymentContext = await createRuntimePaymentContext({
-    runtime: schedulerClient,
-    network: process.env.NETWORK || 'base-sepolia',
-  });
+  if (!schedulerAgent.scheduler) {
+    throw new Error('Scheduler extension not initialized');
+  }
 
+  const walletAddress = schedulerAgent.wallets?.agent?.connector
+    ? await schedulerAgent.wallets.agent.connector.getAddress()
+    : null;
   console.log(
-    `[example] Payer wallet address: ${paymentContext.walletAddress}`
+    `[example] Scheduler agent wallet address: ${walletAddress || 'N/A'}`
   );
 
-  console.log('\n[example] Creating scheduler runtime...');
-  const agentCardByUrl: Record<string, AgentCardWithEntrypoints> = {
-    [agentA.agentOrigin]: agentA.agentCard,
-    [agentB.agentOrigin]: agentB.agentCard,
-  };
-
-  const scheduler = createSchedulerRuntime({
-    store: createMemoryStore(),
-    runtime: schedulerClient,
-    paymentContext,
-    fetchAgentCard: async url =>
-      agentCardByUrl[url] ??
-      ((await fetch(`${url}/.well-known/agent-card.json`).then(r =>
-        r.json()
-      )) as AgentCardWithEntrypoints),
-  });
-
   console.log('\n[example] Creating hires (scheduling agent calls)...');
-  const hireA = await scheduler.createHire({
+  const hireA = await schedulerAgent.scheduler.createHire({
     agentCardUrl: agentA.agentOrigin,
     entrypointKey: 'hello',
     schedule: { kind: 'interval', everyMs: 10_000 },
     jobInput: { name: 'Scheduler -> Agent A' },
   });
 
-  const hireB = await scheduler.createHire({
+  const hireB = await schedulerAgent.scheduler.createHire({
     agentCardUrl: agentB.agentOrigin,
     entrypointKey: 'hello',
     schedule: { kind: 'interval', everyMs: 15_000 },
@@ -155,7 +134,7 @@ async function main() {
   console.log('[example] Jobs will run every 10s and 15s respectively');
 
   console.log('\n[example] Starting scheduler worker...');
-  const worker = createSchedulerWorker(scheduler, 1_000);
+  const worker = createSchedulerWorker(schedulerAgent.scheduler, 1_000);
   worker.start();
   console.log('[example] Scheduler worker started');
   console.log('[example] Press Ctrl+C to stop\n');

@@ -7,6 +7,6 @@ import type { EntrypointDef } from './entrypoint';
 export type AgentCore = {
   readonly config: AgentConfig;
   addEntrypoint: (entrypoint: EntrypointDef) => void;
+  getEntrypoint: (key: string) => EntrypointDef | undefined;
   listEntrypoints: () => EntrypointDef[];
 };
-

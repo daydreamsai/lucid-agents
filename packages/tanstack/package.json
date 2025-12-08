@@ -36,7 +36,7 @@
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@tanstack/react-start": "^1.134.13",
-    "viem": "^2.21.26",
+    "viem": "catalog:",
     "x402": "catalog:",
     "zod": "catalog:"
   },

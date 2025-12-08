@@ -3,7 +3,7 @@
 <div align="center">
   <h1>Lucid Agents</h1>
   <p><strong>The Protocol-Agnostic Multi-Runtime Framework for Building and Monetizing AI Agents</strong></p>
-  <p>Build, deploy, and monetize autonomous AI agents with typed entrypoints, on-chain identity, and built-in payment infrastructure.</p>
+  <p>Build, deploy, and monetize autonomous AI agents with typed entrypoints, onchain identity, and built-in payment infrastructure.</p>
 </div>
 
 <div align="center">
@@ -17,22 +17,25 @@
 
 ## What is Lucid Agents?
 
-Lucid Agents is a TypeScript-first framework for building and monetizing AI agents—an agentic commerce and payments SDK. Build AI agents that sell services, facilitate monetary transactions, and participate in agent-to-agent marketplaces.
+Lucid Agents is a TypeScript-first framework for building and monetizing AI agents. An agentic commerce and payments SDK. Build AI agents that sell services, facilitate monetary transactions, and participate in agent-to-agent marketplaces.
 
 **Core Capabilities:**
 
-- **Industry-Standard Protocols**: Native support for x402 (payments), A2A (agent-to-agent communication), and ERC-8004 (on-chain identity)—build agents that work with the ecosystem
-- **Accept Payments**: Accept payments in USDC on Ethereum L2s (Base) or Solana with automatic paywall middleware—no payment infrastructure code needed
+- **Industry-Standard Protocols**: Native support for x402 (payments), A2A (agent-to-agent communication), and ERC-8004 (onchain identity). Build agents that work with the ecosystem
+- **Bi-Directional Payment Tracking**: Track both outgoing payments (agent pays) and incoming payments (agent receives) with persistent storage. Automatic recording with policy enforcement
+- **Payment Policies**: Control spending and receivables with per-payment limits, time-windowed totals, per-target/per-sender limits, and allow/block lists. Multiple policy groups for flexible control
+- **Accept Payments**: Accept payments in USDC on Ethereum L2s (Base) or Solana with automatic paywall middleware. No payment infrastructure code needed
+- **Payment Analytics**: Comprehensive payment reporting with summary statistics, transaction history, and CSV/JSON export for accounting system integration
 - **Agent-to-Agent Communication**: Agents can discover and call other agents, enabling agent marketplaces and multi-agent systems where agents buy and sell services from each other
-- **On-Chain Identity**: Register agent identities on-chain, build reputation, and prove ownership for trust in agent marketplaces
-- **Framework Flexibility**: Write your agent logic once, deploy on Hono, TanStack Start, Express, or Next.js—choose the framework that fits your stack
+- **Onchain Identity**: Register agent identities onchain, build reputation, and prove ownership for trust in agent marketplaces
+- **Framework Flexibility**: Write your agent logic once, deploy on Hono, TanStack Start, Express, or Next.js. Choose the framework that fits your stack
 - **Type-Safe APIs**: Define inputs/outputs with Zod schemas, get automatic validation, JSON schemas, and full TypeScript inference
-- **Real-Time Streaming**: Server-Sent Events (SSE) for streaming agent responses—perfect for LLM outputs and long-running operations
+- **Real-Time Streaming**: Server-Sent Events (SSE) for streaming agent responses. Perfect for LLM outputs and long-running operations
 - **Task Management**: Long-running tasks with status tracking, cancellation, and real-time updates via SSE subscriptions
-- **Auto-Discovery**: Auto-generated AgentCard manifests with Open Graph tags—agents are discoverable in directories and show rich previews when shared
-- **Quick Start**: CLI scaffolding with templates for common patterns—get a working agent in minutes, not hours
+- **Auto-Discovery**: Auto-generated AgentCard manifests with Open Graph tags. Agents are discoverable in directories and show rich previews when shared
+- **Quick Start**: CLI scaffolding with templates for common patterns. Get a working agent in minutes, not hours
 - **Multi-Network Support**: Accept payments on EVM (Base, Ethereum, Sepolia) or Solana (mainnet, devnet) networks
-- **Composable Architecture**: Add only the features you need—payments, identity, A2A, wallets—mix and match as your agent evolves
+- **Composable Architecture**: Add only the features you need. Payments, identity, A2A, wallets, analytics. Mix and match as your agent evolves
 
 Whether you're building paid AI services, agent marketplaces, or multi-agent systems where agents transact with each other, Lucid Agents provides the payments and commerce infrastructure you need.
 
@@ -69,7 +72,7 @@ bunx @lucid-agents/cli my-agent \
 The CLI will:
 
 - **Adapter selection**: `hono` (HTTP server), `tanstack-ui` (full dashboard), `tanstack-headless` (API only), `express` (Node.js server), or `next` (Next.js App Router)
-- **Template selection**: `blank` (minimal), `axllm` (LLM-powered), `axllm-flow` (workflows), `identity` (on-chain identity), `trading-data-agent` (merchant), or `trading-recommendation-agent` (shopper)
+- **Template selection**: `blank` (minimal), `axllm` (LLM-powered), `axllm-flow` (workflows), `identity` (onchain identity), `trading-data-agent` (merchant), or `trading-recommendation-agent` (shopper)
 - **Configuration**: Set agent metadata, LLM keys, and optional payment details
 - **Install dependencies**: Automatically run `bun install`
 
@@ -107,7 +110,7 @@ Lucid Agents is a TypeScript monorepo built for protocol-agnostic, multi-runtime
 - **Layer 2: Extensions** - Optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol)
 - **Layer 3: Adapters** - Framework integrations (hono, tanstack, express, next) that use the HTTP extension
 
-The core runtime is completely protocol-agnostic—protocols like HTTP are provided as extensions that get merged into the runtime. Future protocols (gRPC, WebSocket, etc.) can be added as additional extensions.
+The core runtime is completely protocol-agnostic. Protocols like HTTP are provided as extensions that get merged into the runtime. Future protocols (gRPC, WebSocket, etc.) can be added as additional extensions.
 
 > For detailed architecture documentation including dependency graphs, request flows, and extension system design, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -117,8 +120,9 @@ The core runtime is completely protocol-agnostic—protocols like HTTP are provi
 - **`@lucid-agents/core`** - Protocol-agnostic agent runtime with extension system
 - **`@lucid-agents/http`** - HTTP extension for request/response handling, streaming, and SSE
 - **`@lucid-agents/wallet`** - Wallet SDK for agent and developer wallet management
-- **`@lucid-agents/payments`** - x402 payment utilities for multi-network payment handling
-- **`@lucid-agents/identity`** - ERC-8004 identity toolkit for on-chain agent identity
+- **`@lucid-agents/payments`** - x402 payment utilities with bi-directional tracking, payment policies, and persistent storage (SQLite, In-Memory, Postgres)
+- **`@lucid-agents/analytics`** - Payment analytics and reporting with CSV/JSON export for accounting system integration
+- **`@lucid-agents/identity`** - ERC-8004 identity toolkit for onchain agent identity
 - **`@lucid-agents/a2a`** - A2A Protocol client for agent-to-agent communication
 - **`@lucid-agents/ap2`** - AP2 (Agent Payments Protocol) extension for Agent Cards
 - **`@lucid-agents/hono`** - Hono HTTP server adapter
@@ -155,7 +159,11 @@ The core runtime is completely protocol-agnostic—protocols like HTTP are provi
 - **EVM**: Base, Ethereum, Sepolia (ERC-20 USDC)
 - **Solana**: Mainnet, Devnet (SPL USDC)
 
-**Identity**: ERC-8004 on-chain identity for reputation and trust. Register once, reference across all networks.
+**Identity**: ERC-8004 onchain identity for reputation and trust. Register once, reference across all networks.
+
+**Payment Policies**: Control both outgoing and incoming payments with limits, time windows, and allow/block lists. Organize policies into groups for flexible control.
+
+**Payment Analytics**: Track spending and earnings with summary statistics, transaction history, and export to CSV/JSON for accounting systems.
 
 ---
 
@@ -256,7 +264,7 @@ const agent = await createAgent({
 
 #### [`@lucid-agents/identity`](packages/identity/README.md)
 
-ERC-8004 toolkit for on-chain identity, reputation, and validation.
+ERC-8004 toolkit for onchain identity, reputation, and validation.
 
 ```typescript
 import { createAgent } from '@lucid-agents/core';
@@ -274,13 +282,13 @@ const agent = await createAgent({
 const identity = await createAgentIdentity({
   runtime: agent,
   domain: 'my-agent.example.com',
-  autoRegister: true, // Register on-chain if not exists
+  autoRegister: true, // Register onchain if not exists
 });
 ```
 
 #### [`@lucid-agents/payments`](packages/payments/README.md)
 
-x402 payment utilities for multi-network payment handling.
+x402 payment utilities with bi-directional tracking, payment policies, and persistent storage.
 
 ```typescript
 import { createAgent } from '@lucid-agents/core';
@@ -291,10 +299,32 @@ const agent = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
 })
-  .use(payments({ config: paymentsFromEnv() }))
+  .use(
+    payments({
+      config: {
+        ...paymentsFromEnv(),
+        policyGroups: [
+          {
+            name: 'Daily Limits',
+            outgoingLimits: {
+              global: { maxTotalUsd: 100.0, windowMs: 86400000 },
+            },
+            incomingLimits: {
+              global: { maxTotalUsd: 5000.0, windowMs: 86400000 },
+            },
+            blockedSenders: {
+              domains: ['https://untrusted.example.com'],
+            },
+          },
+        ],
+      },
+      storage: { type: 'sqlite' }, // or 'in-memory' or 'postgres'
+    })
+  )
   .build();
 
 // Auto-detects EVM vs Solana from PAYMENTS_RECEIVABLE_ADDRESS format
+// Automatically tracks outgoing and incoming payments
 ```
 
 #### [`@lucid-agents/a2a`](packages/a2a/README.md)
@@ -322,6 +352,34 @@ const result = await agent.a2a.client.invoke(
     input: 'data',
   }
 );
+```
+
+#### [`@lucid-agents/analytics`](packages/analytics/README.md)
+
+Payment analytics and reporting with CSV/JSON export for accounting systems.
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { analytics } from '@lucid-agents/analytics';
+import { getSummary, exportToCSV } from '@lucid-agents/analytics';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(analytics())
+  .build();
+
+// Get payment summary
+const summary = await getSummary(agent.analytics.paymentTracker, 86400000);
+console.log(
+  `Outgoing: ${summary.outgoingTotal}, Incoming: ${summary.incomingTotal}`
+);
+
+// Export to CSV for accounting systems
+const csv = await exportToCSV(agent.analytics.paymentTracker);
 ```
 
 #### [`@lucid-agents/ap2`](packages/ap2/README.md)
@@ -441,7 +499,7 @@ const ai = new AI({
 const agent = await createAgent({
   name: 'ai-assistant',
   version: '1.0.0',
-  description: 'AI assistant with on-chain identity and streaming responses',
+  description: 'AI assistant with onchain identity and streaming responses',
   image: 'https://my-agent.example.com/og-image.png',
 })
   .use(http())
@@ -501,8 +559,9 @@ export default {
 
 **Features demonstrated:**
 
-- On-chain identity registration (ERC-8004) - automatically handled by identity extension
+- Onchain identity registration (ERC-8004). Automatically handled by identity extension
 - Automatic x402 payment verification
+- Bi-directional payment tracking with policy enforcement
 - Streaming LLM responses via SSE
 - Type-safe input/output schemas
 - Trust metadata in manifest for verifiable agent identity
@@ -602,7 +661,7 @@ For detailed guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Protocols & Specifications
 
-- **ERC-8004 Specification**: [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004) - On-chain agent identity standard
+- **ERC-8004 Specification**: [EIP-8004](https://eips.ethereum.org/EIPS/eip-8004) - Onchain agent identity standard
 - **x402 Protocol**: [x402 GitHub](https://github.com/paywithx402) - HTTP-native payment protocol
 - **A2A Protocol**: [Agent-to-Agent Communication](https://a2a-protocol.org/) - Agent discovery and communication protocol
 

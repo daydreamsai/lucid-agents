@@ -1,4 +1,4 @@
-import type { SchedulerRuntime } from './types';
+import type { SchedulerRuntime } from '@lucid-agents/types/scheduler';
 
 export function createSchedulerWorker(
   runtime: SchedulerRuntime,

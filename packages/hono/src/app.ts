@@ -23,13 +23,7 @@ export type CreateAgentAppOptions = {
 export async function createAgentApp(
   runtime: AgentRuntime,
   opts?: CreateAgentAppOptions
-): Promise<
-  CreateAgentAppReturn<
-    Hono,
-    AgentRuntime,
-    AgentRuntime['agent']
-  >
-> {
+): Promise<CreateAgentAppReturn<Hono, AgentRuntime, AgentRuntime['agent']>> {
   // Require HTTP extension - runtime must have handlers
   if (!runtime.handlers) {
     throw new Error(
@@ -51,6 +45,7 @@ export async function createAgentApp(
       entrypoint,
       kind: 'invoke',
       payments: runtime.payments?.config,
+      runtime,
     });
 
     app.post(invokePath, c =>
@@ -68,6 +63,7 @@ export async function createAgentApp(
       entrypoint,
       kind: 'stream',
       payments: runtime.payments?.config,
+      runtime,
     });
 
     app.post(streamPath, c =>
@@ -106,7 +102,9 @@ export async function createAgentApp(
   const addEntrypoint = <
     TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
     TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
-  >(def: EntrypointDef<TInput, TOutput>): void => {
+  >(
+    def: EntrypointDef<TInput, TOutput>
+  ): void => {
     runtime.entrypoints.add(def);
     const entrypoint = runtime.entrypoints
       .snapshot()

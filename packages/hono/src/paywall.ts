@@ -1,10 +1,19 @@
-import type { Hono } from 'hono';
+import type { Hono, Context } from 'hono';
 import { paymentMiddleware } from 'x402-hono';
 import type { FacilitatorConfig } from 'x402/types';
 import { z } from 'zod';
-import type { EntrypointDef } from '@lucid-agents/types/core';
+import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
-import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
+import {
+  resolvePrice,
+  validatePaymentsConfig,
+  evaluateSender,
+  findMostSpecificIncomingLimit,
+  extractSenderDomain,
+  extractPayerAddress,
+  parsePriceAmount,
+  type PaymentTracker,
+} from '@lucid-agents/payments';
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
@@ -16,6 +25,7 @@ export type WithPaymentsParams = {
   payments?: PaymentsConfig;
   facilitator?: FacilitatorConfig;
   middlewareFactory?: PaymentMiddlewareFactory;
+  runtime?: AgentRuntime;
 };
 
 export function withPayments({
@@ -26,6 +36,7 @@ export function withPayments({
   payments,
   facilitator,
   middlewareFactory = paymentMiddleware,
+  runtime,
 }: WithPaymentsParams): boolean {
   if (!payments) return false;
 
@@ -85,6 +96,40 @@ export function withPayments({
     },
   };
 
+  const policyGroups = runtime?.payments?.policyGroups;
+  const paymentTracker = runtime?.payments?.paymentTracker as
+    | PaymentTracker
+    | undefined;
+
+  if (policyGroups && policyGroups.length > 0) {
+    app.use(path, async (c, next) => {
+      const senderDomain = extractSenderDomain(
+        c.req.header('origin'),
+        c.req.header('referer')
+      );
+
+      for (const group of policyGroups) {
+        if (group.blockedSenders || group.allowedSenders) {
+          const result = evaluateSender(group, undefined, senderDomain);
+          if (!result.allowed) {
+            return c.json(
+              {
+                error: {
+                  code: 'policy_violation',
+                  message: result.reason || 'Payment blocked by policy',
+                  groupName: result.groupName,
+                },
+              },
+              403
+            );
+          }
+        }
+      }
+
+      await next();
+    });
+  }
+
   app.use(
     path,
     middlewareFactory(
@@ -96,5 +141,46 @@ export function withPayments({
       resolvedFacilitator
     )
   );
+
+  if (policyGroups && policyGroups.length > 0 && paymentTracker) {
+    app.use(path, async (c, next) => {
+      await next();
+
+      const paymentResponseHeader = c.res.headers.get('X-PAYMENT-RESPONSE');
+      if (paymentResponseHeader && c.res.status >= 200 && c.res.status < 300) {
+        try {
+          const payerAddress = extractPayerAddress(paymentResponseHeader);
+          const senderDomain = extractSenderDomain(
+            c.req.header('origin'),
+            c.req.header('referer')
+          );
+          const paymentAmount = parsePriceAmount(price);
+
+          if (payerAddress && paymentAmount !== undefined) {
+            for (const group of policyGroups) {
+              if (group.incomingLimits) {
+                const limitInfo = findMostSpecificIncomingLimit(
+                  group.incomingLimits,
+                  payerAddress,
+                  senderDomain,
+                  c.req.url
+                );
+                const scope = limitInfo?.scope ?? 'global';
+
+                await paymentTracker.recordIncoming(
+                  group.name,
+                  scope,
+                  paymentAmount
+                );
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[paywall] Error recording incoming payment:', error);
+        }
+      }
+    });
+  }
+
   return true;
 }

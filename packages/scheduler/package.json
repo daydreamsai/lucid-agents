@@ -33,7 +33,6 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/types": "workspace:*"
   },
   "devDependencies": {

@@ -39,7 +39,7 @@
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
-    "viem": "^2.38.1"
+    "viem": "catalog:"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

@@ -31,16 +31,8 @@ import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
-import {
-  createRuntimePaymentContext,
-  payments,
-  paymentsFromEnv,
-} from '@lucid-agents/payments';
-import {
-  createMemoryStore,
-  createSchedulerRuntime,
-  createSchedulerWorker,
-} from '@lucid-agents/scheduler';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { createSchedulerWorker, scheduler } from '@lucid-agents/scheduler';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
 import { wallets } from '@lucid-agents/wallet';
 import { z } from 'zod';
@@ -105,9 +97,9 @@ async function main() {
   );
 
   // ============================================================================
-  // STEP 2: Create the SCHEDULER CLIENT (payer that calls agents)
+  // STEP 2: Create the SCHEDULER AGENT (agent that schedules calls to other agents)
   // ============================================================================
-  console.log('\n[example] Creating scheduler client (payer)...');
+  console.log('\n[example] Creating scheduler agent...');
 
   const schedulerWalletPrivateKey = process.env.AGENT_WALLET_PRIVATE_KEY;
   if (!schedulerWalletPrivateKey) {
@@ -116,10 +108,10 @@ async function main() {
     );
   }
 
-  const schedulerClient = await createAgent({
-    name: 'scheduler-client',
+  const schedulerAgent = await createAgent({
+    name: 'scheduler-agent',
     version: '1.0.0',
-    description: 'Scheduler client that pays for agent calls',
+    description: 'Agent that schedules calls to other agents',
   })
     .use(
       wallets({
@@ -129,35 +121,27 @@ async function main() {
       })
     )
     .use(a2a())
+    .use(payments({ config: paymentsFromEnv() }))
+    .use(scheduler())
     .build();
 
-  const paymentContext = await createRuntimePaymentContext({
-    runtime: schedulerClient,
-    network: process.env.NETWORK || 'base-sepolia',
-  });
+  if (!schedulerAgent.scheduler) {
+    throw new Error('Scheduler extension not initialized');
+  }
 
+  const walletAddress = schedulerAgent.wallets?.agent?.connector
+    ? await schedulerAgent.wallets.agent.connector.getAddress()
+    : null;
   console.log(
-    `[example] Payer wallet address: ${paymentContext.walletAddress}`
+    `[example] Scheduler agent wallet address: ${walletAddress || 'N/A'}`
   );
-
-  // ============================================================================
-  // STEP 3: Create the SCHEDULER runtime (simplified API)
-  // ============================================================================
-  console.log('\n[example] Creating scheduler runtime...');
-
-  const scheduler = createSchedulerRuntime({
-    store: createMemoryStore(),
-    runtime: schedulerClient,
-    paymentContext,
-    fetchAgentCard: async (_url: string) => agentCard,
-  });
 
   // ============================================================================
   // STEP 4: Create a HIRE (schedule agent calls)
   // ============================================================================
   console.log('\n[example] Creating hire (scheduling agent calls)...');
 
-  const { hire, job } = await scheduler.createHire({
+  const { hire, job } = await schedulerAgent.scheduler.createHire({
     agentCardUrl: agentOrigin,
     entrypointKey: 'hello',
     schedule: { kind: 'interval', everyMs: 10_000 },
@@ -173,7 +157,7 @@ async function main() {
   // ============================================================================
   console.log('\n[example] Starting scheduler worker...');
 
-  const worker = createSchedulerWorker(scheduler, 1_000);
+  const worker = createSchedulerWorker(schedulerAgent.scheduler, 1_000);
   worker.start();
   console.log('[example] Scheduler worker started');
   console.log('[example] Press Ctrl+C to stop\n');

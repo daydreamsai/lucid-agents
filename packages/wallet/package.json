@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "viem": "^2.38.5"
+    "viem": "catalog:"
   },
   "peerDependencies": {
     "thirdweb": "^5.84.0"

@@ -1,10 +1,7 @@
-import type {
-  AgentCardWithEntrypoints,
-  WalletConnector,
-  WalletMetadata,
-} from '@lucid-agents/types';
-import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { FetchFunction } from '@lucid-agents/types/http';
+import type { AgentCardWithEntrypoints } from '../a2a';
+import type { WalletConnector, WalletMetadata } from '../wallets';
+import type { AgentRuntime } from '../core';
+import type { FetchFunction } from '../http';
 
 export type JsonValue =
   | string
@@ -103,6 +100,7 @@ export type SchedulerStore = {
   deleteHire?(id: string): Promise<void>;
   putJob(job: Job): Promise<void>;
   getJob(id: string): Promise<Job | undefined>;
+  getJobs?(): Promise<Job[]>;
   getDueJobs(now: number, limit: number): Promise<Job[]>;
   claimJob(
     jobId: string,
@@ -150,7 +148,9 @@ export type InvokeFn = (args: InvokeArgs) => Promise<void>;
  * - Storing wallet references in a database (serializable WalletRef)
  * - Loading actual signing keys only when needed (WalletConnector)
  */
-export type WalletResolver = (walletRef: WalletRef) => Promise<WalletConnector | undefined>;
+export type WalletResolver = (
+  walletRef: WalletRef
+) => Promise<WalletConnector | undefined>;
 
 export type OperationResult<T = void> =
   | { success: true; data: T }
@@ -204,60 +204,3 @@ export type PaymentContext = {
   chainId: number | null;
 };
 
-/**
- * Options for creating a scheduler runtime.
- *
- * There are two ways to configure the scheduler:
- *
- * 1. Simple API (recommended): Provide `a2aClient` and `paymentContext`
- *    The scheduler handles invocation internally using A2A client with x402 payments.
- *
- * 2. Custom API: Provide a custom `invoke` function
- *    For advanced use cases where you need full control over invocation.
- */
-type BaseSchedulerRuntimeOptions = {
-  /** Storage backend for hires and jobs */
-  store: SchedulerStore;
-
-  /** Custom function to fetch agent cards. Defaults to fetching from agentCardUrl. */
-  fetchAgentCard?: (url: string) => Promise<AgentCardWithEntrypoints>;
-
-  /** Custom clock function for testing. Defaults to Date.now(). */
-  clock?: () => number;
-
-  /** Default max retries for jobs. Defaults to 3. */
-  defaultMaxRetries?: number;
-
-  /** Lease duration in ms. Defaults to 30000. */
-  leaseMs?: number;
-
-  /** Max jobs to fetch per tick. Defaults to 25. */
-  maxDueBatch?: number;
-
-  /** TTL for cached agent cards in ms. Defaults to 5 minutes. */
-  agentCardTtlMs?: number;
-
-  /** Max concurrent job processing. Defaults to 5. */
-  defaultConcurrency?: number;
-};
-
-type A2AInvokeOptions = {
-  /** Agent runtime with A2A client for invoking agent entrypoints. */
-  runtime: AgentRuntime;
-  /** Payment context from createRuntimePaymentContext. Provides x402-enabled fetch. */
-  paymentContext?: PaymentContext;
-  invoke?: never;
-  walletResolver?: never;
-};
-
-type CustomInvokeOptions = {
-  /** Custom invoke function for full control over job execution. */
-  invoke: InvokeFn;
-  /** Optional resolver to get a WalletConnector from a WalletRef. */
-  walletResolver?: WalletResolver;
-  runtime?: never;
-  paymentContext?: never;
-};
-
-export type SchedulerRuntimeOptions = BaseSchedulerRuntimeOptions &
-  (A2AInvokeOptions | CustomInvokeOptions);

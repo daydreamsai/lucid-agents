@@ -9,8 +9,8 @@ import { loadPoliciesFromConfig } from './policy-config';
  * ```json
  * [
  *   {
- *     "name": "Daily Spending Limit",
- *     "spendingLimits": {
+ *     "name": "Daily Outgoing Limit",
+ *     "outgoingLimits": {
  *       "global": {
  *         "maxPaymentUsd": 10.0,
  *         "maxTotalUsd": 1000.0,
@@ -27,7 +27,13 @@ import { loadPoliciesFromConfig } from './policy-config';
  *         }
  *       }
  *     },
+ *     "incomingLimits": {
+ *       "global": {
+ *         "maxTotalUsd": 5000.0
+ *       }
+ *     },
  *     "allowedRecipients": ["https://trusted.example.com"],
+ *     "blockedSenders": ["0x123..."],
  *     "rateLimits": {
  *       "maxPayments": 100,
  *       "windowMs": 3600000

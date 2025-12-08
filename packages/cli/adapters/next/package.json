@@ -23,7 +23,7 @@
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^4.1.16",
-    "viem": "^2.38.5",
+    "viem": "catalog:",
     "wagmi": "^2.19.2",
     "x402-fetch": "^0.7.0",
     "x402-next": "^0.7.1",

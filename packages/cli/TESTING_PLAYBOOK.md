@@ -160,7 +160,7 @@ Update the test project's `package.json` to use `file:` paths:
     "@lucid-agents/identity": "file:./node_modules/@lucid-agents/identity",
     "@lucid-agents/types": "file:./node_modules/@lucid-agents/types",
     "zod": "^4.1.12",
-    "viem": "^2.21.26",
+    "viem": "^2.41.2",
     "hono": "^4.10.1"
   }
 }

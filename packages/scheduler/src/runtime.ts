@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto';
-import { fetchAgentCardWithEntrypoints } from '@lucid-agents/a2a';
 import type {
   Hire,
   InvokeArgs,
@@ -7,22 +6,67 @@ import type {
   OperationResult,
   Schedule,
   SchedulerRuntime,
-  SchedulerRuntimeOptions,
-} from './types';
+  SchedulerStore,
+} from '@lucid-agents/types/scheduler';
+import type { AgentRuntime } from '@lucid-agents/types/core';
+
+export type CreateSchedulerRuntimeOptions = {
+  runtime: AgentRuntime;
+  store: SchedulerStore;
+  clock?: () => number;
+  defaultMaxRetries?: number;
+  leaseMs?: number;
+  maxDueBatch?: number;
+  agentCardTtlMs?: number;
+  defaultConcurrency?: number;
+};
 
 export function createSchedulerRuntime(
-  options: SchedulerRuntimeOptions
+  options: CreateSchedulerRuntimeOptions
 ): SchedulerRuntime {
   const clock = options.clock ?? (() => Date.now());
-  const fetchCard = options.fetchAgentCard ?? fetchAgentCardWithEntrypoints;
   const defaultMaxRetries = options.defaultMaxRetries ?? 3;
   const leaseMs = options.leaseMs ?? 30_000;
   const maxDueBatch = options.maxDueBatch ?? 25;
   const agentCardTtlMs = options.agentCardTtlMs ?? 5 * 60_000;
   const defaultConcurrency = options.defaultConcurrency ?? 5;
 
-  // Determine invoke function: custom or built-in A2A
-  const invokeJob = resolveInvokeFn(options);
+  const a2aClient = options.runtime.a2a?.client;
+  if (!a2aClient) {
+    throw new Error(
+      'Scheduler runtime requires A2A extension. Add .use(a2a()) to your agent.'
+    );
+  }
+
+  const invokeJob = async (args: InvokeArgs) => {
+    let fetchFn:
+      | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
+      | undefined;
+
+    // Get fetch with payment from payments runtime if available
+    if (options.runtime.payments) {
+      try {
+        fetchFn =
+          (await options.runtime.payments.getFetchWithPayment(
+            options.runtime,
+            options.runtime.payments.config.network
+          )) ?? undefined;
+      } catch (error) {
+        // Payment context creation failed, continue without payment
+        console.warn(
+          '[scheduler] Failed to get fetch with payment:',
+          (error as Error).message
+        );
+      }
+    }
+
+    await a2aClient.invoke(
+      args.manifest,
+      args.entrypointKey,
+      args.input,
+      fetchFn as typeof fetch | undefined
+    );
+  };
 
   const buildJob = (input: {
     hireId: string;
@@ -59,7 +103,9 @@ export function createSchedulerRuntime(
     // Validate schedule early to fail fast
     validateSchedule(input.schedule);
 
-    const card = await fetchCard(input.agentCardUrl);
+    const card = await options.runtime.a2a!.fetchCardWithEntrypoints(
+      input.agentCardUrl
+    );
     validateEntrypoint(card, input.entrypointKey);
 
     const hire: Hire = {
@@ -154,7 +200,10 @@ export function createSchedulerRuntime(
       return { success: false, error: `Hire ${hireId} not found` };
     }
     if (hire.status === 'canceled') {
-      return { success: false, error: `Hire ${hireId} is canceled and cannot be resumed` };
+      return {
+        success: false,
+        error: `Hire ${hireId} is canceled and cannot be resumed`,
+      };
     }
     if (hire.status === 'active') {
       return { success: false, error: `Hire ${hireId} is already active` };
@@ -181,7 +230,10 @@ export function createSchedulerRuntime(
       return { success: false, error: `Job ${jobId} not found` };
     }
     if (job.status === 'completed' || job.status === 'failed') {
-      return { success: false, error: `Job ${jobId} is ${job.status} and cannot be paused` };
+      return {
+        success: false,
+        error: `Job ${jobId} is ${job.status} and cannot be paused`,
+      };
     }
     if (job.status === 'paused') {
       return { success: false, error: `Job ${jobId} is already paused` };
@@ -194,13 +246,19 @@ export function createSchedulerRuntime(
     return { success: true, data: undefined };
   }
 
-  async function resumeJob(jobId: string, nextRunAt?: number): Promise<OperationResult> {
+  async function resumeJob(
+    jobId: string,
+    nextRunAt?: number
+  ): Promise<OperationResult> {
     const job = await options.store.getJob(jobId);
     if (!job) {
       return { success: false, error: `Job ${jobId} not found` };
     }
     if (job.status === 'completed') {
-      return { success: false, error: `Job ${jobId} is completed and cannot be resumed` };
+      return {
+        success: false,
+        error: `Job ${jobId} is completed and cannot be resumed`,
+      };
     }
     if (job.status === 'pending' || job.status === 'leased') {
       return { success: false, error: `Job ${jobId} is already ${job.status}` };
@@ -214,7 +272,10 @@ export function createSchedulerRuntime(
     return { success: true, data: undefined };
   }
 
-  async function tick(optionsOverride?: { workerId?: string; concurrency?: number }): Promise<void> {
+  async function tick(optionsOverride?: {
+    workerId?: string;
+    concurrency?: number;
+  }): Promise<void> {
     const workerId = optionsOverride?.workerId ?? 'scheduler-worker';
     const concurrency = optionsOverride?.concurrency ?? defaultConcurrency;
     const now = clock();
@@ -282,12 +343,6 @@ export function createSchedulerRuntime(
       }
 
       try {
-        // Resolve wallet connector if resolver is provided (legacy API)
-        const walletConnector =
-          options.walletResolver && hire.wallet
-            ? await options.walletResolver(hire.wallet)
-            : undefined;
-
         await invokeJob({
           manifest: card,
           entrypointKey: claimedJob.entrypointKey,
@@ -296,7 +351,6 @@ export function createSchedulerRuntime(
           idempotencyKey: claimedJob.idempotencyKey,
           // Legacy API fields (optional)
           walletRef: hire.wallet,
-          walletConnector,
         });
 
         const nextRunAt = computeNextRun(claimedJob.schedule, now);
@@ -384,7 +438,9 @@ export function createSchedulerRuntime(
       }
     }
 
-    const card = await fetchCard(hire.agent.agentCardUrl);
+    const card = await options.runtime.a2a!.fetchCardWithEntrypoints(
+      hire.agent.agentCardUrl
+    );
     const updated: Hire = {
       ...hire,
       agent: {
@@ -442,7 +498,9 @@ function validateSchedule(schedule: Schedule): void {
       return;
     default: {
       const exhaustive: never = schedule;
-      throw new Error(`Unknown schedule kind: ${(exhaustive as Schedule).kind}`);
+      throw new Error(
+        `Unknown schedule kind: ${(exhaustive as Schedule).kind}`
+      );
     }
   }
 }
@@ -462,35 +520,3 @@ function computeBackoffMs(attempts: number): number {
  * 2. Built-in A2A client invoke (simple API via runtime)
  * 3. Throws if neither is configured
  */
-function resolveInvokeFn(
-  options: SchedulerRuntimeOptions
-): (args: InvokeArgs) => Promise<void> {
-  if ('invoke' in options) {
-    return options.invoke;
-  }
-
-  if ('runtime' in options) {
-    const a2aClient = options.runtime.a2a?.client;
-    if (!a2aClient) {
-      throw new Error(
-        'Scheduler runtime requires A2A extension. Add .use(a2a()) to your agent.'
-      );
-    }
-
-    const fetchFn = options.paymentContext?.fetchWithPayment ?? undefined;
-
-    return async (args: InvokeArgs) => {
-      await a2aClient.invoke(
-        args.manifest,
-        args.entrypointKey,
-        args.input,
-        fetchFn
-      );
-    };
-  }
-
-  throw new Error(
-    'Scheduler requires either runtime or invoke function. ' +
-      'Use runtime + paymentContext for simple setup, or provide a custom invoke function.'
-  );
-}

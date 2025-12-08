@@ -15,6 +15,8 @@ describe('createA2ARuntime', () => {
           description: 'Test agent',
         },
       },
+      addEntrypoint: () => {},
+      getEntrypoint: () => undefined,
       listEntrypoints: () => [
         {
           key: 'echo',

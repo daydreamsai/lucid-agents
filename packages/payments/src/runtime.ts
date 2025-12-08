@@ -4,7 +4,7 @@ import type { Signer } from 'x402/types';
 import { createSigner, type Hex, wrapFetchWithPayment } from 'x402-fetch';
 import { sanitizeAddress, ZERO_ADDRESS } from './crypto';
 import { wrapBaseFetchWithPolicy } from './policy-wrapper';
-import type { SpendingTracker } from './spending-tracker';
+import type { PaymentTracker } from './payment-tracker';
 import type { RateLimiter } from './rate-limiter';
 
 type FetchLike = (
@@ -410,14 +410,23 @@ export async function createRuntimePaymentContext(
     // Wrap base fetch with policy checking if policies are configured
     let fetchWithPolicy = baseFetch;
     const policyGroups = runtime.payments?.policyGroups;
-    const spendingTracker = runtime.payments?.spendingTracker as SpendingTracker | undefined;
-    const rateLimiter = runtime.payments?.rateLimiter as RateLimiter | undefined;
+    const paymentTracker = runtime.payments?.paymentTracker as
+      | PaymentTracker
+      | undefined;
+    const rateLimiter = runtime.payments?.rateLimiter as
+      | RateLimiter
+      | undefined;
 
-    if (policyGroups && policyGroups.length > 0 && spendingTracker && rateLimiter) {
+    if (
+      policyGroups &&
+      policyGroups.length > 0 &&
+      paymentTracker &&
+      rateLimiter
+    ) {
       fetchWithPolicy = wrapBaseFetchWithPolicy(
         baseFetch,
         policyGroups,
-        spendingTracker,
+        paymentTracker,
         rateLimiter
       );
     }

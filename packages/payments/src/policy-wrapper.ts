@@ -1,7 +1,7 @@
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
-import type { SpendingTracker } from './spending-tracker';
+import type { PaymentTracker } from './payment-tracker';
 import type { RateLimiter } from './rate-limiter';
-import { evaluatePolicyGroups, findMostSpecificLimit } from './policy';
+import { evaluatePolicyGroups, findMostSpecificOutgoingLimit } from './policy';
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -98,14 +98,14 @@ type PaymentInfo = {
  *
  * @param baseFetch - The base fetch function to wrap
  * @param policyGroups - Array of payment policy groups to evaluate
- * @param spendingTracker - Tracker for enforcing spending limits
+ * @param paymentTracker - Tracker for enforcing payment limits
  * @param rateLimiter - Limiter for enforcing rate limits
  * @returns Wrapped fetch function that enforces payment policies
  */
 export function wrapBaseFetchWithPolicy(
   baseFetch: FetchLike,
   policyGroups: PaymentPolicyGroup[],
-  spendingTracker: SpendingTracker,
+  paymentTracker: PaymentTracker,
   rateLimiter: RateLimiter
 ): FetchLike {
   const paymentInfoCache = new Map<string, PaymentInfo>();
@@ -127,9 +127,9 @@ export function wrapBaseFetchWithPolicy(
       );
 
       if (paymentAmount !== undefined) {
-        const evaluation = evaluatePolicyGroups(
+        const evaluation = await evaluatePolicyGroups(
           policyGroups,
-          spendingTracker,
+          paymentTracker,
           rateLimiter,
           urlString,
           urlString,
@@ -170,15 +170,15 @@ export function wrapBaseFetchWithPolicy(
         const paymentInfo = paymentInfoCache.get(requestKey);
         if (paymentInfo) {
           for (const group of policyGroups) {
-            if (group.spendingLimits) {
-              const limitInfo = findMostSpecificLimit(
-                group.spendingLimits,
+            if (group.outgoingLimits) {
+              const limitInfo = findMostSpecificOutgoingLimit(
+                group.outgoingLimits,
                 targetUrl,
                 endpointUrl
               );
               const scope = limitInfo?.scope ?? 'global';
 
-              spendingTracker.recordSpending(
+              await paymentTracker.recordOutgoing(
                 group.name,
                 scope,
                 paymentInfo.amount

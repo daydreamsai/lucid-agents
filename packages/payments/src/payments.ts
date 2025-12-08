@@ -1,5 +1,9 @@
 import type { Network } from 'x402/types';
-import type { EntrypointDef, AgentCore } from '@lucid-agents/types/core';
+import type {
+  EntrypointDef,
+  AgentCore,
+  AgentRuntime,
+} from '@lucid-agents/types/core';
 import type { EntrypointPrice } from '@lucid-agents/types/payments';
 import type {
   PaymentsConfig,
@@ -8,8 +12,12 @@ import type {
   PaymentPolicyGroup,
 } from '@lucid-agents/types/payments';
 import { resolvePrice } from './pricing';
-import { createSpendingTracker, type SpendingTracker } from './spending-tracker';
+import { createPaymentTracker, type PaymentTracker } from './payment-tracker';
 import { createRateLimiter, type RateLimiter } from './rate-limiter';
+import { createSQLitePaymentStorage } from './sqlite-payment-storage';
+import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
+import { createPostgresPaymentStorage } from './postgres-payment-storage';
+import type { PaymentStorage } from './payment-storage';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -152,6 +160,36 @@ export const paymentRequiredResponse = (
   );
 };
 
+/**
+ * Creates payment storage based on configuration.
+ * Defaults to SQLite if no storage config is provided.
+ */
+function createStorageFromConfig(
+  storageConfig?: import('@lucid-agents/types/payments').PaymentStorageConfig
+): PaymentStorage {
+  if (!storageConfig) {
+    // Default: SQLite
+    return createSQLitePaymentStorage();
+  }
+
+  switch (storageConfig.type) {
+    case 'in-memory':
+      return createInMemoryPaymentStorage();
+    case 'postgres':
+      if (!storageConfig.postgres?.connectionString) {
+        throw new Error(
+          'Postgres storage requires connectionString in postgres config'
+        );
+      }
+      return createPostgresPaymentStorage(
+        storageConfig.postgres.connectionString
+      );
+    case 'sqlite':
+    default:
+      return createSQLitePaymentStorage(storageConfig.sqlite?.dbPath);
+  }
+}
+
 export function createPaymentsRuntime(
   paymentsOption: PaymentsConfig | false | undefined
 ): import('@lucid-agents/types/payments').PaymentsRuntime | undefined {
@@ -164,21 +202,35 @@ export function createPaymentsRuntime(
 
   let isActive = false;
 
-  // Create trackers if policy groups are configured
-  const policyGroups = config.policyGroups;
-  let spendingTracker: SpendingTracker | undefined;
+  // Create storage and payment tracker
+  let paymentTracker: PaymentTracker | undefined;
   let rateLimiter: RateLimiter | undefined;
 
+  const policyGroups = config.policyGroups;
+
+  // Check if we need payment tracking (for outgoing or incoming limits)
   if (policyGroups && policyGroups.length > 0) {
-    // Check if any group needs spending tracking
-    const needsSpendingTracker = policyGroups.some(
-      group => group.spendingLimits?.global?.maxTotalUsd !== undefined ||
-               Object.values(group.spendingLimits?.perTarget ?? {}).some(
-                 limit => limit.maxTotalUsd !== undefined
-               ) ||
-               Object.values(group.spendingLimits?.perEndpoint ?? {}).some(
-                 limit => limit.maxTotalUsd !== undefined
-               )
+    const needsOutgoingTracking = policyGroups.some(
+      group =>
+        group.outgoingLimits?.global?.maxTotalUsd !== undefined ||
+        Object.values(group.outgoingLimits?.perTarget ?? {}).some(
+          limit => limit.maxTotalUsd !== undefined
+        ) ||
+        Object.values(group.outgoingLimits?.perEndpoint ?? {}).some(
+          limit => limit.maxTotalUsd !== undefined
+        )
+    );
+
+    // Check if any group needs incoming payment tracking
+    const needsIncomingTracking = policyGroups.some(
+      group =>
+        group.incomingLimits?.global?.maxTotalUsd !== undefined ||
+        Object.values(group.incomingLimits?.perSender ?? {}).some(
+          limit => limit.maxTotalUsd !== undefined
+        ) ||
+        Object.values(group.incomingLimits?.perEndpoint ?? {}).some(
+          limit => limit.maxTotalUsd !== undefined
+        )
     );
 
     // Check if any group needs rate limiting
@@ -186,8 +238,17 @@ export function createPaymentsRuntime(
       group => group.rateLimits !== undefined
     );
 
-    if (needsSpendingTracker) {
-      spendingTracker = createSpendingTracker();
+    // Create payment tracker if we need tracking for either direction
+    if (needsOutgoingTracking || needsIncomingTracking) {
+      try {
+        const storage = createStorageFromConfig(config.storage);
+        paymentTracker = createPaymentTracker(storage);
+      } catch (error) {
+        // Storage initialization failed - throw error (agent startup fails)
+        throw new Error(
+          `Failed to initialize payment storage: ${(error as Error).message}`
+        );
+      }
     }
 
     if (needsRateLimiter) {
@@ -202,8 +263,8 @@ export function createPaymentsRuntime(
     get isActive() {
       return isActive;
     },
-    get spendingTracker() {
-      return spendingTracker;
+    get paymentTracker() {
+      return paymentTracker;
     },
     get rateLimiter() {
       return rateLimiter;
@@ -224,6 +285,22 @@ export function createPaymentsRuntime(
       if (entrypointHasExplicitPrice(entrypoint)) {
         isActive = true;
       }
+    },
+    async getFetchWithPayment(
+      runtime: AgentRuntime,
+      network?: string
+    ): Promise<
+      | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
+      | null
+    > {
+      const { createRuntimePaymentContext } = await import('./runtime');
+      const paymentContext = await createRuntimePaymentContext({
+        runtime,
+        network,
+      });
+      return paymentContext.fetchWithPayment as
+        | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
+        | null;
     },
   };
 }

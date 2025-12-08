@@ -1,9 +1,11 @@
 import type {
   PaymentPolicyGroup,
-  SpendingLimit,
-  SpendingLimitsConfig,
+  OutgoingLimit,
+  OutgoingLimitsConfig,
+  IncomingLimit,
+  IncomingLimitsConfig,
 } from '@lucid-agents/types/payments';
-import type { SpendingTracker } from './spending-tracker';
+import type { PaymentTracker } from './payment-tracker';
 import type { RateLimiter } from './rate-limiter';
 
 /**
@@ -84,7 +86,79 @@ function domainsMatch(domain1: string, domain2: string): boolean {
 }
 
 /**
- * Evaluates recipient whitelist/blacklist for a policy group.
+ * Evaluates sender whitelist/blacklist for a policy group (incoming payments).
+ * Similar to evaluateRecipient but for incoming payments.
+ * @param group - Policy group to evaluate
+ * @param senderAddress - Sender address (EVM or Solana)
+ * @param senderDomain - Sender domain (from URL)
+ * @returns Evaluation result
+ */
+export function evaluateSender(
+  group: PaymentPolicyGroup,
+  senderAddress?: string,
+  senderDomain?: string
+): PolicyEvaluationResult {
+  if (group.blockedSenders && group.blockedSenders.length > 0) {
+    for (const blocked of group.blockedSenders) {
+      const blockedDomain = extractDomainFromUrlOrDomain(blocked);
+      const normalizedBlocked = normalizeUrl(blocked);
+
+      if (senderAddress && normalizeUrl(senderAddress) === normalizedBlocked) {
+        return {
+          allowed: false,
+          reason: `Sender address "${senderAddress}" is blocked by policy group "${group.name}"`,
+          groupName: group.name,
+        };
+      }
+
+      if (senderDomain) {
+        const normalizedDomain = normalizeUrl(senderDomain);
+        if (domainsMatch(normalizedDomain, blockedDomain)) {
+          return {
+            allowed: false,
+            reason: `Sender domain "${senderDomain}" is blocked by policy group "${group.name}"`,
+            groupName: group.name,
+          };
+        }
+      }
+    }
+  }
+
+  if (group.allowedSenders && group.allowedSenders.length > 0) {
+    let isAllowed = false;
+
+    for (const allowed of group.allowedSenders) {
+      const allowedDomain = extractDomainFromUrlOrDomain(allowed);
+      const normalizedAllowed = normalizeUrl(allowed);
+
+      if (senderAddress && normalizeUrl(senderAddress) === normalizedAllowed) {
+        isAllowed = true;
+        break;
+      }
+
+      if (senderDomain) {
+        const normalizedDomain = normalizeUrl(senderDomain);
+        if (domainsMatch(normalizedDomain, allowedDomain)) {
+          isAllowed = true;
+          break;
+        }
+      }
+    }
+
+    if (!isAllowed) {
+      return {
+        allowed: false,
+        reason: `Sender "${senderAddress || senderDomain || 'unknown'}" is not in the whitelist for policy group "${group.name}"`,
+        groupName: group.name,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Evaluates recipient whitelist/blacklist for a policy group (outgoing payments).
  * @param group - Policy group to evaluate
  * @param recipientAddress - Recipient address (EVM or Solana)
  * @param recipientDomain - Recipient domain (from URL)
@@ -179,18 +253,18 @@ export function evaluateRateLimit(
 }
 
 /**
- * Finds the most specific spending limit for a given scope.
+ * Finds the most specific outgoing limit for a given scope.
  * Hierarchy: endpoint > target > global
- * @param limits - Spending limits configuration
+ * @param limits - Outgoing limits configuration
  * @param targetUrl - Target agent URL (optional)
  * @param endpointUrl - Full endpoint URL (optional)
- * @returns Most specific spending limit with resolved scope, or undefined
+ * @returns Most specific outgoing limit with resolved scope, or undefined
  */
-export function findMostSpecificLimit(
-  limits: SpendingLimitsConfig,
+export function findMostSpecificOutgoingLimit(
+  limits: OutgoingLimitsConfig,
   targetUrl?: string,
   endpointUrl?: string
-): { limit: SpendingLimit; scope: string } | undefined {
+): { limit: OutgoingLimit; scope: string } | undefined {
   if (endpointUrl && limits.perEndpoint) {
     const normalizedEndpoint = normalizeUrl(endpointUrl);
     for (const [key, limit] of Object.entries(limits.perEndpoint)) {
@@ -233,28 +307,78 @@ export function findMostSpecificLimit(
 }
 
 /**
- * Evaluates spending limits for a policy group.
- * Checks both per-request limits (stateless) and total spending limits (stateful).
+ * Finds the most specific incoming limit for a given scope.
+ * Hierarchy: endpoint > sender > global
+ * @param limits - Incoming limits configuration
+ * @param senderAddress - Sender address (optional)
+ * @param senderDomain - Sender domain (optional)
+ * @param endpointUrl - Full endpoint URL (optional)
+ * @returns Most specific incoming limit with resolved scope, or undefined
+ */
+export function findMostSpecificIncomingLimit(
+  limits: IncomingLimitsConfig,
+  senderAddress?: string,
+  senderDomain?: string,
+  endpointUrl?: string
+): { limit: IncomingLimit; scope: string } | undefined {
+  if (endpointUrl && limits.perEndpoint) {
+    const normalizedEndpoint = normalizeUrl(endpointUrl);
+    for (const [key, limit] of Object.entries(limits.perEndpoint)) {
+      if (normalizeUrl(key) === normalizedEndpoint) {
+        return { limit, scope: endpointUrl };
+      }
+    }
+  }
+
+  if (senderAddress && limits.perSender) {
+    const normalizedSender = normalizeUrl(senderAddress);
+    for (const [key, limit] of Object.entries(limits.perSender)) {
+      if (normalizeUrl(key) === normalizedSender) {
+        return { limit, scope: key };
+      }
+    }
+  }
+
+  if (senderDomain && limits.perSender) {
+    const normalizedDomain = normalizeUrl(senderDomain);
+    for (const [key, limit] of Object.entries(limits.perSender)) {
+      const keyDomain = extractDomain(key);
+      if (keyDomain && normalizeUrl(keyDomain) === normalizedDomain) {
+        return { limit, scope: key };
+      }
+    }
+  }
+
+  if (limits.global) {
+    return { limit: limits.global, scope: 'global' };
+  }
+
+  return undefined;
+}
+
+/**
+ * Evaluates outgoing payment limits for a policy group.
+ * Checks both per-request limits (stateless) and total outgoing limits (stateful).
  * @param group - Policy group to evaluate
- * @param spendingTracker - Spending tracker instance
+ * @param paymentTracker - Payment tracker instance
  * @param targetUrl - Target agent URL (optional)
  * @param endpointUrl - Full endpoint URL (optional)
  * @param requestedAmount - Requested payment amount in base units
  * @returns Evaluation result
  */
-export function evaluateSpendingLimits(
+export async function evaluateOutgoingLimits(
   group: PaymentPolicyGroup,
-  spendingTracker: SpendingTracker,
+  paymentTracker: PaymentTracker,
   targetUrl?: string,
   endpointUrl?: string,
   requestedAmount?: bigint
-): PolicyEvaluationResult {
-  if (!group.spendingLimits || requestedAmount === undefined) {
+): Promise<PolicyEvaluationResult> {
+  if (!group.outgoingLimits || requestedAmount === undefined) {
     return { allowed: true };
   }
 
-  const limitInfo = findMostSpecificLimit(
-    group.spendingLimits,
+  const limitInfo = findMostSpecificOutgoingLimit(
+    group.outgoingLimits,
     targetUrl,
     endpointUrl
   );
@@ -272,14 +396,14 @@ export function evaluateSpendingLimits(
     if (requestedAmount > maxPaymentBaseUnits) {
       return {
         allowed: false,
-        reason: `Per-request spending limit exceeded for policy group "${group.name}" at scope "${scope}". Requested: ${formatUsdcAmount(requestedAmount)} USDC, Limit: ${limit.maxPaymentUsd} USDC`,
+        reason: `Per-request outgoing limit exceeded for policy group "${group.name}" at scope "${scope}". Requested: ${formatUsdcAmount(requestedAmount)} USDC, Limit: ${limit.maxPaymentUsd} USDC`,
         groupName: group.name,
       };
     }
   }
 
   if (limit.maxTotalUsd !== undefined) {
-    const checkResult = spendingTracker.checkLimit(
+    const checkResult = await paymentTracker.checkOutgoingLimit(
       group.name,
       scope,
       limit.maxTotalUsd,
@@ -300,10 +424,80 @@ export function evaluateSpendingLimits(
 }
 
 /**
- * Evaluates all policy groups.
+ * Evaluates incoming payment limits for a policy group.
+ * Checks both per-request limits (stateless) and total incoming limits (stateful).
+ * @param group - Policy group to evaluate
+ * @param paymentTracker - Payment tracker instance
+ * @param senderAddress - Sender address (optional)
+ * @param senderDomain - Sender domain (optional)
+ * @param endpointUrl - Full endpoint URL (optional)
+ * @param requestedAmount - Requested payment amount in base units
+ * @returns Evaluation result
+ */
+export async function evaluateIncomingLimits(
+  group: PaymentPolicyGroup,
+  paymentTracker: PaymentTracker,
+  senderAddress?: string,
+  senderDomain?: string,
+  endpointUrl?: string,
+  requestedAmount?: bigint
+): Promise<PolicyEvaluationResult> {
+  if (!group.incomingLimits || requestedAmount === undefined) {
+    return { allowed: true };
+  }
+
+  const limitInfo = findMostSpecificIncomingLimit(
+    group.incomingLimits,
+    senderAddress,
+    senderDomain,
+    endpointUrl
+  );
+
+  if (!limitInfo) {
+    return { allowed: true };
+  }
+
+  const { limit, scope } = limitInfo;
+
+  if (limit.maxPaymentUsd !== undefined) {
+    const maxPaymentBaseUnits = BigInt(
+      Math.floor(limit.maxPaymentUsd * 1_000_000)
+    );
+    if (requestedAmount > maxPaymentBaseUnits) {
+      return {
+        allowed: false,
+        reason: `Per-request incoming limit exceeded for policy group "${group.name}" at scope "${scope}". Requested: ${formatUsdcAmount(requestedAmount)} USDC, Limit: ${limit.maxPaymentUsd} USDC`,
+        groupName: group.name,
+      };
+    }
+  }
+
+  if (limit.maxTotalUsd !== undefined) {
+    const checkResult = await paymentTracker.checkIncomingLimit(
+      group.name,
+      scope,
+      limit.maxTotalUsd,
+      limit.windowMs,
+      requestedAmount
+    );
+
+    if (!checkResult.allowed) {
+      return {
+        allowed: false,
+        reason: checkResult.reason,
+        groupName: group.name,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Evaluates all policy groups for outgoing payments.
  * All groups must pass - first violation blocks the payment.
  * @param groups - Array of policy groups to evaluate
- * @param spendingTracker - Spending tracker instance
+ * @param paymentTracker - Payment tracker instance
  * @param rateLimiter - Rate limiter instance
  * @param targetUrl - Target agent URL (optional)
  * @param endpointUrl - Full endpoint URL (optional)
@@ -312,16 +506,16 @@ export function evaluateSpendingLimits(
  * @param recipientDomain - Recipient domain (optional)
  * @returns Evaluation result (first violation blocks)
  */
-export function evaluatePolicyGroups(
+export async function evaluatePolicyGroups(
   groups: PaymentPolicyGroup[],
-  spendingTracker: SpendingTracker,
+  paymentTracker: PaymentTracker,
   rateLimiter: RateLimiter,
   targetUrl?: string,
   endpointUrl?: string,
   requestedAmount?: bigint,
   recipientAddress?: string,
   recipientDomain?: string
-): PolicyEvaluationResult {
+): Promise<PolicyEvaluationResult> {
   if (targetUrl && !recipientDomain) {
     recipientDomain = extractDomain(targetUrl);
   }
@@ -336,20 +530,61 @@ export function evaluatePolicyGroups(
       return recipientResult;
     }
 
-    const spendingResult = evaluateSpendingLimits(
+    const outgoingResult = await evaluateOutgoingLimits(
       group,
-      spendingTracker,
+      paymentTracker,
       targetUrl,
       endpointUrl,
       requestedAmount
     );
-    if (!spendingResult.allowed) {
-      return spendingResult;
+    if (!outgoingResult.allowed) {
+      return outgoingResult;
     }
 
     const rateResult = evaluateRateLimit(group, rateLimiter);
     if (!rateResult.allowed) {
       return rateResult;
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Evaluates all policy groups for incoming payments.
+ * All groups must pass - first violation blocks the service (payment already received).
+ * @param groups - Array of policy groups to evaluate
+ * @param paymentTracker - Payment tracker instance
+ * @param senderAddress - Sender address (optional)
+ * @param senderDomain - Sender domain (optional)
+ * @param endpointUrl - Full endpoint URL (optional)
+ * @param requestedAmount - Requested payment amount in base units
+ * @returns Evaluation result (first violation blocks)
+ */
+export async function evaluateIncomingPolicyGroups(
+  groups: PaymentPolicyGroup[],
+  paymentTracker: PaymentTracker,
+  senderAddress?: string,
+  senderDomain?: string,
+  endpointUrl?: string,
+  requestedAmount?: bigint
+): Promise<PolicyEvaluationResult> {
+  for (const group of groups) {
+    const senderResult = evaluateSender(group, senderAddress, senderDomain);
+    if (!senderResult.allowed) {
+      return senderResult;
+    }
+
+    const incomingResult = await evaluateIncomingLimits(
+      group,
+      paymentTracker,
+      senderAddress,
+      senderDomain,
+      endpointUrl,
+      requestedAmount
+    );
+    if (!incomingResult.allowed) {
+      return incomingResult;
     }
   }
 

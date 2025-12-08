@@ -684,24 +684,24 @@ if (agent.payments?.policyGroups) {
   console.log('Payment policies configured:');
   agent.payments.policyGroups.forEach(group => {
     console.log(`  - ${group.name}`);
-    if (group.spendingLimits?.global) {
-      if (group.spendingLimits.global.maxPaymentUsd) {
+    if (group.outgoingLimits?.global) {
+      if (group.outgoingLimits.global.maxPaymentUsd) {
         console.log(
-          `    - Max payment: $${group.spendingLimits.global.maxPaymentUsd}`
+          `    - Max payment: $${group.outgoingLimits.global.maxPaymentUsd}`
         );
       }
-      if (group.spendingLimits.global.maxTotalUsd) {
+      if (group.outgoingLimits.global.maxTotalUsd) {
         console.log(
-          `    - Max total: $${group.spendingLimits.global.maxTotalUsd}`
+          `    - Max total: $${group.outgoingLimits.global.maxTotalUsd}`
         );
       }
-      if (group.spendingLimits.global.windowMs) {
-        const hours = group.spendingLimits.global.windowMs / (60 * 60 * 1000);
+      if (group.outgoingLimits.global.windowMs) {
+        const hours = group.outgoingLimits.global.windowMs / (60 * 60 * 1000);
         console.log(`    - Window: ${hours} hours`);
       }
     }
-    if (group.spendingLimits?.perTarget) {
-      const targetCount = Object.keys(group.spendingLimits.perTarget).length;
+    if (group.outgoingLimits?.perTarget) {
+      const targetCount = Object.keys(group.outgoingLimits.perTarget).length;
       console.log(`    - Per-target limits: ${targetCount} targets`);
     }
     if (group.allowedRecipients) {

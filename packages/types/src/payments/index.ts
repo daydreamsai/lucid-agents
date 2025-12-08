@@ -1,4 +1,5 @@
 import type { Network, Resource } from 'x402/types';
+import type { AgentRuntime } from '../core';
 
 /**
  * Solana address type (base58 encoded).
@@ -6,28 +7,76 @@ import type { Network, Resource } from 'x402/types';
 export type SolanaAddress = string;
 
 /**
- * Spending limit configuration for a specific scope.
+ * Outgoing payment limit configuration for a specific scope.
  */
-export type SpendingLimit = {
+export type OutgoingLimit = {
   /** Maximum payment amount per individual request in USD (stateless) */
   maxPaymentUsd?: number;
-  /** Maximum total spending amount in USD (stateful, tracks across requests) */
+  /** Maximum total outgoing amount in USD (stateful, tracks across requests) */
   maxTotalUsd?: number;
-  /** Time window in milliseconds for total spending limit (optional - if not provided, lifetime limit) */
+  /** Time window in milliseconds for total outgoing limit (optional - if not provided, lifetime limit) */
   windowMs?: number;
 };
 
 /**
- * Spending limits configuration at different scopes.
+ * Incoming payment limit configuration for a specific scope.
  */
-export type SpendingLimitsConfig = {
-  /** Global spending limits applied to all payments */
-  global?: SpendingLimit;
-  /** Per-target limits keyed by agent URL or domain */
-  perTarget?: Record<string, SpendingLimit>;
-  /** Per-endpoint limits keyed by full endpoint URL */
-  perEndpoint?: Record<string, SpendingLimit>;
+export type IncomingLimit = {
+  /** Maximum payment amount per individual request in USD (stateless) */
+  maxPaymentUsd?: number;
+  /** Maximum total incoming amount in USD (stateful, tracks across requests) */
+  maxTotalUsd?: number;
+  /** Time window in milliseconds for total incoming limit (optional - if not provided, lifetime limit) */
+  windowMs?: number;
 };
+
+/**
+ * Outgoing limits configuration at different scopes.
+ */
+export type OutgoingLimitsConfig = {
+  /** Global outgoing limits applied to all payments */
+  global?: OutgoingLimit;
+  /** Per-target limits keyed by agent URL or domain */
+  perTarget?: Record<string, OutgoingLimit>;
+  /** Per-endpoint limits keyed by full endpoint URL */
+  perEndpoint?: Record<string, OutgoingLimit>;
+};
+
+/**
+ * Incoming limits configuration at different scopes.
+ */
+export type IncomingLimitsConfig = {
+  /** Global incoming limits applied to all payments */
+  global?: IncomingLimit;
+  /** Per-sender limits keyed by sender address or domain */
+  perSender?: Record<string, IncomingLimit>;
+  /** Per-endpoint limits keyed by full endpoint URL */
+  perEndpoint?: Record<string, IncomingLimit>;
+};
+
+/**
+ * Payment direction: outgoing (agent pays) or incoming (agent receives).
+ */
+export type PaymentDirection = 'outgoing' | 'incoming';
+
+/**
+ * Payment record stored in the database.
+ */
+export type PaymentRecord = {
+  id?: number;
+  groupName: string;
+  scope: string;
+  direction: PaymentDirection;
+  amount: bigint;
+  timestamp: number;
+};
+
+/**
+ * Payment tracker interface for reading payment data.
+ */
+export interface PaymentTracker {
+  getAllData(): Promise<PaymentRecord[]>;
+}
 
 /**
  * Rate limiting configuration for a policy group.
@@ -46,14 +95,38 @@ export type RateLimitConfig = {
 export type PaymentPolicyGroup = {
   /** Policy group identifier (e.g., "Daily Spending Limit", "API Usage Policy") */
   name: string;
-  /** Spending limits at global, per-target, or per-endpoint scope */
-  spendingLimits?: SpendingLimitsConfig;
-  /** Whitelist of allowed recipient addresses or domains */
+  /** Outgoing payment limits at global, per-target, or per-endpoint scope */
+  outgoingLimits?: OutgoingLimitsConfig;
+  /** Incoming payment limits at global, per-sender, or per-endpoint scope */
+  incomingLimits?: IncomingLimitsConfig;
+  /** Whitelist of allowed recipient addresses or domains (for outgoing payments) */
   allowedRecipients?: string[];
-  /** Blacklist of blocked recipient addresses or domains (takes precedence over whitelist) */
+  /** Blacklist of blocked recipient addresses or domains (for outgoing payments, takes precedence over whitelist) */
   blockedRecipients?: string[];
+  /** Whitelist of allowed sender addresses or domains (for incoming payments) */
+  allowedSenders?: string[];
+  /** Blacklist of blocked sender addresses or domains (for incoming payments, takes precedence over whitelist) */
+  blockedSenders?: string[];
   /** Rate limiting configuration (scoped per policy group) */
   rateLimits?: RateLimitConfig;
+};
+
+/**
+ * Storage configuration for payment tracking.
+ */
+export type PaymentStorageConfig = {
+  /** Storage type: 'sqlite' (default), 'in-memory', or 'postgres' */
+  type: 'sqlite' | 'in-memory' | 'postgres';
+  /** SQLite-specific configuration */
+  sqlite?: {
+    /** Custom database path (defaults to `.data/payments.db`) */
+    dbPath?: string;
+  };
+  /** Postgres-specific configuration */
+  postgres?: {
+    /** Postgres connection string */
+    connectionString: string;
+  };
 };
 
 /**
@@ -66,6 +139,8 @@ export type PaymentsConfig = {
   network: Network;
   /** Optional policy groups for payment controls and limits */
   policyGroups?: PaymentPolicyGroup[];
+  /** Optional storage configuration (defaults to SQLite) */
+  storage?: PaymentStorageConfig;
 };
 
 /**
@@ -107,10 +182,19 @@ export type PaymentsRuntime = {
     kind: 'invoke' | 'stream'
   ) => RuntimePaymentRequirement;
   activate: (entrypoint: import('../core').EntrypointDef) => void;
-  /** Optional spending tracker for total spending limits (only present if policy groups have total spending limits) */
-  readonly spendingTracker?: unknown; // SpendingTracker instance (type exported from payments package)
+  /** Payment tracker for bi-directional payment tracking (outgoing and incoming) */
+  readonly paymentTracker?: unknown; // PaymentTracker instance (type exported from payments package)
   /** Optional rate limiter for rate limiting (only present if policy groups have rate limits) */
   readonly rateLimiter?: unknown; // RateLimiter instance (type exported from payments package)
   /** Policy groups configured for this runtime */
   readonly policyGroups?: PaymentPolicyGroup[];
+  /**
+   * Get fetch function with payment support.
+   * Returns a fetch function that automatically includes x402 payment headers.
+   * Returns null if payment context cannot be created (e.g., no wallet configured).
+   */
+  getFetchWithPayment: (
+    runtime: AgentRuntime,
+    network?: string
+  ) => Promise<((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null>;
 };

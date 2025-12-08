@@ -1,4 +1,4 @@
-import type { Hire, Job, SchedulerStore } from '../types';
+import type { Hire, Job, SchedulerStore } from '@lucid-agents/types/scheduler';
 
 export function createMemoryStore(): SchedulerStore {
   return new MemoryStore();
@@ -24,6 +24,10 @@ class MemoryStore implements SchedulerStore {
   async getJob(id: string): Promise<Job | undefined> {
     const job = this.jobs.get(id);
     return job ? this.clone(job) : undefined;
+  }
+
+  async getJobs(): Promise<Job[]> {
+    return Array.from(this.jobs.values()).map(job => this.clone(job));
   }
 
   async getDueJobs(now: number, limit: number): Promise<Job[]> {

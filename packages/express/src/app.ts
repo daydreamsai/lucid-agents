@@ -37,12 +37,7 @@ export type CreateAgentAppOptions = {
 export async function createAgentApp(
   runtime: AgentRuntime,
   opts?: CreateAgentAppOptions
-): Promise<CreateAgentAppReturn<
-  Express,
-  AgentRuntime,
-  AgentRuntime['agent']
->> {
-
+): Promise<CreateAgentAppReturn<Express, AgentRuntime, AgentRuntime['agent']>> {
   // Require HTTP extension - runtime must have handlers
   if (!runtime.handlers) {
     throw new Error(
@@ -63,6 +58,7 @@ export async function createAgentApp(
       entrypoint,
       kind: 'invoke',
       payments: runtime.payments?.config,
+      runtime,
     });
 
     app.post(
@@ -76,6 +72,7 @@ export async function createAgentApp(
       entrypoint,
       kind: 'stream',
       payments: runtime.payments?.config,
+      runtime,
     });
 
     app.post(
@@ -107,10 +104,12 @@ export async function createAgentApp(
   const addEntrypoint = <
     TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
     TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
-  >(def: EntrypointDef<TInput, TOutput>): void => {
+  >(
+    def: EntrypointDef<TInput, TOutput>
+  ): void => {
     runtime.entrypoints.add(def);
-    const entrypoint = runtime
-      .entrypoints.snapshot()
+    const entrypoint = runtime.entrypoints
+      .snapshot()
       .find(item => item.key === def.key);
     if (!entrypoint) {
       throw new Error(`Failed to register entrypoint "${def.key}"`);
@@ -129,11 +128,7 @@ export async function createAgentApp(
     runtime,
     agent: runtime.agent,
     addEntrypoint,
-  } as CreateAgentAppReturn<
-    Express,
-    AgentRuntime,
-    AgentRuntime['agent']
-  >;
+  } as CreateAgentAppReturn<Express, AgentRuntime, AgentRuntime['agent']>;
 }
 
 function createRouteHandler(

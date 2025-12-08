@@ -59,7 +59,7 @@
     "@lucid-agents/wallet": "workspace:*",
     "x402-fetch": "catalog:",
     "x402": "^0.7.1",
-    "viem": "^2.38.5",
+    "viem": "catalog:",
     "@ax-llm/ax": "^14.0.37",
     "@ax-llm/ax-tools": "^14.0.37"
   },

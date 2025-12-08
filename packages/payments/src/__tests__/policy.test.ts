@@ -3,18 +3,20 @@ import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
 import {
   evaluateRecipient,
   evaluateRateLimit,
-  evaluateSpendingLimits,
+  evaluateOutgoingLimits,
   evaluatePolicyGroups,
 } from '../policy';
-import { createSpendingTracker } from '../spending-tracker';
+import { createPaymentTracker } from '../payment-tracker';
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createRateLimiter } from '../rate-limiter';
 
 describe('Policy Evaluation', () => {
-  let spendingTracker: ReturnType<typeof createSpendingTracker>;
+  let paymentTracker: ReturnType<typeof createPaymentTracker>;
   let rateLimiter: ReturnType<typeof createRateLimiter>;
 
   beforeEach(() => {
-    spendingTracker = createSpendingTracker();
+    const storage = createInMemoryPaymentStorage();
+    paymentTracker = createPaymentTracker(storage);
     rateLimiter = createRateLimiter();
   });
 
@@ -71,7 +73,11 @@ describe('Policy Evaluation', () => {
         allowedRecipients: ['https://allowed.example.com'],
       };
 
-      const result = evaluateRecipient(group, undefined, 'not-allowed.example.com');
+      const result = evaluateRecipient(
+        group,
+        undefined,
+        'not-allowed.example.com'
+      );
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('whitelist');
     });
@@ -118,15 +124,15 @@ describe('Policy Evaluation', () => {
     });
   });
 
-  describe('evaluateSpendingLimits', () => {
-    it('should allow when no spending limits configured', () => {
+  describe('evaluateOutgoingLimits', () => {
+    it('should allow when no outgoing limits configured', async () => {
       const group: PaymentPolicyGroup = {
         name: 'test',
       };
 
-      const result = evaluateSpendingLimits(
+      const result = await evaluateOutgoingLimits(
         group,
-        spendingTracker,
+        paymentTracker,
         undefined,
         undefined,
         100_000_000n
@@ -134,44 +140,42 @@ describe('Policy Evaluation', () => {
       expect(result.allowed).toBe(true);
     });
 
-    it('should enforce per-request limit', () => {
+    it('should enforce per-request limit', async () => {
       const group: PaymentPolicyGroup = {
         name: 'test',
-        spendingLimits: {
+        outgoingLimits: {
           global: {
-            maxPaymentUsd: 10.0, // 10 USDC per request
+            maxPaymentUsd: 10.0,
           },
         },
       };
 
-      const result = evaluateSpendingLimits(
+      const result = await evaluateOutgoingLimits(
         group,
-        spendingTracker,
+        paymentTracker,
         undefined,
         undefined,
-        15_000_000n // 15 USDC (over limit)
+        15_000_000n
       );
       expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('Per-request spending limit exceeded');
+      expect(result.reason).toContain('Per-request outgoing limit exceeded');
     });
 
-    it('should enforce total spending limit', () => {
+    it('should enforce total outgoing limit', async () => {
       const group: PaymentPolicyGroup = {
         name: 'test',
-        spendingLimits: {
+        outgoingLimits: {
           global: {
-            maxTotalUsd: 100.0, // 100 USDC total
+            maxTotalUsd: 100.0,
           },
         },
       };
 
-      // Record some spending
-      spendingTracker.recordSpending('test', 'global', 80_000_000n); // 80 USDC
+      await paymentTracker.recordOutgoing('test', 'global', 80_000_000n);
 
-      // Try to spend 30 USDC more (would exceed 100 USDC limit)
-      const result = evaluateSpendingLimits(
+      const result = await evaluateOutgoingLimits(
         group,
-        spendingTracker,
+        paymentTracker,
         undefined,
         undefined,
         30_000_000n
@@ -179,10 +183,10 @@ describe('Policy Evaluation', () => {
       expect(result.allowed).toBe(false);
     });
 
-    it('should prefer endpoint limit over target limit over global', () => {
+    it('should prefer endpoint limit over target limit over global', async () => {
       const group: PaymentPolicyGroup = {
         name: 'test',
-        spendingLimits: {
+        outgoingLimits: {
           global: {
             maxPaymentUsd: 100.0,
           },
@@ -199,13 +203,14 @@ describe('Policy Evaluation', () => {
         },
       };
 
-      const endpointUrl = 'https://target.example.com/entrypoints/process/invoke';
-      const result = evaluateSpendingLimits(
+      const endpointUrl =
+        'https://target.example.com/entrypoints/process/invoke';
+      const result = await evaluateOutgoingLimits(
         group,
-        spendingTracker,
+        paymentTracker,
         'https://target.example.com',
         endpointUrl,
-        25_000_000n // 25 USDC (over endpoint limit but under target/global)
+        25_000_000n
       );
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('process/invoke');
@@ -213,11 +218,11 @@ describe('Policy Evaluation', () => {
   });
 
   describe('evaluatePolicyGroups', () => {
-    it('should pass when all groups pass', () => {
+    it('should pass when all groups pass', async () => {
       const groups: PaymentPolicyGroup[] = [
         {
           name: 'group1',
-          spendingLimits: {
+          outgoingLimits: {
             global: { maxPaymentUsd: 100.0 },
           },
         },
@@ -227,9 +232,9 @@ describe('Policy Evaluation', () => {
         },
       ];
 
-      const result = evaluatePolicyGroups(
+      const result = await evaluatePolicyGroups(
         groups,
-        spendingTracker,
+        paymentTracker,
         rateLimiter,
         'https://allowed.example.com',
         undefined,
@@ -240,11 +245,11 @@ describe('Policy Evaluation', () => {
       expect(result.allowed).toBe(true);
     });
 
-    it('should fail when any group fails', () => {
+    it('should fail when any group fails', async () => {
       const groups: PaymentPolicyGroup[] = [
         {
           name: 'group1',
-          spendingLimits: {
+          outgoingLimits: {
             global: { maxPaymentUsd: 10.0 },
           },
         },
@@ -254,13 +259,13 @@ describe('Policy Evaluation', () => {
         },
       ];
 
-      const result = evaluatePolicyGroups(
+      const result = await evaluatePolicyGroups(
         groups,
-        spendingTracker,
+        paymentTracker,
         rateLimiter,
         'https://allowed.example.com',
         undefined,
-        15_000_000n, // Over spending limit
+        15_000_000n,
         undefined,
         'allowed.example.com'
       );
@@ -269,4 +274,3 @@ describe('Policy Evaluation', () => {
     });
   });
 });
-

@@ -7,7 +7,7 @@
     "dependencies": {
       "@lucid-agents/identity": "latest",
       "@lucid-agents/wallet": "latest",
-      "viem": "^2.21.26"
+      "viem": "^2.41.2"
     }
   },
   "wizard": {

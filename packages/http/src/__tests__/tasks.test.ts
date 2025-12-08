@@ -55,7 +55,11 @@ const makeMockRuntime = (
   return {
     agent: {
       config: { meta },
+      addEntrypoint: (def: EntrypointDef) => {
+        entrypoints.set(def.key, def);
+      },
       getEntrypoint: (key: string) => entrypoints.get(key),
+      listEntrypoints: () => Array.from(entrypoints.values()),
       invoke: invokeFn || defaultInvoke,
     },
     entrypoints: {
