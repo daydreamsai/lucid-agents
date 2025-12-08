@@ -5,6 +5,7 @@ import type { EntrypointDef } from '../core';
 import type { AgentRuntime } from '../core';
 import type { Usage } from '../core';
 import type { FetchFunction } from '../http';
+import type { AP2ExtensionDescriptor } from '../ap2';
 
 /**
  * Metadata describing an agent.
@@ -71,7 +72,7 @@ export type AgentCapabilities = {
   pushNotifications?: boolean;
   stateTransitionHistory?: boolean;
   extensions?: Array<
-    import('../ap2').AP2ExtensionDescriptor | Record<string, unknown>
+    AP2ExtensionDescriptor | Record<string, unknown>
   >;
 };
 

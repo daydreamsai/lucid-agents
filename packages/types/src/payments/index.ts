@@ -1,5 +1,5 @@
 import type { Network, Resource } from 'x402/types';
-import type { AgentRuntime } from '../core';
+import type { AgentRuntime, EntrypointDef } from '../core';
 
 /**
  * Solana address type (base58 encoded).
@@ -178,10 +178,14 @@ export type PaymentsRuntime = {
   readonly config: PaymentsConfig;
   readonly isActive: boolean;
   requirements: (
-    entrypoint: import('../core').EntrypointDef,
+    entrypoint: EntrypointDef,
     kind: 'invoke' | 'stream'
   ) => RuntimePaymentRequirement;
-  activate: (entrypoint: import('../core').EntrypointDef) => void;
+  activate: (entrypoint: EntrypointDef) => void;
+  resolvePrice: (
+    entrypoint: EntrypointDef,
+    which: 'invoke' | 'stream'
+  ) => string | null;
   /** Payment tracker for bi-directional payment tracking (outgoing and incoming) */
   readonly paymentTracker?: unknown; // PaymentTracker instance (type exported from payments package)
   /** Optional rate limiter for rate limiting (only present if policy groups have rate limits) */

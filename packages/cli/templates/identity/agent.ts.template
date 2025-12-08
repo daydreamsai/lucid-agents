@@ -4,7 +4,7 @@ import { http } from "@lucid-agents/http";
 import { wallets } from "@lucid-agents/wallet";
 import { walletsFromEnv } from "@lucid-agents/wallet";
 import { identity, identityFromEnv } from "@lucid-agents/identity";
-import { createAgentIdentity, getTrustConfig } from "@lucid-agents/identity";
+import { createAgentIdentity, getTrustConfig, generateAgentMetadata } from "@lucid-agents/identity";
 
 {{TEMPLATE_PRE_SETUP}}
 const agent = await createAgent({
@@ -41,7 +41,6 @@ if (identityResult.didRegister) {
   // IMPORTANT: After registration, you MUST host the ERC-8004 metadata at the tokenURI
   // The tokenURI points to: https://{domain}/.well-known/agent-metadata.json
   // This metadata is what gets stored on-chain and allows others to verify your agent's identity
-  const { generateAgentMetadata } = await import("@lucid-agents/identity");
   const metadata = generateAgentMetadata(identityResult, {
     name: process.env.AGENT_NAME,
     description: process.env.AGENT_DESCRIPTION,

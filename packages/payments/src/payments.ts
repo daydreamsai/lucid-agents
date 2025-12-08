@@ -10,6 +10,8 @@ import type {
   PaymentRequirement,
   RuntimePaymentRequirement,
   PaymentPolicyGroup,
+  PaymentsRuntime,
+  PaymentStorageConfig,
 } from '@lucid-agents/types/payments';
 import { resolvePrice } from './pricing';
 import { createPaymentTracker, type PaymentTracker } from './payment-tracker';
@@ -165,7 +167,7 @@ export const paymentRequiredResponse = (
  * Defaults to SQLite if no storage config is provided.
  */
 function createStorageFromConfig(
-  storageConfig?: import('@lucid-agents/types/payments').PaymentStorageConfig
+  storageConfig?: PaymentStorageConfig
 ): PaymentStorage {
   if (!storageConfig) {
     // Default: SQLite
@@ -192,7 +194,7 @@ function createStorageFromConfig(
 
 export function createPaymentsRuntime(
   paymentsOption: PaymentsConfig | false | undefined
-): import('@lucid-agents/types/payments').PaymentsRuntime | undefined {
+): PaymentsRuntime | undefined {
   const config: PaymentsConfig | undefined =
     paymentsOption === false ? undefined : paymentsOption;
 
@@ -285,6 +287,9 @@ export function createPaymentsRuntime(
       if (entrypointHasExplicitPrice(entrypoint)) {
         isActive = true;
       }
+    },
+    resolvePrice(entrypoint: EntrypointDef, which: 'invoke' | 'stream') {
+      return resolvePrice(entrypoint, config, which);
     },
     async getFetchWithPayment(
       runtime: AgentRuntime,

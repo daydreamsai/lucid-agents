@@ -1,4 +1,3 @@
-import { resolvePrice } from '@lucid-agents/payments';
 import type { AgentMeta } from '@lucid-agents/types/a2a';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { html } from 'hono/html';
@@ -12,6 +11,7 @@ type LandingPageOptions = {
   origin: string;
   entrypoints: EntrypointDef[];
   activePayments?: PaymentsConfig;
+  resolvePrice?: (entrypoint: EntrypointDef, which: 'invoke' | 'stream') => string | null;
   manifestPath: string;
   faviconDataUrl: string;
   x402ClientExample: string;
@@ -168,6 +168,7 @@ export const renderLandingPage = ({
   origin,
   entrypoints,
   activePayments,
+  resolvePrice,
   manifestPath,
   faviconDataUrl,
   x402ClientExample,
@@ -752,13 +753,9 @@ export const renderLandingPage = ({
                     );
                     const description =
                       entrypoint.description ?? 'No description provided yet.';
-                    const invokePrice = resolvePrice(
-                      entrypoint,
-                      activePayments,
-                      'invoke'
-                    );
+                    const invokePrice = resolvePrice?.(entrypoint, 'invoke') ?? null;
                     const streamPrice = streaming
-                      ? resolvePrice(entrypoint, activePayments, 'stream')
+                      ? resolvePrice?.(entrypoint, 'stream') ?? null
                       : undefined;
                     const hasPricing = Boolean(invokePrice || streamPrice);
                     const network = entrypoint.network ?? defaultNetwork;

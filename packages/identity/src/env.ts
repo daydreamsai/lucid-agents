@@ -1,7 +1,9 @@
+import type { TrustConfig } from '@lucid-agents/types/identity';
+
 import { parseBoolean } from './validation';
 
 export type IdentityConfig = {
-  trust?: import('@lucid-agents/types/identity').TrustConfig;
+  trust?: TrustConfig;
   domain?: string;
   autoRegister?: boolean;
   rpcUrl?: string;

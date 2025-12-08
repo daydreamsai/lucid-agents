@@ -33,8 +33,6 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "@lucid-agents/core": "workspace:*",
-    "@lucid-agents/payments": "workspace:*",
     "hono": "catalog:"
   },
   "peerDependencies": {

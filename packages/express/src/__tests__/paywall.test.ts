@@ -281,7 +281,6 @@ describe('Express Paywall - Incoming Payment Recording', () => {
   });
 
   it('normalizes array headers to single string values', async () => {
-    const { extractSenderDomain } = await import('@lucid-agents/payments');
 
     // Test normalization logic directly
     const normalizeHeader = (

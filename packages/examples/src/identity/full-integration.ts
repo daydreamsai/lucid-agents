@@ -18,7 +18,11 @@
  */
 
 import { createAgent } from '@lucid-agents/core';
-import { createAgentIdentity } from '@lucid-agents/identity';
+import {
+  createAgentIdentity,
+  type FeedbackEntry,
+  hashValidationRequest,
+} from '@lucid-agents/identity';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
 async function main() {
@@ -265,7 +269,6 @@ async function main() {
     console.log(`   Request URI: ${requestUri}`);
 
     // Compute request hash to check status
-    const { hashValidationRequest } = await import('@lucid-agents/identity');
     requestHash = hashValidationRequest(requestUri);
 
     // 3.4: Get validation status (read)
@@ -376,8 +379,7 @@ async function main() {
 
   // 4.3: Give feedback (write) - Agent 2 gives feedback to Agent 1
   console.log('\n4.3: Giving feedback (Agent 2 -> Agent 1)...');
-  let feedbackEntry: import('@lucid-agents/identity').FeedbackEntry | null =
-    null;
+  let feedbackEntry: FeedbackEntry | null = null;
   let lastIndex = 0n;
   let clientAddress: `0x${string}` | null = null;
 

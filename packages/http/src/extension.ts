@@ -154,6 +154,7 @@ export function http(
                 origin,
                 entrypoints,
                 activePayments,
+                resolvePrice: runtime.payments?.resolvePrice,
                 manifestPath,
                 faviconDataUrl: faviconDataUrl!,
                 x402ClientExample,
