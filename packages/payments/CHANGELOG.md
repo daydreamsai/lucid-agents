@@ -1,5 +1,21 @@
 # @lucid-agents/payments
 
+## 1.10.1
+
+### Patch Changes
+
+- 8b1afb7: Fix circular dependencies and inline type imports
+  - **HTTP package**: Removed circular dependencies on `@lucid-agents/core` and `@lucid-agents/payments` by exposing `resolvePrice` on PaymentsRuntime instead of importing from payments package
+  - **Payments package**: Added `resolvePrice` method to PaymentsRuntime for use by extensions
+  - **Types package**: Fixed inline type imports within types package (payments, a2a) and added `resolvePrice` to PaymentsRuntime type
+  - **Identity package**: Fixed inline type import for TrustConfig
+  - **All packages**: Converted unnecessary dynamic imports to static imports in tests, templates, and examples
+
+  These changes improve code quality and eliminate circular dependencies while maintaining backward compatibility.
+
+- Updated dependencies [8b1afb7]
+  - @lucid-agents/types@1.5.3
+
 ## 1.10.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @lucid-agents/wallet
 
+## 0.5.3
+
+### Patch Changes
+
+- Updated dependencies [8b1afb7]
+  - @lucid-agents/types@1.5.3
+
 ## 0.5.2
 
 ### Patch Changes
