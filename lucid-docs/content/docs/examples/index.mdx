@@ -1,0 +1,87 @@
+---
+title: Examples
+description: Working examples demonstrating Lucid Agents capabilities.
+icon: Code
+---
+
+The `@lucid-agents/examples` package contains working examples that demonstrate real-world usage patterns. Each example is a complete, runnable script.
+
+## Running examples
+
+```bash
+# Clone the repository
+git clone https://github.com/daydreamsai/lucid-agents.git
+cd lucid-agents
+
+# Install dependencies
+bun install
+
+# Build packages
+bun run build:packages
+
+# Run an example
+bun run packages/examples/src/core/full-agent.ts
+```
+
+## Example categories
+
+<Cards>
+  <Card
+    title="Core"
+    description="Full agent setup with HTTP, payments, identity, and streaming"
+    href="/docs/examples/core"
+  />
+  <Card
+    title="Identity"
+    description="ERC-8004 on-chain identity registration and registry operations"
+    href="/docs/examples/identity"
+  />
+  <Card
+    title="Agent-to-Agent"
+    description="Multi-agent composition with discovery and task operations"
+    href="/docs/examples/a2a"
+  />
+  <Card
+    title="Wallet"
+    description="Wallet connectors including thirdweb Engine integration"
+    href="/docs/examples/wallet"
+  />
+  <Card
+    title="Payment Policies"
+    description="Spending limits, rate limiting, and recipient filtering"
+    href="/docs/examples/payment-policies"
+  />
+  <Card
+    title="Scheduler"
+    description="Automated agent hiring and interval-based execution"
+    href="/docs/examples/scheduler"
+  />
+</Cards>
+
+## Environment setup
+
+Most examples require environment variables. Create a `.env` file based on the example's requirements:
+
+```bash
+# Common variables
+FACILITATOR_URL=https://facilitator.x402.org
+PAYMENTS_RECEIVABLE_ADDRESS=0x...
+NETWORK=base-sepolia
+AGENT_WALLET_PRIVATE_KEY=0x...
+
+# For identity examples
+RPC_URL=https://sepolia.base.org
+CHAIN_ID=84532
+AGENT_DOMAIN=my-agent.example.com
+```
+
+## What you'll learn
+
+| Example | Key concepts |
+|---------|--------------|
+| **Full Agent** | Complete agent with all extensions, streaming entrypoints |
+| **Identity Quick Start** | Simplest path to on-chain registration |
+| **A2A Integration** | Agent discovery, task operations, multi-turn conversations |
+| **Thirdweb Wallets** | Enterprise wallet management with thirdweb Engine |
+| **Payment Policies** | Spending limits, allowlists, blocklists |
+| **Scheduler** | Automated agent invocation with payments |

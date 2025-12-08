@@ -1,0 +1,225 @@
+---
+title: Core Examples
+description: Full agent setup with HTTP, payments, identity, and streaming.
+icon: Cpu
+---
+
+The core examples demonstrate how to build a complete agent with all major capabilities.
+
+## Full Agent
+
+**File:** `packages/examples/src/core/full-agent.ts`
+
+This example shows how to build an agent with:
+- HTTP extension for REST API
+- Payments (x402) for monetization
+- Identity (ERC-8004) for on-chain identity
+- Streaming and standard entrypoints
+
+### The code
+
+```typescript title="full-agent.ts"
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { identity } from '@lucid-agents/identity';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+import { z } from 'zod';
+
+async function main() {
+  // 1. Build agent with extensions
+  const agentBuilder = createAgent({
+    name: 'full-agent-example',
+    version: '1.0.0',
+    description: 'Demonstrates HTTP, payments, identity, and streaming capabilities',
+  })
+    .use(http())
+    .use(wallets({ config: walletsFromEnv() }));
+
+  // 2. Add payments if configured
+  const paymentsConfig = paymentsFromEnv();
+  if (paymentsConfig) {
+    agentBuilder.use(payments({ config: paymentsConfig }));
+  }
+
+  // 3. Add identity if wallet is configured
+  const walletsConfig = walletsFromEnv();
+  if (walletsConfig?.agent) {
+    agentBuilder.use(
+      identity({
+        config: {
+          domain: process.env.AGENT_DOMAIN,
+          autoRegister: process.env.REGISTER_IDENTITY === 'true',
+          rpcUrl: process.env.RPC_URL,
+          chainId: process.env.CHAIN_ID ? Number(process.env.CHAIN_ID) : undefined,
+        },
+      })
+    );
+  }
+
+  // 4. Build the agent runtime
+  const agent = await agentBuilder.build();
+
+  // 5. Create Hono app
+  const { app, addEntrypoint } = await createAgentApp(agent);
+
+  // 6. Add simple echo entrypoint (with optional pricing)
+  addEntrypoint({
+    key: 'echo',
+    description: 'Echo back the input text',
+    input: z.object({ text: z.string() }),
+    output: z.object({ text: z.string() }),
+    price: paymentsConfig ? '1000' : undefined, // 0.001 USDC if payments enabled
+    handler: async ctx => {
+      const input = ctx.input as { text: string };
+      return {
+        output: { text: input.text },
+        usage: { total_tokens: input.text.length },
+      };
+    },
+  });
+
+  // 7. Add streaming entrypoint (with optional pricing)
+  addEntrypoint({
+    key: 'stream',
+    description: 'Stream characters back one by one',
+    input: z.object({ prompt: z.string() }),
+    streaming: true,
+    price: paymentsConfig ? '2000' : undefined, // 0.002 USDC if payments enabled
+    stream: async (ctx, emit) => {
+      const input = ctx.input as { prompt: string };
+      const prompt = input.prompt;
+
+      // Stream each character
+      for (const char of prompt) {
+        await emit({
+          kind: 'delta',
+          delta: char,
+          mime: 'text/plain',
+        });
+      }
+
+      // Send final text chunk
+      await emit({
+        kind: 'text',
+        text: `\nEchoed: ${prompt}`,
+        mime: 'text/plain',
+      });
+
+      return {
+        output: { done: true },
+        usage: { total_tokens: prompt.length },
+      };
+    },
+  });
+
+  // 8. Start server
+  const port = Number(process.env.PORT ?? 8787);
+  Bun.serve({
+    port,
+    fetch: app.fetch,
+  });
+  console.log(`Agent running at http://localhost:${port}`);
+}
+
+main();
+```
+
+### Key patterns explained
+
+#### Conditional extension loading
+
+Extensions are added conditionally based on environment configuration:
+
+```typescript
+const paymentsConfig = paymentsFromEnv();
+if (paymentsConfig) {
+  agentBuilder.use(payments({ config: paymentsConfig }));
+}
+```
+
+This pattern allows the same code to run in development (without payments) and production (with payments).
+
+#### Streaming entrypoints
+
+Streaming uses the `emit` callback to send chunks:
+
+```typescript
+addEntrypoint({
+  key: 'stream',
+  streaming: true,
+  stream: async (ctx, emit) => {
+    // Emit incremental content
+    await emit({
+      kind: 'delta',
+      delta: 'chunk of text',
+      mime: 'text/plain',
+    });
+
+    // Return final result
+    return {
+      output: { done: true },
+      usage: { total_tokens: 100 },
+    };
+  },
+});
+```
+
+#### Usage tracking
+
+Return `usage` from handlers to track resource consumption:
+
+```typescript
+return {
+  output: { text: input.text },
+  usage: { total_tokens: input.text.length },
+};
+```
+
+### Environment variables
+
+```bash
+# Server
+PORT=8787
+
+# Payments (optional)
+FACILITATOR_URL=https://facilitator.x402.org
+PAYMENTS_RECEIVABLE_ADDRESS=0x...
+NETWORK=base-sepolia
+
+# Identity (optional)
+AGENT_WALLET_PRIVATE_KEY=0x...
+AGENT_DOMAIN=my-agent.example.com
+RPC_URL=https://sepolia.base.org
+CHAIN_ID=84532
+REGISTER_IDENTITY=true
+```
+
+### Running the example
+
+```bash
+# Without payments/identity
+bun run packages/examples/src/core/full-agent.ts
+
+# With payments
+PAYMENTS_RECEIVABLE_ADDRESS=0x... NETWORK=base-sepolia \
+  bun run packages/examples/src/core/full-agent.ts
+```
+
+### Testing
+
+```bash
+# Echo entrypoint
+curl -X POST http://localhost:8787/entrypoints/echo/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"text": "Hello, World!"}}'
+
+# Streaming entrypoint
+curl -X POST http://localhost:8787/entrypoints/stream/stream \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"prompt": "Hello"}}'
+
+# View agent card
+curl http://localhost:8787/.well-known/agent-card.json
+```

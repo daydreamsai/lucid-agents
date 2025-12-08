@@ -1,0 +1,249 @@
+---
+title: Payment Policy Examples
+description: Spending limits, rate limiting, and recipient filtering.
+icon: Shield
+---
+
+The payment policy examples demonstrate how to control agent spending when making payments to other agents. Policies are enforced **before** any payment is made.
+
+## Overview
+
+The examples include a 4-agent system:
+
+| Agent | Port | Purpose |
+|-------|------|---------|
+| **paid-service** | 3001 | Service that accepts payments (whitelisted) |
+| **blocked-domain** | 3002 | Service blocked by domain policy |
+| **blocked-wallet** | 3003 | Service blocked by wallet address |
+| **policy-agent** | 3000 | Consumer that enforces policies |
+
+## Policy Configuration
+
+**File:** `packages/examples/src/payments/payment-policies.json`
+
+```json title="payment-policies.json"
+[
+  {
+    "name": "Daily Spending Limit",
+    "spendingLimits": {
+      "global": {
+        "maxPaymentUsd": 0.10,
+        "maxTotalUsd": 1.00,
+        "windowMs": 86400000
+      }
+    }
+  },
+  {
+    "name": "API Usage Policy",
+    "spendingLimits": {
+      "global": {
+        "maxPaymentUsd": 0.05
+      },
+      "perTarget": {
+        "http://localhost:3001": {
+          "maxPaymentUsd": 0.10,
+          "maxTotalUsd": 0.50
+        }
+      }
+    },
+    "allowedRecipients": ["http://localhost:3001"],
+    "rateLimits": {
+      "maxPayments": 100,
+      "windowMs": 3600000
+    }
+  },
+  {
+    "name": "Blocked Services",
+    "blockedRecipients": [
+      "https://blocked-service.example.com",
+      "0x1234567890123456789012345678901234567890"
+    ]
+  }
+]
+```
+
+### Policy settings explained
+
+| Setting | Description |
+|---------|-------------|
+| `maxPaymentUsd` | Maximum amount for a single payment |
+| `maxTotalUsd` | Maximum total spending in the time window |
+| `windowMs` | Time window in milliseconds (86400000 = 24 hours) |
+| `perTarget` | Per-recipient spending limits |
+| `allowedRecipients` | Whitelist of allowed domains/addresses |
+| `blockedRecipients` | Blacklist of blocked domains/addresses |
+| `rateLimits.maxPayments` | Maximum number of payments in window |
+| `rateLimits.windowMs` | Rate limit time window |
+
+## Policy Agent
+
+**File:** `packages/examples/src/payments/policy-agent/index.ts`
+
+The policy agent demonstrates how to enforce policies when making payments.
+
+### Loading policies
+
+```typescript title="policy-agent/index.ts"
+import { join } from 'node:path';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import {
+  createRuntimePaymentContext,
+  payments,
+  paymentsFromEnv,
+} from '@lucid-agents/payments';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const agent = await createAgent({
+  name: 'policy-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(
+    payments({
+      config: paymentsFromEnv(),
+      policies: join(import.meta.dir, '..', 'payment-policies.json'),
+    })
+  )
+  .use(wallets({ config: walletsFromEnv() }))
+  .build();
+```
+
+### Making policy-enforced payments
+
+```typescript
+addEntrypoint({
+  key: 'delegate-with-policy',
+  input: z.object({
+    targetUrl: z.string().url(),
+    endpoint: z.string(),
+    data: z.unknown(),
+  }),
+  handler: async ctx => {
+    const runtime = ctx.runtime;
+
+    // Create payment context with policy enforcement
+    const paymentContext = await createRuntimePaymentContext({
+      runtime,
+      network: runtime.payments?.config.network || 'base-sepolia',
+    });
+
+    // Use fetchWithPayment - policies automatically enforced
+    const response = await paymentContext.fetchWithPayment(
+      `${ctx.input.targetUrl}/entrypoints/${ctx.input.endpoint}/invoke`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ctx.input.data),
+      }
+    );
+
+    // 403 = policy violation (no payment made)
+    if (response.status === 403) {
+      const error = await response.json();
+      throw new Error(error.error?.message || 'Payment blocked by policy');
+    }
+
+    const result = await response.json();
+    return { output: { result, paymentPolicy: 'Payment successful' } };
+  },
+});
+```
+
+### Testing different scenarios
+
+The policy agent includes test entrypoints:
+
+```typescript
+// Test spending limits
+addEntrypoint({
+  key: 'test-policies',
+  handler: async ctx => {
+    // Call echo ($0.01) - succeeds (under $0.10 limit)
+    // Call process ($0.05) - succeeds (under $0.10 limit)
+    // Call expensive ($0.15) - BLOCKED (exceeds $0.10 limit)
+  },
+});
+
+// Test domain blocking
+addEntrypoint({
+  key: 'test-blocked-domain',
+  handler: async ctx => {
+    // Call localhost:3002 - BLOCKED (not in allowedRecipients)
+  },
+});
+
+// Test wallet address blocking
+addEntrypoint({
+  key: 'test-blocked-wallet',
+  handler: async ctx => {
+    // Call agent with blocked address - BLOCKED (in blockedRecipients)
+  },
+});
+```
+
+## Running the examples
+
+### Start all agents
+
+```bash
+# Terminal 1: Paid service (whitelisted)
+bun run packages/examples/src/payments/paid-service
+
+# Terminal 2: Blocked domain service
+bun run packages/examples/src/payments/blocked-domain
+
+# Terminal 3: Blocked wallet service
+bun run packages/examples/src/payments/blocked-wallet
+
+# Terminal 4: Policy agent
+bun run packages/examples/src/payments/policy-agent
+```
+
+### Test policy enforcement
+
+```bash
+# Test spending limits
+curl -X POST http://localhost:3000/entrypoints/test-policies/invoke \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Test domain blocking
+curl -X POST http://localhost:3000/entrypoints/test-blocked-domain/invoke \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Test wallet blocking
+curl -X POST http://localhost:3000/entrypoints/test-blocked-wallet/invoke \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+### Expected output
+
+```
+[Test 1] Calling echo ($0.01) - should succeed
+[PASS] Success: { output: { echoed: "Hello!" } }
+
+[Test 2] Calling process ($0.05) - should succeed
+[PASS] Success: { output: { processed: "test-item" } }
+
+[Test 3] Calling expensive ($0.15) - should be BLOCKED
+[PASS] Correctly blocked by policy: Exceeds maximum payment limit of $0.10
+```
+
+## Why use payment policies?
+
+| Risk | Policy solution |
+|------|-----------------|
+| Runaway spending | `maxTotalUsd` caps total spend |
+| Single expensive call | `maxPaymentUsd` caps per-payment |
+| Unknown services | `allowedRecipients` whitelist |
+| Malicious addresses | `blockedRecipients` blacklist |
+| Rate abuse | `rateLimits` throttle calls |
+
+Policies protect your agent from:
+- Overspending on a single call
+- Accumulating too much spend over time
+- Paying untrusted or malicious services
+- Being rate-limited or blacklisted by making too many calls

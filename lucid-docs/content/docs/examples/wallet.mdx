@@ -1,0 +1,207 @@
+---
+title: Wallet Examples
+description: Wallet connectors including thirdweb Engine integration.
+icon: Wallet
+---
+
+The wallet examples demonstrate how to configure different wallet types for agent operations.
+
+## Thirdweb Engine Wallets
+
+**File:** `packages/examples/src/wallet/thirdweb-engine-wallets.ts`
+
+This example shows how to use thirdweb Engine server wallets with Lucid Agents. Thirdweb Engine provides managed wallets that sign transactions through their API, not locally.
+
+### The code
+
+```typescript title="thirdweb-engine-wallets.ts"
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { wallets } from '@lucid-agents/wallet';
+import { baseSepolia as thirdwebBaseSepolia } from 'thirdweb/chains';
+import type { WalletClient } from 'viem';
+import {
+  createPublicClient,
+  erc20Abi,
+  http as viemHttp,
+  parseUnits,
+} from 'viem';
+
+async function main() {
+  // Step 1: Create agent with thirdweb wallet configured
+  const agent = await createAgent({
+    name: 'my-agent',
+    version: '0.1.0',
+    description: 'Agent using thirdweb Engine server wallet',
+  })
+    .use(http())
+    .use(
+      wallets({
+        config: {
+          agent: {
+            type: 'thirdweb',
+            secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+            clientId: process.env.AGENT_WALLET_CLIENT_ID,
+            walletLabel: process.env.AGENT_WALLET_LABEL || 'agent-wallet',
+            chainId: thirdwebBaseSepolia.id, // 84532
+          },
+        },
+      })
+    )
+    .build();
+
+  // Step 2: Get wallet address (triggers initialization)
+  console.log('Initializing wallet...');
+  const address = await agent.wallets.agent.connector.getAddress();
+  console.log('Wallet address:', address);
+
+  // Step 3: Test challenge signing
+  console.log('Testing challenge signing...');
+  const testChallenge = {
+    id: 'test-challenge',
+    credential_id: null,
+    payload: { message: 'Hello from Lucid Agents SDK!' },
+    payload_hash: null,
+    nonce: 'test-nonce',
+    scopes: [],
+    issued_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 3600000).toISOString(),
+    server_signature: null,
+  };
+
+  const signature = await agent.wallets.agent.connector.signChallenge(testChallenge);
+  console.log('Challenge signed:', signature.slice(0, 20) + '...');
+
+  // Step 4: Send ERC20 transaction
+  console.log('Sending USDC transaction...');
+  const USDC_ADDRESS = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+  const RECEIVER = '0x...';
+  const AMOUNT = '0.01';
+
+  const connector = agent.wallets.agent.connector;
+  const capabilities = connector.getCapabilities?.();
+
+  if (!capabilities?.walletClient || !connector.getWalletClient) {
+    throw new Error('Wallet does not support contract interactions');
+  }
+
+  const walletClient = await connector.getWalletClient() as WalletClient;
+
+  // Create public client for reading
+  const publicClient = createPublicClient({
+    chain: walletClient.chain,
+    transport: viemHttp(),
+  });
+
+  // Send ERC20 transfer
+  const amount = parseUnits(AMOUNT, 6); // USDC has 6 decimals
+
+  const txHash = await walletClient.writeContract({
+    account: walletClient.account,
+    chain: walletClient.chain,
+    address: USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'transfer',
+    args: [RECEIVER, amount],
+  });
+
+  console.log('Transaction hash:', txHash);
+
+  // Wait for confirmation
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash: txHash,
+    timeout: 30000,
+  });
+
+  console.log('Confirmed in block:', receipt.blockNumber.toString());
+}
+
+main();
+```
+
+### Key patterns explained
+
+#### Configuring thirdweb wallet
+
+```typescript
+wallets({
+  config: {
+    agent: {
+      type: 'thirdweb',
+      secretKey: process.env.AGENT_WALLET_SECRET_KEY!,
+      clientId: process.env.AGENT_WALLET_CLIENT_ID,
+      walletLabel: 'agent-wallet',  // Label in thirdweb Engine
+      chainId: 84532,               // Base Sepolia
+    },
+  },
+})
+```
+
+The thirdweb connector:
+1. Connects to thirdweb Engine API
+2. Retrieves or creates a server wallet with the given label
+3. Converts it to a viem-compatible wallet client
+
+#### Checking wallet capabilities
+
+Not all wallets support all operations:
+
+```typescript
+const capabilities = connector.getCapabilities?.();
+
+if (capabilities?.walletClient) {
+  // Can send transactions
+  const client = await connector.getWalletClient();
+}
+
+if (capabilities?.signTypedData) {
+  // Can sign EIP-712 typed data
+}
+```
+
+#### Sending transactions
+
+Use the viem wallet client for contract interactions:
+
+```typescript
+const walletClient = await connector.getWalletClient();
+
+const txHash = await walletClient.writeContract({
+  account: walletClient.account,
+  chain: walletClient.chain,
+  address: CONTRACT_ADDRESS,
+  abi: contractAbi,
+  functionName: 'myFunction',
+  args: [arg1, arg2],
+});
+```
+
+### Environment variables
+
+```bash
+# thirdweb Engine credentials
+AGENT_WALLET_SECRET_KEY=your-engine-secret-key
+AGENT_WALLET_CLIENT_ID=your-client-id
+AGENT_WALLET_LABEL=agent-wallet
+```
+
+### Running the example
+
+```bash
+bun run packages/examples/src/wallet/thirdweb-engine-wallets.ts
+```
+
+### Why use thirdweb Engine?
+
+| Feature | Local wallet | thirdweb Engine |
+|---------|-------------|-----------------|
+| Private key storage | In environment | Managed by thirdweb |
+| Key rotation | Manual | Built-in |
+| Multiple wallets | Multiple keys needed | Label-based |
+| Transaction signing | Local | API-based |
+| Audit logging | DIY | Built-in |
+
+thirdweb Engine is useful for:
+- **Production agents** - Keys never leave thirdweb's infrastructure
+- **Multi-tenant** - Each agent can have its own labeled wallet
+- **Enterprise** - Audit logs, key rotation, access control

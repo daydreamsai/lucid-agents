@@ -1,0 +1,221 @@
+---
+title: Identity Examples
+description: ERC-8004 on-chain identity registration and registry operations.
+icon: Fingerprint
+---
+
+The identity examples demonstrate how to register agents on the ERC-8004 registry and interact with identity, reputation, and validation registries.
+
+## Quick Start
+
+**File:** `packages/examples/src/identity/quick-start.ts`
+
+The simplest way to register your agent on-chain.
+
+### The code
+
+```typescript title="quick-start.ts"
+import { createAgent } from '@lucid-agents/core';
+import { createAgentIdentity, registerAgent } from '@lucid-agents/identity';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+async function main() {
+  // Create a minimal runtime with wallet configuration
+  const agent = await createAgent({
+    name: 'quick-start-agent',
+    version: '1.0.0',
+    description: 'Quick start example agent',
+  })
+    .use(wallets({ config: walletsFromEnv() }))
+    .build();
+
+  // Example 1: Simple registration with env vars
+  console.log('Example 1: Simple Registration');
+  const identity = await createAgentIdentity({
+    runtime: agent,
+    autoRegister: true,
+  });
+
+  console.log('Status:', identity.status);
+
+  if (identity.didRegister) {
+    console.log('Agent registered successfully!');
+    console.log('Transaction:', identity.transactionHash);
+    console.log(
+      'Next step: Host your metadata at:',
+      `https://${identity.domain}/.well-known/agent-metadata.json`
+    );
+  } else if (identity.trust) {
+    console.log('Found existing registration');
+    console.log('Agent ID:', identity.record?.agentId);
+  } else {
+    console.log('No on-chain identity (agent will run without it)');
+  }
+
+  // Example 2: Explicit registration
+  console.log('Example 2: Explicit Registration');
+  const registration = await registerAgent({
+    runtime: agent,
+    domain: 'my-agent.example.com',
+  });
+
+  console.log('Status:', registration.status);
+  if (registration.didRegister) {
+    console.log('TX:', registration.transactionHash);
+  }
+
+  // Example 3: Custom configuration
+  console.log('Example 3: Custom Configuration');
+  const customIdentity = await createAgentIdentity({
+    runtime: agent,
+    domain: 'custom-agent.example.com',
+    autoRegister: true,
+    trustModels: ['feedback', 'tee-attestation'],
+    trustOverrides: {
+      feedbackDataUri: 'https://custom-agent.example.com/feedback.json',
+    },
+  });
+
+  console.log('Status:', customIdentity.status);
+  if (customIdentity.trust) {
+    console.log('Trust models:', customIdentity.trust.trustModels);
+    console.log('Feedback URI:', customIdentity.trust.feedbackDataUri);
+  }
+}
+
+main().catch(console.error);
+```
+
+### Key patterns explained
+
+#### Auto-registration
+
+The simplest path - set `autoRegister: true` and the SDK handles everything:
+
+```typescript
+const identity = await createAgentIdentity({
+  runtime: agent,
+  autoRegister: true,  // Register if not already registered
+});
+```
+
+#### Explicit registration
+
+When you want more control over when registration happens:
+
+```typescript
+const registration = await registerAgent({
+  runtime: agent,
+  domain: 'my-agent.example.com',
+});
+```
+
+#### Custom trust models
+
+Configure which trust models your agent supports:
+
+```typescript
+const identity = await createAgentIdentity({
+  runtime: agent,
+  domain: 'custom-agent.example.com',
+  autoRegister: true,
+  trustModels: ['feedback', 'tee-attestation'],
+  trustOverrides: {
+    feedbackDataUri: 'https://custom-agent.example.com/feedback.json',
+  },
+});
+```
+
+Available trust models:
+- `feedback` - Reputation feedback system
+- `tee-attestation` - Trusted Execution Environment attestation
+- `domain` - Domain ownership verification
+
+### Environment variables
+
+```bash
+# Required
+AGENT_WALLET_PRIVATE_KEY=0x...
+RPC_URL=https://sepolia.base.org
+CHAIN_ID=84532
+
+# Optional
+AGENT_DOMAIN=my-agent.example.com
+```
+
+### Running the example
+
+```bash
+bun run packages/examples/src/identity/quick-start.ts
+```
+
+## Full Integration
+
+**File:** `packages/examples/src/identity/full-integration.ts`
+
+Comprehensive example testing all three registries: Identity, Validation, and Reputation.
+
+### What it demonstrates
+
+1. **Identity Registry**
+   - Registration and lookups
+   - Metadata management
+   - Multiple agents per wallet
+
+2. **Validation Registry**
+   - Creating validation requests
+   - Submitting validation responses
+   - Querying validation status
+
+3. **Reputation Registry**
+   - Giving feedback to agents
+   - Responding to feedback
+   - Querying reputation summaries
+
+### Key operations
+
+```typescript
+// Identity Registry
+const agent = await registry.identity.get(domain);
+const metadata = await registry.identity.getMetadata(agentId);
+await registry.identity.setMetadata(agentId, { name: 'Updated' });
+
+// Validation Registry
+const summary = await registry.validation.getSummary(agentId);
+await registry.validation.createRequest(agentId, { ... });
+await registry.validation.submitResponse(requestId, { ... });
+
+// Reputation Registry
+const reputation = await registry.reputation.getSummary(agentId);
+await registry.reputation.giveFeedback(agentId, { score: 5, comment: '...' });
+await registry.reputation.appendResponse(feedbackId, { ... });
+```
+
+## Test Clients
+
+**File:** `packages/examples/src/identity/test-clients.ts`
+
+A quick validation that all registry clients are properly initialized.
+
+```typescript
+import { createAgentIdentity } from '@lucid-agents/identity';
+
+const identity = await createAgentIdentity({ runtime: agent });
+
+// Access individual clients
+console.log('Identity client:', identity.clients.identity.address);
+console.log('Reputation client:', identity.clients.reputation.address);
+console.log('Validation client:', identity.clients.validation.address);
+
+// Check chain configuration
+console.log('Chain ID:', identity.clients.identity.chainId);
+```
+
+### Why this matters
+
+The test clients example verifies:
+- Registry contract addresses are correctly configured
+- RPC connection is working
+- Client methods are available
+
+This is useful for debugging configuration issues before running full integration tests.

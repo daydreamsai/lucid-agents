@@ -1,0 +1,249 @@
+---
+title: A2A Examples
+description: Multi-agent composition with discovery and task operations.
+icon: Users
+---
+
+The A2A (Agent-to-Agent) examples demonstrate how agents discover each other, communicate, and compose into complex workflows.
+
+## Full Integration (Three Agents)
+
+**File:** `packages/examples/src/a2a/full-integration.ts`
+
+This comprehensive example demonstrates the **facilitator pattern** where an agent acts as both server and client:
+
+```
+Agent 3 (Client) → Agent 2 (Facilitator) → Agent 1 (Worker)
+                         ↓
+                 Results flow back
+```
+
+### Architecture
+
+| Agent | Role | Description |
+|-------|------|-------------|
+| Agent 1 | Worker | Does the actual work (echo, process, stream) |
+| Agent 2 | Facilitator | Receives calls, delegates to Agent 1, returns results |
+| Agent 3 | Client | Initiates requests to Agent 2 |
+
+### The code
+
+```typescript title="full-integration.ts"
+import {
+  a2a,
+  fetchAgentCard,
+  findSkill,
+  hasCapability,
+  supportsPayments,
+  waitForTask,
+} from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { z } from 'zod';
+
+// Agent 1: Worker
+const agent1 = await createAgent({
+  name: 'worker-agent',
+  version: '1.0.0',
+  description: 'Worker agent that processes tasks',
+})
+  .use(http())
+  .use(a2a())
+  .build();
+
+const { app: app1, addEntrypoint: addEntrypoint1 } = await createAgentApp(agent1);
+
+addEntrypoint1({
+  key: 'echo',
+  description: 'Echoes back the input text',
+  input: z.object({ text: z.string() }),
+  output: z.object({ text: z.string() }),
+  handler: async ctx => {
+    console.log(`[Agent 1] echo called with: "${ctx.input.text}"`);
+    return {
+      output: { text: `Echo: ${ctx.input.text}` },
+    };
+  },
+});
+
+// Agent 2: Facilitator (both server AND client)
+const agent2 = await createAgent({
+  name: 'facilitator-agent',
+  version: '1.0.0',
+  description: 'Facilitator that proxies to worker',
+})
+  .use(http())
+  .use(a2a())
+  .build();
+
+const { app: app2, addEntrypoint: addEntrypoint2, runtime: runtime2 } =
+  await createAgentApp(agent2);
+
+// Get A2A client from facilitator
+const a2aClient = runtime2.a2a;
+
+addEntrypoint2({
+  key: 'echo',
+  description: 'Proxies echo requests to worker agent',
+  input: z.object({ text: z.string() }),
+  output: z.object({ text: z.string() }),
+  handler: async ctx => {
+    console.log(`[Agent 2] Received request, forwarding to Agent 1`);
+
+    // Fetch Agent 1's card
+    const agent1Card = await a2aClient.fetchCard('http://localhost:8787');
+
+    // Create task on Agent 1
+    const { taskId } = await a2aClient.client.sendMessage(
+      agent1Card,
+      'echo',
+      { text: ctx.input.text }
+    );
+
+    // Wait for result
+    const task = await waitForTask(a2aClient.client, agent1Card, taskId);
+
+    if (task.status === 'failed') {
+      throw new Error(task.error?.message || 'Task failed');
+    }
+
+    // Validate output with Zod (runtime safety)
+    const outputSchema = z.object({ text: z.string() });
+    const validatedOutput = outputSchema.parse(task.result?.output);
+
+    return { output: validatedOutput };
+  },
+});
+
+// Agent 3: Client (no HTTP server needed)
+const agent3 = await createAgent({
+  name: 'client-agent',
+  version: '1.0.0',
+})
+  .use(a2a())
+  .build();
+
+const a2a3 = agent3.a2a;
+
+// Call Agent 2, which calls Agent 1
+const card2 = await a2a3.fetchCard('http://localhost:8788');
+const { taskId } = await a2a3.client.sendMessage(card2, 'echo', {
+  text: 'Hello from Agent 3!',
+});
+
+const result = await waitForTask(a2a3.client, card2, taskId);
+console.log('Final result:', result.result?.output);
+// Output: { text: "Echo: Hello from Agent 3!" }
+```
+
+### Key patterns explained
+
+#### Agent discovery
+
+Fetch another agent's capabilities at runtime:
+
+```typescript
+const card = await fetchAgentCard('https://other-agent.com');
+
+console.log(card.name);                    // Agent name
+console.log(card.skills);                  // Available entrypoints
+console.log(hasCapability(card, 'streaming'));  // Check capabilities
+console.log(supportsPayments(card));       // Check payment support
+```
+
+#### Task-based operations
+
+Create a task and poll for results:
+
+```typescript
+// Create task (returns immediately)
+const { taskId, status } = await client.sendMessage(card, 'skillId', input);
+// status is 'running'
+
+// Wait for completion
+const task = await waitForTask(client, card, taskId);
+
+if (task.status === 'completed') {
+  console.log(task.result?.output);
+} else if (task.status === 'failed') {
+  console.error(task.error?.message);
+}
+```
+
+#### Multi-turn conversations
+
+Group related tasks with `contextId`:
+
+```typescript
+const contextId = `conversation-${Date.now()}`;
+
+// First message
+await client.sendMessage(card, 'chat', { text: 'Hello' }, undefined, { contextId });
+
+// Second message in same conversation
+await client.sendMessage(card, 'chat', { text: 'Tell me more' }, undefined, { contextId });
+
+// List all messages in conversation
+const { tasks } = await client.listTasks(card, { contextId });
+```
+
+#### Task cancellation
+
+Cancel a running task:
+
+```typescript
+try {
+  const cancelled = await client.cancelTask(card, taskId);
+  console.log('Cancelled:', cancelled.status);  // 'cancelled'
+} catch (error) {
+  // Task may have already completed
+  const task = await client.getTask(card, taskId);
+  console.log('Task status:', task.status);
+}
+```
+
+#### Validating remote output
+
+Always validate output from remote agents:
+
+```typescript
+const task = await waitForTask(client, card, taskId);
+
+// Don't trust remote data - validate with Zod
+const outputSchema = z.object({ result: z.number() });
+const validated = outputSchema.parse(task.result?.output);
+```
+
+### Running the example
+
+```bash
+bun run packages/examples/src/a2a/full-integration.ts
+```
+
+### Output
+
+```
+STEP 1: Creating Agent 1 (Worker Agent)
+Agent 1 running at: http://localhost:8787
+
+STEP 2: Creating Agent 2 (Facilitator Agent)
+Agent 2 running at: http://localhost:8788
+
+STEP 3: Creating Agent 3 (Client Agent)
+Agent 3 ready
+
+STEP 6: A2A Composition (Agent 3 -> Agent 2 -> Agent 1)
+[Agent 2] Received request, forwarding to Agent 1
+[Agent 1] echo called with: "Hello from Agent 3!"
+Final result at Agent 3: {"text":"Echo: Hello from Agent 3!"}
+```
+
+### Why this matters
+
+This pattern enables:
+
+- **Agent marketplaces** - Agents discover and call other agents
+- **Supply chains** - Requests flow through multiple specialized agents
+- **Load balancing** - Facilitators can route to different workers
+- **Abstraction** - Clients don't need to know about underlying workers

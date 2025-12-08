@@ -1,0 +1,508 @@
+---
+title: Scheduler Examples
+description: Hiring agents on recurring schedules with automatic payments.
+icon: Clock
+---
+
+The scheduler examples demonstrate how to create scheduled agent invocations with automatic payment handling.
+
+## Hello Interval (Single Agent)
+
+**File:** `packages/examples/src/scheduler/hello-interval.ts`
+
+This example demonstrates the core scheduler pattern: one agent providing a paid service, and a scheduler that "hires" the agent to run on a recurring schedule.
+
+### Architecture
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│  Scheduler      │────▶│  Hello Agent    │
+│  (payer)        │     │  (service)      │
+│                 │     │                 │
+│  Wallet: pays   │     │  Wallet: receives│
+│  every 10s      │     │  $0.01/call     │
+└─────────────────┘     └─────────────────┘
+```
+
+| Component | Role |
+|-----------|------|
+| **Hello Agent** | Paid service that receives payments |
+| **Scheduler Client** | Payer wallet that funds scheduled calls |
+| **Scheduler Runtime** | Manages schedules and executes jobs |
+| **Worker** | Polls for due jobs and invokes them |
+
+### The code
+
+```typescript title="hello-interval.ts"
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import {
+  createRuntimePaymentContext,
+  payments,
+  paymentsFromEnv,
+} from '@lucid-agents/payments';
+import {
+  createMemoryStore,
+  createSchedulerRuntime,
+  createSchedulerWorker,
+} from '@lucid-agents/scheduler';
+import { wallets } from '@lucid-agents/wallet';
+import { z } from 'zod';
+
+async function main() {
+  // Step 1: Create the AGENT (service provider)
+  const serviceAgent = await createAgent({
+    name: 'hello-agent',
+    version: '1.0.0',
+    description: 'A simple agent that says hello (paid service)',
+  })
+    .use(http())
+    .use(payments({ config: paymentsFromEnv() }))
+    .use(a2a())
+    .build();
+
+  const { app, addEntrypoint } = await createAgentApp(serviceAgent);
+
+  addEntrypoint({
+    key: 'hello',
+    description: 'Says hello with a timestamp',
+    price: '0.01',  // $0.01 USDC per call
+    input: z.object({ name: z.string().optional() }),
+    output: z.object({ message: z.string(), timestamp: z.string() }),
+    handler: async ctx => {
+      const input = ctx.input as { name?: string };
+      const name = input.name ?? 'World';
+      const timestamp = new Date().toISOString();
+      console.log(`[agent] Hello, ${name}! at ${timestamp}`);
+      return {
+        output: { message: `Hello, ${name}!`, timestamp },
+      };
+    },
+  });
+
+  const port = 8787;
+  Bun.serve({ port, fetch: app.fetch });
+  console.log(`Agent running at http://localhost:${port}`);
+
+  // Fetch agent card for scheduler
+  const cardResp = await fetch(`http://localhost:${port}/.well-known/agent-card.json`);
+  const agentCard = await cardResp.json();
+
+  // Step 2: Create the SCHEDULER CLIENT (payer)
+  const schedulerClient = await createAgent({
+    name: 'scheduler-client',
+    version: '1.0.0',
+    description: 'Scheduler client that pays for agent calls',
+  })
+    .use(
+      wallets({
+        config: {
+          agent: { type: 'local', privateKey: process.env.AGENT_WALLET_PRIVATE_KEY! },
+        },
+      })
+    )
+    .use(a2a())
+    .build();
+
+  const paymentContext = await createRuntimePaymentContext({
+    runtime: schedulerClient,
+    network: process.env.NETWORK || 'base-sepolia',
+  });
+
+  // Step 3: Create the SCHEDULER runtime
+  const scheduler = createSchedulerRuntime({
+    store: createMemoryStore(),
+    runtime: schedulerClient,
+    paymentContext,
+    fetchAgentCard: async () => agentCard,
+  });
+
+  // Step 4: Create a HIRE (schedule)
+  const { hire, job } = await scheduler.createHire({
+    agentCardUrl: `http://localhost:${port}`,
+    entrypointKey: 'hello',
+    schedule: { kind: 'interval', everyMs: 10_000 },  // Every 10 seconds
+    jobInput: { name: 'Scheduler' },
+  });
+
+  console.log(`Created hire: ${hire.id}`);
+  console.log(`Job will run every 10 seconds`);
+
+  // Step 5: Start the worker
+  const worker = createSchedulerWorker(scheduler, 1_000);  // Poll every 1s
+  worker.start();
+
+  process.on('SIGINT', () => {
+    worker.stop();
+    process.exit(0);
+  });
+}
+
+main();
+```
+
+### Key patterns explained
+
+#### Service agent with payments
+
+The agent receives payments for each invocation:
+
+```typescript
+const serviceAgent = await createAgent({ name: 'hello-agent', version: '1.0.0' })
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))  // Receive payments
+  .use(a2a())
+  .build();
+
+addEntrypoint({
+  key: 'hello',
+  price: '0.01',  // $0.01 USDC
+  // ...
+});
+```
+
+#### Scheduler client with wallet
+
+The scheduler client has a wallet to pay for calls:
+
+```typescript
+const schedulerClient = await createAgent({ name: 'scheduler-client', version: '1.0.0' })
+  .use(
+    wallets({
+      config: {
+        agent: { type: 'local', privateKey: process.env.AGENT_WALLET_PRIVATE_KEY! },
+      },
+    })
+  )
+  .use(a2a())
+  .build();
+```
+
+#### Payment context
+
+Creates a payment context for automatic x402 payments:
+
+```typescript
+const paymentContext = await createRuntimePaymentContext({
+  runtime: schedulerClient,
+  network: 'base-sepolia',
+});
+```
+
+#### Creating a hire
+
+A "hire" represents a scheduled agent invocation:
+
+```typescript
+const { hire, job } = await scheduler.createHire({
+  agentCardUrl: 'http://localhost:8787',
+  entrypointKey: 'hello',
+  schedule: { kind: 'interval', everyMs: 10_000 },
+  jobInput: { name: 'Scheduler' },
+});
+```
+
+| Field | Description |
+|-------|-------------|
+| `agentCardUrl` | URL to fetch the agent card |
+| `entrypointKey` | Which entrypoint to invoke |
+| `schedule` | When to run (interval, cron, etc.) |
+| `jobInput` | Input to pass to the entrypoint |
+
+#### Worker polling
+
+The worker polls for due jobs and executes them:
+
+```typescript
+const worker = createSchedulerWorker(scheduler, 1_000);  // Poll every 1 second
+worker.start();
+
+// Later:
+worker.stop();
+```
+
+### Running the example
+
+```bash
+# Set environment variables
+export AGENT_WALLET_PRIVATE_KEY=0x...
+export PAYMENTS_RECEIVABLE_ADDRESS=0x...
+export FACILITATOR_URL=https://facilitator.x402.org
+export NETWORK=base-sepolia
+
+# Run
+bun run packages/examples/src/scheduler/hello-interval.ts
+```
+
+### Expected output
+
+```
+[example] Creating agent (service provider)...
+[example] Agent running at http://localhost:8787
+[example] Agent card fetched
+[example] Agent accepts payments via: x402
+[example] Agent payee address: 0x...
+
+[example] Creating scheduler client (payer)...
+[example] Payer wallet address: 0x...
+
+[example] Creating scheduler runtime...
+
+[example] Creating hire (scheduling agent calls)...
+[example] Created hire: hire_abc123
+[example] Created job: job_xyz789
+[example] Job will run every 10 seconds
+
+[example] Starting scheduler worker...
+[example] Scheduler worker started
+[example] Press Ctrl+C to stop
+
+[agent] Hello, Scheduler! at 2024-01-15T10:00:00.000Z
+[agent] Hello, Scheduler! at 2024-01-15T10:00:10.000Z
+[agent] Hello, Scheduler! at 2024-01-15T10:00:20.000Z
+```
+
+## Double Hire (Multiple Agents)
+
+**File:** `packages/examples/src/scheduler/double-hire.ts`
+
+This example extends the pattern to schedule multiple agents with different intervals.
+
+### Architecture
+
+```
+                        ┌─────────────────┐
+                   ────▶│  Agent A        │
+                  │     │  (every 10s)    │
+┌─────────────────┐     └─────────────────┘
+│  Scheduler      │
+│  (single payer) │     ┌─────────────────┐
+│                 │────▶│  Agent B        │
+└─────────────────┘     │  (every 15s)    │
+                        └─────────────────┘
+```
+
+### The code
+
+```typescript title="double-hire.ts"
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import {
+  createRuntimePaymentContext,
+  payments,
+  paymentsFromEnv,
+} from '@lucid-agents/payments';
+import {
+  createMemoryStore,
+  createSchedulerRuntime,
+  createSchedulerWorker,
+} from '@lucid-agents/scheduler';
+import { wallets } from '@lucid-agents/wallet';
+import { z } from 'zod';
+
+// Helper to start an agent
+async function startAgent(name: string, port: number) {
+  const agentRuntime = await createAgent({
+    name,
+    version: '1.0.0',
+    description: `${name} that says hello (paid service)`,
+  })
+    .use(http())
+    .use(payments({ config: paymentsFromEnv() }))
+    .use(a2a())
+    .build();
+
+  const { app, addEntrypoint } = await createAgentApp(agentRuntime);
+
+  addEntrypoint({
+    key: 'hello',
+    description: 'Says hello with a timestamp',
+    price: '0.01',
+    input: z.object({ name: z.string().optional() }),
+    output: z.object({ message: z.string(), timestamp: z.string() }),
+    handler: async ctx => {
+      const input = ctx.input as { name?: string };
+      const caller = input.name ?? 'World';
+      const timestamp = new Date().toISOString();
+      console.log(`[${name}] Hello, ${caller}! at ${timestamp}`);
+      return {
+        output: { message: `Hello, ${caller}!`, timestamp },
+      };
+    },
+  });
+
+  Bun.serve({ port, fetch: app.fetch });
+  console.log(`[example] ${name} running at http://localhost:${port}`);
+
+  const cardResp = await fetch(`http://localhost:${port}/.well-known/agent-card.json`);
+  const agentCard = await cardResp.json();
+
+  return { agentOrigin: `http://localhost:${port}`, agentCard };
+}
+
+async function main() {
+  // Start two agents on different ports
+  const agentA = await startAgent('hello-agent-A', 8787);
+  const agentB = await startAgent('hello-agent-B', 8788);
+
+  // Create scheduler client (single payer for both)
+  const schedulerClient = await createAgent({
+    name: 'scheduler-client',
+    version: '1.0.0',
+  })
+    .use(
+      wallets({
+        config: {
+          agent: { type: 'local', privateKey: process.env.AGENT_WALLET_PRIVATE_KEY! },
+        },
+      })
+    )
+    .use(a2a())
+    .build();
+
+  const paymentContext = await createRuntimePaymentContext({
+    runtime: schedulerClient,
+    network: process.env.NETWORK || 'base-sepolia',
+  });
+
+  // Create scheduler with card lookup
+  const agentCardByUrl = {
+    [agentA.agentOrigin]: agentA.agentCard,
+    [agentB.agentOrigin]: agentB.agentCard,
+  };
+
+  const scheduler = createSchedulerRuntime({
+    store: createMemoryStore(),
+    runtime: schedulerClient,
+    paymentContext,
+    fetchAgentCard: async url => agentCardByUrl[url],
+  });
+
+  // Create two hires with different intervals
+  const hireA = await scheduler.createHire({
+    agentCardUrl: agentA.agentOrigin,
+    entrypointKey: 'hello',
+    schedule: { kind: 'interval', everyMs: 10_000 },  // Every 10 seconds
+    jobInput: { name: 'Scheduler -> Agent A' },
+  });
+
+  const hireB = await scheduler.createHire({
+    agentCardUrl: agentB.agentOrigin,
+    entrypointKey: 'hello',
+    schedule: { kind: 'interval', everyMs: 15_000 },  // Every 15 seconds
+    jobInput: { name: 'Scheduler -> Agent B' },
+  });
+
+  console.log(`Created hire A: ${hireA.hire.id} (every 10s)`);
+  console.log(`Created hire B: ${hireB.hire.id} (every 15s)`);
+
+  // Start single worker for both
+  const worker = createSchedulerWorker(scheduler, 1_000);
+  worker.start();
+
+  process.on('SIGINT', () => {
+    worker.stop();
+    process.exit(0);
+  });
+}
+
+main();
+```
+
+### Key patterns explained
+
+#### Multiple agents, single scheduler
+
+One scheduler can manage multiple hires to different agents:
+
+```typescript
+const scheduler = createSchedulerRuntime({
+  store: createMemoryStore(),
+  runtime: schedulerClient,
+  paymentContext,
+  fetchAgentCard: async url => agentCardByUrl[url],
+});
+
+// Hire Agent A (every 10s)
+await scheduler.createHire({
+  agentCardUrl: agentA.agentOrigin,
+  entrypointKey: 'hello',
+  schedule: { kind: 'interval', everyMs: 10_000 },
+  jobInput: { name: 'Scheduler -> Agent A' },
+});
+
+// Hire Agent B (every 15s)
+await scheduler.createHire({
+  agentCardUrl: agentB.agentOrigin,
+  entrypointKey: 'hello',
+  schedule: { kind: 'interval', everyMs: 15_000 },
+  jobInput: { name: 'Scheduler -> Agent B' },
+});
+```
+
+#### Centralized payment
+
+A single wallet pays for all scheduled calls:
+
+```typescript
+const paymentContext = await createRuntimePaymentContext({
+  runtime: schedulerClient,
+  network: 'base-sepolia',
+});
+```
+
+This is useful for:
+- **Budget control** - One wallet to fund and monitor
+- **Simplified operations** - Single private key to manage
+- **Cost aggregation** - Easy to track total spending
+
+### Running the example
+
+```bash
+bun run packages/examples/src/scheduler/double-hire.ts
+```
+
+### Expected output
+
+```
+[example] Creating agents (service providers)...
+[example] hello-agent-A running at http://localhost:8787
+[example] hello-agent-B running at http://localhost:8788
+
+[example] Creating scheduler client (payer)...
+[example] Payer wallet address: 0x...
+
+[example] Creating scheduler runtime...
+
+[example] Creating hires (scheduling agent calls)...
+[example] Created hire A: hire_abc123 (every 10s)
+[example] Created hire B: hire_def456 (every 15s)
+
+[example] Starting scheduler worker...
+[example] Scheduler worker started
+
+[hello-agent-A] Hello, Scheduler -> Agent A! at 2024-01-15T10:00:00.000Z
+[hello-agent-A] Hello, Scheduler -> Agent A! at 2024-01-15T10:00:10.000Z
+[hello-agent-B] Hello, Scheduler -> Agent B! at 2024-01-15T10:00:15.000Z
+[hello-agent-A] Hello, Scheduler -> Agent A! at 2024-01-15T10:00:20.000Z
+```
+
+## Why use the scheduler?
+
+| Use case | Benefit |
+|----------|---------|
+| **Recurring data sync** | Fetch external data on a schedule |
+| **Health checks** | Monitor agent availability |
+| **Batch processing** | Process queued items periodically |
+| **Cron jobs** | Run tasks at specific times |
+| **Rate-limited APIs** | Spread calls over time |
+
+The scheduler handles:
+- **Job persistence** - Jobs survive restarts (with persistent store)
+- **Automatic payments** - x402 payments on each invocation
+- **Failure handling** - Retry logic and error tracking
+- **Multiple schedules** - Different intervals per agent

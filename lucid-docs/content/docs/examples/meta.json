@@ -1,0 +1,15 @@
+{
+  "title": "Examples",
+  "pages": [
+    "index",
+    "---Fundamentals---",
+    "core",
+    "a2a",
+    "---Payments---",
+    "payment-policies",
+    "scheduler",
+    "---Trust---",
+    "identity",
+    "wallet"
+  ]
+}
