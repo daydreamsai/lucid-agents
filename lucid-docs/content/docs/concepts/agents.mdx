@@ -1,0 +1,200 @@
+---
+title: Agents
+description: Understand what an agent is and how to configure one.
+icon: Bot
+---
+
+An agent is the core unit in Lucid Agents. It represents an autonomous service with typed capabilities (entrypoints), optional payments, and discoverable metadata.
+
+## Creating an agent
+
+Use `createAgent()` to create an agent with metadata:
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+  description: 'An AI-powered assistant',
+})
+  .use(http())
+  .build();
+```
+
+The `createAgent()` function returns a builder that lets you compose extensions before calling `.build()`.
+
+## Agent metadata
+
+The agent metadata (`AgentMeta`) describes your agent for discovery and display:
+
+```typescript
+type AgentMeta = {
+  name: string;        // Required: Agent name
+  version: string;     // Required: Semantic version
+  description?: string; // What the agent does
+  icon?: string;       // Icon URL
+  image?: string;      // Open Graph image for social previews (1200x630px recommended)
+  url?: string;        // Canonical URL
+  type?: 'website' | 'article';
+};
+```
+
+### Example with full metadata
+
+```typescript
+const agent = await createAgent({
+  name: 'trading-advisor',
+  version: '1.0.0',
+  description: 'AI-powered trading recommendations and market analysis',
+  image: 'https://my-agent.example.com/og-image.png',
+  url: 'https://my-agent.example.com',
+})
+  .use(http())
+  .build();
+```
+
+This metadata is used to:
+
+- Generate the Agent Card (`.well-known/agent.json`) for A2A discovery
+- Render Open Graph tags for social sharing
+- Display information on the landing page (if enabled)
+
+## The extension system
+
+Agents are built by composing extensions. Each extension adds capabilities:
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { identity, identityFromEnv } from '@lucid-agents/identity';
+import { a2a } from '@lucid-agents/a2a';
+
+const agent = await createAgent({
+  name: 'full-featured-agent',
+  version: '1.0.0',
+})
+  .use(http())                                    // HTTP protocol support
+  .use(wallets({ config: walletsFromEnv() }))     // Wallet management
+  .use(payments({ config: paymentsFromEnv() }))   // x402 payments
+  .use(identity({ config: identityFromEnv() }))   // ERC-8004 identity
+  .use(a2a())                                     // Agent-to-Agent protocol
+  .build();
+```
+
+### Available extensions
+
+| Extension | Package | Purpose |
+|-----------|---------|---------|
+| `http()` | `@lucid-agents/http` | HTTP request/response handling, SSE streaming |
+| `wallets()` | `@lucid-agents/wallet` | Wallet management for agent operations |
+| `payments()` | `@lucid-agents/payments` | x402 payment protocol |
+| `identity()` | `@lucid-agents/identity` | ERC-8004 on-chain identity |
+| `a2a()` | `@lucid-agents/a2a` | Agent-to-Agent communication |
+| `ap2()` | `@lucid-agents/ap2` | Agent Payments Protocol |
+
+Extensions are independent and can be used in any combination.
+
+## Framework adapters
+
+After building an agent, use an adapter to expose it via your preferred framework:
+
+### Hono
+
+```typescript
+import { createAgentApp } from '@lucid-agents/hono';
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// Add entrypoints...
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+### TanStack Start
+
+```typescript
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
+
+export const { runtime, handlers } = await createTanStackRuntime(agent);
+```
+
+### Express
+
+```typescript
+import { createAgentApp } from '@lucid-agents/express';
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// Add entrypoints...
+
+app.listen(3000);
+```
+
+## Agent Card
+
+Every agent automatically generates an Agent Card at `/.well-known/agent.json`. This follows the A2A protocol specification and includes:
+
+- Agent metadata (name, version, description)
+- Supported interfaces and capabilities
+- Available skills (entrypoints)
+- Payment methods (if configured)
+- Identity registrations (if configured)
+
+Example Agent Card:
+
+```json
+{
+  "protocolVersion": "1.0",
+  "name": "my-agent",
+  "version": "1.0.0",
+  "description": "An AI-powered assistant",
+  "supportedInterfaces": [
+    {
+      "url": "https://my-agent.example.com",
+      "protocolBinding": "http"
+    }
+  ],
+  "capabilities": {
+    "streaming": true
+  },
+  "skills": [
+    {
+      "id": "chat",
+      "name": "chat",
+      "description": "Chat with the assistant"
+    }
+  ]
+}
+```
+
+## HTTP endpoints
+
+When using the `http()` extension and a framework adapter, your agent exposes these endpoints:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/.well-known/agent.json` | GET | Agent Card for A2A discovery |
+| `/entrypoints` | GET | List available entrypoints |
+| `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
+| `/entrypoints/:key/stream` | POST | Stream from an entrypoint (SSE) |
+| `/tasks` | GET | List tasks |
+| `/tasks/:id` | GET | Get task status |
+| `/tasks/:id/cancel` | POST | Cancel a task |
+| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Entrypoints"
+    description="Define typed capabilities for your agent"
+    href="./entrypoints"
+  />
+</Cards>

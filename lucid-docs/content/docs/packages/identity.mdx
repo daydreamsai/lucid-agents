@@ -1,0 +1,259 @@
+---
+title: "@lucid-agents/identity"
+description: ERC-8004 on-chain identity and reputation for agents.
+icon: Fingerprint
+---
+
+The identity extension adds ERC-8004 on-chain identity support, enabling verifiable agent identity, domain proofs, and reputation tracking.
+
+## Installation
+
+```bash
+bun add @lucid-agents/identity viem
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+import { identity, identityFromEnv } from '@lucid-agents/identity';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(wallets({ config: walletsFromEnv() }))
+  .use(identity({ config: identityFromEnv() }))
+  .build();
+```
+
+## Configuration
+
+### Environment variables
+
+```bash
+# Identity registry contract address
+IDENTITY_REGISTRY_ADDRESS=0x...
+
+# Agent's domain for identity binding
+AGENT_DOMAIN=my-agent.example.com
+
+# Auto-register identity if not exists
+IDENTITY_AUTO_REGISTER=true
+```
+
+### identityFromEnv()
+
+Loads configuration from environment variables:
+
+```typescript
+import { identityFromEnv } from '@lucid-agents/identity';
+
+const config = identityFromEnv();
+```
+
+### IdentityConfig
+
+```typescript
+type IdentityConfig = {
+  registryAddress?: `0x${string}`;
+  domain?: string;
+  autoRegister?: boolean;
+  trustModels?: TrustModel[];
+};
+```
+
+## API reference
+
+### identity(options)
+
+Creates the identity extension.
+
+```typescript
+function identity(options: {
+  config: IdentityConfig;
+}): Extension<IdentityExtensionContext>
+```
+
+**Requirements:**
+- The `wallets()` extension must be added before `identity()`
+- An agent wallet is required for signing identity proofs
+
+### createAgentIdentity()
+
+Bootstrap function for creating and registering agent identity:
+
+```typescript
+import { createAgentIdentity } from '@lucid-agents/identity';
+
+const identity = await createAgentIdentity({
+  runtime: agent,
+  domain: 'my-agent.example.com',
+  autoRegister: true,  // Register on-chain if not exists
+});
+```
+
+### IdentityRuntime
+
+When identity is configured, `agent.identity` provides:
+
+```typescript
+type IdentityRuntime = {
+  config: IdentityConfig;
+  getRegistration: () => RegistrationEntry | undefined;
+  signDomainProof: (domain: string) => Promise<string>;
+};
+```
+
+## ERC-8004 overview
+
+ERC-8004 is a standard for on-chain agent identity:
+
+- **Registry**: Smart contract storing agent registrations
+- **Domain binding**: Prove ownership of a domain
+- **Reputation**: Track agent reputation scores
+- **Trust models**: Define trust relationships
+
+### Registration entry
+
+```typescript
+type RegistrationEntry = {
+  agentId: `0x${string}`;
+  domain: string;
+  registeredAt: number;
+  metadata?: {
+    name?: string;
+    description?: string;
+    version?: string;
+  };
+};
+```
+
+### Trust models
+
+```typescript
+type TrustModel = {
+  id: string;
+  name: string;
+  description?: string;
+  verificationMethod: 'domain' | 'registry' | 'signature';
+};
+```
+
+## Domain proofs
+
+Prove ownership of a domain by signing a challenge:
+
+```typescript
+// Server generates challenge
+const challenge = await identity.createDomainChallenge('my-agent.example.com');
+
+// Agent signs challenge with wallet
+const proof = await agent.identity.signDomainProof(challenge);
+
+// Server verifies proof
+const isValid = await identity.verifyDomainProof(proof, 'my-agent.example.com');
+```
+
+## Manifest integration
+
+Identity information is included in the Agent Card:
+
+```json
+{
+  "name": "my-agent",
+  "registrations": [
+    {
+      "agentId": "0x...",
+      "domain": "my-agent.example.com",
+      "registeredAt": 1704067200
+    }
+  ],
+  "trustModels": [
+    {
+      "id": "erc8004",
+      "name": "ERC-8004 Registry",
+      "verificationMethod": "registry"
+    }
+  ],
+  "ValidationRequestsURI": "https://my-agent.example.com/validation/request",
+  "ValidationResponsesURI": "https://my-agent.example.com/validation/response"
+}
+```
+
+## Registry operations
+
+### Identity registry client
+
+```typescript
+import { createIdentityRegistryClient } from '@lucid-agents/identity';
+
+const registry = createIdentityRegistryClient({
+  address: '0x...',
+  client: publicClient,  // viem public client
+});
+
+// Lookup agent by domain
+const agent = await registry.getAgentByDomain('my-agent.example.com');
+
+// Register new agent
+await registry.register({
+  domain: 'my-agent.example.com',
+  metadata: { name: 'My Agent', version: '1.0.0' },
+});
+```
+
+### Reputation registry client
+
+```typescript
+import { createReputationRegistryClient } from '@lucid-agents/identity';
+
+const reputation = createReputationRegistryClient({
+  address: '0x...',
+  client: publicClient,
+});
+
+// Get agent reputation
+const score = await reputation.getReputation('0x...');
+
+// Submit feedback
+await reputation.submitFeedback({
+  agentId: '0x...',
+  score: 5,
+  comment: 'Excellent service',
+});
+```
+
+## Exports
+
+```typescript
+// Extension
+export { identity } from '@lucid-agents/identity';
+
+// Configuration
+export { identityFromEnv } from '@lucid-agents/identity';
+
+// Bootstrap
+export { createAgentIdentity } from '@lucid-agents/identity';
+
+// Registry clients
+export {
+  createIdentityRegistryClient,
+  createReputationRegistryClient,
+  createValidationRegistryClient,
+} from '@lucid-agents/identity';
+
+// Manifest integration
+export { createAgentCardWithIdentity } from '@lucid-agents/identity';
+
+// Types
+export type {
+  IdentityConfig,
+  IdentityRuntime,
+  RegistrationEntry,
+  TrustModel,
+} from '@lucid-agents/identity';
+```

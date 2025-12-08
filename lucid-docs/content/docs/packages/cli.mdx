@@ -1,0 +1,322 @@
+---
+title: "@lucid-agents/cli"
+description: CLI tool for scaffolding new agent projects.
+icon: Terminal
+---
+
+The CLI tool scaffolds new agent projects with templates, adapters, and interactive configuration.
+
+## Installation
+
+The CLI is typically run via `bunx` or `npx` without installation:
+
+```bash
+bunx @lucid-agents/cli my-agent
+```
+
+Or install globally:
+
+```bash
+bun add -g @lucid-agents/cli
+```
+
+## Basic usage
+
+### Interactive mode
+
+Run without arguments for the interactive wizard:
+
+```bash
+bunx @lucid-agents/cli my-agent
+```
+
+The wizard guides you through:
+
+1. **Adapter selection** - Choose your framework
+2. **Template selection** - Choose a starter template
+3. **Configuration** - Set agent name, description, API keys, etc.
+
+### Non-interactive mode
+
+Pass options directly for CI/CD or scripted setups:
+
+```bash
+bunx @lucid-agents/cli my-agent \
+  --adapter=hono \
+  --template=axllm \
+  --AGENT_NAME="My AI Agent" \
+  --AGENT_DESCRIPTION="AI-powered assistant" \
+  --OPENAI_API_KEY=sk-... \
+  --non-interactive
+```
+
+## Command options
+
+```bash
+bunx @lucid-agents/cli <project-name> [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--adapter=<id>` | Framework adapter to use |
+| `--template=<id>` | Starter template to use |
+| `--install` | Auto-install dependencies after scaffolding |
+| `--non-interactive` | Skip prompts, use provided options |
+| `--help` | Show help message |
+
+### Configuration variables
+
+Pass configuration as `--KEY=value`:
+
+```bash
+bunx @lucid-agents/cli my-agent \
+  --AGENT_NAME="My Agent" \
+  --AGENT_DESCRIPTION="Description" \
+  --OPENAI_API_KEY=sk-... \
+  --PAYMENTS_RECEIVABLE_ADDRESS=0x... \
+  --NETWORK=base-sepolia \
+  --DEFAULT_PRICE=1000
+```
+
+## Adapters
+
+Choose how your agent will be deployed:
+
+| Adapter | Description | Use case |
+|---------|-------------|----------|
+| `hono` | Lightweight HTTP server | Edge deployments, simple APIs |
+| `tanstack-ui` | TanStack Start with dashboard | Full-stack apps with UI |
+| `tanstack-headless` | TanStack Start API-only | API-only deployments |
+| `express` | Express.js server | Traditional Node.js |
+| `next` | Next.js App Router | Next.js applications |
+
+### Hono adapter
+
+```bash
+bunx @lucid-agents/cli my-agent --adapter=hono
+```
+
+Generates:
+- `src/index.ts` - Hono app with agent configuration
+- `package.json` - Dependencies for Hono + Bun
+- `.env` - Environment variables
+
+### TanStack UI adapter
+
+```bash
+bunx @lucid-agents/cli my-agent --adapter=tanstack-ui
+```
+
+Generates:
+- Full TanStack Start project structure
+- Dashboard UI components
+- API routes for agent endpoints
+- `package.json` with React dependencies
+
+### TanStack headless adapter
+
+```bash
+bunx @lucid-agents/cli my-agent --adapter=tanstack-headless
+```
+
+Generates:
+- TanStack Start project without UI
+- API routes only
+- Minimal dependencies
+
+### Express adapter
+
+```bash
+bunx @lucid-agents/cli my-agent --adapter=express
+```
+
+Generates:
+- `src/index.ts` - Express app with agent configuration
+- `package.json` - Dependencies for Express + Node.js
+- `.env` - Environment variables
+
+## Templates
+
+Choose a starting point for your agent:
+
+| Template | Description | Includes |
+|----------|-------------|----------|
+| `blank` | Minimal agent | Basic entrypoint |
+| `axllm` | LLM-powered agent | AxLLM integration, chat entrypoint |
+| `axllm-flow` | LLM with workflows | AxLLM + flow orchestration |
+| `identity` | On-chain identity | ERC-8004 identity setup |
+| `trading-data-agent` | Merchant example | Data provider with pricing |
+| `trading-recommendation-agent` | Shopper example | Agent that calls other agents |
+
+### Blank template
+
+```bash
+bunx @lucid-agents/cli my-agent --template=blank
+```
+
+Minimal agent with a single echo entrypoint:
+
+```typescript
+addEntrypoint({
+  key: 'echo',
+  input: z.object({ text: z.string() }),
+  async handler({ input }) {
+    return { output: { echoed: input.text } };
+  },
+});
+```
+
+### AxLLM template
+
+```bash
+bunx @lucid-agents/cli my-agent --template=axllm
+```
+
+LLM-powered agent with streaming chat:
+
+```typescript
+addEntrypoint({
+  key: 'chat',
+  input: z.object({ message: z.string() }),
+  streaming: true,
+  async stream(ctx, emit) {
+    const stream = await ai.chat.stream({
+      messages: [{ role: 'user', content: ctx.input.message }],
+    });
+
+    for await (const chunk of stream) {
+      await emit({ kind: 'delta', delta: chunk.delta, mime: 'text/plain' });
+    }
+
+    return { output: { completed: true } };
+  },
+});
+```
+
+### Identity template
+
+```bash
+bunx @lucid-agents/cli my-agent --template=identity
+```
+
+Agent with ERC-8004 on-chain identity:
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http())
+  .use(wallets({ config: walletsFromEnv() }))
+  .use(identity({ config: identityFromEnv() }))
+  .build();
+```
+
+### Trading data agent (merchant)
+
+```bash
+bunx @lucid-agents/cli my-agent --template=trading-data-agent
+```
+
+Example merchant agent that sells data:
+
+```typescript
+addEntrypoint({
+  key: 'get-market-data',
+  price: { invoke: '$0.001' },
+  async handler({ input }) {
+    return { output: { price: 100.50, volume: 1000000 } };
+  },
+});
+```
+
+### Trading recommendation agent (shopper)
+
+```bash
+bunx @lucid-agents/cli my-agent --template=trading-recommendation-agent
+```
+
+Example shopper agent that calls other agents:
+
+```typescript
+addEntrypoint({
+  key: 'get-recommendation',
+  async handler({ input }) {
+    // Fetch from merchant agent
+    const data = await agent.a2a.client.fetchAndInvoke(
+      process.env.DATA_AGENT_URL,
+      'get-market-data',
+      { symbol: input.symbol }
+    );
+
+    return { output: { recommendation: 'buy', data } };
+  },
+});
+```
+
+## Generated files
+
+A typical generated project includes:
+
+```
+my-agent/
+├── src/
+│   └── index.ts        # Agent definition
+├── .env                # Environment variables
+├── .env.example        # Example env file
+├── package.json        # Dependencies
+├── tsconfig.json       # TypeScript config
+└── README.md           # Project readme
+```
+
+### Environment file
+
+```bash
+# Agent metadata
+AGENT_NAME="My Agent"
+AGENT_DESCRIPTION="Description"
+
+# LLM provider (if using axllm template)
+OPENAI_API_KEY=
+
+# Payments (optional)
+PAYMENTS_RECEIVABLE_ADDRESS=
+NETWORK=base-sepolia
+DEFAULT_PRICE=
+
+# Identity (optional)
+AGENT_WALLET_PRIVATE_KEY=
+IDENTITY_REGISTRY_ADDRESS=
+```
+
+## After scaffolding
+
+```bash
+cd my-agent
+bun install
+bun run dev
+```
+
+Your agent will be running at `http://localhost:3000`.
+
+Test it:
+
+```bash
+# View manifest
+curl http://localhost:3000/.well-known/agent.json
+
+# List entrypoints
+curl http://localhost:3000/entrypoints
+
+# Invoke an entrypoint
+curl -X POST http://localhost:3000/entrypoints/echo/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"text": "Hello"}}'
+```
+
+## Exports
+
+```typescript
+// CLI entry point (for programmatic use)
+export { runCli } from '@lucid-agents/cli';
+
+// Types (for custom CLI implementations)
+export type { PromptApi, RunLogger } from '@lucid-agents/cli';
+```

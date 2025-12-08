@@ -1,0 +1,323 @@
+---
+title: "@lucid-agents/types"
+description: Shared TypeScript type definitions for all packages.
+icon: FileType
+---
+
+The types package provides shared TypeScript type definitions used across all Lucid Agents packages. It has zero dependencies on other `@lucid-agents` packages.
+
+## Installation
+
+```bash
+bun add @lucid-agents/types
+```
+
+## Overview
+
+Types are organized by domain:
+
+| Export path | Contains |
+|-------------|----------|
+| `@lucid-agents/types/core` | Agent, config, entrypoint, extension types |
+| `@lucid-agents/types/a2a` | Agent Card, task, manifest types |
+| `@lucid-agents/types/http` | HTTP handlers, streaming types |
+| `@lucid-agents/types/payments` | Payment config, pricing types |
+| `@lucid-agents/types/wallets` | Wallet runtime, connector types |
+| `@lucid-agents/types/identity` | Identity, registration, trust types |
+| `@lucid-agents/types/ap2` | AP2 config, role types |
+
+## Core types
+
+```typescript
+import type {
+  AgentConfig,
+  AgentRuntime,
+  EntrypointDef,
+  EntrypointHandler,
+  EntrypointStreamHandler,
+  EntrypointsRuntime,
+  Extension,
+  BuildContext,
+} from '@lucid-agents/types/core';
+```
+
+### AgentConfig
+
+```typescript
+type AgentConfig = {
+  meta: AgentMeta;
+};
+```
+
+### EntrypointDef
+
+```typescript
+type EntrypointDef<
+  TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+> = {
+  key: string;
+  description?: string;
+  input?: TInput;
+  output?: TOutput;
+  streaming?: boolean;
+  price?: EntrypointPrice;
+  network?: Network;
+  handler?: EntrypointHandler<TInput, TOutput>;
+  stream?: EntrypointStreamHandler<TInput>;
+  metadata?: Record<string, unknown>;
+};
+```
+
+### Extension
+
+```typescript
+type Extension<T = unknown> = {
+  name: string;
+  build(ctx: BuildContext): T;
+  onEntrypointAdded?(entrypoint: EntrypointDef, runtime: AgentRuntime): void;
+  onManifestBuild?(
+    card: AgentCardWithEntrypoints,
+    runtime: AgentRuntime
+  ): AgentCardWithEntrypoints;
+};
+```
+
+## A2A types
+
+```typescript
+import type {
+  AgentMeta,
+  AgentCard,
+  AgentCardWithEntrypoints,
+  Manifest,
+  Task,
+  TaskStatus,
+  TaskResult,
+  TaskError,
+  A2ARuntime,
+  A2AClient,
+  SendMessageRequest,
+  SendMessageResponse,
+} from '@lucid-agents/types/a2a';
+```
+
+### AgentMeta
+
+```typescript
+type AgentMeta = {
+  name: string;
+  version: string;
+  description?: string;
+  icon?: string;
+  image?: string;
+  url?: string;
+  type?: 'website' | 'article';
+};
+```
+
+### AgentCard
+
+```typescript
+type AgentCard = {
+  protocolVersion?: string;
+  name: string;
+  description?: string;
+  version?: string;
+  supportedInterfaces?: AgentInterface[];
+  capabilities?: AgentCapabilities;
+  skills?: Skill[];
+  payments?: PaymentMethod[];
+  registrations?: RegistrationEntry[];
+  trustModels?: TrustModel[];
+};
+```
+
+### Task
+
+```typescript
+type Task<TOutput = unknown> = {
+  taskId: string;
+  status: TaskStatus;
+  result?: TaskResult<TOutput>;
+  error?: TaskError;
+  contextId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type TaskStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+```
+
+## HTTP types
+
+```typescript
+import type {
+  AgentHttpHandlers,
+  HttpExtensionOptions,
+  StreamEnvelope,
+  StreamPushEnvelope,
+  StreamDeltaEnvelope,
+  StreamDataEnvelope,
+  StreamDoneEnvelope,
+  StreamResult,
+  FetchFunction,
+} from '@lucid-agents/types/http';
+```
+
+### StreamEnvelope
+
+```typescript
+type StreamPushEnvelope =
+  | StreamDeltaEnvelope
+  | StreamDataEnvelope
+  | StreamStatusEnvelope;
+
+type StreamDeltaEnvelope = {
+  kind: 'delta';
+  delta: string;
+  mime: string;
+};
+
+type StreamDataEnvelope = {
+  kind: 'data';
+  data: unknown;
+};
+
+type StreamDoneEnvelope = {
+  kind: 'done';
+  output: unknown;
+  usage?: Usage;
+  model?: string;
+};
+```
+
+## Payment types
+
+```typescript
+import type {
+  PaymentsConfig,
+  PaymentsRuntime,
+  EntrypointPrice,
+  PaymentRequirement,
+  SolanaAddress,
+} from '@lucid-agents/types/payments';
+```
+
+### EntrypointPrice
+
+```typescript
+type EntrypointPrice = {
+  invoke?: string;  // Price for invoke requests
+  stream?: string;  // Price for stream requests
+};
+```
+
+## Wallet types
+
+```typescript
+import type {
+  WalletsConfig,
+  WalletsRuntime,
+  WalletConnector,
+  WalletConnectorConfig,
+  WalletCapabilities,
+} from '@lucid-agents/types/wallets';
+```
+
+### WalletConnector
+
+```typescript
+type WalletConnector = {
+  getAddress: () => Promise<`0x${string}`>;
+  signMessage: (message: string) => Promise<`0x${string}`>;
+  signTypedData: (data: TypedData) => Promise<`0x${string}`>;
+  getCapabilities?: () => WalletCapabilities;
+  getWalletClient?: () => Promise<{ client: WalletClient }>;
+};
+```
+
+## Identity types
+
+```typescript
+import type {
+  IdentityConfig,
+  IdentityRuntime,
+  RegistrationEntry,
+  TrustModel,
+} from '@lucid-agents/types/identity';
+```
+
+### RegistrationEntry
+
+```typescript
+type RegistrationEntry = {
+  agentId: `0x${string}`;
+  domain: string;
+  registeredAt: number;
+  metadata?: {
+    name?: string;
+    description?: string;
+    version?: string;
+  };
+};
+```
+
+## AP2 types
+
+```typescript
+import type {
+  AP2Config,
+  AP2Runtime,
+  AP2Role,
+  AP2ExtensionDescriptor,
+  AP2ExtensionParams,
+} from '@lucid-agents/types/ap2';
+```
+
+### AP2 types
+
+```typescript
+type AP2Role = 'merchant' | 'shopper';
+
+type AP2Config = {
+  roles: AP2Role[];
+};
+
+type AP2ExtensionDescriptor = {
+  uri: 'urn:x-lucid:ap2:1.0';
+  params: AP2ExtensionParams;
+};
+```
+
+## Usage context
+
+```typescript
+import type { AgentContext, Usage } from '@lucid-agents/types/core';
+```
+
+### AgentContext
+
+Passed to entrypoint handlers:
+
+```typescript
+type AgentContext = {
+  input: unknown;
+  request?: Request;
+  headers?: Headers;
+  // ... additional context from extensions
+};
+```
+
+### Usage
+
+Track resource consumption:
+
+```typescript
+type Usage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  [key: string]: number | undefined;
+};
+```

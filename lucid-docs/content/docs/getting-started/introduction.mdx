@@ -1,0 +1,107 @@
+---
+title: Introduction
+description: Learn what Lucid Agents is and why you should use it to build AI agents.
+icon: Sparkles
+---
+
+Lucid Agents is a TypeScript-first framework for building and monetizing AI agents. It provides the infrastructure for agents that sell services, accept payments, and communicate with other agents.
+
+## What is Lucid Agents?
+
+Lucid Agents is an agentic commerce and payments SDK. Build AI agents that:
+
+- **Accept payments** in USDC on Ethereum L2s (Base) or Solana with automatic paywall middleware
+- **Communicate with other agents** via the A2A protocol, enabling agent marketplaces and multi-agent systems
+- **Establish on-chain identity** using ERC-8004 for reputation and trust
+- **Deploy anywhere** with framework adapters for Hono, TanStack Start, Express, and Next.js
+
+## Core capabilities
+
+### Industry-standard protocols
+
+Native support for protocols that let your agents work within the ecosystem:
+
+- **x402** - HTTP-native payment protocol for monetizing agent capabilities
+- **A2A** - Agent-to-Agent communication for discovery and interoperability
+- **ERC-8004** - On-chain identity standard for verifiable agent reputation
+
+### Type-safe APIs
+
+Define inputs and outputs with Zod schemas. Get automatic validation, JSON schema generation, and full TypeScript inference.
+
+```typescript
+import { z } from 'zod';
+
+const entrypoint = {
+  key: 'analyze',
+  input: z.object({
+    text: z.string(),
+    language: z.enum(['en', 'es', 'fr']),
+  }),
+  output: z.object({
+    sentiment: z.number(),
+    keywords: z.array(z.string()),
+  }),
+  async handler({ input }) {
+    // TypeScript knows input.text and input.language types
+    return { output: { sentiment: 0.8, keywords: ['example'] } };
+  },
+};
+```
+
+### Framework flexibility
+
+Write your agent logic once, deploy on your preferred framework:
+
+- **Hono** - Lightweight, edge-compatible HTTP server
+- **TanStack Start** - Full-stack React with UI dashboard or headless API
+- **Express** - Traditional Node.js HTTP server
+- **Next.js** - Next.js App Router integration
+
+### Composable architecture
+
+Add only the features you need. Extensions are independent modules you can mix and match:
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { identity } from '@lucid-agents/identity';
+import { a2a } from '@lucid-agents/a2a';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(identity({ config: identityFromEnv() }))
+  .use(a2a())
+  .build();
+```
+
+## Use cases
+
+Lucid Agents is designed for:
+
+- **Paid AI services** - Monetize LLM-powered capabilities with per-request pricing
+- **Agent marketplaces** - Build agents that discover and purchase services from other agents
+- **Multi-agent systems** - Create networks of specialized agents that collaborate
+- **Verifiable AI** - Establish trust through on-chain identity and reputation
+
+## Architecture overview
+
+The SDK is organized into layers:
+
+1. **Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`)
+2. **Extensions** - Optional capabilities: `http()`, `payments()`, `identity()`, `a2a()`, `ap2()`, `wallets()`
+3. **Adapters** - Framework integrations that use the HTTP extension (hono, tanstack, express, next)
+
+The core runtime is completely protocol-agnostic. HTTP is provided as an extension, and future protocols (gRPC, WebSocket) can be added the same way.
+
+## Next steps
+
+<Cards>
+  <Card title="Installation" href="./installation" />
+  <Card title="Quickstart" href="./quickstart" />
+</Cards>

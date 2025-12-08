@@ -1,0 +1,274 @@
+---
+title: "@lucid-agents/tanstack"
+description: TanStack Start adapter for full-stack agent applications.
+icon: Layers
+---
+
+The TanStack Start adapter integrates agents with TanStack Start, supporting both UI dashboards and headless API-only deployments.
+
+## Installation
+
+```bash
+bun add @lucid-agents/tanstack @tanstack/start
+```
+
+For payments support:
+
+```bash
+bun add x402
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .build();
+
+export const { runtime, handlers } = await createTanStackRuntime(agent);
+```
+
+## API reference
+
+### createTanStackRuntime(agent)
+
+Creates a TanStack Start runtime from an agent.
+
+```typescript
+function createTanStackRuntime(
+  agent: AgentRuntime
+): Promise<{
+  runtime: TanStackRuntime;
+  handlers: TanStackHandlers;
+}>
+```
+
+**Returns:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `runtime` | `TanStackRuntime` | Runtime with agent access |
+| `handlers` | `TanStackHandlers` | Request handlers for routes |
+
+### TanStackHandlers
+
+```typescript
+type TanStackHandlers = {
+  invoke: (key: string, input: unknown) => Promise<InvokeResult>;
+  stream: (key: string, input: unknown) => ReadableStream;
+  manifest: () => AgentCardWithEntrypoints;
+  health: () => { status: 'ok' };
+  entrypoints: () => EntrypointInfo[];
+  getTask: (id: string) => Task | undefined;
+  listTasks: (filters?: ListTasksRequest) => ListTasksResponse;
+  cancelTask: (id: string) => Task | undefined;
+  subscribeTask: (id: string) => ReadableStream;
+};
+```
+
+## Route setup
+
+Create route files in your TanStack Start project:
+
+### API routes
+
+```typescript title="app/routes/api/agent/entrypoints.ts"
+import { createAPIFileRoute } from '@tanstack/start/api';
+import { handlers } from '~/lib/agent';
+
+export const APIRoute = createAPIFileRoute('/api/agent/entrypoints')({
+  GET: async () => {
+    return Response.json(handlers.entrypoints());
+  },
+});
+```
+
+```typescript title="app/routes/api/agent/entrypoints/$key/invoke.ts"
+import { createAPIFileRoute } from '@tanstack/start/api';
+import { handlers } from '~/lib/agent';
+
+export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/invoke')({
+  POST: async ({ request, params }) => {
+    const { key } = params;
+    const { input } = await request.json();
+    const result = await handlers.invoke(key, input);
+    return Response.json(result);
+  },
+});
+```
+
+```typescript title="app/routes/api/agent/entrypoints/$key/stream.ts"
+import { createAPIFileRoute } from '@tanstack/start/api';
+import { handlers } from '~/lib/agent';
+
+export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/stream')({
+  POST: async ({ request, params }) => {
+    const { key } = params;
+    const { input } = await request.json();
+    const stream = handlers.stream(key, input);
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  },
+});
+```
+
+### Well-known routes
+
+```typescript title="app/routes/.well-known/agent.json.ts"
+import { createAPIFileRoute } from '@tanstack/start/api';
+import { handlers } from '~/lib/agent';
+
+export const APIRoute = createAPIFileRoute('/.well-known/agent.json')({
+  GET: async () => {
+    return Response.json(handlers.manifest());
+  },
+});
+```
+
+## Payment middleware
+
+Add x402 payment middleware for paid routes:
+
+```typescript
+import { createTanStackPaywall, paymentMiddleware } from '@lucid-agents/tanstack';
+
+const paywall = createTanStackPaywall(agent, {
+  routes: {
+    '/api/agent/entrypoints/premium/invoke': {
+      price: '$0.01',
+      network: 'base-sepolia',
+    },
+  },
+});
+
+// Use in route
+export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/invoke')({
+  POST: async ({ request, params }) => {
+    const { key } = params;
+
+    // Check payment for paid routes
+    const paymentResult = await paymentMiddleware(request, key, agent);
+    if (paymentResult) {
+      return paymentResult;  // 402 Payment Required
+    }
+
+    // Process request
+    const { input } = await request.json();
+    const result = await handlers.invoke(key, input);
+    return Response.json(result);
+  },
+});
+```
+
+### createTanStackPaywall(agent, config)
+
+Creates a paywall configuration for routes.
+
+```typescript
+function createTanStackPaywall(
+  agent: AgentRuntime,
+  config: PaywallConfig
+): TanStackPaywall
+
+type PaywallConfig = {
+  routes: {
+    [path: string]: {
+      price?: string;    // e.g., "$0.01"
+      network?: Network;
+    };
+  };
+};
+```
+
+### paymentMiddleware(request, entrypointKey, agent)
+
+Middleware function that checks payment requirements.
+
+```typescript
+async function paymentMiddleware(
+  request: Request,
+  entrypointKey: string,
+  agent: AgentRuntime
+): Promise<Response | null>
+```
+
+Returns:
+- `Response` with 402 status if payment required and invalid
+- `null` if payment is valid or not required
+
+## UI template
+
+The `tanstack-ui` CLI template includes a dashboard for:
+
+- Viewing agent metadata
+- Testing entrypoints
+- Monitoring tasks
+- Viewing logs
+
+## Headless template
+
+The `tanstack-headless` CLI template provides API-only routes without UI components.
+
+## Full example
+
+```typescript title="app/lib/agent.ts"
+import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+// Add entrypoints
+agent.entrypoints.add({
+  key: 'chat',
+  input: z.object({ message: z.string() }),
+  streaming: true,
+  async stream(ctx, emit) {
+    await emit({ kind: 'delta', delta: 'Hello!', mime: 'text/plain' });
+    return { output: { completed: true } };
+  },
+});
+
+export const { runtime, handlers } = await createTanStackRuntime(agent);
+export { agent };
+```
+
+## Exports
+
+```typescript
+// Main API
+export { createTanStackRuntime } from '@lucid-agents/tanstack';
+export { createTanStackHandlers } from '@lucid-agents/tanstack';
+
+// Payment middleware
+export { createTanStackPaywall, paymentMiddleware } from '@lucid-agents/tanstack';
+
+// Types
+export type {
+  TanStackRuntime,
+  TanStackHandlers,
+  TanStackPaywall,
+  PaywallConfig,
+} from '@lucid-agents/tanstack';
+```

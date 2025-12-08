@@ -1,0 +1,59 @@
+---
+title: Lucid Agents
+description: The protocol-agnostic multi-runtime framework for building and monetizing AI agents.
+icon: Sparkles
+---
+
+Build, deploy, and monetize autonomous AI agents with typed entrypoints, on-chain identity, and built-in payment infrastructure.
+
+## Quick start
+
+Get your first agent running in minutes:
+
+```bash
+bunx @lucid-agents/cli my-agent
+cd my-agent
+bun run dev
+```
+
+<Cards>
+  <Card
+    title="Introduction"
+    description="Learn what Lucid Agents is and why you should use it"
+    href="/docs/getting-started/introduction"
+  />
+  <Card
+    title="Installation"
+    description="Install packages and set up your environment"
+    href="/docs/getting-started/installation"
+  />
+  <Card
+    title="Quickstart"
+    description="Build your first agent in 5 minutes"
+    href="/docs/getting-started/quickstart"
+  />
+</Cards>
+
+## Core concepts
+
+<Cards>
+  <Card
+    title="Agents"
+    description="Understand agent configuration and the extension system"
+    href="/docs/concepts/agents"
+  />
+  <Card
+    title="Entrypoints"
+    description="Define typed API capabilities with Zod schemas"
+    href="/docs/concepts/entrypoints"
+  />
+</Cards>
+
+## Key features
+
+- **Type-safe APIs** - Define inputs/outputs with Zod schemas, get automatic validation and TypeScript inference
+- **Framework flexibility** - Deploy on Hono, TanStack Start, Express, or Next.js
+- **Accept payments** - x402 protocol for USDC payments on Base or Solana
+- **On-chain identity** - ERC-8004 standard for verifiable agent reputation
+- **Agent-to-Agent** - A2A protocol for agent discovery and communication
+- **Real-time streaming** - Server-Sent Events for LLM responses and long operations
