@@ -1,16 +1,19 @@
 ---
 "@lucid-agents/payments": minor
 "@lucid-agents/analytics": minor
+"@lucid-agents/scheduler": minor
+"@lucid-agents/a2a": minor
 "@lucid-agents/hono": patch
 "@lucid-agents/express": patch
 "@lucid-agents/types": patch
+"@lucid-agents/examples": minor
 ---
 
-# Bi-directional Payment Tracking and Analytics
+# Bi-directional Payment Tracking, Analytics, and Scheduler Package
 
 ## Overview
 
-This changeset implements comprehensive bi-directional payment tracking with persistent storage, incoming payment policies (receivables), and a dedicated analytics package. The system tracks both outgoing payments (agent pays) and incoming payments (agent receives), with support for multiple storage backends and policy enforcement.
+This changeset implements comprehensive bi-directional payment tracking with persistent storage, incoming payment policies (receivables), a dedicated analytics package, and introduces a new scheduler package for automated agent task execution. The system tracks both outgoing payments (agent pays) and incoming payments (agent receives), with support for multiple storage backends, policy enforcement, and scheduled agent invocations.
 
 ## New Features
 
@@ -88,14 +91,34 @@ New `@lucid-agents/analytics` package provides comprehensive payment reporting:
 - Performance monitoring and optimization
 - Revenue and cost analysis
 
-### 7. Automatic Payment Recording
+### 7. Scheduler Package
+
+New `@lucid-agents/scheduler` package provides pull-style scheduling for hiring agents and invoking them on a schedule with bound wallets:
+
+- **Runtime** - Scheduler runtime with extension system integration
+- **Worker** - Background worker for executing scheduled hires
+- **In-Memory Store** - Default storage for scheduled hires (can be extended)
+- **Type-Safe APIs** - Full TypeScript support for one-time and recurring hires
+- **Interval Scheduling** - Support for recurring tasks with configurable intervals
+- **Multi-Agent Hires** - Schedule hires across multiple agents
+- **Paid Invocations** - Support for scheduling paid agent invocations
+
+### 8. Agent Card Fetching API
+
+New API in `@lucid-agents/a2a` package to fetch agent cards with entrypoint details:
+
+- Fetch agent cards with full entrypoint information
+- Support for discovering agent capabilities before scheduling
+- Integration with scheduler for dynamic agent discovery
+
+### 9. Automatic Payment Recording
 
 Payments are automatically tracked:
 
 - **Outgoing payments** - Recorded when using `fetchWithPayment` (policy enforcement happens before payment)
 - **Incoming payments** - Recorded after x402 validation succeeds (policy enforcement happens after payment for wallet-based checks)
 
-### 8. Utility Functions
+### 10. Utility Functions
 
 New shared utility functions for paywall implementations:
 
@@ -136,7 +159,6 @@ const group: PaymentPolicyGroup = {
   },
 };
 ```
-
 
 ## Implementation Details
 
@@ -184,6 +206,52 @@ Both Hono and Express paywalls now support:
    - Extracts payer address from `X-PAYMENT-RESPONSE` header
    - Records incoming payment in PaymentTracker
 
+### Scheduler Extension
+
+The scheduler integrates with the agent extension system:
+
+```typescript
+import { scheduler } from '@lucid-agents/scheduler';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(scheduler())
+  .build();
+```
+
+### Scheduling Hires
+
+Schedule one-time or recurring hires:
+
+```typescript
+// One-time hire
+await agent.scheduler.schedule({
+  agentUrl: 'https://other-agent.com',
+  entrypoint: 'process',
+  input: { data: 'value' },
+  executeAt: Date.now() + 60000, // 1 minute from now
+});
+
+// Recurring hire (every hour)
+await agent.scheduler.schedule({
+  agentUrl: 'https://other-agent.com',
+  entrypoint: 'process',
+  input: { data: 'value' },
+  interval: 3600000, // 1 hour in milliseconds
+});
+```
+
+### Worker Execution
+
+The scheduler worker automatically executes scheduled hires:
+
+- Pulls pending hires from the store
+- Executes hires at their scheduled time
+- Handles errors and retries
+- Supports bound wallets for paid invocations
+
 ## Files Changed
 
 ### New Files
@@ -202,6 +270,24 @@ Both Hono and Express paywalls now support:
 - `packages/analytics/src/index.ts` - Main exports
 - `packages/analytics/src/extension.ts` - Analytics extension
 - `packages/analytics/src/api.ts` - Analytics API functions
+- `packages/analytics/src/__tests__/csv-export.test.ts` - CSV export tests
+- `packages/analytics/src/__tests__/format-usdc.test.ts` - USDC formatting tests
+
+**Scheduler Package:**
+
+- `packages/scheduler/src/index.ts` - Main exports
+- `packages/scheduler/src/extension.ts` - Scheduler extension
+- `packages/scheduler/src/runtime.ts` - Scheduler runtime
+- `packages/scheduler/src/worker.ts` - Background worker
+- `packages/scheduler/src/store.ts` - In-memory store
+- `packages/scheduler/README.md` - Package documentation
+- `packages/scheduler/src/__tests__/runtime.test.ts` - Runtime tests
+- `packages/scheduler/src/__tests__/worker.test.ts` - Worker tests
+- `packages/scheduler/src/__tests__/store.test.ts` - Store tests
+
+**A2A Package:**
+
+- `packages/a2a/src/agent-card.ts` - Agent card fetching with entrypoint details
 
 **Examples:**
 
@@ -209,6 +295,9 @@ Both Hono and Express paywalls now support:
 - `packages/examples/src/payments/receivables-policies/env.example` - Environment variables
 - `packages/examples/src/analytics/index.ts` - Analytics usage example
 - `packages/examples/src/analytics/env.example` - Environment variables
+- `packages/examples/src/scheduler/hello-interval/index.ts` - Interval scheduling example
+- `packages/examples/src/scheduler/double-hire/index.ts` - Multi-agent hire example
+- `packages/examples/src/scheduler/paid-invocations/index.ts` - Paid invocation example
 
 ### Modified Files
 
@@ -231,6 +320,7 @@ Both Hono and Express paywalls now support:
 
 - `packages/types/src/payments/index.ts` - Added new types, removed deprecated types
 - `packages/types/src/analytics/index.ts` - New analytics types domain
+- `packages/types/src/scheduler/index.ts` - Scheduler type definitions
 
 **Hono Adapter:**
 
@@ -244,6 +334,10 @@ Both Hono and Express paywalls now support:
 - `packages/express/src/app.ts` - Pass runtime to paywall
 - `packages/express/src/__tests__/paywall.test.ts` - New tests for incoming payment recording
 
+**A2A Package:**
+
+- `packages/a2a/src/index.ts` - Export agent card fetching API
+
 **Core Package:**
 
 - `packages/core/README.md` - Updated payment section with bi-directional tracking info and link to payments README
@@ -253,6 +347,7 @@ Both Hono and Express paywalls now support:
 - `packages/examples/src/payments/policy-agent/index.ts` - Updated to use `outgoingLimits`
 - `packages/examples/src/payments/payment-policies.json` - Updated to use `outgoingLimits`
 - `packages/examples/src/payments/payment-policies.json.example` - Updated to use `outgoingLimits`
+- `packages/examples/package.json` - Added scheduler dependency
 
 ### Deleted Files
 
@@ -266,6 +361,15 @@ Both Hono and Express paywalls now support:
 - `pg@^8.13.1` - PostgreSQL client
 - `@types/better-sqlite3@^7.6.13` - TypeScript types
 - `@types/pg@^8.11.10` - TypeScript types
+
+**Analytics Package:**
+
+- `viem@^2.41.2` - For USDC amount formatting (formatUnits)
+
+**Scheduler Package:**
+
+- `@lucid-agents/a2a` - For agent card fetching and invocations
+- `@lucid-agents/types` - For type definitions
 
 ## Known Limitations
 
@@ -340,4 +444,20 @@ await evaluateOutgoingLimits(group, tracker, targetUrl, endpointUrl, amount);
   }
 }
 ```
+
+## Use Cases
+
+**Payment Tracking & Analytics:**
+- Financial reporting and reconciliation
+- Integration with accounting systems (QuickBooks, Xero, etc.)
+- Audit trails and compliance
+- Performance monitoring and optimization
+- Revenue and cost analysis
+
+**Scheduler:**
+- Automated Data Processing - Schedule regular data processing tasks
+- Multi-Agent Workflows - Coordinate tasks across multiple agents
+- Scheduled Reports - Generate and send reports on a schedule
+- Periodic Health Checks - Monitor agent health and status
+- Paid Service Invocations - Schedule paid agent service calls
 
