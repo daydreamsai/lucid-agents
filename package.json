@@ -2,7 +2,8 @@
   "name": "@lucid-agents/root",
   "workspaces": {
     "packages": [
-      "packages/*"
+      "packages/*",
+      "lucid-docs"
     ],
     "catalog": {
       "zod": "^4.1.12",

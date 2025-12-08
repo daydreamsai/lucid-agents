@@ -1,0 +1,232 @@
+---
+title: "@lucid-agents/http"
+description: HTTP extension for request/response handling and SSE streaming.
+icon: Globe
+---
+
+The HTTP extension adds HTTP protocol support to agents, including request handling, Server-Sent Events (SSE) streaming, and landing page rendering.
+
+## Installation
+
+```bash
+bun add @lucid-agents/http
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .build();
+```
+
+## API reference
+
+### http(options?)
+
+Creates the HTTP extension.
+
+```typescript
+function http(options?: HttpExtensionOptions): Extension<HttpExtensionContext>
+```
+
+**Options:**
+
+```typescript
+type HttpExtensionOptions = {
+  landingPage?: boolean;  // Enable landing page at "/" (default: true)
+  favicon?: boolean;      // Enable favicon endpoint (default: true)
+};
+```
+
+**Example:**
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http({ landingPage: true, favicon: true }))
+  .build();
+```
+
+### HTTP handlers
+
+When the HTTP extension is used, `agent.handlers` provides these handlers:
+
+```typescript
+type AgentHttpHandlers = {
+  invoke: (key: string, input: unknown, request?: Request) => Promise<InvokeResult>;
+  stream: (key: string, input: unknown, request?: Request) => ReadableStream;
+  manifest: (origin: string) => AgentCardWithEntrypoints;
+  health: () => { status: 'ok' };
+  entrypoints: () => EntrypointInfo[];
+  landingPage?: (origin: string) => string;
+  favicon?: () => Response;
+};
+```
+
+Framework adapters use these handlers to create routes.
+
+### SSE streaming
+
+The HTTP extension provides utilities for Server-Sent Events:
+
+```typescript
+import { createSSEStream, writeSSE } from '@lucid-agents/http';
+
+// Create an SSE stream
+const stream = createSSEStream((writer) => {
+  await writeSSE(writer, { kind: 'delta', delta: 'Hello', mime: 'text/plain' });
+  await writeSSE(writer, { kind: 'done', output: { completed: true } });
+});
+```
+
+### Stream envelopes
+
+Streaming entrypoints emit typed envelopes:
+
+```typescript
+// Delta envelope - incremental content (e.g., LLM tokens)
+type StreamDeltaEnvelope = {
+  kind: 'delta';
+  delta: string;
+  mime: string;  // e.g., 'text/plain', 'text/markdown'
+};
+
+// Data envelope - structured data
+type StreamDataEnvelope = {
+  kind: 'data';
+  data: unknown;
+};
+
+// Status envelope - progress updates
+type StreamStatusEnvelope = {
+  kind: 'status';
+  status: string;
+};
+
+// Done envelope - final result
+type StreamDoneEnvelope = {
+  kind: 'done';
+  output: unknown;
+  usage?: Usage;
+  model?: string;
+};
+
+// Error envelope
+type StreamErrorEnvelope = {
+  kind: 'error';
+  error: { code: string; message: string };
+};
+```
+
+### Stream result
+
+Stream handlers return a `StreamResult`:
+
+```typescript
+type StreamResult = {
+  output: unknown;
+  usage?: Usage;
+  model?: string;
+};
+```
+
+## Endpoints
+
+The HTTP extension enables these endpoints (via framework adapters):
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Landing page (if enabled) |
+| `/.well-known/agent.json` | GET | Agent Card manifest |
+| `/health` | GET | Health check |
+| `/entrypoints` | GET | List available entrypoints |
+| `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
+| `/entrypoints/:key/stream` | POST | Stream from an entrypoint |
+| `/tasks` | GET | List tasks |
+| `/tasks/:id` | GET | Get task by ID |
+| `/tasks/:id/cancel` | POST | Cancel a task |
+| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
+| `/favicon.ico` | GET | Favicon (if enabled) |
+
+## Request/Response format
+
+### Invoke request
+
+```bash
+POST /entrypoints/greet/invoke
+Content-Type: application/json
+
+{
+  "input": {
+    "name": "Alice"
+  }
+}
+```
+
+### Invoke response
+
+```json
+{
+  "status": "completed",
+  "output": {
+    "message": "Hello, Alice!"
+  },
+  "usage": {
+    "total_tokens": 10
+  }
+}
+```
+
+### Stream request
+
+```bash
+POST /entrypoints/chat/stream
+Content-Type: application/json
+
+{
+  "input": {
+    "message": "Hello"
+  }
+}
+```
+
+### Stream response (SSE)
+
+```
+data: {"kind":"delta","delta":"Hello","mime":"text/plain"}
+
+data: {"kind":"delta","delta":", how can I help?","mime":"text/plain"}
+
+data: {"kind":"done","output":{"completed":true},"usage":{"total_tokens":25}}
+```
+
+## Exports
+
+```typescript
+// Extension
+export { http } from '@lucid-agents/http';
+export type { HttpExtensionOptions } from '@lucid-agents/http';
+
+// SSE utilities
+export { createSSEStream, writeSSE } from '@lucid-agents/http';
+
+// Handler utilities
+export { invokeHandler } from '@lucid-agents/http';
+
+// Types
+export type {
+  AgentHttpHandlers,
+  StreamEnvelope,
+  StreamPushEnvelope,
+  StreamDeltaEnvelope,
+  StreamDataEnvelope,
+  StreamDoneEnvelope,
+  StreamResult,
+} from '@lucid-agents/http';
+```

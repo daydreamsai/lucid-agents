@@ -1,0 +1,122 @@
+---
+title: Packages
+description: Reference documentation for all Lucid Agents packages.
+icon: Package
+---
+
+Lucid Agents is organized as a monorepo with packages in four layers:
+
+## Foundation
+
+<Cards>
+  <Card
+    title="@lucid-agents/types"
+    description="Shared TypeScript type definitions"
+    href="/docs/packages/types"
+  />
+  <Card
+    title="@lucid-agents/core"
+    description="Protocol-agnostic agent runtime with extension system"
+    href="/docs/packages/core"
+  />
+</Cards>
+
+## Extensions
+
+Optional capabilities you can add to your agent:
+
+<Cards>
+  <Card
+    title="@lucid-agents/http"
+    description="HTTP request/response handling and SSE streaming"
+    href="/docs/packages/http"
+  />
+  <Card
+    title="@lucid-agents/payments"
+    description="x402 payment protocol for monetizing agents"
+    href="/docs/packages/payments"
+  />
+  <Card
+    title="@lucid-agents/identity"
+    description="ERC-8004 on-chain identity and reputation"
+    href="/docs/packages/identity"
+  />
+  <Card
+    title="@lucid-agents/a2a"
+    description="Agent-to-Agent protocol for discovery and communication"
+    href="/docs/packages/a2a"
+  />
+  <Card
+    title="@lucid-agents/wallet"
+    description="Wallet connectors for agent operations"
+    href="/docs/packages/wallet"
+  />
+  <Card
+    title="@lucid-agents/ap2"
+    description="Agent Payments Protocol extension"
+    href="/docs/packages/ap2"
+  />
+</Cards>
+
+## Framework Adapters
+
+Integrate agents with your preferred web framework:
+
+<Cards>
+  <Card
+    title="@lucid-agents/hono"
+    description="Hono framework adapter"
+    href="/docs/packages/hono"
+  />
+  <Card
+    title="@lucid-agents/tanstack"
+    description="TanStack Start adapter"
+    href="/docs/packages/tanstack"
+  />
+  <Card
+    title="@lucid-agents/express"
+    description="Express framework adapter"
+    href="/docs/packages/express"
+  />
+</Cards>
+
+## Developer Tools
+
+<Cards>
+  <Card
+    title="@lucid-agents/cli"
+    description="CLI for scaffolding new agent projects"
+    href="/docs/packages/cli"
+  />
+</Cards>
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Developer Tools                       │
+│                      @lucid-agents/cli                   │
+└─────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────┐
+│                   Framework Adapters                     │
+│         hono  │  tanstack  │  express  │  next          │
+└─────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────┐
+│                      Extensions                          │
+│   http │ payments │ identity │ a2a │ wallet │ ap2       │
+└─────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────┐
+│                         Core                             │
+│                    @lucid-agents/core                    │
+└─────────────────────────────────────────────────────────┘
+                            │
+┌─────────────────────────────────────────────────────────┐
+│                        Types                             │
+│                   @lucid-agents/types                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+Dependencies flow downward. The core runtime is protocol-agnostic; HTTP is provided as an extension.

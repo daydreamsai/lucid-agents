@@ -1,0 +1,298 @@
+---
+title: Entrypoints
+description: Define typed API capabilities for your agent.
+icon: Zap
+---
+
+Entrypoints are typed API endpoints that define your agent's capabilities. Each entrypoint has input/output schemas, a handler, and optional pricing.
+
+## Defining an entrypoint
+
+Use `addEntrypoint()` from your framework adapter:
+
+```typescript
+import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '@lucid-agents/hono';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+addEntrypoint({
+  key: 'greet',
+  description: 'Greets a user by name',
+  input: z.object({
+    name: z.string(),
+  }),
+  output: z.object({
+    message: z.string(),
+  }),
+  async handler({ input }) {
+    return {
+      output: {
+        message: `Hello, ${input.name}!`,
+      },
+    };
+  },
+});
+```
+
+## Entrypoint definition
+
+The `EntrypointDef` type defines the structure:
+
+```typescript
+type EntrypointDef = {
+  key: string;              // Unique identifier (used in URL path)
+  description?: string;     // Human-readable description
+  input?: ZodSchema;        // Input validation schema
+  output?: ZodSchema;       // Output validation schema
+  streaming?: boolean;      // Whether this entrypoint streams responses
+  price?: EntrypointPrice;  // Optional pricing (x402)
+  handler?: Function;       // Handler for non-streaming entrypoints
+  stream?: Function;        // Handler for streaming entrypoints
+  metadata?: Record<string, unknown>;
+};
+```
+
+## Input and output schemas
+
+Schemas are defined with Zod and provide:
+
+- **Runtime validation** - Invalid inputs return 400 errors
+- **TypeScript inference** - Full type safety in handlers
+- **JSON Schema generation** - Automatic schema in Agent Card
+
+```typescript
+addEntrypoint({
+  key: 'analyze',
+  input: z.object({
+    text: z.string().min(1).max(10000),
+    options: z.object({
+      language: z.enum(['en', 'es', 'fr']).default('en'),
+      includeKeywords: z.boolean().default(true),
+    }).optional(),
+  }),
+  output: z.object({
+    sentiment: z.number().min(-1).max(1),
+    keywords: z.array(z.string()),
+    wordCount: z.number(),
+  }),
+  async handler({ input }) {
+    // input is fully typed:
+    // { text: string, options?: { language: 'en' | 'es' | 'fr', includeKeywords: boolean } }
+
+    return {
+      output: {
+        sentiment: 0.75,
+        keywords: ['example', 'analysis'],
+        wordCount: input.text.split(' ').length,
+      },
+    };
+  },
+});
+```
+
+## Handler function
+
+The handler receives a context object with the validated input:
+
+```typescript
+async handler({ input, request, headers }) {
+  // input: Validated and typed input data
+  // request: Original HTTP request (if using HTTP extension)
+  // headers: Request headers
+
+  return {
+    output: { /* your output data */ },
+    usage: { total_tokens: 150 },  // Optional usage tracking
+    model: 'gpt-4',                // Optional model identifier
+  };
+}
+```
+
+## Streaming entrypoints
+
+For long-running operations or LLM responses, use streaming:
+
+```typescript
+addEntrypoint({
+  key: 'chat',
+  description: 'Chat with AI assistant',
+  input: z.object({
+    message: z.string(),
+    history: z.array(z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string(),
+    })).optional(),
+  }),
+  streaming: true,
+  async stream(ctx, emit) {
+    const { input } = ctx;
+
+    // Emit chunks as they become available
+    await emit({
+      kind: 'delta',
+      delta: 'Hello, ',
+      mime: 'text/plain',
+    });
+
+    await emit({
+      kind: 'delta',
+      delta: 'how can I help you today?',
+      mime: 'text/plain',
+    });
+
+    // Return final result
+    return {
+      output: { completed: true },
+      usage: { total_tokens: 25 },
+    };
+  },
+});
+```
+
+### Stream envelope types
+
+The `emit()` function accepts these envelope types:
+
+```typescript
+// Text delta (most common for LLM responses)
+await emit({
+  kind: 'delta',
+  delta: 'chunk of text',
+  mime: 'text/plain',
+});
+
+// JSON data
+await emit({
+  kind: 'data',
+  data: { key: 'value' },
+});
+
+// Status update
+await emit({
+  kind: 'status',
+  status: 'processing',
+});
+```
+
+Clients receive these as Server-Sent Events (SSE).
+
+## Invoking entrypoints
+
+### Non-streaming (invoke)
+
+```bash
+curl -X POST http://localhost:3000/entrypoints/greet/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"name": "Alice"}}'
+```
+
+Response:
+
+```json
+{
+  "status": "completed",
+  "output": {
+    "message": "Hello, Alice!"
+  }
+}
+```
+
+### Streaming (stream)
+
+```bash
+curl -X POST http://localhost:3000/entrypoints/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"message": "Hello"}}'
+```
+
+Response (SSE):
+
+```
+data: {"kind":"delta","delta":"Hello, ","mime":"text/plain"}
+
+data: {"kind":"delta","delta":"how can I help?","mime":"text/plain"}
+
+data: {"kind":"done","output":{"completed":true}}
+```
+
+## Adding pricing
+
+Entrypoints can require payment via the x402 protocol:
+
+```typescript
+addEntrypoint({
+  key: 'premium-analysis',
+  description: 'Advanced AI analysis',
+  input: z.object({ text: z.string() }),
+  output: z.object({ analysis: z.string() }),
+  price: {
+    invoke: '$0.01',  // Price per invocation
+  },
+  async handler({ input }) {
+    return {
+      output: { analysis: 'detailed analysis...' },
+    };
+  },
+});
+```
+
+With payments configured, requests without valid payment headers return `402 Payment Required`.
+
+## Listing entrypoints
+
+Get all available entrypoints:
+
+```bash
+curl http://localhost:3000/entrypoints
+```
+
+Response:
+
+```json
+[
+  {
+    "key": "greet",
+    "description": "Greets a user by name",
+    "streaming": false
+  },
+  {
+    "key": "chat",
+    "description": "Chat with AI assistant",
+    "streaming": true
+  }
+]
+```
+
+## Best practices
+
+1. **Use descriptive keys** - The key appears in URLs and the Agent Card
+2. **Always add descriptions** - They help with discovery and documentation
+3. **Validate thoroughly** - Use Zod's built-in validators (`.min()`, `.max()`, `.email()`, etc.)
+4. **Stream when appropriate** - Use streaming for LLM responses or long operations
+5. **Track usage** - Return `usage` for billing and analytics
+6. **Handle errors gracefully** - Throw errors with clear messages; they're returned as JSON
+
+## Next steps
+
+<Cards>
+  <Card
+    title="Build an LLM agent"
+    description="Create an AI-powered agent with streaming"
+    href="../guides/llm-agent"
+  />
+  <Card
+    title="Add payments"
+    description="Monetize your entrypoints with x402"
+    href="../payments"
+  />
+</Cards>

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   buildAgentCard,
   fetchAgentCard,
+  fetchAgentCardWithEntrypoints,
   findSkill,
   parseAgentCard,
   hasCapability,
@@ -286,6 +287,37 @@ describe('fetchAgentCard', () => {
     await expect(fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch)).rejects.toThrow(
       'Failed to fetch Agent Card'
     );
+  });
+});
+
+describe('fetchAgentCardWithEntrypoints', () => {
+  it('returns entrypoints when present', async () => {
+    const mockCard: AgentCardWithEntrypoints = {
+      name: 'remote-agent',
+      version: '1.0.0',
+      url: 'https://remote.example.com/',
+      skills: [],
+      entrypoints: {
+        default: { description: 'Default', streaming: false },
+      },
+    };
+
+    const mockFetch = mock(async (url: string | URL | Request) => {
+      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      if (urlStr.includes('/.well-known/agent-card.json')) {
+        return new Response(JSON.stringify(mockCard), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not Found', { status: 404 });
+    });
+
+    const card = await fetchAgentCardWithEntrypoints(
+      'https://remote.example.com',
+      mockFetch as unknown as typeof fetch
+    );
+
+    expect(card.entrypoints?.default).toBeDefined();
   });
 });
 
@@ -605,4 +637,3 @@ describe('findSkill', () => {
     expect(skill).toBeUndefined();
   });
 });
-

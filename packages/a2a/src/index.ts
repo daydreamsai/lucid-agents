@@ -1,6 +1,7 @@
 export {
   buildAgentCard,
   fetchAgentCard,
+  fetchAgentCardWithEntrypoints,
   parseAgentCard,
   findSkill,
   hasCapability,

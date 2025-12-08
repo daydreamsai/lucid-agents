@@ -1,0 +1,321 @@
+---
+title: "@lucid-agents/a2a"
+description: Agent-to-Agent protocol for discovery and communication.
+icon: Users
+---
+
+The A2A extension enables agents to discover and communicate with other agents using the Agent-to-Agent protocol.
+
+## Installation
+
+```bash
+bun add @lucid-agents/a2a
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { a2a } from '@lucid-agents/a2a';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(a2a())
+  .build();
+
+// Call another agent
+const result = await agent.a2a.client.fetchAndInvoke(
+  'https://other-agent.com',
+  'skillId',
+  { message: 'Hello' }
+);
+```
+
+## API reference
+
+### a2a()
+
+Creates the A2A extension.
+
+```typescript
+function a2a(): Extension<A2AExtensionContext>
+```
+
+### A2ARuntime
+
+When A2A is configured, `agent.a2a` provides:
+
+```typescript
+type A2ARuntime = {
+  buildCard: (origin: string) => AgentCardWithEntrypoints;
+  fetchCard: (baseUrl: string, fetch?: FetchFunction) => Promise<AgentCard>;
+  client: A2AClient;
+};
+```
+
+## Agent Cards
+
+Agent Cards describe an agent's capabilities and are served at `/.well-known/agent.json`.
+
+### AgentCard structure
+
+```typescript
+type AgentCard = {
+  protocolVersion?: string;  // Default: "1.0"
+  name: string;
+  description?: string;
+  version?: string;
+  supportedInterfaces?: AgentInterface[];
+  capabilities?: AgentCapabilities;
+  skills?: Skill[];
+  payments?: PaymentMethod[];
+  registrations?: RegistrationEntry[];
+  trustModels?: TrustModel[];
+};
+```
+
+### Fetching Agent Cards
+
+```typescript
+// Fetch another agent's card
+const card = await agent.a2a.fetchCard('https://other-agent.com');
+
+console.log(card.name);        // Agent name
+console.log(card.skills);      // Available skills/entrypoints
+console.log(card.payments);    // Payment methods
+```
+
+### Card utilities
+
+```typescript
+import { findSkill, hasCapability, supportsPayments } from '@lucid-agents/a2a';
+
+const card = await agent.a2a.fetchCard('https://other-agent.com');
+
+// Find a specific skill
+const chatSkill = findSkill(card, 'chat');
+
+// Check capabilities
+const canStream = hasCapability(card, 'streaming');
+
+// Check payment support
+const hasPaidEndpoints = supportsPayments(card);
+```
+
+## A2A Client
+
+The A2A client provides methods for calling other agents.
+
+### Direct invocation
+
+```typescript
+// Invoke an agent's entrypoint
+const result = await agent.a2a.client.invoke(
+  card,           // AgentCard
+  'skillId',      // Entrypoint key
+  { input: 'data' }
+);
+
+console.log(result.output);
+console.log(result.usage);
+```
+
+### Streaming
+
+```typescript
+// Stream from an agent
+await agent.a2a.client.stream(
+  card,
+  'chat',
+  { message: 'Hello' },
+  async (chunk) => {
+    if (chunk.type === 'delta') {
+      process.stdout.write(chunk.data);
+    }
+  }
+);
+```
+
+### Convenience methods
+
+```typescript
+// Fetch card and invoke in one call
+const result = await agent.a2a.client.fetchAndInvoke(
+  'https://other-agent.com',
+  'skillId',
+  { input: 'data' }
+);
+```
+
+## Task-based operations
+
+For long-running operations, use task-based methods:
+
+### Send message
+
+Creates a task and returns immediately:
+
+```typescript
+const response = await agent.a2a.client.sendMessage(
+  card,
+  'skillId',
+  { message: 'Process this' },
+  undefined,  // fetch function
+  { contextId: 'conversation-123' }  // for multi-turn
+);
+
+console.log(response.taskId);  // Task ID for polling
+console.log(response.status);  // 'running'
+```
+
+### Get task
+
+Poll for task status:
+
+```typescript
+const task = await agent.a2a.client.getTask(card, taskId);
+
+console.log(task.status);   // 'running' | 'completed' | 'failed' | 'cancelled'
+console.log(task.result);   // Output when completed
+console.log(task.error);    // Error details if failed
+```
+
+### Subscribe to task
+
+Stream task updates via SSE:
+
+```typescript
+await agent.a2a.client.subscribeTask(
+  card,
+  taskId,
+  async (event) => {
+    switch (event.type) {
+      case 'statusUpdate':
+        console.log('Status:', event.data.status);
+        break;
+      case 'resultUpdate':
+        console.log('Result:', event.data.result);
+        break;
+      case 'error':
+        console.error('Error:', event.data.error);
+        break;
+    }
+  }
+);
+```
+
+### List tasks
+
+```typescript
+const response = await agent.a2a.client.listTasks(card, {
+  contextId: 'conversation-123',  // Filter by conversation
+  status: 'running',              // Filter by status
+  limit: 10,
+  offset: 0,
+});
+
+console.log(response.tasks);
+console.log(response.total);
+console.log(response.hasMore);
+```
+
+### Cancel task
+
+```typescript
+const cancelled = await agent.a2a.client.cancelTask(card, taskId);
+console.log(cancelled.status);  // 'cancelled'
+```
+
+## Multi-turn conversations
+
+Group related tasks with `contextId`:
+
+```typescript
+const contextId = crypto.randomUUID();
+
+// First message
+await agent.a2a.client.sendMessage(
+  card, 'chat', { message: 'Hello' },
+  undefined, { contextId }
+);
+
+// Follow-up in same conversation
+await agent.a2a.client.sendMessage(
+  card, 'chat', { message: 'Tell me more' },
+  undefined, { contextId }
+);
+
+// Get all messages in conversation
+const conversation = await agent.a2a.client.listTasks(card, { contextId });
+```
+
+## Task types
+
+```typescript
+type Task = {
+  taskId: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  result?: {
+    output: unknown;
+    usage?: Usage;
+    model?: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  contextId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+
+## Exports
+
+```typescript
+// Extension
+export { a2a } from '@lucid-agents/a2a';
+
+// Runtime
+export { createA2ARuntime } from '@lucid-agents/a2a';
+
+// Card operations
+export {
+  buildAgentCard,
+  fetchAgentCard,
+  parseAgentCard,
+  findSkill,
+  hasCapability,
+  supportsPayments,
+} from '@lucid-agents/a2a';
+
+// Client operations
+export {
+  invokeAgent,
+  streamAgent,
+  sendMessage,
+  getTask,
+  subscribeTask,
+  listTasks,
+  cancelTask,
+} from '@lucid-agents/a2a';
+
+// Types
+export type {
+  AgentCard,
+  AgentCardWithEntrypoints,
+  A2ARuntime,
+  A2AClient,
+  Task,
+  TaskStatus,
+  TaskResult,
+  TaskError,
+  SendMessageRequest,
+  SendMessageResponse,
+} from '@lucid-agents/a2a';
+```

@@ -1,0 +1,256 @@
+---
+title: "@lucid-agents/express"
+description: Express framework adapter for running agents.
+icon: Server
+---
+
+The Express adapter creates an Express application from an agent runtime, exposing all entrypoints as HTTP routes.
+
+## Installation
+
+```bash
+bun add @lucid-agents/express express
+```
+
+For TypeScript:
+
+```bash
+bun add -D @types/express
+```
+
+For payments support:
+
+```bash
+bun add x402-express
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '@lucid-agents/express';
+import { z } from 'zod';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+addEntrypoint({
+  key: 'greet',
+  input: z.object({ name: z.string() }),
+  async handler({ input }) {
+    return { output: { message: `Hello, ${input.name}!` } };
+  },
+});
+
+app.listen(3000, () => {
+  console.log('Agent running at http://localhost:3000');
+});
+```
+
+## API reference
+
+### createAgentApp(agent, options?)
+
+Creates an Express app from an agent runtime.
+
+```typescript
+function createAgentApp(
+  agent: AgentRuntime,
+  options?: CreateAgentAppOptions
+): Promise<{
+  app: Express;
+  addEntrypoint: (def: EntrypointDef) => void;
+}>
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `agent` | `AgentRuntime` | Built agent runtime |
+| `options` | `CreateAgentAppOptions` | Optional configuration |
+
+**Returns:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `app` | `Express` | Configured Express application |
+| `addEntrypoint` | `Function` | Add entrypoints after app creation |
+
+### CreateAgentAppOptions
+
+```typescript
+type CreateAgentAppOptions = {
+  beforeMount?: (app: Express) => void;
+  afterMount?: (app: Express) => void;
+};
+```
+
+### Example with hooks
+
+```typescript
+import cors from 'cors';
+import helmet from 'helmet';
+
+const { app, addEntrypoint } = await createAgentApp(agent, {
+  beforeMount: (app) => {
+    // Add security middleware
+    app.use(helmet());
+    app.use(cors());
+
+    // Add authentication
+    app.use('/entrypoints', (req, res, next) => {
+      const token = req.headers.authorization;
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      next();
+    });
+  },
+  afterMount: (app) => {
+    // Add custom routes
+    app.get('/custom', (req, res) => {
+      res.json({ custom: true });
+    });
+
+    // Add error handler
+    app.use((err, req, res, next) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal error' });
+    });
+  },
+});
+```
+
+## Routes
+
+The adapter registers these routes:
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/` | GET | Landing page (if enabled) |
+| `/.well-known/agent.json` | GET | Agent Card manifest |
+| `/health` | GET | Health check endpoint |
+| `/entrypoints` | GET | List available entrypoints |
+| `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
+| `/entrypoints/:key/stream` | POST | Stream from an entrypoint (SSE) |
+| `/tasks` | GET | List tasks |
+| `/tasks/:id` | GET | Get task by ID |
+| `/tasks/:id/cancel` | POST | Cancel a task |
+| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
+| `/favicon.ico` | GET | Favicon |
+
+## Payment middleware
+
+Add x402 payment middleware for paid entrypoints:
+
+```typescript
+import { createAgentApp, withPayments } from '@lucid-agents/express';
+
+const agent = await createAgent(meta)
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// Add paid entrypoint
+addEntrypoint({
+  key: 'premium',
+  price: { invoke: '$0.01' },
+  async handler({ input }) {
+    return { output: { result: 'premium content' } };
+  },
+});
+
+// Wrap app with payment middleware
+withPayments(app, agent);
+
+app.listen(3000);
+```
+
+### withPayments(app, agent)
+
+Adds x402 payment verification middleware.
+
+```typescript
+function withPayments(app: Express, agent: AgentRuntime): void
+```
+
+The middleware:
+1. Checks if the entrypoint has a price
+2. Validates the `X-Payment` header
+3. Returns `402 Payment Required` if invalid/missing
+4. Allows the request through if payment is valid
+
+## Full example
+
+```typescript
+import express from 'express';
+import cors from 'cors';
+import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { createAgentApp, withPayments } from '@lucid-agents/express';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+  description: 'An AI-powered assistant',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent, {
+  beforeMount: (app) => {
+    app.use(cors());
+    app.use(express.json());
+  },
+});
+
+// Free entrypoint
+addEntrypoint({
+  key: 'echo',
+  input: z.object({ text: z.string() }),
+  async handler({ input }) {
+    return { output: { echoed: input.text } };
+  },
+});
+
+// Paid entrypoint
+addEntrypoint({
+  key: 'analyze',
+  input: z.object({ text: z.string() }),
+  price: { invoke: '$0.01' },
+  async handler({ input }) {
+    return { output: { analysis: 'AI analysis...' } };
+  },
+});
+
+// Add payment middleware
+withPayments(app, agent);
+
+const PORT = process.env.PORT ?? 3000;
+app.listen(PORT, () => {
+  console.log(`Agent running at http://localhost:${PORT}`);
+});
+```
+
+## Exports
+
+```typescript
+// Main API
+export { createAgentApp, withPayments } from '@lucid-agents/express';
+
+// Types
+export type { CreateAgentAppOptions } from '@lucid-agents/express';
+```

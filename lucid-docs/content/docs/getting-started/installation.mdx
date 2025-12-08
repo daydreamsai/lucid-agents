@@ -1,0 +1,181 @@
+---
+title: Installation
+description: Install Lucid Agents and set up your development environment.
+icon: Download
+---
+
+This guide covers installing Lucid Agents packages and setting up your development environment.
+
+## Prerequisites
+
+- [Bun](https://bun.sh/docs/installation) >= 1.0 (recommended) or Node.js >= 20.9
+- An API key from your preferred LLM provider (OpenAI, Anthropic, etc.) if building AI-powered agents
+- Optional: A wallet address for receiving payments
+
+## Using the CLI (recommended)
+
+The fastest way to get started is with the CLI, which scaffolds a complete project with your chosen configuration:
+
+```bash
+# Interactive mode - CLI guides you through all options
+bunx @lucid-agents/cli my-agent
+
+# Or with Bun directly
+bun create @lucid-agents/cli my-agent
+```
+
+The CLI will prompt you to select:
+
+- **Adapter**: `hono`, `tanstack-ui`, `tanstack-headless`, `express`, or `next`
+- **Template**: `blank`, `axllm`, `axllm-flow`, `identity`, `trading-data-agent`, or `trading-recommendation-agent`
+- **Configuration**: Agent metadata, LLM keys, and optional payment details
+
+### Non-interactive mode
+
+For CI/CD or scripted setups, pass options directly:
+
+```bash
+bunx @lucid-agents/cli my-agent \
+  --adapter=hono \
+  --template=axllm \
+  --AGENT_NAME="My AI Agent" \
+  --AGENT_DESCRIPTION="AI-powered assistant" \
+  --OPENAI_API_KEY=your_api_key_here \
+  --PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddress \
+  --NETWORK=base-sepolia \
+  --DEFAULT_PRICE=1000
+```
+
+## Manual installation
+
+If you prefer to set up packages manually or add Lucid Agents to an existing project:
+
+### Core packages
+
+```bash
+# Core runtime (required)
+bun add @lucid-agents/core @lucid-agents/types
+
+# HTTP extension (required for web servers)
+bun add @lucid-agents/http
+```
+
+### Framework adapter
+
+Install the adapter for your framework:
+
+```bash
+# Hono (lightweight, edge-compatible)
+bun add @lucid-agents/hono hono
+
+# TanStack Start (full-stack React)
+bun add @lucid-agents/tanstack @tanstack/start
+
+# Express (traditional Node.js)
+bun add @lucid-agents/express express
+
+# Next.js (App Router)
+bun add @lucid-agents/next
+```
+
+### Optional extensions
+
+Add capabilities as needed:
+
+```bash
+# Payments (x402 protocol)
+bun add @lucid-agents/payments
+
+# On-chain identity (ERC-8004)
+bun add @lucid-agents/identity
+
+# Agent-to-Agent communication
+bun add @lucid-agents/a2a
+
+# Wallet management
+bun add @lucid-agents/wallet
+
+# Agent Payments Protocol
+bun add @lucid-agents/ap2
+```
+
+### Peer dependencies
+
+Some extensions have peer dependencies:
+
+```bash
+# For payments
+bun add x402 x402-fetch
+
+# For identity and wallet operations
+bun add viem
+
+# For schema validation (likely already installed)
+bun add zod
+```
+
+## Package overview
+
+| Package | Purpose |
+|---------|---------|
+| `@lucid-agents/core` | Protocol-agnostic agent runtime with extension system |
+| `@lucid-agents/types` | Shared TypeScript type definitions |
+| `@lucid-agents/http` | HTTP extension for request/response handling and SSE |
+| `@lucid-agents/hono` | Hono framework adapter |
+| `@lucid-agents/tanstack` | TanStack Start adapter (UI and headless) |
+| `@lucid-agents/express` | Express framework adapter |
+| `@lucid-agents/payments` | x402 payment utilities |
+| `@lucid-agents/identity` | ERC-8004 identity toolkit |
+| `@lucid-agents/a2a` | A2A protocol client |
+| `@lucid-agents/wallet` | Wallet connectors and helpers |
+| `@lucid-agents/ap2` | Agent Payments Protocol extension |
+| `@lucid-agents/cli` | CLI scaffolding tool |
+
+## Environment variables
+
+Create a `.env` file in your project root. Required variables depend on which features you use:
+
+```bash
+# Agent metadata
+AGENT_NAME="My Agent"
+AGENT_DESCRIPTION="Description of what the agent does"
+
+# LLM provider (if using axllm template)
+OPENAI_API_KEY=sk-...
+# Or for other providers:
+# ANTHROPIC_API_KEY=...
+
+# Payments (optional)
+PAYMENTS_RECEIVABLE_ADDRESS=0x...  # EVM address or Solana address
+NETWORK=base-sepolia               # base, base-sepolia, ethereum, solana, solana-devnet
+
+# Identity (optional)
+IDENTITY_REGISTRY_ADDRESS=0x...
+AGENT_WALLET_PRIVATE_KEY=0x...
+```
+
+## Verify installation
+
+After installation, verify everything works:
+
+```bash
+cd my-agent
+bun run dev
+```
+
+Your agent should be running at `http://localhost:3000`. Test it:
+
+```bash
+# View agent manifest
+curl http://localhost:3000/.well-known/agent.json
+
+# List entrypoints
+curl http://localhost:3000/entrypoints
+```
+
+## Next steps
+
+<Cards>
+  <Card title="Quickstart" href="./quickstart" />
+  <Card title="Core concepts: Agents" href="../concepts/agents" />
+</Cards>

@@ -1,0 +1,247 @@
+---
+title: "@lucid-agents/ap2"
+description: Agent Payments Protocol extension for agent commerce.
+icon: ArrowLeftRight
+---
+
+The AP2 (Agent Payments Protocol) extension adds standardized payment protocol metadata to Agent Cards, enabling agent commerce patterns like merchant and shopper roles.
+
+## Installation
+
+```bash
+bun add @lucid-agents/ap2
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { ap2 } from '@lucid-agents/ap2';
+
+const agent = await createAgent({
+  name: 'merchant-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(ap2({ roles: ['merchant'] }))
+  .build();
+```
+
+## Configuration
+
+### AP2Config
+
+```typescript
+type AP2Config = {
+  roles: AP2Role[];  // Agent's roles in the protocol
+};
+
+type AP2Role = 'merchant' | 'shopper';
+```
+
+### Merchant role
+
+Agents that sell services:
+
+```typescript
+const agent = await createAgent({
+  name: 'data-provider',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(ap2({ roles: ['merchant'] }))
+  .build();
+```
+
+### Shopper role
+
+Agents that purchase services:
+
+```typescript
+const agent = await createAgent({
+  name: 'trading-bot',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(ap2({ roles: ['shopper'] }))
+  .build();
+```
+
+### Both roles
+
+Agents can act as both:
+
+```typescript
+const agent = await createAgent({
+  name: 'broker-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(ap2({ roles: ['merchant', 'shopper'] }))
+  .build();
+```
+
+## API reference
+
+### ap2(options)
+
+Creates the AP2 extension.
+
+```typescript
+function ap2(options: AP2Config): Extension<AP2ExtensionContext>
+```
+
+### AP2Runtime
+
+When AP2 is configured, `agent.ap2` provides:
+
+```typescript
+type AP2Runtime = {
+  config: AP2Config;
+  roles: AP2Role[];
+};
+```
+
+## Manifest integration
+
+AP2 adds extension metadata to the Agent Card:
+
+```json
+{
+  "name": "merchant-agent",
+  "capabilities": {
+    "extensions": [
+      {
+        "uri": "urn:x-lucid:ap2:1.0",
+        "params": {
+          "roles": ["merchant"]
+        }
+      }
+    ]
+  }
+}
+```
+
+### AP2ExtensionDescriptor
+
+```typescript
+type AP2ExtensionDescriptor = {
+  uri: 'urn:x-lucid:ap2:1.0';
+  params: AP2ExtensionParams;
+};
+
+type AP2ExtensionParams = {
+  roles: AP2Role[];
+};
+```
+
+## Use cases
+
+### Merchant pattern
+
+A merchant agent sells services to other agents:
+
+```typescript
+// Merchant agent provides trading data
+const merchantAgent = await createAgent({
+  name: 'trading-data-provider',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(ap2({ roles: ['merchant'] }))
+  .build();
+
+addEntrypoint({
+  key: 'get-market-data',
+  description: 'Real-time market data feed',
+  price: { invoke: '$0.001' },
+  async handler({ input }) {
+    // Return market data
+  },
+});
+```
+
+### Shopper pattern
+
+A shopper agent consumes services from merchants:
+
+```typescript
+// Shopper agent makes trading recommendations
+const shopperAgent = await createAgent({
+  name: 'trading-advisor',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(wallets({ config: walletsFromEnv() }))
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(a2a())
+  .use(ap2({ roles: ['shopper'] }))
+  .build();
+
+addEntrypoint({
+  key: 'get-recommendation',
+  async handler({ input }) {
+    // Fetch data from merchant agent (pays automatically)
+    const data = await agent.a2a.client.fetchAndInvoke(
+      'https://trading-data-provider.com',
+      'get-market-data',
+      { symbol: input.symbol }
+    );
+
+    // Process and return recommendation
+    return { output: { recommendation: 'buy', data } };
+  },
+});
+```
+
+### Agent marketplace
+
+Discover agents by role:
+
+```typescript
+// Find merchant agents
+const card = await agent.a2a.fetchCard('https://some-agent.com');
+
+const ap2Extension = card.capabilities?.extensions?.find(
+  (ext) => ext.uri === 'urn:x-lucid:ap2:1.0'
+);
+
+if (ap2Extension?.params?.roles?.includes('merchant')) {
+  // This agent sells services
+}
+```
+
+## Protocol URI
+
+The AP2 extension uses a standardized URI:
+
+```typescript
+export const AP2_EXTENSION_URI = 'urn:x-lucid:ap2:1.0';
+```
+
+## Exports
+
+```typescript
+// Extension
+export { ap2 } from '@lucid-agents/ap2';
+
+// Runtime
+export { createAP2Runtime } from '@lucid-agents/ap2';
+
+// Manifest integration
+export { createAgentCardWithAP2 } from '@lucid-agents/ap2';
+
+// Constants
+export { AP2_EXTENSION_URI } from '@lucid-agents/ap2';
+
+// Types
+export type {
+  AP2Config,
+  AP2Runtime,
+  AP2Role,
+  AP2ExtensionDescriptor,
+  AP2ExtensionParams,
+} from '@lucid-agents/ap2';
+```

@@ -1,0 +1,212 @@
+---
+title: "@lucid-agents/core"
+description: Protocol-agnostic agent runtime with extension system.
+icon: Cpu
+---
+
+The core package provides the agent runtime and extension system. It's protocol-agnostic—HTTP, payments, and other capabilities are added via extensions.
+
+## Installation
+
+```bash
+bun add @lucid-agents/core
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+  description: 'An AI-powered assistant',
+})
+  .use(http())
+  .build();
+```
+
+## API reference
+
+### createAgent(meta)
+
+Creates an `AgentBuilder` for constructing an agent with extensions.
+
+```typescript
+function createAgent(meta: AgentMeta): AgentBuilder
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `meta` | `AgentMeta` | Agent metadata (name, version, description, etc.) |
+
+**Returns:** `AgentBuilder` - A fluent builder for configuring the agent.
+
+### AgentMeta
+
+```typescript
+type AgentMeta = {
+  name: string;         // Required: Agent name
+  version: string;      // Required: Semantic version (e.g., "1.0.0")
+  description?: string; // What the agent does
+  icon?: string;        // Icon URL
+  image?: string;       // Open Graph image URL (1200x630px recommended)
+  url?: string;         // Canonical URL for the agent
+  type?: 'website' | 'article';
+};
+```
+
+### AgentBuilder
+
+Fluent builder for composing extensions.
+
+```typescript
+class AgentBuilder {
+  use<T>(extension: Extension<T>): AgentBuilder;
+  build(): Promise<AgentRuntime>;
+}
+```
+
+**Methods:**
+
+#### .use(extension)
+
+Adds an extension to the agent.
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http())
+  .use(payments({ config }))
+  .use(identity({ config }))
+  .build();
+```
+
+Extensions are applied in order. Each extension can access context from previous extensions.
+
+#### .build()
+
+Builds the agent runtime with all configured extensions.
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http())
+  .build();
+
+// agent.entrypoints - Entrypoint management
+// agent.handlers - HTTP handlers (if http extension used)
+// agent.config - Agent configuration
+```
+
+### AgentRuntime
+
+The built agent runtime provides access to all configured capabilities:
+
+```typescript
+type AgentRuntime = {
+  config: AgentConfig;
+  entrypoints: EntrypointsRuntime;
+  handlers?: AgentHttpHandlers;    // If http() extension used
+  payments?: PaymentsRuntime;      // If payments() extension used
+  identity?: IdentityRuntime;      // If identity() extension used
+  a2a?: A2ARuntime;               // If a2a() extension used
+  wallets?: WalletsRuntime;       // If wallets() extension used
+  ap2?: AP2Runtime;               // If ap2() extension used
+};
+```
+
+### EntrypointsRuntime
+
+Manages agent entrypoints:
+
+```typescript
+type EntrypointsRuntime = {
+  add: (def: EntrypointDef) => void;
+  list: () => Array<{ key: string; description?: string; streaming: boolean }>;
+  snapshot: () => EntrypointDef[];
+};
+```
+
+## Extension pattern
+
+Extensions follow a consistent interface:
+
+```typescript
+type Extension<T> = {
+  name: string;
+  build(ctx: BuildContext): T;
+  onEntrypointAdded?(entrypoint: EntrypointDef, runtime: AgentRuntime): void;
+  onManifestBuild?(
+    card: AgentCardWithEntrypoints,
+    runtime: AgentRuntime
+  ): AgentCardWithEntrypoints;
+};
+```
+
+**Lifecycle hooks:**
+
+| Hook | When called | Purpose |
+|------|-------------|---------|
+| `build` | During `.build()` | Initialize extension, return context |
+| `onEntrypointAdded` | After `entrypoints.add()` | React to new entrypoints |
+| `onManifestBuild` | When building Agent Card | Enhance manifest with extension data |
+
+## LLM integration
+
+The core package includes AxLLM integration for building AI-powered agents:
+
+```typescript
+import { createAxLLMClient } from '@lucid-agents/core';
+
+const ai = createAxLLMClient({
+  provider: 'openai',
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Use in entrypoint handler
+addEntrypoint({
+  key: 'chat',
+  streaming: true,
+  async stream(ctx, emit) {
+    const stream = await ai.chat.stream({
+      messages: [{ role: 'user', content: ctx.input.message }],
+    });
+
+    for await (const chunk of stream) {
+      await emit({ kind: 'delta', delta: chunk.delta, mime: 'text/plain' });
+    }
+
+    return { output: { completed: true } };
+  },
+});
+```
+
+## Exports
+
+```typescript
+// Main API
+export { createAgent, AgentBuilder } from '@lucid-agents/core';
+
+// Lower-level API
+export { AgentCore, createAgentCore } from '@lucid-agents/core';
+
+// LLM integration
+export { createAxLLMClient } from '@lucid-agents/core';
+export type { AxLLMClient, AxLLMClientOptions } from '@lucid-agents/core';
+
+// Utilities
+export { validateAgentMetadata } from '@lucid-agents/core';
+
+// Re-exported types
+export type {
+  EntrypointDef,
+  EntrypointHandler,
+  EntrypointStreamHandler,
+  AgentConfig,
+  StreamEnvelope,
+  StreamPushEnvelope,
+  StreamResult,
+} from '@lucid-agents/core';
+```

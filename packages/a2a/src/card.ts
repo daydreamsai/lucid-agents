@@ -89,72 +89,16 @@ export async function fetchAgentCard(
   baseUrl: string,
   fetchImpl?: FetchFunction
 ): Promise<AgentCard> {
-  const fetchFn = fetchImpl ?? globalThis.fetch;
-  if (!fetchFn) {
-    throw new Error('fetch is not available');
-  }
+  const card = await fetchAgentCardInternal(baseUrl, fetchImpl);
+  const { entrypoints, ...agentCard } = card;
+  return agentCard;
+}
 
-  // Try multiple well-known paths for agent card discovery
-  // Order: spec-recommended first, then alternatives, then legacy
-  const normalizedBase = baseUrl.replace(/\/$/, '');
-  const agentcardUrls: string[] = [];
-
-  // If baseUrl is already a full URL (starts with http:// or https://), try it directly first
-  // Per ERC-8004, endpoint may already be full URL to agent card
-  if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
-    agentcardUrls.push(baseUrl);
-  }
-
-  // Spec-recommended discovery path (A2A Protocol section 5.3)
-  agentcardUrls.push(`${normalizedBase}/.well-known/agent-card.json`);
-  // Alternative well-known path
-  agentcardUrls.push(`${normalizedBase}/.well-known/agent.json`);
-  // Legacy path
-  agentcardUrls.push(`${normalizedBase}/agentcard.json`);
-
-  let lastError: Error | null = null;
-
-  for (const agentcardUrl of agentcardUrls) {
-    try {
-      // Try to construct URL - if it fails, the URL might be malformed
-      let url: URL;
-      try {
-        url = new URL(agentcardUrl);
-      } catch {
-        // If baseUrl wasn't absolute, try relative to it
-        url = new URL(agentcardUrl, baseUrl);
-      }
-
-      const response = await fetchFn(url.toString());
-
-      if (response.ok) {
-        const json = await response.json();
-        const card = parseAgentCard(json);
-        const { entrypoints, ...agentCard } = card;
-        return agentCard;
-      }
-
-      if (response.status !== 404) {
-        lastError = new Error(
-          `Failed to fetch Agent Card: ${response.status} ${response.statusText}`
-        );
-      }
-    } catch (error) {
-      if (!lastError) {
-        lastError =
-          error instanceof Error
-            ? error
-            : new Error('Failed to fetch Agent Card');
-      }
-    }
-  }
-
-  throw (
-    lastError ||
-    new Error(
-      `Failed to fetch Agent Card from any well-known path. Tried: ${agentcardUrls.join(', ')}`
-    )
-  );
+export async function fetchAgentCardWithEntrypoints(
+  baseUrl: string,
+  fetchImpl?: FetchFunction
+): Promise<AgentCardWithEntrypoints> {
+  return fetchAgentCardInternal(baseUrl, fetchImpl);
 }
 
 /**
@@ -276,4 +220,72 @@ export function supportsPayments(card: AgentCard | null): boolean {
  */
 export function hasTrustInfo(card: AgentCard | null): boolean {
   return Boolean(card?.trustModels?.length || card?.registrations?.length);
+}
+
+/**
+ * Fetches Agent Card from another agent's well-known endpoint.
+ * Tries multiple well-known paths for compatibility with different agent implementations.
+ *
+ * Per ERC-8004, the endpoint may already be a full URL to the agent card.
+ * Per A2A spec section 5.3, the recommended discovery path is /.well-known/agent-card.json.
+ */
+async function fetchAgentCardInternal(
+  baseUrl: string,
+  fetchImpl?: FetchFunction
+): Promise<AgentCardWithEntrypoints> {
+  const fetchFn = fetchImpl ?? globalThis.fetch;
+  if (!fetchFn) {
+    throw new Error('fetch is not available');
+  }
+
+  const normalizedBase = baseUrl.replace(/\/$/, '');
+  const agentcardUrls: string[] = [];
+
+  if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
+    agentcardUrls.push(baseUrl);
+  }
+
+  agentcardUrls.push(`${normalizedBase}/.well-known/agent-card.json`);
+  agentcardUrls.push(`${normalizedBase}/.well-known/agent.json`);
+  agentcardUrls.push(`${normalizedBase}/agentcard.json`);
+
+  let lastError: Error | null = null;
+
+  for (const agentcardUrl of agentcardUrls) {
+    try {
+      let url: URL;
+      try {
+        url = new URL(agentcardUrl);
+      } catch {
+        url = new URL(agentcardUrl, baseUrl);
+      }
+
+      const response = await fetchFn(url.toString());
+
+      if (response.ok) {
+        const json = await response.json();
+        return parseAgentCard(json);
+      }
+
+      if (response.status !== 404) {
+        lastError = new Error(
+          `Failed to fetch Agent Card: ${response.status} ${response.statusText}`
+        );
+      }
+    } catch (error) {
+      if (!lastError) {
+        lastError =
+          error instanceof Error
+            ? error
+            : new Error('Failed to fetch Agent Card');
+      }
+    }
+  }
+
+  throw (
+    lastError ||
+    new Error(
+      `Failed to fetch Agent Card from any well-known path. Tried: ${agentcardUrls.join(', ')}`
+    )
+  );
 }

@@ -1,0 +1,201 @@
+---
+title: Quickstart
+description: Build and run your first Lucid agent in 5 minutes.
+icon: Rocket
+---
+
+This guide walks you through creating a working agent in under 5 minutes.
+
+## Create your agent
+
+Run the CLI to scaffold a new project:
+
+```bash
+bunx @lucid-agents/cli my-agent
+```
+
+Select the following options when prompted:
+
+1. **Adapter**: `hono` (lightweight HTTP server)
+2. **Template**: `axllm` (LLM-powered agent)
+3. **Configuration**: Enter your agent name and OpenAI API key
+
+Or use inline configuration:
+
+```bash
+bunx @lucid-agents/cli my-agent \
+  --adapter=hono \
+  --template=axllm \
+  --AGENT_NAME="My First Agent" \
+  --OPENAI_API_KEY=sk-your-key-here
+```
+
+## Start the development server
+
+```bash
+cd my-agent
+bun run dev
+```
+
+Your agent is now running at `http://localhost:3000`.
+
+## Test your agent
+
+Open a new terminal and try these commands:
+
+### View the agent manifest
+
+```bash
+curl http://localhost:3000/.well-known/agent.json
+```
+
+This returns the Agent Card describing your agent's capabilities, entrypoints, and metadata.
+
+### List available entrypoints
+
+```bash
+curl http://localhost:3000/entrypoints
+```
+
+### Invoke an entrypoint
+
+For the `axllm` template, invoke the chat entrypoint:
+
+```bash
+curl -X POST http://localhost:3000/entrypoints/chat/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"message": "Hello! What can you help me with?"}}'
+```
+
+### Stream a response
+
+For streaming responses (Server-Sent Events):
+
+```bash
+curl -X POST http://localhost:3000/entrypoints/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"message": "Tell me a short story"}}'
+```
+
+## Understanding the project structure
+
+The CLI generates a project with this structure:
+
+```
+my-agent/
+├── src/
+│   └── index.ts        # Agent definition and entrypoints
+├── .env                # Environment variables
+├── package.json
+└── tsconfig.json
+```
+
+Open `src/index.ts` to see your agent definition:
+
+```typescript title="src/index.ts"
+import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '@lucid-agents/hono';
+
+// Create the agent with metadata
+const agent = await createAgent({
+  name: 'My First Agent',
+  version: '1.0.0',
+  description: 'An AI-powered assistant',
+})
+  .use(http())
+  .build();
+
+// Create the Hono app
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// Add an entrypoint
+addEntrypoint({
+  key: 'chat',
+  description: 'Chat with the AI assistant',
+  input: z.object({
+    message: z.string(),
+  }),
+  streaming: true,
+  async stream(ctx, emit) {
+    // Your LLM logic here
+    // emit() sends chunks to the client via SSE
+  },
+});
+
+// Export for Bun.serve
+export default {
+  port: Number(process.env.PORT ?? 3000),
+  fetch: app.fetch,
+};
+```
+
+## Add a simple entrypoint
+
+Let's add a non-streaming entrypoint. Add this after the existing entrypoint:
+
+```typescript title="src/index.ts"
+addEntrypoint({
+  key: 'echo',
+  description: 'Echoes back the input text',
+  input: z.object({
+    text: z.string(),
+  }),
+  output: z.object({
+    echoed: z.string(),
+    timestamp: z.string(),
+  }),
+  async handler({ input }) {
+    return {
+      output: {
+        echoed: input.text,
+        timestamp: new Date().toISOString(),
+      },
+    };
+  },
+});
+```
+
+Test it:
+
+```bash
+curl -X POST http://localhost:3000/entrypoints/echo/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"text": "Hello, Lucid Agents!"}}'
+```
+
+Response:
+
+```json
+{
+  "status": "completed",
+  "output": {
+    "echoed": "Hello, Lucid Agents!",
+    "timestamp": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+## What's next?
+
+You now have a working agent. From here you can:
+
+<Cards>
+  <Card
+    title="Learn about agents"
+    description="Understand agent configuration and lifecycle"
+    href="../concepts/agents"
+  />
+  <Card
+    title="Learn about entrypoints"
+    description="Define typed capabilities with schemas"
+    href="../concepts/entrypoints"
+  />
+</Cards>
+
+When you're ready to add more capabilities:
+
+- **Accept payments** - See the [Payments guide](/payments)
+- **On-chain identity** - See the [Identity guide](/identity)
+- **Call other agents** - See the [A2A guide](/a2a)

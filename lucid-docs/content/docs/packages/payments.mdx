@@ -1,0 +1,254 @@
+---
+title: "@lucid-agents/payments"
+description: x402 payment protocol for monetizing agent capabilities.
+icon: CreditCard
+---
+
+The payments extension adds x402 payment protocol support, enabling agents to accept payments in USDC on EVM chains (Base, Ethereum) or Solana.
+
+## Installation
+
+```bash
+bun add @lucid-agents/payments x402 x402-fetch
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+```
+
+## Configuration
+
+### Environment variables
+
+```bash
+# Wallet address to receive payments
+PAYMENTS_RECEIVABLE_ADDRESS=0x...  # EVM address or Solana address
+
+# Network for payments
+NETWORK=base-sepolia  # base, base-sepolia, ethereum, solana, solana-devnet
+
+# Default price for entrypoints (in cents)
+DEFAULT_PRICE=100  # $1.00
+```
+
+### paymentsFromEnv()
+
+Loads configuration from environment variables:
+
+```typescript
+import { paymentsFromEnv } from '@lucid-agents/payments';
+
+const config = paymentsFromEnv();
+// Returns PaymentsConfig from PAYMENTS_* env vars
+```
+
+### PaymentsConfig
+
+```typescript
+type PaymentsConfig = {
+  receivableAddress?: `0x${string}` | SolanaAddress;
+  network?: Network;
+  defaultPrice?: string;  // e.g., "$0.01" or "1000" (in smallest unit)
+};
+```
+
+## API reference
+
+### payments(options)
+
+Creates the payments extension.
+
+```typescript
+function payments(options: {
+  config: PaymentsConfig;
+}): Extension<PaymentsExtensionContext>
+```
+
+### Pricing entrypoints
+
+Add pricing to entrypoints:
+
+```typescript
+addEntrypoint({
+  key: 'premium-analysis',
+  description: 'Advanced AI analysis',
+  input: z.object({ text: z.string() }),
+  output: z.object({ analysis: z.string() }),
+  price: {
+    invoke: '$0.01',  // Price per invocation
+  },
+  async handler({ input }) {
+    return { output: { analysis: 'detailed analysis...' } };
+  },
+});
+```
+
+For streaming entrypoints:
+
+```typescript
+addEntrypoint({
+  key: 'chat',
+  streaming: true,
+  price: {
+    stream: '$0.005',  // Price per stream request
+  },
+  async stream(ctx, emit) {
+    // ...
+  },
+});
+```
+
+### Price formats
+
+Prices can be specified as:
+
+```typescript
+// Dollar string
+price: { invoke: '$0.01' }
+
+// Smallest unit (cents for USD)
+price: { invoke: '1000' }  // $0.01 in basis points
+```
+
+### PaymentsRuntime
+
+When payments are configured, `agent.payments` provides:
+
+```typescript
+type PaymentsRuntime = {
+  config: PaymentsConfig;
+  resolvePrice: (entrypoint: EntrypointDef) => EntrypointPrice | undefined;
+  evaluateRequirement: (
+    entrypoint: EntrypointDef,
+    request: Request
+  ) => PaymentRequirement | null;
+};
+```
+
+## Network support
+
+### EVM networks
+
+- `base` - Base mainnet
+- `base-sepolia` - Base Sepolia testnet
+- `ethereum` - Ethereum mainnet
+- `sepolia` - Ethereum Sepolia testnet
+
+### Solana networks
+
+- `solana` - Solana mainnet
+- `solana-devnet` - Solana devnet
+
+The network is auto-detected from the address format:
+- `0x...` - EVM address
+- Base58 string - Solana address
+
+## x402 protocol
+
+The x402 protocol enables HTTP-native payments:
+
+1. Client sends request without payment
+2. Server returns `402 Payment Required` with payment details
+3. Client creates payment and retries with `X-Payment` header
+4. Server verifies payment and processes request
+
+### Payment flow
+
+```
+Client                          Server
+  │                               │
+  │  POST /entrypoints/foo/invoke │
+  │─────────────────────────────▶│
+  │                               │
+  │  402 Payment Required         │
+  │  X-Payment-Details: {...}     │
+  │◀─────────────────────────────│
+  │                               │
+  │  POST /entrypoints/foo/invoke │
+  │  X-Payment: {payment_proof}   │
+  │─────────────────────────────▶│
+  │                               │
+  │  200 OK                       │
+  │  {output: ...}                │
+  │◀─────────────────────────────│
+```
+
+## Client-side payments
+
+Use `x402-fetch` to make paid requests:
+
+```typescript
+import { wrapFetchWithX402 } from 'x402-fetch';
+import { createWalletClient } from 'viem';
+
+const wallet = createWalletClient({ ... });
+const x402Fetch = wrapFetchWithX402(fetch, wallet);
+
+// Automatically handles 402 responses
+const response = await x402Fetch('https://agent.example.com/entrypoints/chat/invoke', {
+  method: 'POST',
+  body: JSON.stringify({ input: { message: 'Hello' } }),
+});
+```
+
+## Manifest integration
+
+Payment information is included in the Agent Card:
+
+```json
+{
+  "name": "my-agent",
+  "payments": [
+    {
+      "method": "x402",
+      "payee": "0x...",
+      "network": "base-sepolia"
+    }
+  ],
+  "skills": [
+    {
+      "id": "chat",
+      "pricing": {
+        "stream": "$0.005"
+      }
+    }
+  ]
+}
+```
+
+## Exports
+
+```typescript
+// Extension
+export { payments } from '@lucid-agents/payments';
+
+// Configuration
+export { paymentsFromEnv } from '@lucid-agents/payments';
+
+// Utilities
+export { resolvePrice, evaluatePaymentRequirement } from '@lucid-agents/payments';
+
+// x402 client utilities
+export { createX402Fetch, x402LLM } from '@lucid-agents/payments';
+export { createSpendingTracker, createRateLimiter } from '@lucid-agents/payments';
+
+// Types
+export type {
+  PaymentsConfig,
+  PaymentsRuntime,
+  EntrypointPrice,
+  PaymentRequirement,
+} from '@lucid-agents/payments';
+```

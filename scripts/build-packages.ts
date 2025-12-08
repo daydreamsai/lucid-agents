@@ -80,35 +80,36 @@ async function buildPackages() {
     return;
   }
 
-  // Build order: base packages → extensions → core → adapters → CLI → examples
-  // Extensions (wallet, payments, identity, a2a, ap2, http) only depend on types.
-  // Core depends on all extensions, so extensions must build first.
-  // Examples are full integration tests that depend on all packages.
+  // Build order ensures dependencies are built before dependents.
+  // Layer 0: Packages with no internal dependencies (types, CLI)
+  // Layer 1: Extensions that only depend on @lucid-agents/types
+  // Layer 2: Core runtime that depends on all extensions
+  // Layer 3: Adapters that depend on core and extensions
+  // Layer 4: Examples that depend on all packages for integration testing
   const preferredOrder = [
-    // Base layer - no internal dependencies
+    // Layer 0: Base packages with no internal dependencies
     '@lucid-agents/types',
+    '@lucid-agents/cli', // No runtime dependencies; generates code referencing adapters
 
-    // Extensions - only depend on types
-    '@lucid-agents/wallet', // Depends on types only
-    '@lucid-agents/payments', // Depends on types only
-    '@lucid-agents/analytics', // Depends on types only
-    '@lucid-agents/identity', // Depends on types only
-    '@lucid-agents/a2a', // Depends on types only
-    '@lucid-agents/ap2', // Depends on types only
-    '@lucid-agents/http', // Depends on types only
+    // Layer 1: Extensions (only depend on @lucid-agents/types)
+    '@lucid-agents/wallet',
+    '@lucid-agents/payments',
+    '@lucid-agents/analytics',
+    '@lucid-agents/identity',
+    '@lucid-agents/a2a',
+    '@lucid-agents/ap2',
+    '@lucid-agents/http',
+    '@lucid-agents/scheduler',
 
-    // Core - depends on all extensions
-    '@lucid-agents/core', // Depends on payments, identity, a2a, ap2, types, wallet
+    // Layer 2: Core runtime (depends on all extensions)
+    '@lucid-agents/core',
 
-    // Adapters - depend on core and extensions
-    '@lucid-agents/hono', // Depends on core, payments, types
-    '@lucid-agents/express', // Depends on core, payments, types
-    '@lucid-agents/tanstack', // Depends on core, payments, types
+    // Layer 3: Adapters (depend on core and extensions)
+    '@lucid-agents/hono',
+    '@lucid-agents/express',
+    '@lucid-agents/tanstack',
 
-    // CLI - no dependencies on other packages
-    '@lucid-agents/cli',
-
-    // Examples - full integration tests, depends on all packages
+    // Layer 4: Examples (depend on all packages for integration testing)
     '@lucid-agents/examples',
   ];
 

@@ -1,0 +1,22 @@
+{
+  "title": "Packages",
+  "pages": [
+    "index",
+    "---Foundation---",
+    "types",
+    "core",
+    "---Extensions---",
+    "http",
+    "payments",
+    "identity",
+    "a2a",
+    "wallet",
+    "ap2",
+    "---Adapters---",
+    "hono",
+    "tanstack",
+    "express",
+    "---Tools---",
+    "cli"
+  ]
+}

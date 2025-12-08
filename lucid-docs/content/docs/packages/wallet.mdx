@@ -1,0 +1,314 @@
+---
+title: "@lucid-agents/wallet"
+description: Wallet connectors and helpers for agent operations.
+icon: Wallet
+---
+
+The wallet extension provides wallet management for agents, supporting multiple wallet types including local private keys, thirdweb Engine, and custom signers.
+
+## Installation
+
+```bash
+bun add @lucid-agents/wallet viem
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(wallets({ config: walletsFromEnv() }))
+  .build();
+```
+
+## Configuration
+
+### Environment variables
+
+```bash
+# Agent wallet (for signing identity proofs, making payments)
+AGENT_WALLET_PRIVATE_KEY=0x...
+AGENT_WALLET_TYPE=local  # local, thirdweb, signer
+
+# For thirdweb Engine wallets
+AGENT_WALLET_SECRET_KEY=...
+AGENT_WALLET_CLIENT_ID=...
+AGENT_WALLET_LABEL=agent-wallet
+
+# Developer wallet (for receiving payments)
+DEVELOPER_WALLET_ADDRESS=0x...
+```
+
+### walletsFromEnv()
+
+Loads wallet configuration from environment:
+
+```typescript
+import { walletsFromEnv } from '@lucid-agents/wallet';
+
+const config = walletsFromEnv();
+```
+
+### WalletsConfig
+
+```typescript
+type WalletsConfig = {
+  agent?: WalletConnectorConfig;
+  developer?: WalletConnectorConfig;
+};
+
+type WalletConnectorConfig =
+  | LocalWalletConfig
+  | ThirdwebWalletConfig
+  | SignerWalletConfig;
+```
+
+## Wallet types
+
+### Local wallet
+
+Uses a private key directly:
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http())
+  .use(wallets({
+    config: {
+      agent: {
+        type: 'local',
+        privateKey: process.env.AGENT_WALLET_PRIVATE_KEY,
+        chainId: 84532,  // Base Sepolia
+      },
+    },
+  }))
+  .build();
+```
+
+### Thirdweb Engine wallet
+
+Uses thirdweb Engine for managed wallets:
+
+```typescript
+const agent = await createAgent(meta)
+  .use(http())
+  .use(wallets({
+    config: {
+      agent: {
+        type: 'thirdweb',
+        secretKey: process.env.AGENT_WALLET_SECRET_KEY,
+        clientId: process.env.AGENT_WALLET_CLIENT_ID,
+        walletLabel: 'agent-wallet',
+        chainId: 84532,
+      },
+    },
+  }))
+  .build();
+```
+
+### Custom signer
+
+Use a viem WalletClient or compatible signer:
+
+```typescript
+import { createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { baseSepolia } from 'viem/chains';
+
+const account = privateKeyToAccount('0x...');
+const walletClient = createWalletClient({
+  account,
+  chain: baseSepolia,
+  transport: http(),
+});
+
+const agent = await createAgent(meta)
+  .use(http())
+  .use(wallets({
+    config: {
+      agent: {
+        type: 'signer',
+        signer: walletClient,
+      },
+    },
+  }))
+  .build();
+```
+
+## API reference
+
+### wallets(options)
+
+Creates the wallets extension.
+
+```typescript
+function wallets(options: {
+  config: WalletsConfig;
+}): Extension<WalletsExtensionContext>
+```
+
+### WalletsRuntime
+
+When wallets are configured, `agent.wallets` provides:
+
+```typescript
+type WalletsRuntime = {
+  agent?: {
+    connector: WalletConnector;
+    address: `0x${string}`;
+  };
+  developer?: {
+    connector: WalletConnector;
+    address: `0x${string}`;
+  };
+};
+```
+
+### WalletConnector
+
+All wallet types implement the connector interface:
+
+```typescript
+type WalletConnector = {
+  getAddress: () => Promise<`0x${string}`>;
+  signMessage: (message: string) => Promise<`0x${string}`>;
+  signTypedData: (data: TypedData) => Promise<`0x${string}`>;
+  getCapabilities?: () => WalletCapabilities;
+  getWalletClient?: () => Promise<{ client: WalletClient }>;
+};
+
+type WalletCapabilities = {
+  walletClient?: boolean;
+  signTypedData?: boolean;
+};
+```
+
+## Using wallet operations
+
+### Sign messages
+
+```typescript
+const signature = await agent.wallets.agent.connector.signMessage(
+  'Hello, World!'
+);
+```
+
+### Sign typed data (EIP-712)
+
+```typescript
+const signature = await agent.wallets.agent.connector.signTypedData({
+  domain: {
+    name: 'My App',
+    version: '1',
+    chainId: 84532,
+  },
+  types: {
+    Message: [{ name: 'content', type: 'string' }],
+  },
+  primaryType: 'Message',
+  message: {
+    content: 'Hello',
+  },
+});
+```
+
+### Get wallet client (for transactions)
+
+```typescript
+const connector = agent.wallets.agent.connector;
+const capabilities = connector.getCapabilities?.();
+
+if (capabilities?.walletClient && connector.getWalletClient) {
+  const { client: walletClient } = await connector.getWalletClient();
+
+  // Send transaction
+  const hash = await walletClient.writeContract({
+    account: walletClient.account,
+    chain: walletClient.chain,
+    address: TOKEN_ADDRESS,
+    abi: erc20Abi,
+    functionName: 'transfer',
+    args: [recipient, amount],
+  });
+}
+```
+
+## Standalone wallet creation
+
+Create wallets outside of the extension system:
+
+```typescript
+import { createAgentWallet, createDeveloperWallet } from '@lucid-agents/wallet';
+
+// Create agent wallet
+const agentWallet = await createAgentWallet({
+  type: 'local',
+  privateKey: '0x...',
+});
+
+// Create developer wallet (address only, no signing)
+const devWallet = await createDeveloperWallet({
+  address: '0x...',
+});
+```
+
+## Challenge-response signing
+
+For identity verification:
+
+```typescript
+import { signChallenge, verifyChallenge } from '@lucid-agents/wallet';
+
+// Sign a challenge
+const signature = await signChallenge(
+  agent.wallets.agent.connector,
+  challenge
+);
+
+// Verify the signature
+const isValid = await verifyChallenge(
+  signature,
+  challenge,
+  expectedAddress
+);
+```
+
+## Exports
+
+```typescript
+// Extension
+export { wallets } from '@lucid-agents/wallet';
+
+// Configuration
+export { walletsFromEnv } from '@lucid-agents/wallet';
+
+// Wallet creation
+export { createAgentWallet, createDeveloperWallet } from '@lucid-agents/wallet';
+export { createWalletsRuntime } from '@lucid-agents/wallet';
+
+// Connectors
+export {
+  LocalEoaWalletConnector,
+  ThirdwebWalletConnector,
+  ServerOrchestratorWalletConnector,
+  createSignerConnector,
+} from '@lucid-agents/wallet';
+
+// Utilities
+export { signChallenge, verifyChallenge } from '@lucid-agents/wallet';
+
+// Types
+export type {
+  WalletsConfig,
+  WalletsRuntime,
+  WalletConnector,
+  WalletConnectorConfig,
+  WalletCapabilities,
+} from '@lucid-agents/wallet';
+```
