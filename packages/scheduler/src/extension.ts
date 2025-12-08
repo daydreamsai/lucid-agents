@@ -50,7 +50,7 @@ export function scheduler(
         defaultConcurrency: options?.defaultConcurrency,
       });
 
-      (runtime as any).scheduler = schedulerRuntime;
+      runtime.scheduler = schedulerRuntime;
     },
   };
 }
