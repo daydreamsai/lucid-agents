@@ -73,7 +73,7 @@ graph TB
     style core fill:#fff4e1
     style hono fill:#e8f5e9
     style tanstack fill:#e8f5e9
-    style express fill:#f0f0f0,stroke-dasharray: 5 5
+    style express fill:#e8f5e9
     style cli fill:#f3e5f5
     style templates fill:#f3e5f5
 ```
