@@ -98,6 +98,7 @@ async function buildPackages() {
 
     // Core - depends on all extensions
     '@lucid-agents/core', // Depends on payments, identity, a2a, ap2, types, wallet
+    '@lucid-agents/scheduler',
 
     // Adapters - depend on core and extensions
     '@lucid-agents/hono', // Depends on core, payments, types
