@@ -89,8 +89,9 @@ async function buildPackages() {
     '@lucid-agents/types',
 
     // Extensions - only depend on types
-    '@lucid-agents/wallet', // Depends on types
+    '@lucid-agents/wallet', // Depends on types only
     '@lucid-agents/payments', // Depends on types only
+    '@lucid-agents/analytics', // Depends on types only
     '@lucid-agents/identity', // Depends on types only
     '@lucid-agents/a2a', // Depends on types only
     '@lucid-agents/ap2', // Depends on types only
