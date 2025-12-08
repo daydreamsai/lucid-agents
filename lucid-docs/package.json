@@ -3,9 +3,6 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "overrides": {
-    "path-to-regexp": "^6.3.0"
-  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
