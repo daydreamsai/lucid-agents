@@ -1,11 +1,14 @@
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { payments } from '@lucid-agents/payments';
+import { payments, extractSenderDomain } from '@lucid-agents/payments';
 import { createAgentApp } from '../app';
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { z } from 'zod';
 import type { Express, Request, Response } from 'express';
-import type { PaymentsConfig, PaymentPolicyGroup } from '@lucid-agents/types/payments';
+import type {
+  PaymentsConfig,
+  PaymentPolicyGroup,
+} from '@lucid-agents/types/payments';
 import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
 import type { PaymentTracker } from '@lucid-agents/payments';
 import { createPaymentTracker } from '@lucid-agents/payments';
@@ -281,7 +284,6 @@ describe('Express Paywall - Incoming Payment Recording', () => {
   });
 
   it('normalizes array headers to single string values', async () => {
-
     // Test normalization logic directly
     const normalizeHeader = (
       header: string | string[] | undefined
@@ -340,4 +342,3 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     expect(domain5).toBeUndefined();
   });
 });
-
