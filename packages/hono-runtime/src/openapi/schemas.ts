@@ -157,10 +157,10 @@ export const SerializedEntrypointSchema = z
       example: 'Echo the input back',
       description: 'Human-readable description',
     }),
-    inputSchema: z.record(z.string(), z.unknown()).default({}).openapi({
+    inputSchema: z.record(z.string(), z.any()).default({}).openapi({
       description: 'JSON Schema for input validation (empty = accept any)',
     }),
-    outputSchema: z.record(z.string(), z.unknown()).default({}).openapi({
+    outputSchema: z.record(z.string(), z.any()).default({}).openapi({
       description: 'JSON Schema for output validation (empty = accept any)',
     }),
     handlerType: z
@@ -186,7 +186,7 @@ export const SerializedEntrypointSchema = z
       example: 'base-sepolia',
       description: 'Payment network override for this entrypoint (defaults to agent paymentsConfig.network)',
     }),
-    metadata: z.record(z.string(), z.unknown()).optional().openapi({
+    metadata: z.record(z.string(), z.any()).optional().openapi({
       description: 'Additional metadata',
     }),
   })
@@ -222,7 +222,7 @@ export const CreateAgentSchema = z
       example: true,
       description: 'Whether the agent can be invoked',
     }),
-    metadata: z.record(z.string(), z.unknown()).optional().openapi({
+    metadata: z.record(z.string(), z.any()).optional().openapi({
       description: 'Additional metadata',
     }),
     // Extension configurations
@@ -359,10 +359,10 @@ export const AgentManifestSchema = z
         streaming: z.boolean().optional(),
         pushNotifications: z.boolean().optional(),
         stateTransitionHistory: z.boolean().optional(),
-        extensions: z.array(z.record(z.string(), z.unknown())).optional(),
+        extensions: z.array(z.record(z.string(), z.any())).optional(),
       })
       .optional(),
-    securitySchemes: z.record(z.string(), z.unknown()).optional(),
+    securitySchemes: z.record(z.string(), z.any()).optional(),
     security: z.array(z.unknown()).optional(),
     defaultInputModes: z.array(z.string()).optional(),
     defaultOutputModes: z.array(z.string()).optional(),
@@ -386,14 +386,14 @@ export const AgentManifestSchema = z
         z.object({
           protected: z.string(),
           signature: z.string(),
-          header: z.record(z.string(), z.unknown()).optional(),
+          header: z.record(z.string(), z.any()).optional(),
         })
       )
       .optional(),
     iconUrl: z.string().url().optional(),
-    payments: z.array(z.record(z.string(), z.unknown())).optional(),
-    registrations: z.array(z.record(z.string(), z.unknown())).optional(),
-    trustModels: z.array(z.record(z.string(), z.unknown())).optional(),
+    payments: z.array(z.record(z.string(), z.any())).optional(),
+    registrations: z.array(z.record(z.string(), z.any())).optional(),
+    trustModels: z.array(z.record(z.string(), z.any())).optional(),
     ValidationRequestsURI: z.string().url().optional(),
     ValidationResponsesURI: z.string().url().optional(),
     FeedbackDataURI: z.string().url().optional(),

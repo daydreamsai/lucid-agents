@@ -207,25 +207,22 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
 
   // Get agent manifest (A2A compatible)
   // Return the full agent manifest (AgentCardWithEntrypoints)
-  app.openapi(
-    routes.getAgentManifestRoute,
-    (async (c: any) => {
-      const { agentId } = c.req.valid('param');
+  app.openapi(routes.getAgentManifestRoute, (async (c: any) => {
+    const { agentId } = c.req.valid('param');
 
-      const result = await getOrBuildRuntime(agentId);
-      if (!result) {
-        return c.json({ error: 'Agent not found', code: 'NOT_FOUND' }, 404);
-      }
+    const result = await getOrBuildRuntime(agentId);
+    if (!result) {
+      return c.json({ error: 'Agent not found', code: 'NOT_FOUND' }, 404);
+    }
 
-      const { runtime } = result;
+    const { runtime } = result;
 
-      // Use the runtime's manifest builder for proper A2A card
-      const origin = new URL(c.req.url).origin;
-      const manifest = runtime.manifest.build(origin);
+    // Use the runtime's manifest builder for proper A2A card
+    const origin = new URL(c.req.url).origin;
+    const manifest = runtime.manifest.build(origin);
 
-      return c.json(manifest, 200);
-    }) as any
-  );
+    return c.json(manifest, 200);
+  }) as any);
 
   // List entrypoints
   // Note: Type assertion needed due to runtime entrypoint list format
