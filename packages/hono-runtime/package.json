@@ -1,0 +1,55 @@
+{
+  "name": "@lucid-agents/hono-runtime",
+  "version": "0.1.0",
+  "description": "Stateless multi-agent Hono runtime with OpenAPI support",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/hono-runtime"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "dev": "bun run src/server.ts",
+    "test": "bun test",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "smoke-test": "bun run scripts/smoke-test.ts"
+  },
+  "dependencies": {
+    "@hono/swagger-ui": "^0.4.1",
+    "@hono/zod-openapi": "^0.18.3",
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/types": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}
