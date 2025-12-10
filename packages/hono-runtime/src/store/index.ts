@@ -11,4 +11,15 @@ export type {
 
 export { SlugExistsError } from './types';
 
+// Memory store
 export { createMemoryAgentStore } from './memory';
+
+// Drizzle store
+export {
+  createDrizzleAgentStore,
+  DrizzleAgentStore,
+  agentsTable,
+  type DrizzleStoreOptions,
+  type AgentRow,
+  type NewAgentRow,
+} from './drizzle';

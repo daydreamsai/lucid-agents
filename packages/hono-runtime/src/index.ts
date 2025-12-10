@@ -10,7 +10,13 @@ export { createHonoRuntime as createHonoRuntimeSimple } from './app-simple';
 export type { HonoRuntimeConfig as HonoRuntimeConfigSimple } from './app-simple';
 
 // Store
-export { createMemoryAgentStore } from './store';
+export {
+  createMemoryAgentStore,
+  createDrizzleAgentStore,
+  DrizzleAgentStore,
+  agentsTable,
+  SlugExistsError,
+} from './store';
 export type {
   AgentStore,
   AgentDefinition,
@@ -20,8 +26,10 @@ export type {
   SerializedWalletsConfig,
   SerializedA2AConfig,
   ListOptions,
+  DrizzleStoreOptions,
+  AgentRow,
+  NewAgentRow,
 } from './store';
-export { SlugExistsError } from './store';
 
 // Factory (for building agent runtimes from definitions)
 export {

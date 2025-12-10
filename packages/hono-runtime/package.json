@@ -48,7 +48,11 @@
     "test": "bun test",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "smoke-test": "bun run scripts/smoke-test.ts",
-    "generate": "bun run codegen.ts"
+    "generate": "bun run codegen.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@hey-api/openapi-ts": "^0.88.1",
@@ -65,11 +69,14 @@
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "@tanstack/react-query": "^5.90.12",
+    "drizzle-orm": "^0.45.0",
     "hono": "catalog:",
+    "postgres": "^3.4.5",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "drizzle-kit": "^0.31.8",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }
