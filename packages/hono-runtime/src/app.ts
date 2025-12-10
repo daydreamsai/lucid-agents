@@ -115,11 +115,16 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
 
   // List agents
   app.openapi(routes.listAgentsRoute, (async (c: any) => {
-    const { offset, limit } = c.req.valid('query');
+    const { offset, limit, search, enabled } = c.req.valid('query');
     const ownerId = defaultOwnerId; // TODO: get from auth
 
-    const agents = await config.store.list(ownerId, { offset, limit });
-    const total = await config.store.count(ownerId);
+    const agents = await config.store.list(ownerId, {
+      offset,
+      limit,
+      search,
+      enabled,
+    });
+    const total = await config.store.count(ownerId, { search, enabled });
 
     // Convert dates to ISO strings for JSON response
     const serializedAgents = agents.map(serializeAgent);

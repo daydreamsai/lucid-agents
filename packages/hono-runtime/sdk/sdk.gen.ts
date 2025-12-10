@@ -21,7 +21,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * List agents
  *
- * List all agents for the current owner with pagination.
+ * List all agents for the current owner with pagination, search, and filtering.
  */
 export const getApiAgents = <ThrowOnError extends boolean = false>(options?: Options<GetApiAgentsData, ThrowOnError>) => (options?.client ?? client).get<GetApiAgentsResponses, unknown, ThrowOnError>({ url: '/api/agents', ...options });
 

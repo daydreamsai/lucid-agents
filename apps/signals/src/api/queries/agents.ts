@@ -16,19 +16,29 @@ export { getApiAgentsQueryKey, getApiAgentsByAgentIdQueryKey }
 export interface UseAgentsOptions {
   offset?: number
   limit?: number
+  /** Search agents by name, slug, or description */
+  search?: string
+  /** Filter by enabled status */
+  filterEnabled?: boolean
+  /** Whether the query is enabled */
   enabled?: boolean
 }
 
 /**
- * Fetch paginated list of agents
+ * Fetch paginated list of agents with optional search and filtering
  */
 export function useAgents(options: UseAgentsOptions = {}) {
-  const { offset, limit, enabled = true } = options
+  const { offset, limit, search, filterEnabled, enabled = true } = options
 
   return useQuery({
     ...getApiAgentsOptions({
       client: apiClient,
-      query: { offset, limit },
+      query: {
+        offset,
+        limit,
+        search: search || undefined,
+        enabled: filterEnabled !== undefined ? String(filterEnabled) as 'true' | 'false' : undefined,
+      },
     }),
     enabled,
   })

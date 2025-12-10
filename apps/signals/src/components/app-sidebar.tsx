@@ -10,6 +10,7 @@ import {
   GalleryVerticalEnd,
   Map,
   PieChart,
+  Search,
   Settings2,
   SquareTerminal,
 } from 'lucide-react';
@@ -39,24 +40,18 @@ const data = {
       logo: GalleryVerticalEnd,
       plan: 'Enterprise',
     },
-    {
-      name: 'Acme Corp.',
-      logo: AudioWaveform,
-      plan: 'Startup',
-    },
-    {
-      name: 'Evil Corp.',
-      logo: Command,
-      plan: 'Free',
-    },
   ],
   navMain: [
     {
       title: 'Agents',
-      url: '#',
+      url: '/',
       icon: SquareTerminal,
       isActive: true,
       items: [
+        {
+          title: 'Discover',
+          url: '/',
+        },
         {
           title: 'Create',
           url: '/create',
@@ -64,10 +59,6 @@ const data = {
         {
           title: 'My Agents',
           url: '/agents',
-        },
-        {
-          title: 'Settings',
-          url: '#',
         },
       ],
     },

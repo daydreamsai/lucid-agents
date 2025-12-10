@@ -44,7 +44,7 @@ export const getApiAgentsQueryKey = (options?: Options<GetApiAgentsData>) => cre
 /**
  * List agents
  *
- * List all agents for the current owner with pagination.
+ * List all agents for the current owner with pagination, search, and filtering.
  */
 export const getApiAgentsOptions = (options?: Options<GetApiAgentsData>) => queryOptions<GetApiAgentsResponse, DefaultError, GetApiAgentsResponse, ReturnType<typeof getApiAgentsQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {
@@ -93,7 +93,7 @@ export const getApiAgentsInfiniteQueryKey = (options?: Options<GetApiAgentsData>
 /**
  * List agents
  *
- * List all agents for the current owner with pagination.
+ * List all agents for the current owner with pagination, search, and filtering.
  */
 export const getApiAgentsInfiniteOptions = (options?: Options<GetApiAgentsData>) => infiniteQueryOptions<GetApiAgentsResponse, DefaultError, InfiniteData<GetApiAgentsResponse>, QueryKey<Options<GetApiAgentsData>>, number | null | Pick<QueryKey<Options<GetApiAgentsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
 // @ts-ignore

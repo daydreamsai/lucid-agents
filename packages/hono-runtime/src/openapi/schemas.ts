@@ -67,6 +67,21 @@ export const PaginationQuerySchema = z.object({
   }),
 });
 
+export const AgentSearchQuerySchema = PaginationQuerySchema.extend({
+  search: z.string().optional().openapi({
+    example: 'trading',
+    description: 'Search agents by name, slug, or description',
+  }),
+  enabled: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => (val === undefined ? undefined : val === 'true'))
+    .openapi({
+      example: 'true',
+      description: 'Filter by enabled status',
+    }),
+});
+
 // =============================================================================
 // Handler Config Schemas (MVP: only builtin)
 // =============================================================================

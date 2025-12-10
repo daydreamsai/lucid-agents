@@ -38,18 +38,63 @@ export function createMemoryAgentStore(): AgentStore {
       ownerId: string,
       opts: ListOptions = {}
     ): Promise<AgentDefinition[]> {
-      const { offset = 0, limit = 20 } = opts;
+      const { offset = 0, limit = 20, search, enabled } = opts;
 
       return Array.from(agents.values())
-        .filter(agent => agent.ownerId === ownerId)
+        .filter((agent) => {
+          // Owner filter
+          if (agent.ownerId !== ownerId) return false;
+
+          // Enabled filter
+          if (enabled !== undefined && agent.enabled !== enabled) return false;
+
+          // Search filter (case-insensitive)
+          if (search) {
+            const searchLower = search.toLowerCase();
+            const matchesName = agent.name.toLowerCase().includes(searchLower);
+            const matchesSlug = agent.slug.toLowerCase().includes(searchLower);
+            const matchesDescription = agent.description
+              .toLowerCase()
+              .includes(searchLower);
+            if (!matchesName && !matchesSlug && !matchesDescription) {
+              return false;
+            }
+          }
+
+          return true;
+        })
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(offset, offset + limit);
     },
 
-    async count(ownerId: string): Promise<number> {
-      return Array.from(agents.values()).filter(
-        agent => agent.ownerId === ownerId
-      ).length;
+    async count(
+      ownerId: string,
+      opts: Pick<ListOptions, 'search' | 'enabled'> = {}
+    ): Promise<number> {
+      const { search, enabled } = opts;
+
+      return Array.from(agents.values()).filter((agent) => {
+        // Owner filter
+        if (agent.ownerId !== ownerId) return false;
+
+        // Enabled filter
+        if (enabled !== undefined && agent.enabled !== enabled) return false;
+
+        // Search filter (case-insensitive)
+        if (search) {
+          const searchLower = search.toLowerCase();
+          const matchesName = agent.name.toLowerCase().includes(searchLower);
+          const matchesSlug = agent.slug.toLowerCase().includes(searchLower);
+          const matchesDescription = agent.description
+            .toLowerCase()
+            .includes(searchLower);
+          if (!matchesName && !matchesSlug && !matchesDescription) {
+            return false;
+          }
+        }
+
+        return true;
+      }).length;
     },
 
     async create(

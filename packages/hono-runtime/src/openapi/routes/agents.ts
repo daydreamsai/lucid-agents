@@ -6,7 +6,7 @@ import {
   CreateAgentSchema,
   UpdateAgentSchema,
   ErrorSchema,
-  PaginationQuerySchema,
+  AgentSearchQuerySchema,
 } from '../schemas';
 
 // =============================================================================
@@ -18,9 +18,10 @@ export const listAgentsRoute = createRoute({
   path: '/api/agents',
   tags: ['Agents'],
   summary: 'List agents',
-  description: 'List all agents for the current owner with pagination.',
+  description:
+    'List all agents for the current owner with pagination, search, and filtering.',
   request: {
-    query: PaginationQuerySchema,
+    query: AgentSearchQuerySchema,
   },
   responses: {
     200: {

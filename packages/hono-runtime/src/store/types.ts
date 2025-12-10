@@ -160,6 +160,10 @@ export interface CreateAgentInput {
 export interface ListOptions {
   offset?: number;
   limit?: number;
+  /** Search agents by name, slug, or description */
+  search?: string;
+  /** Filter by enabled status */
+  enabled?: boolean;
 }
 
 export interface AgentStore {
@@ -167,7 +171,7 @@ export interface AgentStore {
   getById(id: string): Promise<AgentDefinition | null>;
   getBySlug(slug: string): Promise<AgentDefinition | null>;
   list(ownerId: string, opts?: ListOptions): Promise<AgentDefinition[]>;
-  count(ownerId: string): Promise<number>;
+  count(ownerId: string, opts?: Pick<ListOptions, 'search' | 'enabled'>): Promise<number>;
 
   // Write operations
   create(

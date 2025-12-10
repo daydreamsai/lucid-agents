@@ -117,6 +117,22 @@ export type SerializedEntrypoint = {
 };
 
 /**
+ * Payment storage configuration (for analytics). Defaults to SQLite if not specified.
+ */
+export type PaymentStorageConfig = {
+    /**
+     * Storage backend type. SQLite is automatic (no configuration needed). Postgres requires a connection string.
+     */
+    type: 'sqlite' | 'postgres';
+    postgres?: {
+        /**
+         * PostgreSQL connection string (required when type is postgres)
+         */
+        connectionString: string;
+    };
+};
+
+/**
  * Payment configuration for monetizing entrypoints
  */
 export type PaymentsConfig = {
@@ -132,6 +148,7 @@ export type PaymentsConfig = {
      * URL of the x402 facilitator service
      */
     facilitatorUrl: string;
+    storage?: PaymentStorageConfig;
 };
 
 /**
@@ -637,6 +654,14 @@ export type GetApiAgentsData = {
          * Maximum number of items to return
          */
         limit?: number;
+        /**
+         * Search agents by name, slug, or description
+         */
+        search?: string;
+        /**
+         * Filter by enabled status
+         */
+        enabled?: 'true' | 'false';
     };
     url: '/api/agents';
 };

@@ -1,4 +1,4 @@
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and, or, ilike } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type {
   AgentStore,
@@ -46,12 +46,31 @@ export class DrizzleAgentStore implements AgentStore {
     ownerId: string,
     opts: ListOptions = {}
   ): Promise<AgentDefinition[]> {
-    const { offset = 0, limit = 20 } = opts;
+    const { offset = 0, limit = 20, search, enabled } = opts;
+
+    const conditions = [eq(agents.ownerId, ownerId)];
+
+    // Add enabled filter
+    if (enabled !== undefined) {
+      conditions.push(eq(agents.enabled, enabled));
+    }
+
+    // Add search filter (case-insensitive)
+    if (search) {
+      const searchPattern = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(agents.name, searchPattern),
+          ilike(agents.slug, searchPattern),
+          ilike(agents.description, searchPattern)
+        )!
+      );
+    }
 
     const rows = await this.db
       .select()
       .from(agents)
-      .where(eq(agents.ownerId, ownerId))
+      .where(and(...conditions))
       .orderBy(desc(agents.createdAt))
       .offset(offset)
       .limit(Math.min(limit, 100)); // Cap at 100
@@ -59,11 +78,35 @@ export class DrizzleAgentStore implements AgentStore {
     return rows.map(rowToDefinition);
   }
 
-  async count(ownerId: string): Promise<number> {
+  async count(
+    ownerId: string,
+    opts: Pick<ListOptions, 'search' | 'enabled'> = {}
+  ): Promise<number> {
+    const { search, enabled } = opts;
+
+    const conditions = [eq(agents.ownerId, ownerId)];
+
+    // Add enabled filter
+    if (enabled !== undefined) {
+      conditions.push(eq(agents.enabled, enabled));
+    }
+
+    // Add search filter (case-insensitive)
+    if (search) {
+      const searchPattern = `%${search}%`;
+      conditions.push(
+        or(
+          ilike(agents.name, searchPattern),
+          ilike(agents.slug, searchPattern),
+          ilike(agents.description, searchPattern)
+        )!
+      );
+    }
+
     const result = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(agents)
-      .where(eq(agents.ownerId, ownerId));
+      .where(and(...conditions));
 
     return result[0]?.count ?? 0;
   }
