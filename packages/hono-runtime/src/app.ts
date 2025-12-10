@@ -97,7 +97,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
   // ---------------------------------------------------------------------------
 
   // List agents
-  app.openapi(routes.listAgentsRoute, async c => {
+  app.openapi(routes.listAgentsRoute, (async (c: any) => {
     const { offset, limit } = c.req.valid('query');
     const ownerId = defaultOwnerId; // TODO: get from auth
 
@@ -108,10 +108,10 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
     const serializedAgents = agents.map(serializeAgent);
 
     return c.json({ agents: serializedAgents, total, offset, limit }, 200);
-  });
+  }) as any);
 
   // Create agent
-  app.openapi(routes.createAgentRoute, async c => {
+  app.openapi(routes.createAgentRoute, (async (c: any) => {
     const body = c.req.valid('json');
     const ownerId = defaultOwnerId; // TODO: get from auth
 
@@ -127,10 +127,10 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
       }
       throw err;
     }
-  });
+  }) as any);
 
   // Get agent
-  app.openapi(routes.getAgentRoute, async c => {
+  app.openapi(routes.getAgentRoute, (async (c: any) => {
     const { agentId } = c.req.valid('param');
 
     const agent = await config.store.getById(agentId);
@@ -139,10 +139,10 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
     }
 
     return c.json(serializeAgent(agent), 200);
-  });
+  }) as any);
 
   // Update agent
-  app.openapi(routes.updateAgentRoute, async c => {
+  app.openapi(routes.updateAgentRoute, (async (c: any) => {
     const { agentId } = c.req.valid('param');
     const body = c.req.valid('json');
 
@@ -163,7 +163,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
       }
       throw err;
     }
-  });
+  }) as any);
 
   // Delete agent
   app.openapi(routes.deleteAgentRoute, async c => {
@@ -226,7 +226,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
 
   // List entrypoints
   // Note: Type assertion needed due to runtime entrypoint list format
-  app.openapi(routes.listEntrypointsRoute, async c => {
+  app.openapi(routes.listEntrypointsRoute, (async (c: any) => {
     const { agentId } = c.req.valid('param');
 
     const result = await getOrBuildRuntime(agentId);
@@ -238,11 +238,11 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
     const entrypoints = agent.entrypoints;
 
     return c.json(entrypoints, 200);
-  });
+  }) as any);
 
   // Invoke entrypoint - uses runtime handler but wraps response in our format
   // Note: Type assertion needed due to complex response type union
-  app.openapi(routes.invokeEntrypointRoute, async c => {
+  app.openapi(routes.invokeEntrypointRoute, (async (c: any) => {
     const { agentId, key } = c.req.valid('param');
     const body = c.req.valid('json');
 
@@ -330,7 +330,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
       },
       200
     );
-  });
+  }) as any);
 
   app.get('/swagger', swaggerUI({ url: '/doc' }));
 
@@ -338,7 +338,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
   // Health Route
   // ---------------------------------------------------------------------------
 
-  app.openapi(routes.healthRoute, c => {
+  app.openapi(routes.healthRoute, ((c: any) => {
     return c.json(
       {
         status: 'ok' as const,
@@ -347,7 +347,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
       },
       200
     );
-  });
+  }) as any);
 
   return app;
 }

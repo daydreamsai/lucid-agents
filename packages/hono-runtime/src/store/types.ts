@@ -8,7 +8,7 @@ export interface SerializedEntrypoint {
   inputSchema: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
   handlerType: 'builtin' | 'llm' | 'graph' | 'webhook' | 'js' | 'url';
-  handlerConfig:
+  handlerConfig?:
     | {
         /** Builtin handler name (echo, passthrough, etc.) */
         name: string;

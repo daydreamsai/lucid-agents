@@ -17,6 +17,21 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./sdk": {
+      "types": "./sdk/index.ts",
+      "import": "./sdk/index.ts",
+      "default": "./sdk/index.ts"
+    },
+    "./sdk/client": {
+      "types": "./sdk/client/index.ts",
+      "import": "./sdk/client/index.ts",
+      "default": "./sdk/client/index.ts"
+    },
+    "./sdk/react-query": {
+      "types": "./sdk/@tanstack/react-query.gen.ts",
+      "import": "./sdk/@tanstack/react-query.gen.ts",
+      "default": "./sdk/@tanstack/react-query.gen.ts"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,

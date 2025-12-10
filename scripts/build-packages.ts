@@ -108,6 +108,7 @@ async function buildPackages() {
     '@lucid-agents/hono',
     '@lucid-agents/express',
     '@lucid-agents/tanstack',
+    '@lucid-agents/hono-runtime',
 
     // Layer 4: Examples (depend on all packages for integration testing)
     '@lucid-agents/examples',

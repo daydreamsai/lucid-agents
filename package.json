@@ -3,7 +3,8 @@
   "workspaces": {
     "packages": [
       "packages/*",
-      "lucid-docs"
+      "lucid-docs",
+      "apps/*"
     ],
     "catalog": {
       "zod": "^4.1.12",
