@@ -33,6 +33,14 @@ import {
 type HandlerType = 'builtin' | 'js' | 'url'
 type WalletType = 'local' | 'thirdweb' | 'signer'
 
+export interface SchemaField {
+  id: string
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array'
+  required: boolean
+  description: string
+}
+
 export interface EntrypointFormData {
   id: string
   key: string
@@ -43,6 +51,8 @@ export interface EntrypointFormData {
   urlEndpoint: string
   urlMethod: 'GET' | 'POST'
   price: string
+  inputFields: SchemaField[]
+  outputFields: SchemaField[]
 }
 
 export interface PaymentsFormData {
@@ -90,6 +100,16 @@ export const NETWORK_OPTIONS = [
 // Utilities
 // ============================================================================
 
+function createEmptySchemaField(): SchemaField {
+  return {
+    id: crypto.randomUUID(),
+    name: '',
+    type: 'string',
+    required: false,
+    description: '',
+  }
+}
+
 export function createEmptyEntrypoint(): EntrypointFormData {
   return {
     id: crypto.randomUUID(),
@@ -101,7 +121,53 @@ export function createEmptyEntrypoint(): EntrypointFormData {
     urlEndpoint: '',
     urlMethod: 'POST',
     price: '',
+    inputFields: [],
+    outputFields: [],
   }
+}
+
+function schemaFieldsToJsonSchema(fields: SchemaField[]): Record<string, unknown> | undefined {
+  if (fields.length === 0) return undefined
+
+  const properties: Record<string, unknown> = {}
+  const required: string[] = []
+
+  for (const field of fields) {
+    if (!field.name.trim()) continue
+
+    const prop: Record<string, unknown> = { type: field.type }
+    if (field.description) prop.description = field.description
+
+    properties[field.name] = prop
+    if (field.required) required.push(field.name)
+  }
+
+  if (Object.keys(properties).length === 0) return undefined
+
+  const schema: Record<string, unknown> = {
+    type: 'object',
+    properties,
+  }
+  if (required.length > 0) schema.required = required
+
+  return schema
+}
+
+function jsonSchemaToFields(schema?: Record<string, unknown>): SchemaField[] {
+  if (!schema || typeof schema !== 'object') return []
+
+  const properties = schema.properties as Record<string, Record<string, unknown>> | undefined
+  if (!properties) return []
+
+  const required = (schema.required as string[]) || []
+
+  return Object.entries(properties).map(([name, prop]) => ({
+    id: crypto.randomUUID(),
+    name,
+    type: (prop.type as SchemaField['type']) || 'string',
+    required: required.includes(name),
+    description: (prop.description as string) || '',
+  }))
 }
 
 export function generateSlug(name: string): string {
@@ -125,6 +191,8 @@ function entrypointFromApi(ep: SerializedEntrypoint): EntrypointFormData {
     urlEndpoint: (config?.url as string) || '',
     urlMethod: ((config?.method as string) || 'POST') as 'GET' | 'POST',
     price: ep.price || '',
+    inputFields: jsonSchemaToFields(ep.inputSchema),
+    outputFields: jsonSchemaToFields(ep.outputSchema),
   }
 }
 
@@ -277,6 +345,8 @@ export function AgentForm({
       handlerType: ep.handlerType,
       handlerConfig: { name: 'echo' },
       price: ep.price || undefined,
+      inputSchema: schemaFieldsToJsonSchema(ep.inputFields),
+      outputSchema: schemaFieldsToJsonSchema(ep.outputFields),
     }
 
     switch (ep.handlerType) {
@@ -843,6 +913,22 @@ function EntrypointForm({
         </div>
       )}
 
+      {/* Input/Output Schemas */}
+      <div className="space-y-4 pt-2 border-t">
+        <SchemaFieldsEditor
+          label="Input Fields"
+          description="Define the expected input structure for this entrypoint"
+          fields={entrypoint.inputFields}
+          onChange={(fields) => onUpdate({ inputFields: fields })}
+        />
+        <SchemaFieldsEditor
+          label="Output Fields"
+          description="Define the expected output structure for this entrypoint"
+          fields={entrypoint.outputFields}
+          onChange={(fields) => onUpdate({ outputFields: fields })}
+        />
+      </div>
+
       {/* Pricing */}
       <div className="space-y-2 pt-2 border-t">
         <Label>Price (USD)</Label>
@@ -860,6 +946,135 @@ function EntrypointForm({
           Leave empty for free invocations. Requires Payments config enabled.
         </p>
       </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// SchemaFieldsEditor Component
+// ============================================================================
+
+interface SchemaFieldsEditorProps {
+  label: string
+  description: string
+  fields: SchemaField[]
+  onChange: (fields: SchemaField[]) => void
+}
+
+const FIELD_TYPES: { value: SchemaField['type']; label: string }[] = [
+  { value: 'string', label: 'String' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'object', label: 'Object' },
+  { value: 'array', label: 'Array' },
+]
+
+function SchemaFieldsEditor({
+  label,
+  description,
+  fields,
+  onChange,
+}: SchemaFieldsEditorProps) {
+  const addField = () => {
+    onChange([...fields, createEmptySchemaField()])
+  }
+
+  const removeField = (id: string) => {
+    onChange(fields.filter((f) => f.id !== id))
+  }
+
+  const updateField = (id: string, updates: Partial<SchemaField>) => {
+    onChange(fields.map((f) => (f.id === id ? { ...f, ...updates } : f)))
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label>{label}</Label>
+          <p className="text-muted-foreground text-xs">{description}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addField}
+        >
+          <Plus className="size-3" />
+          Add Field
+        </Button>
+      </div>
+
+      {fields.length === 0 ? (
+        <p className="text-muted-foreground text-xs italic py-2">
+          No fields defined. Any input/output will be accepted.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {fields.map((field) => (
+            <div
+              key={field.id}
+              className="flex items-start gap-2 p-2 rounded-md bg-muted/50"
+            >
+              <div className="grid grid-cols-12 gap-2 flex-1">
+                <div className="col-span-3">
+                  <Input
+                    placeholder="Field name"
+                    value={field.name}
+                    onChange={(e) => updateField(field.id, { name: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <Select
+                    value={field.type}
+                    onChange={(e) =>
+                      updateField(field.id, { type: e.target.value as SchemaField['type'] })
+                    }
+                    className="h-8 text-sm"
+                  >
+                    {FIELD_TYPES.map((t) => (
+                      <SelectOption key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectOption>
+                    ))}
+                  </Select>
+                </div>
+                <div className="col-span-4">
+                  <Input
+                    placeholder="Description (optional)"
+                    value={field.description}
+                    onChange={(e) => updateField(field.id, { description: e.target.value })}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={field.required}
+                      onChange={(e) => updateField(field.id, { required: e.target.checked })}
+                      className="rounded border-input"
+                    />
+                    Required
+                  </label>
+                </div>
+                <div className="col-span-1 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeField(field.id)}
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
