@@ -366,9 +366,9 @@ export const SerializedEntrypointSchema = z
         example: { name: 'echo' },
       }),
     price: z.string().optional().openapi({
-      example: '0.01',
+      example: '1000',
       description:
-        'Price in USD to invoke this entrypoint (e.g., "0.01" = $0.01)',
+        'Price in base units (smallest denomination). Must match the token\'s smallest denomination (e.g., "1000" = $0.001 USDC).',
     }),
     network: z.string().optional().openapi({
       example: 'base-sepolia',

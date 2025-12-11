@@ -74,5 +74,4 @@ jobs:
       - name: Stop PostgreSQL test database
         if: always()
         run: |
-          cd platform/dev
-          docker compose stop test-db || true
+          docker compose -f platform/dev/docker-compose.yml stop test-db || true

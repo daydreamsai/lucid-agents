@@ -23,13 +23,44 @@ function matchesHost(hostname: string, allowedHost: string): boolean {
 function createFetchProxy(allowedHosts: string[], timeoutMs: number) {
   if (typeof fetch !== 'function') return undefined;
 
+  const allowAnyHost = allowedHosts.includes('*');
+
   return async function guardedFetch(
     input: RequestInfo | URL,
     init?: RequestInit
   ) {
-    const url =
-      typeof input === 'string' ? new URL(input) : new URL(String(input));
-    if (!allowedHosts.some(host => matchesHost(url.hostname, host))) {
+    // Robustly extract URL string from various input types
+    let urlString: string;
+    if (typeof input === 'string') {
+      urlString = input;
+    } else if (input instanceof URL) {
+      urlString = input.toString();
+    } else if (
+      typeof input === 'object' &&
+      input !== null &&
+      'url' in input &&
+      typeof (input as { url?: unknown }).url === 'string'
+    ) {
+      urlString = (input as { url: string }).url;
+    } else {
+      urlString = String(input);
+    }
+
+    // Parse URL with error handling
+    let url: URL;
+    try {
+      url = new URL(urlString);
+    } catch (err) {
+      throw new Error(
+        `Invalid URL: ${urlString}. ${err instanceof Error ? err.message : 'Failed to parse URL'}`
+      );
+    }
+
+    // Check hostname against allowed hosts (wildcard check happens first)
+    if (
+      !allowAnyHost &&
+      !allowedHosts.some(host => matchesHost(url.hostname, host))
+    ) {
       throw new Error(`Host not allowed: ${url.hostname}`);
     }
 

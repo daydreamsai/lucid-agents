@@ -220,7 +220,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
     const ownerId = resolveOwnerId(c);
 
     try {
-      const agent = await config.store.create({ ...body, ownerId });
+      let agent = await config.store.create({ ...body, ownerId });
 
       // Handle identity registration if configured and auto-register is enabled
       if (agent.identityConfig?.autoRegister && agent.walletsConfig?.agent) {
@@ -278,6 +278,11 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
                 : String(identityErr),
           };
           await config.store.update(agent.id, { metadata: updatedMetadata });
+          // Reload agent to get updated metadata
+          const reloadedAgent = await config.store.getById(agent.id);
+          if (reloadedAgent) {
+            agent = reloadedAgent;
+          }
         }
       }
 
@@ -435,11 +440,24 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
       );
     }
 
-    // Build request to pass to runtime handler
+    const requestBody: {
+      input: unknown;
+      sessionId?: string;
+      metadata?: Record<string, unknown>;
+    } = {
+      input: body.input,
+    };
+    if (body.sessionId !== undefined) {
+      requestBody.sessionId = body.sessionId;
+    }
+    if (body.metadata !== undefined) {
+      requestBody.metadata = body.metadata;
+    }
+
     const invokeRequest = new Request(c.req.url, {
       method: 'POST',
       headers: c.req.raw.headers,
-      body: JSON.stringify({ input: body.input }),
+      body: JSON.stringify(requestBody),
     });
 
     // Delegate to the runtime's invoke handler
@@ -683,7 +701,7 @@ export function createHonoRuntime(config: HonoRuntimeConfig) {
 
     try {
       const domain = new URL(c.req.url).hostname;
-      const runtime = await buildRuntimeForAgent(agent, config.factoryConfig);
+      const runtime = await buildRuntimeForAgent(agent, factoryConfig);
 
       if (!runtime.wallets?.agent) {
         return c.json(

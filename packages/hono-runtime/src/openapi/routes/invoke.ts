@@ -16,7 +16,7 @@ import {
 
 export const getAgentManifestRoute = createRoute({
   method: 'get',
-  path: '/agents/{agentId}/.well-known/agent.json',
+  path: '/agents/{agentId}/.well-known/agent-card.json',
   tags: ['Invocation'],
   summary: 'Get agent manifest',
   description: 'Get the agent manifest/card in A2A-compatible format.',

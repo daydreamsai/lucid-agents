@@ -20,7 +20,7 @@ import type {
   PaymentStorageConfig,
 } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from '@lucid-agents/payments';
-import type { AgentContext } from '@lucid-agents/types/core';
+import type { AgentContext, EntrypointHandler } from '@lucid-agents/types/core';
 import type { Network } from '@lucid-agents/types';
 import type { AgentDefinition, SerializedEntrypoint } from '../store/types';
 import { HandlerRegistry } from '../handlers/registry';
@@ -66,6 +66,47 @@ export interface RuntimeFactoryConfig {
 
   /** Drizzle database instance (for shared payment storage when using Postgres) */
   drizzleDb?: PostgresJsDatabase<typeof schema>;
+}
+
+// =============================================================================
+// Network Validation
+// =============================================================================
+
+/**
+ * Known supported networks (EVM and Solana).
+ * This list should match x402/types SupportedEVMNetworks and SupportedSVMNetworks.
+ */
+const KNOWN_SUPPORTED_NETWORKS: readonly string[] = [
+  // EVM networks
+  'base',
+  'base-sepolia',
+  'ethereum',
+  'sepolia',
+  // Solana networks
+  'solana',
+  'solana-devnet',
+];
+
+/**
+ * Validate and narrow network string to Network type.
+ * Returns undefined if network is not provided or not supported.
+ * Logs a warning for unsupported networks but doesn't throw.
+ */
+function validateNetwork(network: string | undefined): Network | undefined {
+  if (!network) {
+    return undefined;
+  }
+
+  if (KNOWN_SUPPORTED_NETWORKS.includes(network as string)) {
+    return network as Network;
+  }
+
+  console.warn(
+    `[hono-runtime] Unsupported network "${network}" for entrypoint. ` +
+      `Supported networks: ${KNOWN_SUPPORTED_NETWORKS.join(', ')}`
+  );
+
+  return undefined;
 }
 
 // =============================================================================
@@ -218,7 +259,10 @@ function addEntrypointToRuntime(
   ) as HandlerFn;
 
   // Wrap HandlerFn to the EntrypointHandler shape expected by runtime
-  const wrappedHandler = async (ctx: AgentContext) => {
+  const wrappedHandler: EntrypointHandler<
+    typeof inputSchema,
+    typeof outputSchema
+  > = async ctx => {
     const handlerCtx = {
       agentId: agent.id,
       entrypointKey: entrypoint.key,
@@ -243,6 +287,9 @@ function addEntrypointToRuntime(
     };
   };
 
+  // Validate and narrow network type
+  const network = validateNetwork(entrypoint.network);
+
   // Add to runtime
   runtime.entrypoints.add({
     key: entrypoint.key,
@@ -250,7 +297,7 @@ function addEntrypointToRuntime(
     input: inputSchema,
     output: outputSchema,
     price: entrypoint.price,
-    network: entrypoint.network as Network | undefined,
+    network,
     handler: wrappedHandler,
   });
 }

@@ -71,6 +71,7 @@
     "drizzle-orm": "^0.45.0",
     "hono": "catalog:",
     "postgres": "^3.4.5",
+    "x402": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
