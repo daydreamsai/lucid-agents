@@ -1,8 +1,0 @@
-export { LandingContainer, LandingSection, SectionHeader } from './landing-container'
-export { HeroSection } from './hero-section'
-export { FeaturesSection } from './features-section'
-export { HowItWorksSection } from './how-it-works-section'
-export { PricingSection } from './pricing-section'
-export { ComparisonSection } from './comparison-section'
-export { TrendingSection } from './trending-section'
-export { CTASection } from './cta-section'
