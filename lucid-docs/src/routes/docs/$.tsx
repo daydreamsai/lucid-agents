@@ -13,7 +13,7 @@ import {
 } from 'fumadocs-ui/layouts/docs/page';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import { baseOptions } from '@/lib/layout.shared';
-import { LLMCopyButton } from '@/components/page-actions';
+import { LLMCopyButton, ViewOptions } from '@/components/page-actions';
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
@@ -47,10 +47,13 @@ const clientLoader = browserCollections.docs.createClientLoader<DocsPageProps>({
   component({ toc, frontmatter, default: MDX }, { markdownUrl }) {
     return (
       <DocsPage toc={toc}>
-        {/* TODO: This isn't working for some reason... */}
-        {/* <div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
+        <div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
           <LLMCopyButton markdownUrl={markdownUrl} />
-        </div> */}
+          <ViewOptions
+            markdownUrl={`${markdownUrl}.mdx`}
+            githubUrl={`https://github.com/daydreamsai/lucid-agents/blob/master/lucid-docs/content/${markdownUrl}`}
+          />
+        </div>
         <DocsTitle>{frontmatter.title}</DocsTitle>
         <DocsDescription>{frontmatter.description}</DocsDescription>
         <DocsBody>
@@ -67,9 +70,9 @@ const clientLoader = browserCollections.docs.createClientLoader<DocsPageProps>({
 
 function Page() {
   const data = Route.useLoaderData();
-  const markdownUrl = data.path.endsWith('.mdx')
-    ? data.path
-    : `${data.path}.mdx`;
+  const params = Route.useParams();
+  const slugPath = params._splat ?? '';
+  const markdownUrl = `/docs/${slugPath}.mdx`;
   const Content = clientLoader.getComponent(data.path);
   const tree = useMemo(
     () => transformPageTree(data.tree as PageTree.Folder),
