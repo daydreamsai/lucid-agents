@@ -652,7 +652,7 @@ export function http(
 
       // Update runtime with actual handlers
       handlers = actualHandlers;
-      (runtime as any).handlers = actualHandlers;
+      runtime.handlers = actualHandlers;
     },
   };
 }

@@ -1,10 +1,20 @@
+import { a2a } from '@lucid-agents/a2a';
+import { analytics } from '@lucid-agents/analytics';
+import { ap2 } from '@lucid-agents/ap2';
+import { http } from '@lucid-agents/http';
+import { identity } from '@lucid-agents/identity';
 import {
   createRuntimePaymentContext,
   type RuntimePaymentOptions,
 } from '@lucid-agents/payments';
 import { payments } from '@lucid-agents/payments';
+import { scheduler } from '@lucid-agents/scheduler';
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { TrustConfig } from '@lucid-agents/types/identity';
+import type {
+  PaymentsConfig,
+  PaymentTracker,
+} from '@lucid-agents/types/payments';
 import { wallets } from '@lucid-agents/wallet';
 import { describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
@@ -31,8 +41,8 @@ const makeRuntimeStub = (): {
           async getWalletMetadata() {
             return await getWalletMetadata();
           },
-          async signChallenge(challenge) {
-            return await signChallenge(challenge);
+          async signChallenge(_challenge) {
+            return await signChallenge(_challenge);
           },
           async supportsCaip2() {
             return true;
@@ -705,5 +715,534 @@ describe('createAgentRuntime integration', () => {
     expect(agent.payments?.isActive).toBe(true);
 
     expect(agent.entrypoints.list()).toHaveLength(3);
+  });
+});
+
+describe('Analytics Extension', () => {
+  it('analytics returns undefined when payments are not configured', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(analytics())
+      .build();
+
+    expect(agent.analytics).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeUndefined();
+  });
+
+  it('analytics returns undefined when payments configured but no policy groups with tracking', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(payments({ config: paymentsConfig }))
+      .use(analytics())
+      .build();
+
+    expect(agent.payments).toBeDefined();
+    expect(agent.payments?.paymentTracker).toBeUndefined();
+    expect(agent.analytics).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeUndefined();
+  });
+
+  it('analytics.paymentTracker matches payments.paymentTracker when policy groups require tracking', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+      policyGroups: [
+        {
+          name: 'Daily Spending Limit',
+          outgoingLimits: {
+            global: {
+              maxTotalUsd: 100, // This requires tracking
+            },
+          },
+        },
+      ],
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(payments({ config: paymentsConfig }))
+      .use(analytics())
+      .build();
+
+    expect(agent.payments).toBeDefined();
+    expect(agent.payments?.paymentTracker).toBeDefined();
+    expect(agent.analytics).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeDefined();
+    // They should be the same instance
+    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
+      agent.payments?.paymentTracker as PaymentTracker
+    );
+  });
+
+  it('analytics.paymentTracker exists when incoming limits require tracking', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+      policyGroups: [
+        {
+          name: 'Receivables Limit',
+          incomingLimits: {
+            global: {
+              maxTotalUsd: 1000, // This requires tracking
+            },
+          },
+        },
+      ],
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(payments({ config: paymentsConfig }))
+      .use(analytics())
+      .build();
+
+    expect(agent.payments?.paymentTracker).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeDefined();
+    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
+      agent.payments?.paymentTracker as PaymentTracker
+    );
+  });
+
+  it('analytics.paymentTracker exists when per-target limits require tracking', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+      policyGroups: [
+        {
+          name: 'Per-Target Limits',
+          outgoingLimits: {
+            perTarget: {
+              'https://example.com': {
+                maxTotalUsd: 50, // This requires tracking
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(payments({ config: paymentsConfig }))
+      .use(analytics())
+      .build();
+
+    expect(agent.payments?.paymentTracker).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeDefined();
+    const analyticsTracker = agent.analytics?.paymentTracker as PaymentTracker;
+    const paymentsTracker = agent.payments?.paymentTracker as PaymentTracker;
+    expect(analyticsTracker).toBe(paymentsTracker);
+  });
+
+  it('analytics.paymentTracker is undefined when only rate limits are configured (no maxTotalUsd)', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+      policyGroups: [
+        {
+          name: 'Rate Limit Only',
+          rateLimits: {
+            maxPayments: 10,
+            windowMs: 60000,
+          },
+          // No maxTotalUsd limits, so no tracking needed
+        },
+      ],
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(payments({ config: paymentsConfig }))
+      .use(analytics())
+      .build();
+
+    expect(agent.payments).toBeDefined();
+    expect(agent.payments?.paymentTracker).toBeUndefined();
+    expect(agent.analytics?.paymentTracker).toBeUndefined();
+  });
+});
+
+describe('A2A Extension', () => {
+  it('adds a2a runtime with buildCard method', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .build();
+
+    expect(agent.a2a).toBeDefined();
+    expect(agent.a2a?.buildCard).toBeDefined();
+    expect(typeof agent.a2a?.buildCard).toBe('function');
+  });
+
+  it('buildCard creates valid agent card', async () => {
+    const agent = await createAgent({
+      name: 'test-agent',
+      version: '1.0.0',
+      description: 'Test agent',
+    })
+      .use(a2a())
+      .build();
+
+    const card = agent.a2a?.buildCard('https://agent.example.com');
+    expect(card).toBeDefined();
+    expect(card?.name).toBe('test-agent');
+    expect(card?.version).toBe('1.0.0');
+    // buildAgentCard adds trailing slash to origin
+    expect(card?.url).toBe('https://agent.example.com/');
+    expect(card?.entrypoints).toBeDefined();
+  });
+});
+
+describe('AP2 Extension', () => {
+  it('adds ap2 runtime when explicitly configured', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(
+        ap2({
+          roles: ['merchant'],
+          description: 'AP2 merchant',
+        })
+      )
+      .build();
+
+    expect(agent.ap2).toBeDefined();
+    expect(agent.ap2?.config).toBeDefined();
+    expect(agent.ap2?.config?.roles).toEqual(['merchant']);
+  });
+
+  it('does not add ap2 runtime when not configured', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(ap2())
+      .build();
+
+    expect(agent.ap2).toBeUndefined();
+  });
+
+  it('modifies manifest to include AP2 extension', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(
+        ap2({
+          roles: ['shopper'],
+          required: true,
+        })
+      )
+      .build();
+
+    const card = agent.manifest.build('https://agent.example.com');
+    expect(card.capabilities?.extensions).toBeDefined();
+    const ap2Extension = card.capabilities?.extensions?.find(
+      ext =>
+        'uri' in ext &&
+        ext.uri === 'https://github.com/google-agentic-commerce/ap2/tree/v0.1'
+    );
+    expect(ap2Extension).toBeDefined();
+    expect(ap2Extension?.required).toBe(true);
+  });
+});
+
+describe('Identity Extension', () => {
+  it('adds trust config when provided', async () => {
+    const trustConfig = {
+      validationRequestsUri: 'https://example.com/validation-requests',
+      validationResponsesUri: 'https://example.com/validation-responses',
+      feedbackDataUri: 'https://example.com/feedback',
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(
+        identity({
+          config: {
+            trust: trustConfig,
+          },
+        })
+      )
+      .build();
+
+    // Identity extension adds trust to runtime
+    const runtimeWithTrust = agent as AgentRuntime & { trust?: TrustConfig };
+    expect(runtimeWithTrust.trust).toBeDefined();
+    expect(runtimeWithTrust.trust).toEqual(trustConfig);
+  });
+
+  it('does not add trust config when not provided', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(identity())
+      .build();
+
+    const runtimeWithTrust = agent as AgentRuntime & { trust?: TrustConfig };
+    expect(runtimeWithTrust.trust).toBeUndefined();
+  });
+
+  it('modifies manifest to include identity properties when trust config provided', async () => {
+    const trustConfig = {
+      validationRequestsUri: 'https://example.com/validation-requests',
+      validationResponsesUri: 'https://example.com/validation-responses',
+      feedbackDataUri: 'https://example.com/feedback',
+      trustModels: ['feedback', 'inference-validation'],
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(
+        identity({
+          config: {
+            trust: trustConfig,
+          },
+        })
+      )
+      .build();
+
+    const card = agent.manifest.build('https://agent.example.com');
+    // Identity extension adds properties directly to the card, not to capabilities.extensions
+    expect(card.ValidationRequestsURI).toBe(trustConfig.validationRequestsUri);
+    expect(card.ValidationResponsesURI).toBe(
+      trustConfig.validationResponsesUri
+    );
+    expect(card.FeedbackDataURI).toBe(trustConfig.feedbackDataUri);
+    expect(card.trustModels).toEqual(trustConfig.trustModels);
+  });
+});
+
+describe('HTTP Extension', () => {
+  it('adds handlers runtime when used', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(http())
+      .build();
+
+    expect(agent.handlers).toBeDefined();
+    expect(agent.handlers?.health).toBeDefined();
+    expect(agent.handlers?.entrypoints).toBeDefined();
+    expect(agent.handlers?.manifest).toBeDefined();
+    expect(agent.handlers?.favicon).toBeDefined();
+    expect(agent.handlers?.invoke).toBeDefined();
+    expect(agent.handlers?.stream).toBeDefined();
+    expect(agent.handlers?.tasks).toBeDefined();
+    expect(agent.handlers?.getTask).toBeDefined();
+    expect(agent.handlers?.listTasks).toBeDefined();
+    expect(agent.handlers?.cancelTask).toBeDefined();
+    expect(agent.handlers?.subscribeTask).toBeDefined();
+  });
+
+  it('handlers.health returns correct response', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(http())
+      .build();
+
+    const request = new Request('http://agent/health');
+    const response = await agent.handlers?.health(request);
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const body = await response?.json();
+    expect(body).toEqual({ ok: true, version: '1.0.0' });
+  });
+
+  it('handlers.entrypoints returns list of entrypoints', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(http())
+      .build();
+
+    agent.entrypoints.add({
+      key: 'echo',
+      description: 'Echo endpoint',
+      input: z.object({ text: z.string() }),
+      handler: async () => ({ output: { text: 'echo' } }),
+    });
+
+    const request = new Request('http://agent/entrypoints');
+    const response = await agent.handlers?.entrypoints(request);
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const body = await response?.json();
+    expect(body).toEqual({
+      items: [{ key: 'echo', description: 'Echo endpoint', streaming: false }],
+    });
+  });
+
+  it('handlers.manifest returns agent card', async () => {
+    const agent = await createAgent({
+      name: 'test-agent',
+      version: '1.0.0',
+      description: 'Test agent',
+    })
+      .use(a2a())
+      .use(http())
+      .build();
+
+    const request = new Request(
+      'http://agent.example.com/.well-known/agent-card.json'
+    );
+    const response = await agent.handlers?.manifest(request);
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const body = await response?.json();
+    expect(body.name).toBe('test-agent');
+    expect(body.version).toBe('1.0.0');
+  });
+
+  it('handlers.landing is optional and can be disabled', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(http({ landingPage: false }))
+      .build();
+
+    expect(agent.handlers?.landing).toBeUndefined();
+  });
+
+  it('handlers.landing is available when enabled', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(http({ landingPage: true }))
+      .build();
+
+    expect(agent.handlers?.landing).toBeDefined();
+    const request = new Request('http://agent.example.com/');
+    const response = await agent.handlers?.landing?.(request);
+    expect(response).toBeDefined();
+    expect(response?.status).toBe(200);
+    const html = await response?.text();
+    expect(html).toContain('test');
+  });
+});
+
+describe('Scheduler Extension', () => {
+  it('throws error when a2a extension is missing', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+    };
+
+    await expect(
+      createAgent({
+        name: 'test',
+        version: '1.0.0',
+      })
+        .use(payments({ config: paymentsConfig }))
+        .use(scheduler())
+        .build()
+    ).rejects.toThrow('A2A runtime missing');
+  });
+
+  it('throws error when payments extension is missing', async () => {
+    await expect(
+      createAgent({
+        name: 'test',
+        version: '1.0.0',
+      })
+        .use(a2a())
+        .use(scheduler())
+        .build()
+    ).rejects.toThrow('Payments runtime missing');
+  });
+
+  it('adds scheduler runtime when both a2a and payments are present', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(payments({ config: paymentsConfig }))
+      .use(scheduler())
+      .build();
+
+    expect(agent.scheduler).toBeDefined();
+    expect(agent.scheduler?.createHire).toBeDefined();
+    expect(agent.scheduler?.addJob).toBeDefined();
+    expect(agent.scheduler?.pauseHire).toBeDefined();
+    expect(agent.scheduler?.resumeHire).toBeDefined();
+    expect(agent.scheduler?.cancelHire).toBeDefined();
+    expect(agent.scheduler?.pauseJob).toBeDefined();
+    expect(agent.scheduler?.resumeJob).toBeDefined();
+    expect(agent.scheduler?.tick).toBeDefined();
+    expect(agent.scheduler?.recoverExpiredLeases).toBeDefined();
+  });
+
+  it('scheduler runtime methods are functions', async () => {
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc000000000000000000000000000000000c0de',
+      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
+      network: 'base-sepolia',
+    };
+
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(payments({ config: paymentsConfig }))
+      .use(scheduler())
+      .build();
+
+    expect(typeof agent.scheduler?.createHire).toBe('function');
+    expect(typeof agent.scheduler?.addJob).toBe('function');
+    expect(typeof agent.scheduler?.pauseHire).toBe('function');
+    expect(typeof agent.scheduler?.resumeHire).toBe('function');
+    expect(typeof agent.scheduler?.cancelHire).toBe('function');
+    expect(typeof agent.scheduler?.pauseJob).toBe('function');
+    expect(typeof agent.scheduler?.resumeJob).toBe('function');
+    expect(typeof agent.scheduler?.tick).toBe('function');
+    expect(typeof agent.scheduler?.recoverExpiredLeases).toBe('function');
   });
 });

@@ -22,7 +22,9 @@ const initialState: ThemeProviderState = {
   setTheme: () => null,
 };
 
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
+  undefined
+);
 
 const isBrowser = typeof window !== 'undefined';
 
