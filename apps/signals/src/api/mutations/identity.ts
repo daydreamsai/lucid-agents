@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../client';
 import { getApiAgentsByAgentIdQueryKey } from '../queries/agents';
-import {
-  postApiAgentsByAgentIdIdentityRetryMutation,
-  type PostApiAgentsByAgentIdIdentityRetryError,
-} from '@lucid-agents/hono-runtime/sdk/@tanstack/react-query';
-import type { IdentityRegistrationResult } from '@lucid-agents/hono-runtime/sdk/types.gen';
+import { postApiAgentsByAgentIdIdentityRetryMutation } from '@lucid-agents/hono-runtime/sdk/react-query';
+import type {
+  IdentityRegistrationResult,
+  PostApiAgentsByAgentIdIdentityRetryError,
+} from '@lucid-agents/hono-runtime/sdk';
 
 // Re-export type for convenience
 export type { IdentityRegistrationResult };

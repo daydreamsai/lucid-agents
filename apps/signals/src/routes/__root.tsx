@@ -72,7 +72,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
                 <div className="flex-1 pr-4">
                   <GlobalSearchBar />
                 </div>
-                <ModeToggle />
               </header>
               <div className="p-4">{children}</div>
             </SidebarInset>

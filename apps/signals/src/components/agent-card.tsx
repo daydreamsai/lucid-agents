@@ -52,8 +52,8 @@ export function AgentCard({ agent }: AgentCardProps) {
     <Card
       className={`group transition-all hover:shadow-md border-l-4 ${
         agent.enabled
-          ? 'border-l-green-500 dark:border-l-green-400'
-          : 'border-l-gray-300 dark:border-l-gray-600'
+          ? 'border-l-success'
+          : 'border-l-muted-foreground/30'
       }`}
     >
       <Link to="/agent/$id" params={{ id: agent.id }} onMouseEnter={prefetch}>
@@ -63,15 +63,15 @@ export function AgentCard({ agent }: AgentCardProps) {
             <span
               className={`size-2 rounded-full flex-shrink-0 ${
                 agent.enabled
-                  ? 'bg-green-500 dark:bg-green-400'
-                  : 'bg-gray-400 dark:bg-gray-500'
+                  ? 'bg-success'
+                  : 'bg-muted-foreground/50'
               }`}
             />
             <h3 className="font-semibold text-base truncate">{agent.name}</h3>
             <span
               className={`ml-auto text-xs flex-shrink-0 ${
                 agent.enabled
-                  ? 'text-green-600 dark:text-green-400'
+                  ? 'text-success'
                   : 'text-muted-foreground'
               }`}
             >

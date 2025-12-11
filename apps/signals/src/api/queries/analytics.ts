@@ -5,11 +5,11 @@ import {
   getApiAgentsByAgentIdAnalyticsTransactionsOptions,
   getApiAgentsByAgentIdAnalyticsExportCsvOptions,
   getApiAgentsByAgentIdAnalyticsExportJsonOptions,
-} from '@lucid-agents/hono-runtime/sdk/@tanstack/react-query';
+} from '@lucid-agents/hono-runtime/sdk/react-query';
 import type {
   AnalyticsSummary,
   Transaction,
-} from '@lucid-agents/hono-runtime/sdk/types.gen';
+} from '@lucid-agents/hono-runtime/sdk';
 
 // Re-export types for convenience
 export type { AnalyticsSummary, Transaction };
