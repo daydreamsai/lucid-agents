@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: lucid-agents-postgres
+    ports:
+      - '5434:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lucid_agents
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  test-db:
+    image: postgres:15-alpine
+    container_name: lucid-agents-test-db
+    ports:
+      - '5435:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: lucid_agents_test
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  test_db_data:
+

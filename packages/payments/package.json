@@ -34,17 +34,15 @@
   "dependencies": {
     "@ax-llm/ax": "catalog:",
     "@lucid-agents/types": "workspace:*",
-    "x402-fetch": "catalog:",
-    "x402": "^0.7.1",
+    "pg": "^8.13.1",
     "viem": "catalog:",
-    "zod": "catalog:",
-    "better-sqlite3": "^11.7.0",
-    "pg": "^8.13.1"
+    "x402": "^0.7.1",
+    "x402-fetch": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.11.10"
   }
 }

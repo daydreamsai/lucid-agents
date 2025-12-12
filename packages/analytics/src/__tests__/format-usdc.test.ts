@@ -126,3 +126,5 @@ describe('formatUsdcAmount (via getAllTransactions)', () => {
     expect(formatted.split('.')[1]).toHaveLength(6);
   });
 });
+
+

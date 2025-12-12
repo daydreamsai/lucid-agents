@@ -4,7 +4,6 @@ export {
   createAxLLMClient,
 } from './axllm';
 export { AgentCore, createAgentCore } from './core/agent';
-export type { Network } from './core/types';
 export { AgentBuilder } from './extensions/builder';
 export { createAgent } from './runtime';
 export * from './utils';

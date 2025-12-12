@@ -14,3 +14,9 @@ old/*
 dist/
 */dist/
 *.tsbuildinfo
+
+# Data directories
+.data/
+*/.data/
+
+.cursor

@@ -33,7 +33,6 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "@lucid-agents/payments": "workspace:*",
     "viem": "catalog:"
   },
   "devDependencies": {

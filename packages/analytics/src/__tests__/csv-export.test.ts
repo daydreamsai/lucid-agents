@@ -110,10 +110,13 @@ describe('CSV Export Escaping', () => {
     const storage = createInMemoryPaymentStorage();
     const tracker = createPaymentTracker(storage);
 
-    await tracker.recordOutgoing('group, with "quotes" and\nnewlines', 'global', 1000n);
+    await tracker.recordOutgoing(
+      'group, with "quotes" and\nnewlines',
+      'global',
+      1000n
+    );
 
     const csv = await exportToCSV(tracker);
     expect(csv).toContain('"group, with ""quotes"" and\nnewlines"');
   });
 });
-

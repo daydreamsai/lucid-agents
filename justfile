@@ -105,11 +105,47 @@ type-check PACKAGE:
     cd packages/{{PACKAGE}} && bun run type-check
     @echo -e $'{{BOLD}}{{GREEN}}{{PACKAGE}} type check passed!{{RESET}}'
 
+# Build a specific package
+build PACKAGE:
+    @echo -e $'{{BOLD}}{{CYAN}}Building {{PACKAGE}}...{{RESET}}'
+    cd packages/{{PACKAGE}} && bun run build
+    @echo -e $'{{BOLD}}{{GREEN}}{{PACKAGE}} built successfully!{{RESET}}'
+
+# ===== Test Database Commands =====
+
+# Start test database
+testdb-start:
+    @echo -e $'{{BOLD}}{{CYAN}}Starting test database...{{RESET}}'
+    @cd platform/dev && docker compose up -d test-db
+    @echo -e $'{{BOLD}}{{CYAN}}Waiting for database to be ready...{{RESET}}'
+    @sleep 2
+    @docker exec lucid-agents-test-db psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'lucid_agents_test'" | grep -q 1 || docker exec lucid-agents-test-db psql -U postgres -c "CREATE DATABASE lucid_agents_test;"
+    @echo -e $'{{BOLD}}{{GREEN}}Test database started on port 5435{{RESET}}'
+
+# Stop test database
+testdb-stop:
+    @echo -e $'{{BOLD}}{{CYAN}}Stopping test database...{{RESET}}'
+    @cd platform/dev && docker compose stop test-db
+    @echo -e $'{{BOLD}}{{GREEN}}Test database stopped!{{RESET}}'
+
+# Reset test database
+testdb-reset:
+    @just testdb-stop
+    @just testdb-start
+
+# ===== Test Commands =====
+
 # Run all tests
 test-all:
     @echo -e $'{{BOLD}}{{CYAN}}Running all tests...{{RESET}}'
     bun test
     @echo -e $'{{BOLD}}{{GREEN}}All tests passed!{{RESET}}'
+
+# Run payment tests with test database
+test-payments:
+    @echo -e $'{{BOLD}}{{CYAN}}Running payment tests...{{RESET}}'
+    @cd packages/payments && TEST_POSTGRES_URL="postgresql://postgres:test_password@localhost:5435/lucid_agents_test?schema=public" bun test
+    @echo -e $'{{BOLD}}{{GREEN}}Payment tests completed!{{RESET}}'
 
 # Clean all build artifacts
 clean-all:
@@ -154,6 +190,7 @@ help:
     @echo -e $'  just type-check-all  # Check types'
     @echo -e $''
     @echo -e $'{{BOLD}}{{CYAN}}Package-specific:{{RESET}}'
+    @echo -e $'  just build PACKAGE        # Build specific package'
     @echo -e $'  just lint-check PACKAGE   # Lint specific package'
     @echo -e $'  just lint-fix PACKAGE     # Fix lint in specific package'
     @echo -e $'  just format-check PACKAGE # Format check specific package'

@@ -46,6 +46,13 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Start PostgreSQL test database
+        run: |
+          docker compose -f platform/dev/docker-compose.yml up -d test-db
+          echo "Waiting for PostgreSQL to be ready..."
+          timeout 60 bash -c 'until docker exec lucid-agents-test-db pg_isready -U postgres -d lucid_agents_test; do sleep 2; done' || exit 1
+          echo "PostgreSQL is ready!"
+
       - name: Build packages
         run: bun run build:packages
 
@@ -59,4 +66,12 @@ jobs:
         run: bun run format:check
 
       - name: Test packages
+        env:
+          TEST_POSTGRES_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
+          TEST_DATABASE_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
         run: bun test
+
+      - name: Stop PostgreSQL test database
+        if: always()
+        run: |
+          docker compose -f platform/dev/docker-compose.yml stop test-db || true
