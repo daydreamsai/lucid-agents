@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/scheduler",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pull-style scheduler for hiring agents and invoking them on a schedule with bound wallets",
   "repository": {
     "type": "git",
