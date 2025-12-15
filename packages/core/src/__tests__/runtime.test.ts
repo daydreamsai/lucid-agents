@@ -731,7 +731,7 @@ describe('Analytics Extension', () => {
     expect(agent.analytics?.paymentTracker).toBeUndefined();
   });
 
-  it('analytics returns undefined when payments configured but no policy groups with tracking', async () => {
+  it('analytics.paymentTracker is defined when payments configured even without policy groups', async () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
@@ -747,9 +747,12 @@ describe('Analytics Extension', () => {
       .build();
 
     expect(agent.payments).toBeDefined();
-    expect(agent.payments?.paymentTracker).toBeUndefined();
+    expect(agent.payments?.paymentTracker).toBeDefined();
     expect(agent.analytics).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeUndefined();
+    expect(agent.analytics?.paymentTracker).toBeDefined();
+    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
+      agent.payments?.paymentTracker as PaymentTracker
+    );
   });
 
   it('analytics.paymentTracker matches payments.paymentTracker when policy groups require tracking', async () => {
@@ -853,7 +856,7 @@ describe('Analytics Extension', () => {
     expect(analyticsTracker).toBe(paymentsTracker);
   });
 
-  it('analytics.paymentTracker is undefined when only rate limits are configured (no maxTotalUsd)', async () => {
+  it('analytics.paymentTracker is defined when only rate limits are configured (payment tracker always created)', async () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
@@ -865,7 +868,6 @@ describe('Analytics Extension', () => {
             maxPayments: 10,
             windowMs: 60000,
           },
-          // No maxTotalUsd limits, so no tracking needed
         },
       ],
     };
@@ -879,8 +881,12 @@ describe('Analytics Extension', () => {
       .build();
 
     expect(agent.payments).toBeDefined();
-    expect(agent.payments?.paymentTracker).toBeUndefined();
-    expect(agent.analytics?.paymentTracker).toBeUndefined();
+    expect(agent.payments?.paymentTracker).toBeDefined();
+    expect(agent.analytics).toBeDefined();
+    expect(agent.analytics?.paymentTracker).toBeDefined();
+    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
+      agent.payments?.paymentTracker as PaymentTracker
+    );
   });
 });
 
