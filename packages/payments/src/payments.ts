@@ -219,50 +219,21 @@ export function createPaymentsRuntime(
 
   const policyGroups = config.policyGroups;
 
-  // Check if we need payment tracking (for outgoing or incoming limits)
+  try {
+    const storage = customStorageFactory
+      ? customStorageFactory(config.storage, agentId)
+      : createStorageFromConfig(config.storage, agentId);
+    paymentTracker = createPaymentTracker(storage);
+  } catch (error) {
+    throw new Error(
+      `Failed to initialize payment storage: ${(error as Error).message}`
+    );
+  }
+
   if (policyGroups && policyGroups.length > 0) {
-    const needsOutgoingTracking = policyGroups.some(
-      group =>
-        group.outgoingLimits?.global?.maxTotalUsd !== undefined ||
-        Object.values(group.outgoingLimits?.perTarget ?? {}).some(
-          limit => limit.maxTotalUsd !== undefined
-        ) ||
-        Object.values(group.outgoingLimits?.perEndpoint ?? {}).some(
-          limit => limit.maxTotalUsd !== undefined
-        )
-    );
-
-    // Check if any group needs incoming payment tracking
-    const needsIncomingTracking = policyGroups.some(
-      group =>
-        group.incomingLimits?.global?.maxTotalUsd !== undefined ||
-        Object.values(group.incomingLimits?.perSender ?? {}).some(
-          limit => limit.maxTotalUsd !== undefined
-        ) ||
-        Object.values(group.incomingLimits?.perEndpoint ?? {}).some(
-          limit => limit.maxTotalUsd !== undefined
-        )
-    );
-
-    // Check if any group needs rate limiting
     const needsRateLimiter = policyGroups.some(
       group => group.rateLimits !== undefined
     );
-
-    // Create payment tracker if we need tracking for either direction
-    if (needsOutgoingTracking || needsIncomingTracking) {
-      try {
-        const storage = customStorageFactory
-          ? customStorageFactory(config.storage, agentId)
-          : createStorageFromConfig(config.storage, agentId);
-        paymentTracker = createPaymentTracker(storage);
-      } catch (error) {
-        // Storage initialization failed - throw error (agent startup fails)
-        throw new Error(
-          `Failed to initialize payment storage: ${(error as Error).message}`
-        );
-      }
-    }
 
     if (needsRateLimiter) {
       rateLimiter = createRateLimiter();
