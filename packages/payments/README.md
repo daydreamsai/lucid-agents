@@ -7,6 +7,7 @@ Bi-directional payment tracking with persistent storage and policy enforcement f
 The `@lucid-agents/payments` package provides:
 
 - **Bi-directional payment tracking** - Track both outgoing payments (agent pays) and incoming payments (agent receives)
+- **Zero-value transaction tracking** - Track free services and zero-cost transactions to enable policy enforcement
 - **Persistent storage** - Multiple storage backends (SQLite, In-Memory, Postgres) for different deployment scenarios
 - **Payment policies** - Enforce limits and controls on both outgoing and incoming payments
 - **x402 integration** - Seamless integration with the x402 micropayment protocol
@@ -153,6 +154,16 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname
 - When you need to query payment data from external tools
 
 **Schema:** The Postgres storage automatically creates the required table and indexes on first use.
+
+## Zero-Value Transaction Tracking
+
+The payment tracker records **all transactions**, including those with zero value (free services). This enables:
+
+- **Policy enforcement on free services** - Block or rate-limit free endpoints using the same policy system
+- **Usage analytics** - Track how often free services are used
+- **Consistent behavior** - Apply the same controls regardless of whether a service is paid or free
+
+This means even when `price: "0"` or when no payment is required, the transaction is still recorded in the payment storage and subject to policy checks like rate limits and recipient restrictions.
 
 ## Payment Policies
 
