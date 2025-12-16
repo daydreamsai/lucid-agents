@@ -374,6 +374,75 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
     });
   });
 
+  describe('Zero-amount transactions', () => {
+    it('should track zero-amount outgoing transactions', async () => {
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'outgoing',
+        amount: 0n,
+      });
+
+      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      expect(total).toBe(0n);
+
+      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      expect(records).toHaveLength(1);
+      expect(records[0].amount).toBe(0n);
+    });
+
+    it('should track zero-amount incoming transactions', async () => {
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'incoming',
+        amount: 0n,
+      });
+
+      const total = await storageWithAgent.getTotal('group1', 'global', 'incoming');
+      expect(total).toBe(0n);
+
+      const records = await storageWithAgent.getAllRecords('group1', 'global', 'incoming');
+      expect(records).toHaveLength(1);
+      expect(records[0].amount).toBe(0n);
+    });
+
+    it('should track zero-amount transactions mixed with non-zero amounts', async () => {
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'outgoing',
+        amount: 1000n,
+      });
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'outgoing',
+        amount: 0n,
+      });
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'outgoing',
+        amount: 2000n,
+      });
+      await storageWithAgent.recordPayment({
+        groupName: 'group1',
+        scope: 'global',
+        direction: 'outgoing',
+        amount: 0n,
+      });
+
+      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      expect(total).toBe(3000n);
+
+      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      expect(records).toHaveLength(4);
+      const zeroRecords = records.filter(r => r.amount === 0n);
+      expect(zeroRecords).toHaveLength(2);
+    });
+  });
+
   describe('Backward compatibility', () => {
     it('should work without agentId (NULL agent_id)', async () => {
       // Storage without agentId should work for single-agent deployments

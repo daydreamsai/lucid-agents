@@ -59,10 +59,6 @@ export class SQLitePaymentStorage implements PaymentStorage {
   async recordPayment(
     record: Omit<PaymentRecord, 'id' | 'timestamp'>
   ): Promise<void> {
-    if (record.amount <= 0n) {
-      return;
-    }
-
     const stmt = this.db.prepare(`
       INSERT INTO payments (group_name, scope, direction, amount, timestamp)
       VALUES (?, ?, ?, ?, ?)

@@ -180,10 +180,18 @@ describe('PaymentTracker', () => {
       );
     });
 
-    it('should handle zero amounts gracefully', async () => {
+    it('should track zero-amount outgoing transactions', async () => {
       await tracker.recordOutgoing('group1', 'global', 0n);
       const total = await tracker.getOutgoingTotal('group1', 'global');
       expect(total).toBe(0n);
+
+      // Verify the transaction is actually recorded
+      const allData = await tracker.getAllData();
+      const zeroAmountRecords = allData.filter(
+        r => r.groupName === 'group1' && r.scope === 'global' && r.direction === 'outgoing' && r.amount === 0n
+      );
+      expect(zeroAmountRecords).toHaveLength(1);
+      expect(zeroAmountRecords[0].amount).toBe(0n);
     });
 
     it('should clear all data', async () => {
@@ -207,6 +215,31 @@ describe('PaymentTracker', () => {
       const total = await tracker.getOutgoingTotal('group1', 'global');
       expect(total).toBe(80_000_000n);
     });
+
+    it('should track zero-amount outgoing transactions', async () => {
+      await tracker.recordOutgoing('group1', 'global', 0n);
+      const allData = await tracker.getAllData();
+      const zeroRecords = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'outgoing' && r.amount === 0n
+      );
+      expect(zeroRecords).toHaveLength(1);
+    });
+
+    it('should track zero-amount transactions mixed with non-zero amounts', async () => {
+      await tracker.recordOutgoing('group1', 'global', 100_000_000n);
+      await tracker.recordOutgoing('group1', 'global', 0n);
+      await tracker.recordOutgoing('group1', 'global', 50_000_000n);
+      await tracker.recordOutgoing('group1', 'global', 0n);
+
+      const total = await tracker.getOutgoingTotal('group1', 'global');
+      expect(total).toBe(150_000_000n);
+
+      const allData = await tracker.getAllData();
+      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'outgoing');
+      expect(group1Records).toHaveLength(4);
+      const zeroRecords = group1Records.filter(r => r.amount === 0n);
+      expect(zeroRecords).toHaveLength(2);
+    });
   });
 
   describe('recordIncoming', () => {
@@ -221,6 +254,30 @@ describe('PaymentTracker', () => {
       await tracker.recordIncoming('group1', 'global', 30_000_000n);
       const total = await tracker.getIncomingTotal('group1', 'global');
       expect(total).toBe(80_000_000n);
+    });
+
+    it('should track zero-amount incoming transactions', async () => {
+      await tracker.recordIncoming('group1', 'global', 0n);
+      const allData = await tracker.getAllData();
+      const zeroRecords = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'incoming' && r.amount === 0n
+      );
+      expect(zeroRecords).toHaveLength(1);
+    });
+
+    it('should track zero-amount incoming transactions mixed with non-zero amounts', async () => {
+      await tracker.recordIncoming('group1', 'global', 100_000_000n);
+      await tracker.recordIncoming('group1', 'global', 0n);
+      await tracker.recordIncoming('group1', 'global', 50_000_000n);
+
+      const total = await tracker.getIncomingTotal('group1', 'global');
+      expect(total).toBe(150_000_000n);
+
+      const allData = await tracker.getAllData();
+      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'incoming');
+      expect(group1Records).toHaveLength(3);
+      const zeroRecords = group1Records.filter(r => r.amount === 0n);
+      expect(zeroRecords).toHaveLength(1);
     });
   });
 

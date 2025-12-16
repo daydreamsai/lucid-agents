@@ -55,10 +55,6 @@ export class PostgresPaymentStorage implements PaymentStorage {
   async recordPayment(
     record: Omit<PaymentRecord, 'id' | 'timestamp'>
   ): Promise<void> {
-    if (record.amount <= 0n) {
-      return;
-    }
-
     if (!this.schemaInitialized) {
       await this.initSchema();
     }
