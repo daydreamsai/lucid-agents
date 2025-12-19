@@ -1,29 +1,4 @@
-/**
- * Minimal viem-compatible wallet client interface for signing operations.
- * This avoids direct viem dependency in the types package.
- */
-export interface ViemWalletClient {
-  account?: {
-    address: `0x${string}`;
-    signMessage?(args: { message: string | { raw: `0x${string}` | Uint8Array } }): Promise<`0x${string}`>;
-  };
-  chain?: {
-    id: number;
-  };
-  signMessage(args: {
-    account?: { address: `0x${string}` };
-    message: string | { raw: `0x${string}` | Uint8Array };
-  }): Promise<`0x${string}`>;
-  signTypedData?(args: {
-    account?: { address: `0x${string}` };
-    domain?: Record<string, unknown>;
-    types: Record<string, Array<{ name: string; type: string }>>;
-    primaryType: string;
-    message: Record<string, unknown>;
-  }): Promise<`0x${string}`>;
-  signTransaction?(args: any): Promise<`0x${string}`>;
-  writeContract?(args: any): Promise<`0x${string}`>;
-}
+import type { WalletClient } from 'viem';
 
 /**
  * Wallet metadata describing wallet properties and capabilities.
@@ -117,7 +92,7 @@ export type LocalWalletOptions = LocalWalletMetadataOptions & {
  */
 export type SignerWalletOptions = LocalWalletMetadataOptions & {
   type: 'signer';
-  walletClient: ViemWalletClient;
+  walletClient: WalletClient;
 };
 
 /**
