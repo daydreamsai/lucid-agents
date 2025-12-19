@@ -880,49 +880,62 @@ The CLI doesn't directly import these; it scaffolds code that uses them.
 
 ### Testing Local Packages in External Projects
 
-When developing changes to packages and testing them in external projects (e.g., your own agent), use the `link:` protocol in your `package.json`:
-
-**In your test project's `package.json`:**
-
-```json
-{
-  "dependencies": {
-    "@lucid-agents/identity": "link:../../lucid-agents/packages/identity",
-    "@lucid-agents/core": "link:../../lucid-agents/packages/core",
-    "@lucid-agents/wallet": "link:../../lucid-agents/packages/wallet"
-  }
-}
-```
+When developing changes to packages and testing them in external projects (e.g., your own agent), use bun's linking feature:
 
 **Workflow:**
 
-1. **Link the packages** you're working on:
+1. **Register packages globally** - In the lucid-agents monorepo, register the packages you want to link:
+   ```bash
+   cd lucid-agents/packages/types
+   bun link
+
+   cd ../wallet
+   bun link
+
+   cd ../identity
+   bun link
+   ```
+
+2. **Update your test project's `package.json`** to use the `link:` protocol:
+   ```json
+   {
+     "dependencies": {
+       "@lucid-agents/identity": "link:@lucid-agents/identity",
+       "@lucid-agents/types": "link:@lucid-agents/types",
+       "@lucid-agents/wallet": "link:@lucid-agents/wallet"
+     }
+   }
+   ```
+
+3. **Install dependencies** in your test project:
    ```bash
    cd my-test-agent
-   # Edit package.json to use link: protocol pointing to local packages
    bun install
    ```
 
-2. **Make changes** in the linked package:
+4. **Make changes** in the linked package:
    ```bash
-   cd ../../lucid-agents/packages/identity
+   cd lucid-agents/packages/identity
    # Make your changes to source code
    bun run build  # Build after changes
    ```
 
-3. **Test immediately** - Changes are reflected in your test project automatically
+5. **Test immediately** - Changes are reflected in your test project automatically
 
-4. **Before committing**, remember to change back to version references:
+6. **Before committing**, remember to change back to version references:
    ```json
    {
      "dependencies": {
-       "@lucid-agents/identity": "^1.12.0"
+       "@lucid-agents/identity": "^1.12.0",
+       "@lucid-agents/types": "^1.5.5",
+       "@lucid-agents/wallet": "^0.5.5"
      }
    }
    ```
 
 **How it works:**
-- The `link:` protocol creates a symlink to the local package directory
+- `bun link` registers a package globally by name
+- The `link:@package-name` protocol in package.json references the globally registered package
 - Any changes you make and build in the linked package are immediately available
 - No need to publish to npm or reinstall dependencies
 - Perfect for rapid iteration and testing

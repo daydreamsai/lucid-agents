@@ -76,11 +76,13 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
+    "viem": "^2.41.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
+    "viem": "catalog:",
     "zod": "catalog:",
     "x402": "catalog:"
   }

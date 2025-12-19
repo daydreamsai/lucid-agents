@@ -4,15 +4,14 @@ import type {
   WalletCapabilities,
   AgentChallenge,
   LocalEoaSigner,
-  ViemWalletClient,
 } from '@lucid-agents/types/wallets';
-import { hashMessage, recoverMessageAddress } from 'viem';
+import { hashMessage, recoverMessageAddress, type WalletClient } from 'viem';
 
 /**
  * Options for creating a ViemWalletConnector.
  */
 export interface ViemWalletConnectorOptions {
-  walletClient: ViemWalletClient;
+  walletClient: WalletClient;
   metadata?: Partial<WalletMetadata>;
 }
 
@@ -22,7 +21,7 @@ export interface ViemWalletConnectorOptions {
  * It can be used for both developer wallets and agent wallets.
  */
 export class ViemWalletConnector implements WalletConnector {
-  private walletClient: ViemWalletClient;
+  private walletClient: WalletClient;
   private metadata: Partial<WalletMetadata>;
 
   constructor(options: ViemWalletConnectorOptions) {
