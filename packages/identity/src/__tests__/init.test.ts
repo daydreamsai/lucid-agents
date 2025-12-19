@@ -73,7 +73,8 @@ mock.module('viem/accounts', () => ({
   }),
 }));
 
-mock.module('viem/chains', () => ({}));
+// Note: We don't mock viem/chains because it causes module cache pollution
+// that affects other test suites. The identity code handles missing chains gracefully.
 
 const REGISTRY_ADDRESS = '0x000000000000000000000000000000000000dEaD' as const;
 
