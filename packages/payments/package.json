@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/payments",
-  "version": "1.10.1",
+  "version": "1.12.0",
   "description": "Payment logic for bidirectional agent-to-agent payments",
   "repository": {
     "type": "git",
@@ -39,15 +39,13 @@
     "@x402/svm": "catalog:",
     "x402-fetch": "catalog:",
     "x402": "catalog:",
+    "pg": "^8.13.1",
     "viem": "catalog:",
-    "zod": "catalog:",
-    "better-sqlite3": "^11.7.0",
-    "pg": "^8.13.1"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.11.10"
   }
 }

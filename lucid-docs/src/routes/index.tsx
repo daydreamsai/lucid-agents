@@ -9,7 +9,17 @@ export const Route = createFileRoute('/')({
 function Home() {
   return (
     <HomeLayout {...baseOptions()}>
-      <div className="w-full max-w-6xl mx-auto border-x border-fd-border">
+      <div className="w-full max-w-6xl mx-auto border-x border-fd-border relative">
+        {/* Animated border lines */}
+        <div className="absolute left-0 top-0 w-px h-full overflow-hidden">
+          <div className="absolute w-px h-32 bg-gradient-to-b from-transparent via-emerald-500 to-transparent animate-line-down" />
+        </div>
+        <div className="absolute right-0 top-0 w-px h-full overflow-hidden">
+          <div className="absolute w-px h-32 bg-gradient-to-b from-transparent via-blue-500 to-transparent animate-line-up" />
+        </div>
+        <div className="absolute left-0 top-0 w-full h-px overflow-hidden">
+          <div className="absolute h-px w-48 bg-gradient-to-r from-transparent via-violet-500 to-transparent animate-line-right" />
+        </div>
         {/* Hero */}
         <section className="border-b border-fd-border p-8 md:p-16 text-center">
           <p className="text-xs font-medium text-fd-muted-foreground mb-4 tracking-widest uppercase">

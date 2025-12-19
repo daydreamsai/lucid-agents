@@ -19,10 +19,6 @@ export class InMemoryPaymentStorage implements PaymentStorage {
   async recordPayment(
     record: Omit<PaymentRecord, 'id' | 'timestamp'>
   ): Promise<void> {
-    if (record.amount <= 0n) {
-      return;
-    }
-
     const key = `${record.groupName}:${record.direction}`;
     let groupPayments = this.payments.get(key);
     if (!groupPayments) {

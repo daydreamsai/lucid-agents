@@ -5,6 +5,10 @@
 
 import type { AgentRuntime } from '@lucid-agents/types/core';
 import type { TrustConfig } from '@lucid-agents/types/identity';
+import type {
+  AgentWalletHandle,
+  DeveloperWalletHandle,
+} from '@lucid-agents/types/wallets';
 
 import { getRegistryAddresses } from './config';
 import {
@@ -62,10 +66,17 @@ function resolveRequiredChainId(
  */
 export type CreateAgentIdentityOptions = {
   /**
-   * Agent runtime instance (required).
-   * Must have wallets.agent configured for identity operations.
+   * Agent runtime instance (optional if walletHandle is provided).
+   * If walletHandle is not provided, runtime.wallets.developer is required.
    */
-  runtime: AgentRuntime;
+  runtime?: AgentRuntime;
+
+  /**
+   * Optional wallet handle to use for identity operations.
+   * Takes precedence over runtime.wallets.developer.
+   * Useful when passing a browser-connected wallet (e.g., thirdweb account).
+   */
+  walletHandle?: AgentWalletHandle | DeveloperWalletHandle;
 
   /**
    * Agent domain (e.g., "agent.example.com").
@@ -228,22 +239,11 @@ export type AgentIdentity = BootstrapIdentityResult & {
 export async function createAgentIdentity(
   options: CreateAgentIdentityOptions
 ): Promise<AgentIdentity> {
-  if (!options.runtime) {
-    throw new Error(
-      'runtime is required for createAgentIdentity. Pass the AgentRuntime instance from createAgentHttpRuntime or createAgentRuntime.'
-    );
-  }
-
-  if (!options.runtime.wallets?.agent) {
-    throw new Error(
-      'runtime.wallets.agent is required for identity operations. Configure a wallet in the runtime config.'
-    );
-  }
-
   validateIdentityConfig(options, options.env);
 
   const {
     runtime,
+    walletHandle: explicitWalletHandle,
     domain,
     chainId,
     registryAddress,
@@ -255,6 +255,19 @@ export async function createAgentIdentity(
     makeClients,
   } = options;
 
+  // Prefer explicit walletHandle, then developer wallet, then agent wallet (for backward compatibility)
+  const walletHandle =
+    explicitWalletHandle ??
+    runtime?.wallets?.developer ??
+    runtime?.wallets?.agent;
+
+  if (!walletHandle) {
+    throw new Error(
+      'Either walletHandle or runtime.wallets.developer is required for identity operations. ' +
+        'Provide walletHandle directly or configure runtime.wallets.developer in the runtime config.'
+    );
+  }
+
   const autoRegister = resolveAutoRegister(options, env);
 
   const viemFactory =
@@ -262,7 +275,7 @@ export async function createAgentIdentity(
     (await makeViemClientsFromWallet({
       env,
       rpcUrl,
-      walletHandle: runtime.wallets.agent,
+      walletHandle,
     }));
 
   const resolvedChainId = resolveRequiredChainId(chainId, env);

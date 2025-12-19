@@ -8,10 +8,10 @@ import type {
   BuildContext,
   EntrypointDef,
   Extension,
+  Network,
 } from '@lucid-agents/types/core';
 
 import { createAgentCore } from '../core/agent';
-import type { Network } from '../core/types';
 
 export class AgentBuilder {
   private extensions: Extension[] = [];

@@ -2,3 +2,44 @@
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
 @import 'fumadocs-twoslash/twoslash.css';
+
+@keyframes line-down {
+  0% {
+    top: -128px;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+@keyframes line-up {
+  0% {
+    bottom: -128px;
+  }
+  100% {
+    bottom: 100%;
+  }
+}
+
+@keyframes line-right {
+  0% {
+    left: -192px;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.animate-line-down {
+  animation: line-down 8s linear infinite;
+}
+
+.animate-line-up {
+  animation: line-up 10s linear infinite;
+  animation-delay: 2s;
+}
+
+.animate-line-right {
+  animation: line-right 6s linear infinite;
+  animation-delay: 1s;
+}

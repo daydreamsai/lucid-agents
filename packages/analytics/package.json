@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/analytics",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Analytics and reporting for payment tracking data",
   "repository": {
     "type": "git",
@@ -33,7 +33,6 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "@lucid-agents/payments": "workspace:*",
     "viem": "catalog:"
   },
   "devDependencies": {

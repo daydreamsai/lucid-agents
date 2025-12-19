@@ -1,5 +1,23 @@
 # @lucid-agents/identity
 
+## 1.12.0
+
+### Minor Changes
+
+- d2b4b6b: Add support for custom client factory via `makeClients` parameter in `createAgentIdentity`. This enables browser-based wallet integration (e.g., thirdweb) by allowing custom Viem client creation instead of requiring a wallet handle from the runtime.
+
+## 1.11.0
+
+## 1.10.3
+
+## 1.10.2
+
+### Patch Changes
+
+- Updated dependencies [9abbd6a]
+  - @lucid-agents/types@1.5.4
+  - @lucid-agents/wallet@0.5.4
+
 ## 1.10.1
 
 ### Patch Changes

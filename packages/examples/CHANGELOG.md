@@ -1,5 +1,55 @@
 # @lucid-agents/examples
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [d2b4b6b]
+  - @lucid-agents/identity@1.12.0
+  - @lucid-agents/core@1.12.0
+  - @lucid-agents/payments@1.12.0
+  - @lucid-agents/a2a@0.5.2
+  - @lucid-agents/hono@0.7.9
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [03d5279]
+  - @lucid-agents/payments@1.11.0
+  - @lucid-agents/core@1.11.0
+  - @lucid-agents/hono@0.7.8
+  - @lucid-agents/a2a@0.5.2
+  - @lucid-agents/identity@1.11.0
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [70d804e]
+  - @lucid-agents/payments@1.10.3
+  - @lucid-agents/analytics@0.2.3
+  - @lucid-agents/core@1.10.3
+  - @lucid-agents/hono@0.7.7
+  - @lucid-agents/a2a@0.5.2
+  - @lucid-agents/identity@1.10.3
+
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [9abbd6a]
+  - @lucid-agents/payments@1.10.2
+  - @lucid-agents/core@1.10.2
+  - @lucid-agents/types@1.5.4
+  - @lucid-agents/analytics@0.2.2
+  - @lucid-agents/a2a@0.5.2
+  - @lucid-agents/http@1.9.5
+  - @lucid-agents/scheduler@0.1.2
+  - @lucid-agents/hono@0.7.6
+  - @lucid-agents/identity@1.10.2
+  - @lucid-agents/wallet@0.5.4
+
 ## 0.2.1
 
 ### Patch Changes

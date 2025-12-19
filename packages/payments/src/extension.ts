@@ -13,10 +13,19 @@ import type {
 import { createAgentCardWithPayments } from './manifest';
 import { createPaymentsRuntime, entrypointHasExplicitPrice } from './payments';
 import { policiesFromConfig } from './env';
+import type { PaymentStorageConfig } from '@lucid-agents/types/payments';
+import type { PaymentStorage } from './payment-storage';
+
+type PaymentStorageFactory = (
+  storageConfig?: PaymentStorageConfig,
+  agentId?: string
+) => PaymentStorage;
 
 export function payments(options?: {
   config?: PaymentsConfig | false;
   policies?: string;
+  agentId?: string;
+  storageFactory?: PaymentStorageFactory;
 }): Extension<{ payments?: PaymentsRuntime }> {
   let paymentsRuntime: PaymentsRuntime | undefined;
 
@@ -40,7 +49,11 @@ export function payments(options?: {
         }
       }
 
-      paymentsRuntime = createPaymentsRuntime(config);
+      paymentsRuntime = createPaymentsRuntime(
+        config,
+        options?.agentId,
+        options?.storageFactory
+      );
       return { payments: paymentsRuntime };
     },
     onEntrypointAdded(entrypoint: EntrypointDef, runtime: AgentRuntime) {

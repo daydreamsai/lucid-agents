@@ -12,14 +12,16 @@ import type { PaymentStorage } from './payment-storage';
 export class PostgresPaymentStorage implements PaymentStorage {
   private pool: Pool;
   private schemaInitialized = false;
+  private agentId?: string;
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, agentId?: string) {
     this.pool = new Pool({
       connectionString,
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     });
+    this.agentId = agentId;
   }
 
   private async initSchema(): Promise<void> {
@@ -32,12 +34,14 @@ export class PostgresPaymentStorage implements PaymentStorage {
       await client.query(`
         CREATE TABLE IF NOT EXISTS payments (
           id SERIAL PRIMARY KEY,
+          agent_id TEXT,
           group_name VARCHAR NOT NULL,
           scope VARCHAR NOT NULL,
           direction VARCHAR NOT NULL,
           amount BIGINT NOT NULL,
           timestamp BIGINT NOT NULL
         );
+        CREATE INDEX IF NOT EXISTS idx_agent_group_scope ON payments(agent_id, group_name, scope) WHERE agent_id IS NOT NULL;
         CREATE INDEX IF NOT EXISTS idx_group_scope ON payments(group_name, scope);
         CREATE INDEX IF NOT EXISTS idx_timestamp ON payments(timestamp);
         CREATE INDEX IF NOT EXISTS idx_direction ON payments(direction);
@@ -51,28 +55,41 @@ export class PostgresPaymentStorage implements PaymentStorage {
   async recordPayment(
     record: Omit<PaymentRecord, 'id' | 'timestamp'>
   ): Promise<void> {
-    if (record.amount <= 0n) {
-      return;
-    }
-
     if (!this.schemaInitialized) {
       await this.initSchema();
     }
 
     try {
-      await this.pool.query(
-        `
-        INSERT INTO payments (group_name, scope, direction, amount, timestamp)
-        VALUES ($1, $2, $3, $4, $5)
-      `,
-        [
-          record.groupName,
-          record.scope,
-          record.direction,
-          record.amount.toString(),
-          Date.now(),
-        ]
-      );
+      if (this.agentId) {
+        await this.pool.query(
+          `
+          INSERT INTO payments (agent_id, group_name, scope, direction, amount, timestamp)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `,
+          [
+            this.agentId,
+            record.groupName,
+            record.scope,
+            record.direction,
+            record.amount.toString(),
+            Date.now(),
+          ]
+        );
+      } else {
+        await this.pool.query(
+          `
+          INSERT INTO payments (agent_id, group_name, scope, direction, amount, timestamp)
+          VALUES (NULL, $1, $2, $3, $4, $5)
+        `,
+          [
+            record.groupName,
+            record.scope,
+            record.direction,
+            record.amount.toString(),
+            Date.now(),
+          ]
+        );
+      }
     } catch (error) {
       console.error('[PostgresPaymentStorage] Error recording payment:', error);
       throw error;
@@ -90,16 +107,30 @@ export class PostgresPaymentStorage implements PaymentStorage {
         await this.initSchema();
       }
 
-      let query = `
-        SELECT SUM(amount) as total
-        FROM payments
-        WHERE group_name = $1 AND scope = $2 AND direction = $3
-      `;
+      let query: string;
+      const params: unknown[] = [];
+      let paramIndex = 1;
 
-      const params: unknown[] = [groupName, scope, direction];
+      if (this.agentId) {
+        query = `
+          SELECT SUM(amount) as total
+          FROM payments
+          WHERE agent_id = $${paramIndex} AND group_name = $${paramIndex + 1} AND scope = $${paramIndex + 2} AND direction = $${paramIndex + 3}
+        `;
+        params.push(this.agentId, groupName, scope, direction);
+        paramIndex += 4;
+      } else {
+        query = `
+          SELECT SUM(amount) as total
+          FROM payments
+          WHERE agent_id IS NULL AND group_name = $${paramIndex} AND scope = $${paramIndex + 1} AND direction = $${paramIndex + 2}
+        `;
+        params.push(groupName, scope, direction);
+        paramIndex += 3;
+      }
 
       if (windowMs !== undefined) {
-        query += ' AND timestamp > $4';
+        query += ` AND timestamp > $${paramIndex}`;
         params.push(Date.now() - windowMs);
       }
 
@@ -127,6 +158,13 @@ export class PostgresPaymentStorage implements PaymentStorage {
       const params: unknown[] = [];
       let paramIndex = 1;
 
+      if (this.agentId) {
+        query += ` AND agent_id = $${paramIndex}`;
+        params.push(this.agentId);
+        paramIndex++;
+      } else {
+        query += ` AND agent_id IS NULL`;
+      }
       if (groupName) {
         query += ` AND group_name = $${paramIndex}`;
         params.push(groupName);
@@ -171,7 +209,13 @@ export class PostgresPaymentStorage implements PaymentStorage {
       if (!this.schemaInitialized) {
         await this.initSchema();
       }
-      await this.pool.query('DELETE FROM payments');
+      if (this.agentId) {
+        await this.pool.query('DELETE FROM payments WHERE agent_id = $1', [
+          this.agentId,
+        ]);
+      } else {
+        await this.pool.query('DELETE FROM payments');
+      }
     } catch (error) {
       console.error('[PostgresPaymentStorage] Error clearing payments:', error);
       throw error;
@@ -190,10 +234,12 @@ export class PostgresPaymentStorage implements PaymentStorage {
 /**
  * Creates a new Postgres payment storage instance.
  * @param connectionString - Postgres connection string
+ * @param agentId - Optional agent ID for multi-agent platforms (filters transactions by agent)
  * @returns A new PostgresPaymentStorage instance
  */
 export function createPostgresPaymentStorage(
-  connectionString: string
+  connectionString: string,
+  agentId?: string
 ): PaymentStorage {
-  return new PostgresPaymentStorage(connectionString);
+  return new PostgresPaymentStorage(connectionString, agentId);
 }

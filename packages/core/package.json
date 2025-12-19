@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/core",
-  "version": "1.10.1",
+  "version": "1.12.0",
   "description": "Build typed agent HTTP apps",
   "repository": {
     "type": "git",
@@ -53,10 +53,7 @@
     "@lucid-dreams/client": "latest",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/a2a": "workspace:*",
-    "@lucid-agents/ap2": "workspace:*",
-    "@lucid-agents/identity": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
-    "@lucid-agents/wallet": "workspace:*",
     "x402-fetch": "catalog:",
     "x402": "^0.7.1",
     "viem": "catalog:",
@@ -67,6 +64,12 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "@lucid-agents/eslint-config": "workspace:*",
-    "@lucid-agents/prettier-config": "workspace:*"
+    "@lucid-agents/prettier-config": "workspace:*",
+    "@lucid-agents/analytics": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/scheduler": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*"
   }
 }

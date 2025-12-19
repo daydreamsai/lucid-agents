@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
+import { Database } from 'bun:sqlite';
 import type {
   PaymentRecord,
   PaymentDirection,
@@ -8,13 +8,20 @@ import type {
 import type { PaymentStorage } from './payment-storage';
 
 /**
- * SQLite payment storage implementation.
+ * SQLite payment storage implementation using Bun's native SQLite.
  * Default storage - persistent, zero configuration, auto-creates database.
+ * Requires Bun runtime.
  */
 export class SQLitePaymentStorage implements PaymentStorage {
-  private db: Database.Database;
+  private db: Database;
 
-  constructor(dbPath?: string) {
+  constructor(dbPath?: string, agentId?: string) {
+    if (typeof Bun === 'undefined') {
+      throw new Error(
+        'SQLitePaymentStorage requires Bun runtime. Use PostgresPaymentStorage or InMemoryPaymentStorage for Node.js.'
+      );
+    }
+
     const path = dbPath ?? '.data/payments.db';
 
     const dir = dirname(path);
@@ -28,18 +35,21 @@ export class SQLitePaymentStorage implements PaymentStorage {
 
     this.db = new Database(path);
     this.initSchema();
+    // Note: agentId is stored but not used for SQLite (single-agent per DB)
   }
 
   private initSchema(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agent_id TEXT,
         group_name TEXT NOT NULL,
         scope TEXT NOT NULL,
         direction TEXT NOT NULL,
         amount TEXT NOT NULL,
         timestamp INTEGER NOT NULL
       );
+      CREATE INDEX IF NOT EXISTS idx_agent_group_scope ON payments(agent_id, group_name, scope) WHERE agent_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_group_scope ON payments(group_name, scope);
       CREATE INDEX IF NOT EXISTS idx_timestamp ON payments(timestamp);
       CREATE INDEX IF NOT EXISTS idx_direction ON payments(direction);
@@ -49,15 +59,10 @@ export class SQLitePaymentStorage implements PaymentStorage {
   async recordPayment(
     record: Omit<PaymentRecord, 'id' | 'timestamp'>
   ): Promise<void> {
-    if (record.amount <= 0n) {
-      return;
-    }
-
     const stmt = this.db.prepare(`
       INSERT INTO payments (group_name, scope, direction, amount, timestamp)
       VALUES (?, ?, ?, ?, ?)
     `);
-
     stmt.run(
       record.groupName,
       record.scope,
@@ -80,19 +85,26 @@ export class SQLitePaymentStorage implements PaymentStorage {
       WHERE group_name = ? AND scope = ? AND direction = ?
     `;
 
-    const params: unknown[] = [groupName, scope, direction];
-
+    let stmt: ReturnType<typeof this.db.prepare>;
     if (windowMs !== undefined) {
       query += ' AND timestamp > ?';
-      params.push(Date.now() - windowMs);
+      stmt = this.db.prepare(query);
+      const rows = stmt.all(
+        groupName,
+        scope,
+        direction,
+        Date.now() - windowMs
+      ) as Array<{ amount: string }>;
+      const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
+      return Promise.resolve(total);
+    } else {
+      stmt = this.db.prepare(query);
+      const rows = stmt.all(groupName, scope, direction) as Array<{
+        amount: string;
+      }>;
+      const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
+      return Promise.resolve(total);
     }
-
-    const rows = this.db.prepare(query).all(...params) as Array<{
-      amount: string;
-    }>;
-
-    const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
-    return Promise.resolve(total);
   }
 
   async getAllRecords(
@@ -102,35 +114,61 @@ export class SQLitePaymentStorage implements PaymentStorage {
     windowMs?: number
   ): Promise<PaymentRecord[]> {
     let query = 'SELECT * FROM payments WHERE 1=1';
-    const params: unknown[] = [];
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
 
     if (groupName) {
-      query += ' AND group_name = ?';
+      conditions.push('group_name = ?');
       params.push(groupName);
     }
     if (scope) {
-      query += ' AND scope = ?';
+      conditions.push('scope = ?');
       params.push(scope);
     }
     if (direction) {
-      query += ' AND direction = ?';
+      conditions.push('direction = ?');
       params.push(direction);
     }
     if (windowMs !== undefined) {
-      query += ' AND timestamp > ?';
+      conditions.push('timestamp > ?');
       params.push(Date.now() - windowMs);
+    }
+
+    if (conditions.length > 0) {
+      query += ' AND ' + conditions.join(' AND ');
     }
 
     query += ' ORDER BY timestamp DESC';
 
-    const rows = this.db.prepare(query).all(...params) as Array<{
+    const stmt = this.db.prepare(query);
+    // Bun's SQLite all() returns unknown[], so we type the result based on our query schema
+    // This is safe because we control the query and know the row structure
+    type SQLiteRow = {
       id: number;
+      agent_id?: string | null;
       group_name: string;
       scope: string;
       direction: string;
       amount: string;
       timestamp: number;
-    }>;
+    };
+
+    let result: unknown[];
+    if (params.length === 0) {
+      result = stmt.all();
+    } else if (params.length === 1) {
+      result = stmt.all(params[0]);
+    } else if (params.length === 2) {
+      result = stmt.all(params[0], params[1]);
+    } else if (params.length === 3) {
+      result = stmt.all(params[0], params[1], params[2]);
+    } else {
+      result = stmt.all(params[0], params[1], params[2], params[3]);
+    }
+
+    // Type assertion is necessary here because Bun's SQLite returns unknown[]
+    // We know the structure from our query, so this is safe
+    const rows = result as SQLiteRow[];
 
     return Promise.resolve(
       rows.map(row => ({
@@ -161,8 +199,13 @@ export class SQLitePaymentStorage implements PaymentStorage {
 /**
  * Creates a new SQLite payment storage instance.
  * @param dbPath - Optional custom database path (defaults to `.data/payments.db`)
+ * @param agentId - Optional agent ID (not used for SQLite, kept for API consistency)
  * @returns A new SQLitePaymentStorage instance
+ * @throws Error if not running in Bun runtime
  */
-export function createSQLitePaymentStorage(dbPath?: string): PaymentStorage {
-  return new SQLitePaymentStorage(dbPath);
+export function createSQLitePaymentStorage(
+  dbPath?: string,
+  agentId?: string
+): PaymentStorage {
+  return new SQLitePaymentStorage(dbPath, agentId);
 }

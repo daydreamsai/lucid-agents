@@ -1,5 +1,69 @@
 # @lucid-agents/payments
 
+## 1.12.0
+
+## 1.11.0
+
+### Minor Changes
+
+- 03d5279: Track zero-value payments to enable policy enforcement on free services
+
+  Previously, zero-value payments were not recorded in the payment tracker, which prevented applying policies and controls to free services. This change ensures all transactions are tracked regardless of value, allowing the system to block or apply policies to free services when needed.
+
+## 1.10.3
+
+### Patch Changes
+
+- 70d804e: Always create payment tracker when payments are enabled
+
+  The payment tracker is now always created when payments are enabled, regardless of whether policy groups are configured. This enables analytics to access payment data even when policy groups are empty, and ensures historical payment data is available if policy groups are added later.
+
+  Previously, the payment tracker was only created when policy groups had outgoing or incoming limits with `maxTotalUsd` defined. This prevented analytics from working for agents with payments enabled but no policy groups configured.
+
+## 1.10.2
+
+### Patch Changes
+
+- 9abbd6a: Add Postgres storage backend, multi-agent support, and refine extension API structure
+
+  ## New Features
+
+  ### Postgres Storage Backend for Payments
+  - Added `PostgresPaymentStorage` class for persistent payment storage
+  - Supports connection pooling and automatic schema initialization
+  - Ideal for serverless deployments and multi-instance setups
+  - Docker Compose setup for local development
+  - CI integration with Postgres test database
+
+  ### Multi-Agent Support
+  - Added optional `agentId` parameter to payments extension for multi-agent isolation
+  - Multiple agents can now share the same Postgres database with complete payment isolation
+  - Backward compatible - existing single-agent deployments continue to work unchanged
+  - Database queries automatically filter by `agentId` when provided
+
+  ### API Structure Refinements
+  - Added `agentId` parameter to `payments()` extension factory
+  - Added `storageFactory` parameter for custom storage implementations
+  - Refined extension runtime types for stricter type safety:
+    - `a2a()` extension now returns `{ a2a: A2ARuntime }` instead of optional
+    - `analytics()` extension now returns `{ analytics: AnalyticsRuntime }` instead of direct runtime
+    - `scheduler()` extension now returns `{ scheduler: SchedulerRuntime }` instead of optional
+  - Moved `Network` type from `@lucid-agents/core` to `@lucid-agents/types/core` for better organization
+
+  ## Migration
+
+  No breaking changes. Existing code continues to work. To enable multi-agent support, pass `agentId` when creating the payments extension:
+
+  ```typescript
+  .use(payments({
+    config: { /* ... */ },
+    agentId: 'my-agent-id' // Optional, for multi-agent isolation
+  }))
+  ```
+
+- Updated dependencies [9abbd6a]
+  - @lucid-agents/types@1.5.4
+
 ## 1.10.1
 
 ### Patch Changes

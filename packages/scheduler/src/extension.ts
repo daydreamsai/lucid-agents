@@ -20,13 +20,14 @@ export type SchedulerExtensionOptions = {
 
 export function scheduler(
   options?: SchedulerExtensionOptions
-): Extension<{ scheduler?: SchedulerRuntime }> {
-  let schedulerRuntime: SchedulerRuntime | undefined;
-
+): Extension<{ scheduler: SchedulerRuntime }> {
   return {
     name: 'scheduler',
-    build(_ctx: BuildContext): { scheduler?: SchedulerRuntime } {
-      return {};
+    build(_ctx: BuildContext): { scheduler: SchedulerRuntime } {
+      // Return placeholder - will be replaced in onBuild
+      return {
+        scheduler: {} as SchedulerRuntime,
+      };
     },
     async onBuild(runtime: AgentRuntime) {
       if (!runtime.a2a) {
@@ -39,7 +40,7 @@ export function scheduler(
 
       const store = options?.store ?? createMemoryStore();
 
-      schedulerRuntime = createSchedulerRuntime({
+      const schedulerRuntime = createSchedulerRuntime({
         runtime,
         store,
         clock: options?.clock,

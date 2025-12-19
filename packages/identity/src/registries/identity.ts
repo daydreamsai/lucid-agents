@@ -4,6 +4,7 @@ import type {
 } from '@lucid-agents/types/identity';
 import type {
   AgentWalletHandle,
+  DeveloperWalletHandle,
   LocalEoaSigner,
 } from '@lucid-agents/types/wallets';
 import type { Hex } from '@lucid-agents/wallet';
@@ -793,7 +794,7 @@ export async function bootstrapIdentity(
 export type MakeViemClientsFromWalletOptions = {
   env?: Record<string, string | undefined>;
   rpcUrl?: string;
-  walletHandle: AgentWalletHandle;
+  walletHandle: AgentWalletHandle | DeveloperWalletHandle;
 };
 
 export type MakeViemClientsFromEnvOptions = {
