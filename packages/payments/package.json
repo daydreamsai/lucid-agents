@@ -36,7 +36,7 @@
     "@lucid-agents/types": "workspace:*",
     "pg": "^8.13.1",
     "viem": "catalog:",
-    "x402": "^0.7.3",
+    "x402": "^0.7.1",
     "x402-fetch": "catalog:",
     "zod": "catalog:"
   },
