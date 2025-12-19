@@ -28,6 +28,10 @@ export {
   type CompatibleWallet,
 } from './connectors/signer-connector';
 export {
+  ViemWalletConnector,
+  type ViemWalletConnectorOptions,
+} from './connectors/viem-wallet-connector';
+export {
   createAgentWallet,
   createDeveloperWallet,
   createWalletsRuntime,

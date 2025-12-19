@@ -38,7 +38,7 @@ describe('validateIdentityConfig', () => {
     ).toThrow(/AGENT_DOMAIN/);
   });
 
-  it('throws when RPC_URL is missing and no custom clients provided', () => {
+  it('throws when RPC_URL is missing', () => {
     expect(() =>
       validateIdentityConfig(
         makeOptions({
@@ -60,24 +60,6 @@ describe('validateIdentityConfig', () => {
         {}
       )
     ).toThrow(/CHAIN_ID/);
-  });
-
-  it('allows missing RPC_URL when custom clients are provided', () => {
-    expect(() =>
-      validateIdentityConfig(
-        makeOptions({
-          domain: 'agent.example.com',
-          chainId: 84532,
-          makeClients: () =>
-            ({
-              publicClient: {},
-              walletClient: {},
-              signer: {},
-            }) as any,
-        }),
-        {}
-      )
-    ).not.toThrow();
   });
 
   it('uses environment variables as fallbacks', () => {

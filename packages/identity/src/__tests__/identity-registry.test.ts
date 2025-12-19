@@ -404,17 +404,13 @@ describe('bootstrapIdentity', () => {
       },
     } as any;
 
-    const makeClients = () => ({
-      publicClient,
-      walletClient: mockWalletClient,
-      signer: mockWalletClient,
-    });
-
     const result = await bootstrapIdentity({
       domain: 'example.com',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
-      makeClients,
+      publicClient,
+      walletClient: mockWalletClient,
+      signer: mockWalletClient,
       chainId: 84532,
       registerIfMissing: true,
     });
@@ -431,17 +427,11 @@ describe('bootstrapIdentity', () => {
       },
     };
 
-    const makeClients = () => ({
-      publicClient,
-      walletClient: undefined,
-      signer: undefined,
-    });
-
     const result = await bootstrapIdentity({
       domain: 'fallback.example',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
-      makeClients,
+      publicClient,
       chainId: 84532,
     });
 

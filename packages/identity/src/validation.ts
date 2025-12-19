@@ -31,9 +31,8 @@ export function validateIdentityConfig(
     errors.push('AGENT_DOMAIN (set AGENT_DOMAIN or pass the domain option)');
   }
 
-  const hasCustomClients = typeof options.makeClients === 'function';
   const rpcUrl = (options.rpcUrl ?? envVars.RPC_URL)?.trim();
-  if (!hasCustomClients && !rpcUrl) {
+  if (!rpcUrl) {
     errors.push('RPC_URL (set RPC_URL or pass the rpcUrl option)');
   }
 

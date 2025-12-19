@@ -82,6 +82,7 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:",
-    "x402": "catalog:"
+    "x402": "catalog:",
+    "viem": "catalog:"
   }
 }

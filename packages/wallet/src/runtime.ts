@@ -11,6 +11,7 @@ import {
   ThirdwebWalletConnector,
   type ThirdwebWalletConnectorOptions,
 } from './connectors/thirdweb-connector';
+import { ViemWalletConnector } from './connectors/viem-wallet-connector';
 import type {
   AgentWalletConfig,
   AgentWalletHandle,
@@ -54,47 +55,76 @@ const buildLocalWallet = (options: LocalWalletOptions): AgentWalletHandle => {
 };
 
 const buildSignerWallet = (options: SignerWalletOptions): AgentWalletHandle => {
-  const connector = new LocalEoaWalletConnector(
-    resolveLocalConnectorOptions(options, options.signer)
-  );
+  const walletClient = options.walletClient as import('viem').WalletClient;
+  if (!walletClient.account) {
+    throw new Error('WalletClient must have an account');
+  }
+
+  const connector = new ViemWalletConnector({
+    walletClient,
+    address: options.address,
+    caip2: options.caip2 ?? null,
+    chain: options.chain ?? null,
+    chainType: options.chainType ?? null,
+    provider: options.provider ?? null,
+    label: options.label ?? null,
+  });
 
   return {
-    kind: 'local',
+    kind: 'signer',
     connector,
   };
 };
 
-/**
- * Creates a developer wallet handle.
- * Developer wallets are always local (private key-based) and do not support Lucid.
- */
 export const createDeveloperWallet = (
   options: DeveloperWalletConfig
 ): DeveloperWalletHandle => {
-  if (options.type !== 'local') {
-    throw new Error('Developer wallets must be local (type: "local")');
+  if (options.type === 'local') {
+    const signer = options.privateKey
+      ? createPrivateKeySigner(options.privateKey)
+      : null;
+
+    if (!signer) {
+      throw new Error('Developer wallet configuration requires a privateKey');
+    }
+
+    const connector = new LocalEoaWalletConnector(
+      resolveLocalConnectorOptions(options, signer)
+    );
+
+    return {
+      kind: 'local',
+      connector,
+    };
   }
 
-  const signer = options.privateKey
-    ? createPrivateKeySigner(options.privateKey)
-    : null;
+  if (options.type === 'signer') {
+    const walletClient = options.walletClient as import('viem').WalletClient;
+    if (!walletClient.account) {
+      throw new Error('WalletClient must have an account');
+    }
 
-  if (!signer) {
-    throw new Error('Developer wallet configuration requires a privateKey');
+    const connector = new ViemWalletConnector({
+      walletClient,
+      address: options.address,
+      caip2: options.caip2 ?? null,
+      chain: options.chain ?? null,
+      chainType: options.chainType ?? null,
+      provider: options.provider ?? null,
+      label: options.label ?? null,
+    });
+
+    return {
+      kind: 'signer',
+      connector,
+    };
   }
 
-  const connector = new LocalEoaWalletConnector(
-    resolveLocalConnectorOptions(options, signer)
-  );
-
-  return {
-    kind: 'local',
-    connector,
-  };
+  throw new Error('Developer wallet must be type "local" or "signer"');
 };
 
 const resolveLocalConnectorOptions = (
-  options: LocalWalletOptions | SignerWalletOptions,
+  options: LocalWalletOptions,
   signer: LocalEoaWalletConnectorOptions['signer']
 ): LocalEoaWalletConnectorOptions => ({
   signer,
@@ -102,8 +132,7 @@ const resolveLocalConnectorOptions = (
   caip2: options.caip2 ?? null,
   chain: options.chain ?? null,
   chainType: options.chainType ?? null,
-  provider:
-    options.provider ?? (options.type === 'local' ? 'local' : undefined),
+  provider: options.provider ?? 'local',
   label: options.label ?? null,
   walletClient: options.walletClient ?? null,
 });
