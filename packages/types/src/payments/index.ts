@@ -144,9 +144,50 @@ export type PaymentsConfig = {
 };
 
 /**
- * Price for an entrypoint - either a flat string or separate invoke/stream prices.
+ * HTTP request context passed to dynamic price functions.
+ * Simplified version of x402's HTTPRequestContext.
  */
-export type EntrypointPrice = string | { invoke?: string; stream?: string };
+export type PriceContext = {
+  adapter: {
+    getHeader(name: string): string | undefined;
+    getMethod(): string;
+    getPath(): string;
+    getUrl(): string;
+    getQueryParams?(): Record<string, string | string[]>;
+    getQueryParam?(name: string): string | string[] | undefined;
+    getBody?(): unknown;
+  };
+  path: string;
+  method: string;
+};
+
+/**
+ * Static price value - a string like "$0.01" or a number.
+ */
+export type StaticPrice = string | number;
+
+/**
+ * Dynamic price function that receives request context.
+ * Used for request-based pricing (e.g., different tiers).
+ */
+export type DynamicPriceFn = (
+  context: PriceContext
+) => StaticPrice | Promise<StaticPrice>;
+
+/**
+ * Price can be static or dynamic (function).
+ */
+export type PriceOrFn = StaticPrice | DynamicPriceFn;
+
+/**
+ * Price for an entrypoint - can be:
+ * - A static string like "$0.01"
+ * - A dynamic function for request-based pricing
+ * - An object with separate invoke/stream prices (each can be static or dynamic)
+ */
+export type EntrypointPrice =
+  | PriceOrFn
+  | { invoke?: PriceOrFn; stream?: PriceOrFn };
 
 /**
  * Payment requirement for an entrypoint.
@@ -185,13 +226,15 @@ export type PaymentsRuntime = {
   resolvePrice: (
     entrypoint: EntrypointDef,
     which: 'invoke' | 'stream'
-  ) => string | null;
+  ) => PriceOrFn | null;
   /** Payment tracker for bi-directional payment tracking (outgoing and incoming) */
   readonly paymentTracker?: unknown; // PaymentTracker instance (type exported from payments package)
   /** Optional rate limiter for rate limiting (only present if policy groups have rate limits) */
   readonly rateLimiter?: unknown; // RateLimiter instance (type exported from payments package)
   /** Policy groups configured for this runtime */
   readonly policyGroups?: PaymentPolicyGroup[];
+  /** x402 resource server for payment middleware (only present if facilitatorUrl is configured) */
+  readonly resourceServer?: unknown; // x402ResourceServer instance (type exported from payments package)
   /**
    * Get fetch function with payment support.
    * Returns a fetch function that automatically includes x402 payment headers.

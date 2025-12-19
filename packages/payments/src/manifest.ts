@@ -1,13 +1,24 @@
 import type { AgentCardWithEntrypoints, Manifest, PaymentMethod } from '@lucid-agents/types/a2a';
 import type { EntrypointDef } from '@lucid-agents/types/core';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { PaymentsConfig, PriceOrFn } from '@lucid-agents/types/payments';
 
 import { resolvePrice } from './pricing';
+
+/**
+ * Converts a price to a static string for manifest display.
+ * Dynamic price functions are shown as "dynamic" since they can't be resolved at build time.
+ */
+function toStaticPrice(price: PriceOrFn | null): string | null {
+  if (price === null) return null;
+  if (typeof price === 'function') return 'dynamic';
+  return String(price);
+}
 
 /**
  * Creates a new Agent Card with payments metadata added.
  * Adds pricing to entrypoints and payments array to card.
  * Immutable - returns new card, doesn't mutate input.
+ * Note: Dynamic prices (functions) are shown as "dynamic" in the manifest.
  */
 export function createAgentCardWithPayments(
   card: AgentCardWithEntrypoints,
@@ -25,8 +36,10 @@ export function createAgentCardWithPayments(
       continue;
     }
 
-    const invP = resolvePrice(entrypointDef, paymentsConfig, 'invoke');
-    const strP = entrypointDef.stream ? resolvePrice(entrypointDef, paymentsConfig, 'stream') : undefined;
+    const invP = toStaticPrice(resolvePrice(entrypointDef, paymentsConfig, 'invoke'));
+    const strP = entrypointDef.stream
+      ? toStaticPrice(resolvePrice(entrypointDef, paymentsConfig, 'stream'))
+      : undefined;
 
     const manifestEntry: Manifest['entrypoints'][string] = {
       ...entrypoint,

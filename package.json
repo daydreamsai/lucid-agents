@@ -14,6 +14,11 @@
       "viem": "^2.41.2",
       "x402": "latest",
       "x402-fetch": "latest",
+      "@x402/hono": "latest",
+      "@x402/express": "latest",
+      "@x402/core": "latest",
+      "@x402/evm": "latest",
+      "@x402/svm": "latest",
       "tsup": "^8.5.0"
     }
   },

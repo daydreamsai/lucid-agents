@@ -34,10 +34,13 @@
   "dependencies": {
     "@ax-llm/ax": "catalog:",
     "@lucid-agents/types": "workspace:*",
+    "@x402/core": "catalog:",
+    "@x402/evm": "catalog:",
+    "@x402/svm": "catalog:",
+    "x402-fetch": "catalog:",
+    "x402": "catalog:",
     "pg": "^8.13.1",
     "viem": "catalog:",
-    "x402": "^0.7.1",
-    "x402-fetch": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
