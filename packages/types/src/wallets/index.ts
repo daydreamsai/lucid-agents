@@ -245,6 +245,12 @@ export type FetchExecutor = (
 export type AgentWalletKind = 'local' | 'signer' | 'lucid' | 'thirdweb';
 
 /**
+ * Type of developer wallet implementation.
+ * Developer wallets can be local (private key-based) or signer (custom signer).
+ */
+export type DeveloperWalletKind = 'local' | 'signer';
+
+/**
  * Handle to an agent wallet instance with its connector and optional access token management.
  * Agent wallets can be either local or Lucid (server-orchestrated).
  */
@@ -256,10 +262,10 @@ export interface AgentWalletHandle {
 
 /**
  * Handle to a developer wallet instance.
- * Developer wallets are always local (private key-based) and do not support Lucid.
+ * Developer wallets can be local (private key-based) or signer (custom signer).
  */
 export interface DeveloperWalletHandle {
-  kind: 'local';
+  kind: DeveloperWalletKind;
   connector: WalletConnector;
 }
 
