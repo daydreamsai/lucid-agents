@@ -34,7 +34,7 @@
     "tailwindcss": "^4.1.16",
     "viem": "catalog:",
     "wagmi": "^2.19.2",
-    "x402-fetch": "^0.7.0",
+    "x402-fetch": "catalog:",
     "zod": "^4.1.12"
   },
   "devDependencies": {

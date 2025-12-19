@@ -38,7 +38,7 @@
     "@lucid-agents/types": "workspace:*",
     "hono": "catalog:",
     "x402-hono": "^0.7.1",
-    "x402": "^0.7.1",
+    "x402": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

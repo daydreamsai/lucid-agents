@@ -55,7 +55,7 @@
     "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
     "x402-fetch": "catalog:",
-    "x402": "^0.7.1",
+    "x402": "catalog:",
     "viem": "catalog:",
     "@ax-llm/ax": "^14.0.37",
     "@ax-llm/ax-tools": "^14.0.37"

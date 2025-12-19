@@ -124,7 +124,7 @@
         "@lucid-dreams/client": "latest",
         "hono": "catalog:",
         "viem": "catalog:",
-        "x402": "^0.7.1",
+        "x402": "catalog:",
         "x402-fetch": "catalog:",
         "zod": "catalog:",
       },
@@ -163,7 +163,7 @@
         "@lucid-dreams/agent-auth": "latest",
         "thirdweb": "^5.113.0",
         "viem": "catalog:",
-        "x402": "^0.7.1",
+        "x402": "catalog:",
         "x402-fetch": "catalog:",
         "zod": "catalog:",
       },
@@ -183,7 +183,7 @@
         "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "express": "^4.19.2",
-        "x402": "^0.7.1",
+        "x402": "catalog:",
         "x402-express": "^0.7.1",
         "zod": "catalog:",
       },
@@ -203,7 +203,7 @@
         "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "hono": "catalog:",
-        "x402": "^0.7.1",
+        "x402": "catalog:",
         "x402-hono": "^0.7.1",
         "zod": "catalog:",
       },
@@ -253,7 +253,7 @@
         "@lucid-agents/types": "workspace:*",
         "pg": "^8.13.1",
         "viem": "catalog:",
-        "x402": "^0.7.1",
+        "x402": "catalog:",
         "x402-fetch": "catalog:",
         "zod": "catalog:",
       },
@@ -332,8 +332,8 @@
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
     "viem": "^2.41.2",
-    "x402": "latest",
-    "x402-fetch": "latest",
+    "x402": "^0.7.3",
+    "x402-fetch": "^0.7.3",
     "zod": "^4.1.12",
   },
   "packages": {
@@ -2975,7 +2975,7 @@
 
     "x402-express": ["x402-express@0.7.3", "", { "dependencies": { "@coinbase/cdp-sdk": "^1.22.0", "@solana/kit": "^5.0.0", "express": "^4.18.2", "viem": "^2.21.26", "x402": "^0.7.3", "zod": "^3.24.2" } }, "sha512-qn8mvX225tjCM1ysy39c8RwAMzRz6ZWoMCvp9+pWkRIILtO6EjF/SnshLVjqqLEia152C7++dEvCYc6ImAHvAg=="],
 
-    "x402-fetch": ["x402-fetch@1.0.0", "", { "dependencies": { "viem": "^2.21.26", "x402": "^1.0.0", "zod": "^3.24.2" } }, "sha512-iwnKAVb5CitLJ9jHLlaU/59fDERy/7zPtB84Pr8yJYHjWIFABAXQPLCaUGjkLm1l/6X6mmmD5ipQX7CPkV4NSQ=="],
+    "x402-fetch": ["x402-fetch@0.7.3", "", { "dependencies": { "viem": "^2.21.26", "x402": "^0.7.3", "zod": "^3.24.2" } }, "sha512-LuMRN/cdWwWXvRTJq8PJkX5JOPyEKLPzehUsR3/VcZuINEYg/Nzd8Dhbcy64cmmLaIY9vDnx+J0/k4P+Zkz+Nw=="],
 
     "x402-hono": ["x402-hono@0.7.3", "", { "dependencies": { "@coinbase/cdp-sdk": "^1.22.0", "@solana/kit": "^5.0.0", "hono": "^4.7.1", "viem": "^2.21.26", "x402": "^0.7.3", "zod": "^3.24.2" } }, "sha512-GU35K3NjD6R5wtonSzN0qsfrwkyBLls2gzV48xjkuuZY3UKHd/gBrY19BJ8yvwQB7ITCltXJD9NhHASORC4g8g=="],
 
@@ -3067,15 +3067,9 @@
 
     "@hey-api/openapi-ts/semver": ["semver@7.7.2", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-RF0Fw+rO5AMf9MAyaRXI4AV0Ulj5lMHqVxxdSgiVbixSCXoEmmX/jk0CuJw4+3SqroYO9VoUh+HcuJivvtJemA=="],
 
-    "@lucid-agents/tanstack/x402": ["x402@1.0.1", "", { "dependencies": { "@scure/base": "^1.2.6", "@solana-program/compute-budget": "^0.11.0", "@solana-program/token": "^0.9.0", "@solana-program/token-2022": "^0.6.1", "@solana/kit": "^5.0.0", "@solana/transaction-confirmation": "^5.0.0", "@solana/wallet-standard-features": "^1.3.0", "@wallet-standard/app": "^1.1.0", "@wallet-standard/base": "^1.1.0", "@wallet-standard/features": "^1.1.0", "viem": "^2.21.26", "wagmi": "^2.15.6", "zod": "^3.24.2" } }, "sha512-/l1IYDeg7t4sz/wbO3uT6PSATdSWdfECMMme/EAqeC7txItHVNy85ZNm6SWrMqOhpkAMEmBx/Ywf3G1GV18UAA=="],
-
-    "@lucid-agents/types/x402": ["x402@1.0.1", "", { "dependencies": { "@scure/base": "^1.2.6", "@solana-program/compute-budget": "^0.11.0", "@solana-program/token": "^0.9.0", "@solana-program/token-2022": "^0.6.1", "@solana/kit": "^5.0.0", "@solana/transaction-confirmation": "^5.0.0", "@solana/wallet-standard-features": "^1.3.0", "@wallet-standard/app": "^1.1.0", "@wallet-standard/base": "^1.1.0", "@wallet-standard/features": "^1.1.0", "viem": "^2.21.26", "wagmi": "^2.15.6", "zod": "^3.24.2" } }, "sha512-/l1IYDeg7t4sz/wbO3uT6PSATdSWdfECMMme/EAqeC7txItHVNy85ZNm6SWrMqOhpkAMEmBx/Ywf3G1GV18UAA=="],
-
-    "@lucid-dreams/client/x402-fetch": ["x402-fetch@0.7.3", "", { "dependencies": { "viem": "^2.21.26", "x402": "^0.7.3", "zod": "^3.24.2" } }, "sha512-LuMRN/cdWwWXvRTJq8PJkX5JOPyEKLPzehUsR3/VcZuINEYg/Nzd8Dhbcy64cmmLaIY9vDnx+J0/k4P+Zkz+Nw=="],
+    "@lucid-agents/examples/bun-types": ["bun-types@1.3.5", "", { "dependencies": { "@types/node": "*" } }, "sha512-inmAYe2PFLs0SUbFOWSVD24sg1jFlMPxOjOSSCYqUgn4Hsc3rDc7dFvfVYjFPNHtov6kgUeulV4SxbuIV/stPw=="],
 
     "@lucid-dreams/sdk/@tanstack/react-query": ["@tanstack/react-query@5.90.12", "", { "dependencies": { "@tanstack/query-core": "5.90.12" }, "peerDependencies": { "react": "^18 || ^19" } }, "sha512-graRZspg7EoEaw0a8faiUASCyJrqjKPdqJ9EwuDRUF9mEYJ1YPczI9H+/agJ0mOJkPCJDk0lsz5QTrLZ/jQ2rg=="],
-
-    "@lucid-dreams/sdk/x402-fetch": ["x402-fetch@0.7.3", "", { "dependencies": { "viem": "^2.21.26", "x402": "^0.7.3", "zod": "^3.24.2" } }, "sha512-LuMRN/cdWwWXvRTJq8PJkX5JOPyEKLPzehUsR3/VcZuINEYg/Nzd8Dhbcy64cmmLaIY9vDnx+J0/k4P+Zkz+Nw=="],
 
     "@manypkg/find-root/@types/node": ["@types/node@12.20.55", "", {}, "sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ=="],
 
@@ -3429,8 +3423,6 @@
 
     "x402-express/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
-    "x402-fetch/x402": ["x402@1.0.1", "", { "dependencies": { "@scure/base": "^1.2.6", "@solana-program/compute-budget": "^0.11.0", "@solana-program/token": "^0.9.0", "@solana-program/token-2022": "^0.6.1", "@solana/kit": "^5.0.0", "@solana/transaction-confirmation": "^5.0.0", "@solana/wallet-standard-features": "^1.3.0", "@wallet-standard/app": "^1.1.0", "@wallet-standard/base": "^1.1.0", "@wallet-standard/features": "^1.1.0", "viem": "^2.21.26", "wagmi": "^2.15.6", "zod": "^3.24.2" } }, "sha512-/l1IYDeg7t4sz/wbO3uT6PSATdSWdfECMMme/EAqeC7txItHVNy85ZNm6SWrMqOhpkAMEmBx/Ywf3G1GV18UAA=="],
-
     "x402-fetch/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "x402-hono/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
@@ -3483,15 +3475,7 @@
 
     "@coinbase/cdp-sdk/@solana/kit/@solana/transactions": ["@solana/transactions@3.0.3", "", { "dependencies": { "@solana/addresses": "3.0.3", "@solana/codecs-core": "3.0.3", "@solana/codecs-data-structures": "3.0.3", "@solana/codecs-numbers": "3.0.3", "@solana/codecs-strings": "3.0.3", "@solana/errors": "3.0.3", "@solana/functional": "3.0.3", "@solana/instructions": "3.0.3", "@solana/keys": "3.0.3", "@solana/nominal-types": "3.0.3", "@solana/rpc-types": "3.0.3", "@solana/transaction-messages": "3.0.3" }, "peerDependencies": { "typescript": ">=5.3.3" } }, "sha512-iMX+n9j4ON7H1nKlWEbMqMOpKYC6yVGxKKmWHT1KdLRG7v+03I4DnDeFoI+Zmw56FA+7Bbne8jwwX60Q1vk/MQ=="],
 
-    "@lucid-agents/tanstack/x402/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
-
-    "@lucid-agents/types/x402/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
-
-    "@lucid-dreams/client/x402-fetch/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
-
     "@lucid-dreams/sdk/@tanstack/react-query/@tanstack/query-core": ["@tanstack/query-core@5.90.12", "", {}, "sha512-T1/8t5DhV/SisWjDnaiU2drl6ySvsHj1bHBCWNXd+/T+Hh1cf6JodyEYMd5sgwm+b/mETT4EV3H+zCVczCU5hg=="],
-
-    "@lucid-dreams/sdk/x402-fetch/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
     "@manypkg/find-root/find-up/locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "^4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
 

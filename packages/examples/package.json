@@ -28,7 +28,7 @@
     "@lucid-dreams/agent-auth": "latest",
     "thirdweb": "^5.113.0",
     "viem": "catalog:",
-    "x402": "^0.7.1",
+    "x402": "catalog:",
     "x402-fetch": "catalog:",
     "zod": "catalog:"
   },
