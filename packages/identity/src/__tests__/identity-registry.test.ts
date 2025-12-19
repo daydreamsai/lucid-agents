@@ -104,6 +104,9 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         writeArgs = args;
@@ -159,6 +162,9 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         writeArgs = args;
@@ -288,6 +294,9 @@ describe('bootstrapTrust', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         registeredTokenURI = args.args[0];
@@ -374,6 +383,9 @@ describe('bootstrapIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000009' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;

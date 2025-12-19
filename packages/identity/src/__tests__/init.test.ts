@@ -94,6 +94,9 @@ function createMockRuntime(
   const mockWalletClient = {
     account: {
       address: address as `0x${string}`,
+      async signMessage({ message }: { message: string | Uint8Array }) {
+        return '0xsignature' as `0x${string}`;
+      },
     },
     async writeContract() {
       return '0xtxhash' as `0x${string}`;
@@ -186,6 +189,9 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
@@ -273,6 +279,9 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
@@ -323,6 +332,9 @@ describe('createAgentIdentity', () => {
     const walletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000009' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as `0x${string}`;
+        },
       },
       async writeContract() {
         registerCalled = true;
@@ -404,6 +416,9 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x000000000000000000000000000000000000000a' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
@@ -455,6 +470,9 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x000000000000000000000000000000000000000b' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
@@ -508,6 +526,9 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x000000000000000000000000000000000000000c' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
@@ -622,6 +643,9 @@ describe('registerAgent', () => {
     const walletClient = {
       account: {
         address: '0x000000000000000000000000000000000000000d' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as `0x${string}`;
+        },
       },
       async writeContract() {
         registerCalled = true;
