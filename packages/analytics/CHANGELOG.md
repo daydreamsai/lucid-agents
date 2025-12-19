@@ -1,5 +1,12 @@
 # @lucid-agents/analytics
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [0a8ad8f]
+  - @lucid-agents/types@1.5.6
+
 ## 0.2.4
 
 ### Patch Changes

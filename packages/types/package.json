@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/types",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Shared types for lucid-agents framework",
   "type": "module",
   "types": "./dist/index.d.ts",
