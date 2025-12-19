@@ -36,6 +36,7 @@
     "viem": "catalog:"
   },
   "devDependencies": {
+    "@lucid-agents/payments": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }
