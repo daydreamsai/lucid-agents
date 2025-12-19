@@ -1,15 +1,9 @@
-import type { Network } from 'x402/types';
-import type {
-  EntrypointDef,
-  AgentCore,
-  AgentRuntime,
-} from '@lucid-agents/types/core';
-import type { EntrypointPrice } from '@lucid-agents/types/payments';
+import type { x402ResourceServer } from '@x402/core/server';
+import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type {
   PaymentsConfig,
   PaymentRequirement,
   RuntimePaymentRequirement,
-  PaymentPolicyGroup,
   PaymentsRuntime,
   PaymentStorageConfig,
 } from '@lucid-agents/types/payments';
@@ -20,6 +14,7 @@ import { createSQLitePaymentStorage } from './sqlite-payment-storage';
 import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
 import { createPostgresPaymentStorage } from './postgres-payment-storage';
 import type { PaymentStorage } from './payment-storage';
+import { createResourceServerFromConfig } from './resource-server';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -125,10 +120,16 @@ export const resolvePaymentRequirement = (
     return { required: false };
   }
 
+  // Dynamic prices (functions) can't be resolved without request context.
+  // Let the x402 middleware handle dynamic pricing - return required: false here.
+  if (typeof price === 'function') {
+    return { required: false };
+  }
+
   return {
     required: true,
     payTo: payments.payTo,
-    price,
+    price: String(price),
     network,
     facilitatorUrl: payments.facilitatorUrl,
   };
@@ -207,8 +208,20 @@ export function createPaymentsRuntime(
   // Create storage and payment tracker
   let paymentTracker: PaymentTracker | undefined;
   let rateLimiter: RateLimiter | undefined;
+  let resourceServer: x402ResourceServer | undefined;
 
   const policyGroups = config.policyGroups;
+
+  // Create resource server if facilitatorUrl is configured
+  if (config.facilitatorUrl) {
+    try {
+      resourceServer = createResourceServerFromConfig(config);
+    } catch (error) {
+      console.warn(
+        `[payments] Failed to create resource server: ${(error as Error).message}`
+      );
+    }
+  }
 
   // Check if we need payment tracking (for outgoing or incoming limits)
   if (policyGroups && policyGroups.length > 0) {
@@ -273,6 +286,9 @@ export function createPaymentsRuntime(
     },
     get policyGroups() {
       return policyGroups;
+    },
+    get resourceServer() {
+      return resourceServer;
     },
     requirements(entrypoint: EntrypointDef, kind: 'invoke' | 'stream') {
       return evaluatePaymentRequirement(

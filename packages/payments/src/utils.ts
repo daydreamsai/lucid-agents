@@ -69,13 +69,20 @@ export function extractPayerAddress(
 }
 
 /**
- * Parses payment amount from price string (assumes USDC with 6 decimals).
- * @param price - Price string (e.g., "1.5" for $1.50)
- * @returns Amount in base units (with 6 decimals), or undefined if invalid
+ * Parses payment amount from price (assumes USDC with 6 decimals).
+ * @param price - Price value (string, number, or function). Functions return undefined.
+ * @returns Amount in base units (with 6 decimals), or undefined if invalid or dynamic
  */
-export function parsePriceAmount(price: string): bigint | undefined {
+export function parsePriceAmount(
+  price: string | number | ((...args: unknown[]) => unknown) | null | undefined
+): bigint | undefined {
+  // Dynamic prices (functions) can't be parsed statically
+  if (typeof price === 'function' || price === null || price === undefined) {
+    return undefined;
+  }
+
   try {
-    const priceNum = parseFloat(price);
+    const priceNum = typeof price === 'number' ? price : parseFloat(price);
     if (!Number.isFinite(priceNum) || priceNum < 0) return undefined;
     return BigInt(Math.floor(priceNum * 1_000_000));
   } catch {

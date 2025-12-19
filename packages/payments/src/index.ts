@@ -66,3 +66,26 @@ export {
   type PolicyEvaluationResult,
 } from './policy';
 export { wrapBaseFetchWithPolicy } from './policy-wrapper';
+
+// x402 route config utilities
+export {
+  buildPaymentAccept,
+  buildRouteConfig,
+  buildRoutesConfig,
+  type PaymentRouteKind,
+  type PaymentAccept,
+  type PaymentRouteConfig,
+  type PriceContext,
+  type PriceValue,
+  type DynamicPriceFn,
+  type Price,
+} from './route-config';
+
+// x402 resource server utilities
+export {
+  createFacilitatorClient,
+  createResourceServer,
+  createResourceServerFromConfig,
+  type ResourceServerOptions,
+  type x402ResourceServer,
+} from './resource-server';

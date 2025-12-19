@@ -1,5 +1,5 @@
 import type { AgentMeta } from '@lucid-agents/types/a2a';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { PaymentsConfig, PriceOrFn } from '@lucid-agents/types/payments';
 import { html } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 
@@ -11,11 +11,21 @@ type LandingPageOptions = {
   origin: string;
   entrypoints: EntrypointDef[];
   activePayments?: PaymentsConfig;
-  resolvePrice?: (entrypoint: EntrypointDef, which: 'invoke' | 'stream') => string | null;
+  resolvePrice?: (entrypoint: EntrypointDef, which: 'invoke' | 'stream') => PriceOrFn | null;
   manifestPath: string;
   faviconDataUrl: string;
   x402ClientExample: string;
 };
+
+/**
+ * Converts a price to a display string.
+ * Dynamic prices (functions) are shown as "dynamic".
+ */
+function priceToDisplayString(price: PriceOrFn | null): string | null {
+  if (price === null) return null;
+  if (typeof price === 'function') return 'dynamic';
+  return String(price);
+}
 
 const sampleFromJsonSchema = (
   schema: any,
@@ -753,9 +763,9 @@ export const renderLandingPage = ({
                     );
                     const description =
                       entrypoint.description ?? 'No description provided yet.';
-                    const invokePrice = resolvePrice?.(entrypoint, 'invoke') ?? null;
+                    const invokePrice = priceToDisplayString(resolvePrice?.(entrypoint, 'invoke') ?? null);
                     const streamPrice = streaming
-                      ? resolvePrice?.(entrypoint, 'stream') ?? null
+                      ? priceToDisplayString(resolvePrice?.(entrypoint, 'stream') ?? null)
                       : undefined;
                     const hasPricing = Boolean(invokePrice || streamPrice);
                     const network = entrypoint.network ?? defaultNetwork;

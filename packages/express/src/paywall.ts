@@ -1,21 +1,19 @@
-import type { Express, RequestHandler, Request, Response } from 'express';
-import { paymentMiddleware } from 'x402-express';
-import type { FacilitatorConfig } from 'x402/types';
-import { z } from 'zod';
+import type { Express, RequestHandler } from 'express';
+import { paymentMiddleware } from '@x402/express';
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
-  resolvePrice,
   validatePaymentsConfig,
   evaluateSender,
   findMostSpecificIncomingLimit,
   extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,
+  resolvePrice,
+  buildRoutesConfig,
   type PaymentTracker,
+  type x402ResourceServer,
 } from '@lucid-agents/payments';
-
-type PaymentMiddlewareFactory = typeof paymentMiddleware;
 
 export type WithPaymentsParams = {
   app: Express;
@@ -23,8 +21,8 @@ export type WithPaymentsParams = {
   entrypoint: EntrypointDef;
   kind: 'invoke' | 'stream';
   payments?: PaymentsConfig;
-  facilitator?: FacilitatorConfig;
-  middlewareFactory?: PaymentMiddlewareFactory;
+  /** Optional override - if not provided, uses runtime.payments.resourceServer */
+  resourceServer?: x402ResourceServer;
   runtime?: AgentRuntime;
 };
 
@@ -34,11 +32,16 @@ export function withPayments({
   entrypoint,
   kind,
   payments,
-  facilitator,
-  middlewareFactory = paymentMiddleware,
+  resourceServer: resourceServerOverride,
   runtime,
 }: WithPaymentsParams): boolean {
   if (!payments) return false;
+
+  // Use provided resourceServer or get from runtime
+  const resourceServer =
+    resourceServerOverride ??
+    (runtime?.payments?.resourceServer as x402ResourceServer | undefined);
+  if (!resourceServer) return false;
 
   const network = entrypoint.network ?? payments.network;
   const price = resolvePrice(entrypoint, payments, kind);
@@ -47,55 +50,11 @@ export function withPayments({
 
   if (!price) return false;
   if (!payments.payTo) return false;
+  if (!network) return false;
 
-  const requestSchema = entrypoint.input
-    ? z.toJSONSchema(entrypoint.input)
-    : undefined;
-  const responseSchema = entrypoint.output
-    ? z.toJSONSchema(entrypoint.output)
-    : undefined;
-
-  const description =
-    entrypoint.description ??
-    `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
-  const postMimeType =
-    kind === 'stream' ? 'text/event-stream' : 'application/json';
-  const inputSchema = {
-    bodyType: 'json' as const,
-    ...(requestSchema ? { bodyFields: { input: requestSchema } } : {}),
-  };
-  const outputSchema =
-    kind === 'invoke' && responseSchema
-      ? { output: responseSchema }
-      : undefined;
-
-  const resolvedFacilitator: FacilitatorConfig =
-    facilitator ??
-    ({ url: payments.facilitatorUrl } satisfies FacilitatorConfig);
-
-  const postRoute = {
-    price,
-    network,
-    config: {
-      description,
-      mimeType: postMimeType,
-      discoverable: true,
-      inputSchema,
-      outputSchema,
-    },
-  };
-
-  const getRoute = {
-    price,
-    network,
-    config: {
-      description,
-      mimeType: 'application/json',
-      discoverable: true,
-      inputSchema,
-      outputSchema,
-    },
-  };
+  // Build routes config using shared utility
+  const routes = buildRoutesConfig(path, entrypoint, payments, kind);
+  if (!routes) return false;
 
   const policyGroups = runtime?.payments?.policyGroups;
   const paymentTracker = runtime?.payments?.paymentTracker as
@@ -144,13 +103,10 @@ export function withPayments({
     });
   }
 
-  const middleware = middlewareFactory(
-    payments.payTo as Parameters<PaymentMiddlewareFactory>[0],
-    {
-      [`POST ${path}`]: postRoute,
-      [`GET ${path}`]: getRoute,
-    },
-    resolvedFacilitator
+  // Use the provided resourceServer with the payment middleware
+  const middleware = paymentMiddleware(
+    routes,
+    resourceServer
   ) as unknown as RequestHandler;
 
   app.use((req, res, next) => {

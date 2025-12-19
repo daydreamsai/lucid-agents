@@ -1,13 +1,14 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
 import { z } from 'zod';
 import type { EntrypointDef } from '@lucid-agents/types/core';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { PaymentsConfig, PriceOrFn } from '@lucid-agents/types/payments';
 import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
 import type {
   FacilitatorConfig,
   PaywallConfig,
   RouteConfig,
   RoutesConfig,
+  Price,
 } from 'x402/types';
 import {
   paymentMiddleware,
@@ -94,8 +95,20 @@ function buildEntrypointRoutes({
         ? { output: responseSchema }
         : undefined;
 
+    // Note: The old x402 API (x402/types) only supports static prices.
+    // Dynamic price functions are not supported and will be skipped.
+    const staticPrice: Price | null =
+      typeof price === 'function' ? null : (price as Price);
+
+    if (staticPrice === null) {
+      console.warn(
+        `[tanstack-paywall] Dynamic pricing not supported for entrypoint "${entrypoint.key}". Skipping payment middleware.`
+      );
+      return null;
+    }
+
     const postRoute: RouteConfig = {
-      price,
+      price: staticPrice,
       network,
       config: {
         description,
@@ -107,7 +120,7 @@ function buildEntrypointRoutes({
     };
 
     const getRoute: RouteConfig = {
-      price,
+      price: staticPrice,
       network,
       config: {
         description,
