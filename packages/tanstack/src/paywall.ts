@@ -102,9 +102,9 @@ function buildEntrypointRoutes({
 
     if (staticPrice === null) {
       console.warn(
-        `[tanstack-paywall] Dynamic pricing not supported for entrypoint "${entrypoint.key}". Skipping payment middleware.`
+        `[tanstack-paywall] Dynamic pricing not supported for entrypoint "${entrypoint.key}". Skipping.`
       );
-      return null;
+      continue;
     }
 
     const postRoute: RouteConfig = {
