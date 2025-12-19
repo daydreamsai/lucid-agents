@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/a2a",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Agent-to-Agent (A2A) protocol support for Lucid agents",
   "repository": {
     "type": "git",

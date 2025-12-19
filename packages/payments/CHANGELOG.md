@@ -1,5 +1,12 @@
 # @lucid-agents/payments
 
+## 1.12.1
+
+### Patch Changes
+
+- Updated dependencies [5bafcef]
+  - @lucid-agents/types@1.5.5
+
 ## 1.12.0
 
 ## 1.11.0
