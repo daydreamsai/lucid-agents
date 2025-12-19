@@ -891,12 +891,28 @@ export async function makeViemClientsFromWallet(
       : { id: chainId };
     const publicClient = modules.createPublicClient({ chain, transport });
 
-    // For local wallets, try to extract the signer to create a wallet client
-    // For server orchestrator wallets, we can't create a wallet client for contract writes
+    // Prioritize getWalletClient() if available (for ViemWalletConnector)
+    // Falls back to signer-based approach for local wallets
     let walletClient: any = undefined;
     let signer: any = undefined;
 
-    if (walletHandle.kind === 'local') {
+    // Try getWalletClient() first (for ViemWalletConnector and signer wallets)
+    if (connector.getWalletClient) {
+      try {
+        walletClient = await connector.getWalletClient();
+        if (walletClient) {
+          signer = walletClient;
+        }
+      } catch (error) {
+        defaultLogger.warn(
+          '[agent-kit] failed to get wallet client from connector',
+          error
+        );
+      }
+    }
+
+    // Fallback: For local wallets without getWalletClient, try to extract the signer
+    if (!walletClient && walletHandle.kind === 'local') {
       // For local wallets, try to access the signer from the connector
       // This is a type assertion because the signer is private
       const localConnector = connector as any;

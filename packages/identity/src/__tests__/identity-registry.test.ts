@@ -104,6 +104,9 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         writeArgs = args;
@@ -159,6 +162,9 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         writeArgs = args;
@@ -288,13 +294,13 @@ describe('bootstrapTrust', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract(args: any) {
         registeredTokenURI = args.args[0];
         return '0xtxhash' as const;
-      },
-      async signMessage(args: any) {
-        return '0xsignature';
       },
     } as WalletClientLike;
 
@@ -374,12 +380,12 @@ describe('bootstrapIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000009' as const,
+        async signMessage({ message }: { message: string | Uint8Array }) {
+          return '0xsignature' as const;
+        },
       },
       async writeContract() {
         return '0xtxhash' as const;
-      },
-      async signMessage(args: any) {
-        return '0xsignature';
       },
     } as WalletClientLike;
 
@@ -404,17 +410,15 @@ describe('bootstrapIdentity', () => {
       },
     } as any;
 
-    const makeClients = () => ({
-      publicClient,
-      walletClient: mockWalletClient,
-      signer: mockWalletClient,
-    });
-
     const result = await bootstrapIdentity({
       domain: 'example.com',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
-      makeClients,
+      makeClients: () => ({
+        publicClient,
+        walletClient: mockWalletClient,
+        signer: mockWalletClient,
+      }),
       chainId: 84532,
       registerIfMissing: true,
     });
@@ -431,17 +435,15 @@ describe('bootstrapIdentity', () => {
       },
     };
 
-    const makeClients = () => ({
-      publicClient,
-      walletClient: undefined,
-      signer: undefined,
-    });
-
     const result = await bootstrapIdentity({
       domain: 'fallback.example',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
-      makeClients,
+      makeClients: () => ({
+        publicClient,
+        walletClient: undefined,
+        signer: undefined,
+      }),
       chainId: 84532,
     });
 

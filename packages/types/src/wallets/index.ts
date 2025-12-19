@@ -1,4 +1,31 @@
 /**
+ * Minimal viem-compatible wallet client interface for signing operations.
+ * This avoids direct viem dependency in the types package.
+ */
+export interface ViemWalletClient {
+  account?: {
+    address: `0x${string}`;
+    signMessage?(args: { message: string | { raw: `0x${string}` | Uint8Array } }): Promise<`0x${string}`>;
+  };
+  chain?: {
+    id: number;
+  };
+  signMessage(args: {
+    account?: { address: `0x${string}` };
+    message: string | { raw: `0x${string}` | Uint8Array };
+  }): Promise<`0x${string}`>;
+  signTypedData?(args: {
+    account?: { address: `0x${string}` };
+    domain?: Record<string, unknown>;
+    types: Record<string, Array<{ name: string; type: string }>>;
+    primaryType: string;
+    message: Record<string, unknown>;
+  }): Promise<`0x${string}`>;
+  signTransaction?(args: any): Promise<`0x${string}`>;
+  writeContract?(args: any): Promise<`0x${string}`>;
+}
+
+/**
  * Wallet metadata describing wallet properties and capabilities.
  */
 export interface WalletMetadata {
@@ -84,11 +111,13 @@ export type LocalWalletOptions = LocalWalletMetadataOptions & {
 };
 
 /**
- * Wallet configuration using a custom signer.
+ * Wallet configuration using a custom wallet client.
+ * A wallet client is a viem WalletClient that can sign messages and send transactions.
+ * This enables browser wallets (e.g., thirdweb) that use eth_sendTransaction instead of eth_signTransaction.
  */
 export type SignerWalletOptions = LocalWalletMetadataOptions & {
   type: 'signer';
-  signer: LocalEoaSigner;
+  walletClient: ViemWalletClient;
 };
 
 /**
@@ -130,12 +159,14 @@ export type AgentWalletConfig =
   | ThirdwebWalletOptions;
 
 /**
- * Configuration for a developer wallet. Must be a local wallet with private key.
+ * Configuration for a developer wallet. Can be local (with private key) or signer (with wallet client).
  */
-export type DeveloperWalletConfig = LocalWalletMetadataOptions & {
-  type: 'local';
-  privateKey: string;
-};
+export type DeveloperWalletConfig =
+  | (LocalWalletMetadataOptions & {
+      type: 'local';
+      privateKey: string;
+    })
+  | SignerWalletOptions;
 
 /**
  * Configuration for agent and developer wallets.

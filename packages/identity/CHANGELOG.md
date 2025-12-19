@@ -1,5 +1,15 @@
 # @lucid-agents/identity
 
+## 1.12.1
+
+### Patch Changes
+
+- Remove `clientFactory` parameter from `createAgentIdentity` (unnecessary workaround)
+- Add support for signer-based developer wallets via `DeveloperWalletConfig`
+- `DeveloperWalletHandle` now supports both `'local'` and `'signer'` kinds
+- Update client-side identity registration to use direct developer wallet creation
+- Fix validation error messages to reference `runtime.wallets.developer` instead of `runtime.wallets.agent`
+
 ## 1.12.0
 
 ### Minor Changes

@@ -1,5 +1,13 @@
 # @lucid-agents/wallet
 
+## 0.5.5
+
+### Patch Changes
+
+- Replace `LocalEoaSigner` with `ViemWalletConnector` for browser wallet support. `SignerWalletOptions` now accepts a viem `WalletClient` directly instead of `LocalEoaSigner`, enabling browser wallets (e.g., thirdweb) that use `eth_sendTransaction` instead of `eth_signTransaction`.
+- Add `ViemWalletConnector` class that wraps a viem `WalletClient` directly for both developer and agent wallets.
+- Update `createDeveloperWallet` and `buildSignerWallet` to use `ViemWalletConnector` for signer wallets.
+
 ## 0.5.4
 
 ### Patch Changes

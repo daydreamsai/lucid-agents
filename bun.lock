@@ -76,11 +76,11 @@
       "name": "@lucid-agents/analytics",
       "version": "0.2.3",
       "dependencies": {
-        "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "viem": "catalog:",
       },
       "devDependencies": {
+        "@lucid-agents/payments": "workspace:*",
         "tsup": "catalog:",
         "typescript": "catalog:",
       },
