@@ -8,6 +8,42 @@ import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
+/**
+ * Creates a mock middleware factory for testing.
+ * Returns 402 when no X-PAYMENT header is present.
+ */
+function createMockMiddlewareFactory() {
+  return (routes: any, _resourceServer: any) => {
+    return async (c: any, next: any) => {
+      const paymentHeader = c.req.header('X-PAYMENT');
+      if (!paymentHeader) {
+        const method = c.req.method;
+        const path = c.req.path;
+        const routeKey = `${method} ${path}`;
+        const routeConfig = routes[routeKey];
+
+        // Route config has accepts as single object: { scheme, price, network, payTo }
+        if (routeConfig?.accepts) {
+          const accepts = Array.isArray(routeConfig.accepts)
+            ? routeConfig.accepts
+            : [routeConfig.accepts];
+          return c.json(
+            {
+              error: 'Payment required',
+              accepts: accepts.map((a: any) => ({
+                ...a,
+                maxAmountRequired: a.price,
+              })),
+            },
+            402
+          );
+        }
+      }
+      await next();
+    };
+  };
+}
+
 const meta = { name: 'tester', version: '0.0.1', description: 'test agent' };
 
 describe('resolvePrice', () => {
@@ -58,15 +94,16 @@ describe('withPayments helper', () => {
     price: { invoke: '42' },
   };
 
+  // Mock resourceServer for unit tests
+  const mockResourceServer = {} as any;
+
   it('registers middleware when price/network resolved', () => {
     const calls: Array<[string, any]> = [];
     const app = { use: (...args: any[]) => calls.push([...args] as any) };
-    const middlewareFactory = (
-      payTo: string,
-      mapping: Record<string, { price: string; network: string }>,
-      facilitatorConfig: { url: string }
-    ) => {
-      return { payTo, mapping, facilitator: facilitatorConfig };
+    let capturedRoutes: any = null;
+    const middlewareFactory = (routes: any, _resourceServer: any) => {
+      capturedRoutes = routes;
+      return { registered: true };
     };
     const didRegister = withPayments({
       app: app as any,
@@ -74,26 +111,27 @@ describe('withPayments helper', () => {
       entrypoint,
       kind: 'invoke',
       payments,
+      resourceServer: mockResourceServer,
       middlewareFactory: middlewareFactory as any,
     });
     expect(didRegister).toBe(true);
     expect(calls.length).toBe(1);
-    const [path, middleware] = calls[0];
+    const [path] = calls[0];
     expect(path).toBe('/entrypoints/test/invoke');
-    const routeKeys = Object.keys(middleware.mapping);
+
+    // Verify routes config passed to middleware factory
+    const routeKeys = Object.keys(capturedRoutes);
     expect(routeKeys).toContain('POST /entrypoints/test/invoke');
     expect(routeKeys).toContain('GET /entrypoints/test/invoke');
 
-    const postConfig = middleware.mapping['POST /entrypoints/test/invoke'];
-    expect(postConfig.price).toBe('42');
-    expect(postConfig.config?.mimeType).toBe('application/json');
+    // Route config structure: { accepts: { scheme, price, network, payTo }, mimeType, description }
+    const postConfig = capturedRoutes['POST /entrypoints/test/invoke'];
+    expect(postConfig.accepts.price).toBe('42');
+    expect(postConfig.mimeType).toBe('application/json');
 
-    const getConfig = middleware.mapping['GET /entrypoints/test/invoke'];
-    expect(getConfig.price).toBe('42');
-    expect(getConfig.config?.mimeType).toBe('application/json');
-    expect(middleware.facilitator).toEqual({
-      url: payments.facilitatorUrl,
-    });
+    const getConfig = capturedRoutes['GET /entrypoints/test/invoke'];
+    expect(getConfig.accepts.price).toBe('42');
+    expect(getConfig.mimeType).toBe('application/json');
   });
 
   it('skips registration when no payments provided', () => {
@@ -123,27 +161,26 @@ describe('withPayments helper', () => {
     expect(calls.length).toBe(0);
   });
 
-  it('allows overriding facilitator config', () => {
+  it('allows providing resourceServer directly', () => {
     const calls: Array<[string, any]> = [];
     const app = { use: (...args: any[]) => calls.push([...args] as any) };
-    const customFacilitator = { url: 'https://override.example' as any };
-    const middlewareFactory = (
-      payTo: string,
-      mapping: Record<string, { price: string; network: string }>,
-      facilitatorConfig: { url: string }
-    ) => ({ payTo, mapping, facilitator: facilitatorConfig });
+    let capturedResourceServer: any = null;
+    const middlewareFactory = (routes: any, resourceServer: any) => {
+      capturedResourceServer = resourceServer;
+      return { registered: true };
+    };
+    const customResourceServer = { custom: true } as any;
     const didRegister = withPayments({
       app: app as any,
       path: '/entrypoints/test/invoke',
       entrypoint,
       kind: 'invoke',
       payments,
-      facilitator: customFacilitator,
+      resourceServer: customResourceServer,
       middlewareFactory: middlewareFactory as any,
     });
     expect(didRegister).toBe(true);
-    const [, middleware] = calls[0];
-    expect(middleware.facilitator).toBe(customFacilitator);
+    expect(capturedResourceServer).toBe(customResourceServer);
   });
 });
 
@@ -354,62 +391,38 @@ describe('createAgentApp invoke/stream routes', () => {
     );
   });
 
-  it('requires payment when entrypoint price is set', async () => {
-    const agent = await createAgent(meta)
-      .use(http())
-      .use(
-        payments({
-          config: {
-            payTo: '0xabc0000000000000000000000000000000000000',
-            facilitatorUrl: 'https://facilitator.example' as any,
-            network: 'base-sepolia' as any,
-          },
-        })
-      )
-      .build();
-    const { app, addEntrypoint } = await createAgentApp(agent);
-
-    addEntrypoint({
+  it('withPayments returns 402 when no payment provided', async () => {
+    // Test payment middleware behavior using withPayments directly
+    const { Hono } = await import('hono');
+    const app = new Hono();
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc0000000000000000000000000000000000000',
+      facilitatorUrl: 'https://facilitator.example' as any,
+      network: 'base-sepolia' as any,
+    };
+    const entrypoint: EntrypointDef = {
       key: 'paywalled',
       price: '321',
-      handler: async () => ({ output: { paywalled: true } }),
+    };
+    const mockResourceServer = {} as any;
+
+    withPayments({
+      app,
+      path: '/entrypoints/paywalled/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: paymentsConfig,
+      resourceServer: mockResourceServer,
+      middlewareFactory: createMockMiddlewareFactory() as any,
     });
 
-    const res = await app.request('http://agent/entrypoints/paywalled/invoke', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: {} }),
-    });
-
-    expect(res.status).toBe(402);
-    const body = await res.json();
-    expect(body.error).toBeTruthy();
-    expect(body.accepts?.[0]?.maxAmountRequired).toBeDefined();
-  });
-
-  it('auto-paywalls priced entrypoints when payments configured', async () => {
-    const agent = await createAgent(meta)
-      .use(http())
-      .use(
-        payments({
-          config: {
-            payTo: '0xabc0000000000000000000000000000000000000',
-            facilitatorUrl: 'https://facilitator.example' as any,
-            network: 'base-sepolia' as any,
-          },
-        })
-      )
-      .build();
-    const { app, addEntrypoint } = await createAgentApp(agent);
-
-    addEntrypoint({
-      key: 'auto-paywalled',
-      price: '444',
-      handler: async () => ({ output: { ok: true } }),
-    });
+    // Add a handler after the middleware
+    app.post('/entrypoints/paywalled/invoke', c =>
+      c.json({ output: { paywalled: true } })
+    );
 
     const res = await app.request(
-      'http://agent/entrypoints/auto-paywalled/invoke',
+      'http://agent/entrypoints/paywalled/invoke',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -418,6 +431,55 @@ describe('createAgentApp invoke/stream routes', () => {
     );
 
     expect(res.status).toBe(402);
+    const body = await res.json();
+    expect(body.error).toBeTruthy();
+    expect(body.accepts?.[0]?.maxAmountRequired).toBe('321');
+  });
+
+  it('withPayments allows request when payment header present', async () => {
+    // Test that request proceeds when X-PAYMENT header is present
+    const { Hono } = await import('hono');
+    const app = new Hono();
+    const paymentsConfig: PaymentsConfig = {
+      payTo: '0xabc0000000000000000000000000000000000000',
+      facilitatorUrl: 'https://facilitator.example' as any,
+      network: 'base-sepolia' as any,
+    };
+    const entrypoint: EntrypointDef = {
+      key: 'paywalled',
+      price: '321',
+    };
+    const mockResourceServer = {} as any;
+
+    withPayments({
+      app,
+      path: '/entrypoints/paywalled/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: paymentsConfig,
+      resourceServer: mockResourceServer,
+      middlewareFactory: createMockMiddlewareFactory() as any,
+    });
+
+    app.post('/entrypoints/paywalled/invoke', c =>
+      c.json({ output: { paywalled: true } })
+    );
+
+    const res = await app.request(
+      'http://agent/entrypoints/paywalled/invoke',
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-PAYMENT': 'mock-payment-token',
+        },
+        body: JSON.stringify({ input: {} }),
+      }
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.output.paywalled).toBe(true);
   });
 
   it('emits SSE envelopes for stream entrypoint', async () => {

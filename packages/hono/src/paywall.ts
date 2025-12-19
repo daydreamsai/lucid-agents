@@ -15,6 +15,8 @@ import {
   type x402ResourceServer,
 } from '@lucid-agents/payments';
 
+type PaymentMiddlewareFactory = typeof paymentMiddleware;
+
 export type WithPaymentsParams = {
   app: Hono;
   path: string;
@@ -24,6 +26,8 @@ export type WithPaymentsParams = {
   /** Optional override - if not provided, uses runtime.payments.resourceServer */
   resourceServer?: x402ResourceServer;
   runtime?: AgentRuntime;
+  /** @internal For testing only - override the middleware factory */
+  middlewareFactory?: PaymentMiddlewareFactory;
 };
 
 export function withPayments({
@@ -34,6 +38,7 @@ export function withPayments({
   payments,
   resourceServer: resourceServerOverride,
   runtime,
+  middlewareFactory = paymentMiddleware,
 }: WithPaymentsParams): boolean {
   if (!payments) return false;
 
@@ -91,7 +96,7 @@ export function withPayments({
   }
 
   // Use the provided resourceServer with the payment middleware
-  app.use(path, paymentMiddleware(routes, resourceServer));
+  app.use(path, middlewareFactory(routes, resourceServer));
 
   if (policyGroups && policyGroups.length > 0 && paymentTracker) {
     app.use(path, async (c, next) => {
