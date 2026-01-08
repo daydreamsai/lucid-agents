@@ -35,7 +35,7 @@
     "PAYMENTS_NETWORK": {
       "type": "string",
       "description": "Payment network (EVM or Solana)",
-      "default": "base-sepolia",
+      "default": "ethereum-sepolia",
       "enum": [
         "base",
         "base-sepolia",
