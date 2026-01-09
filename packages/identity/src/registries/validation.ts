@@ -1,6 +1,10 @@
 /**
  * ERC-8004 Validation Registry Client
  * Handles validation requests and responses for agent work verification
+ *
+ * @deprecated Validation Registry is under active development and will be revised and expanded
+ * in a follow-up spec update later this year. This client is kept for backward compatibility
+ * but should not be used in new code until the spec is finalized.
  */
 
 import type { Hex } from '@lucid-agents/wallet';
@@ -10,8 +14,8 @@ import type { PublicClientLike, WalletClientLike } from './identity';
 import { hashValidationRequest } from './signatures';
 import { waitForConfirmation } from './utils';
 
-const DEFAULT_TAG: Hex =
-  '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
+// Tags are now strings, using empty string as default
+const DEFAULT_TAG = '';
 
 export type ValidationRegistryClientOptions<
   PublicClient extends PublicClientLike,
@@ -37,7 +41,7 @@ export type ValidationStatus = {
   agentId: bigint;
   response: number; // Validation result code
   responseHash: Hex;
-  tag: Hex;
+  tag: string;
   lastUpdate: bigint;
 };
 
@@ -53,7 +57,7 @@ export type SubmitValidationResponseInput = {
   response: number; // Result code
   responseUri: string;
   responseHash: Hex;
-  tag?: Hex;
+  tag?: string;
 };
 
 export type ValidationSummary = {
@@ -72,11 +76,12 @@ export type ValidationRegistryClient = {
     agentId: bigint,
     options?: {
       validatorAddresses?: Hex[];
-      tag?: Hex;
+      tag?: string;
     }
   ): Promise<ValidationSummary>;
-  createRequest(input: CreateValidationRequestInput): Promise<Hex>;
-  submitResponse(input: SubmitValidationResponseInput): Promise<Hex>;
+  validationRequest(input: CreateValidationRequestInput): Promise<Hex>;
+  validationResponse(input: SubmitValidationResponseInput): Promise<Hex>;
+  getVersion(): Promise<string>;
 };
 
 export function createValidationRegistryClient<
@@ -96,7 +101,7 @@ export function createValidationRegistryClient<
         abi: VALIDATION_REGISTRY_ABI,
         functionName: 'getValidationStatus',
         args: [requestHash],
-      })) as [Hex, bigint, number, Hex, Hex, bigint];
+      })) as [Hex, bigint, number, Hex, string, bigint];
 
       const [
         validatorAddress,
@@ -152,7 +157,7 @@ export function createValidationRegistryClient<
     agentId: bigint,
     options: {
       validatorAddresses?: Hex[];
-      tag?: Hex;
+      tag?: string;
     } = {}
   ): Promise<ValidationSummary> {
     const validatorAddresses = options.validatorAddresses ?? [];
@@ -173,11 +178,11 @@ export function createValidationRegistryClient<
     };
   }
 
-  async function createRequest(
+  async function validationRequest(
     input: CreateValidationRequestInput
   ): Promise<Hex> {
     if (!walletClient) {
-      throw new Error('Wallet client required for createRequest');
+      throw new Error('Wallet client required for validationRequest');
     }
 
     // Compute request hash from URI if not provided
@@ -201,11 +206,11 @@ export function createValidationRegistryClient<
     return txHash;
   }
 
-  async function submitResponse(
+  async function validationResponse(
     input: SubmitValidationResponseInput
   ): Promise<Hex> {
     if (!walletClient) {
-      throw new Error('Wallet client required for submitResponse');
+      throw new Error('Wallet client required for validationResponse');
     }
 
     const tag = input.tag ?? DEFAULT_TAG;
@@ -228,6 +233,17 @@ export function createValidationRegistryClient<
     return txHash;
   }
 
+  async function getVersion(): Promise<string> {
+    const result = (await publicClient.readContract({
+      address,
+      abi: VALIDATION_REGISTRY_ABI,
+      functionName: 'getVersion',
+      args: [],
+    })) as string;
+
+    return result;
+  }
+
   return {
     address,
     chainId,
@@ -235,7 +251,8 @@ export function createValidationRegistryClient<
     getAgentValidations,
     getValidatorRequests,
     getSummary,
-    createRequest,
-    submitResponse,
+    validationRequest,
+    validationResponse,
+    getVersion,
   };
 }

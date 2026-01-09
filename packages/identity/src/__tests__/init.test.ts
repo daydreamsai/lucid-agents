@@ -702,7 +702,7 @@ describe('getTrustConfig', () => {
       record: {
         agentId: 1n,
         owner: '0x0000000000000000000000000000000000000001',
-        tokenURI: 'https://test.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://test.example.com/.well-known/agent-metadata.json',
       },
     };
 

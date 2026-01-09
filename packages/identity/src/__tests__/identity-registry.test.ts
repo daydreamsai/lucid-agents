@@ -65,7 +65,7 @@ describe('createIdentityRegistryClient', () => {
     const record = await client.get(1n);
     expect(record?.agentId).toBe(1n);
     expect(record?.owner).toBe('0xaaaa000000000000000000000000000000000001');
-    expect(record?.tokenURI).toBe(
+    expect(record?.agentURI).toBe(
       'https://agent.example.com/.well-known/agent-metadata.json'
     );
 
@@ -99,7 +99,7 @@ describe('createIdentityRegistryClient', () => {
     expect(record).toBeNull();
   });
 
-  it('registers agent with tokenURI', async () => {
+  it('registers agent with agentURI', async () => {
     let writeArgs: any;
     const mockWalletClient = {
       account: {
@@ -143,7 +143,7 @@ describe('createIdentityRegistryClient', () => {
     });
 
     const result = await client.register({
-      tokenURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
     });
 
     expect(result.transactionHash).toBe('0xtxhash');
@@ -157,7 +157,7 @@ describe('createIdentityRegistryClient', () => {
     ]);
   });
 
-  it('registers agent with tokenURI and metadata', async () => {
+  it('registers agent with agentURI and metadata', async () => {
     let writeArgs: any;
     const mockWalletClient = {
       account: {
@@ -203,7 +203,7 @@ describe('createIdentityRegistryClient', () => {
     const metadata = [{ key: 'version', value: new Uint8Array([1, 0, 0]) }];
 
     const result = await client.register({
-      tokenURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
       metadata,
     });
 
@@ -223,7 +223,7 @@ describe('buildTrustConfigFromIdentity', () => {
       {
         agentId: 5n,
         owner: '0x0000000000000000000000000000000000000005',
-        tokenURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
       },
       { chainId: 84532 }
     );
@@ -239,7 +239,7 @@ describe('buildTrustConfigFromIdentity', () => {
       {
         agentId: largeId,
         owner: '0x0000000000000000000000000000000000000abc',
-        tokenURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
       },
       { chainId: 84532 }
     );
@@ -289,7 +289,7 @@ describe('signAgentDomainProof', () => {
 
 describe('bootstrapTrust', () => {
   it('registers agent when registerIfMissing is true', async () => {
-    let registeredTokenURI: string | undefined;
+    let registeredAgentURI: string | undefined;
 
     const mockWalletClient = {
       account: {
@@ -299,7 +299,7 @@ describe('bootstrapTrust', () => {
         },
       },
       async writeContract(args: any) {
-        registeredTokenURI = args.args[0];
+        registeredAgentURI = args.args[0];
         return '0xtxhash' as const;
       },
     } as WalletClientLike;
@@ -335,7 +335,7 @@ describe('bootstrapTrust', () => {
     });
 
     expect(result.didRegister).toBe(true);
-    expect(registeredTokenURI).toBe(
+    expect(registeredAgentURI).toBe(
       'https://example.com/.well-known/agent-metadata.json'
     );
     expect(result.transactionHash).toBe('0xtxhash');
@@ -348,7 +348,7 @@ describe('bootstrapTrust', () => {
     const record: IdentityRecord = {
       agentId: 7n,
       owner: '0x0000000000000000000000000000000000000007',
-      tokenURI: 'https://example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://example.com/.well-known/agent-metadata.json',
     };
 
     const publicClient: PublicClientLike = {

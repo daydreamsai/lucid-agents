@@ -41,7 +41,7 @@ export type IdentityRegistryClientOptions<
 export type IdentityRecord = {
   agentId: bigint;
   owner: Hex;
-  tokenURI: string;
+  agentURI: string;
 };
 
 type AgentIdentifierInput = bigint | number | string;
@@ -52,7 +52,7 @@ type RegistrationEntryParams = {
   chainId: number | string;
   namespace?: string;
   signature?: string;
-  tokenURI?: string;
+  agentURI?: string;
   agentRegistry?: Hex;
 };
 
@@ -109,8 +109,8 @@ function createRegistrationEntry(
   if (params.signature) {
     entry.signature = params.signature;
   }
-  if (params.tokenURI) {
-    entry.tokenURI = params.tokenURI;
+  if (params.agentURI) {
+    entry.agentURI = params.agentURI;
   }
   if (params.agentRegistry) {
     entry.agentRegistry = params.agentRegistry;
@@ -138,6 +138,10 @@ export type IdentityRegistryClient = {
     key: string
   ): Promise<Uint8Array | null>;
   register(input: RegisterAgentInput): Promise<RegisterAgentResult>;
+  setAgentURI(
+    agentId: bigint | number | string,
+    agentURI: string
+  ): Promise<Hex>;
   setMetadata(
     agentId: bigint | number | string,
     key: string,
@@ -147,6 +151,7 @@ export type IdentityRegistryClient = {
     record: IdentityRecord,
     signature?: string
   ): RegistrationEntry;
+  getVersion(): Promise<string>;
 };
 
 export type PublicClientLike = {
@@ -169,7 +174,7 @@ export type WalletClientLike = {
 };
 
 export type RegisterAgentInput = {
-  tokenURI: string;
+  agentURI: string;
   metadata?: Array<{ key: string; value: Uint8Array }>;
 };
 
@@ -210,6 +215,7 @@ export function createIdentityRegistryClient<
       return null;
     }
 
+    // Use tokenURI() function for ERC-721 compatibility, but treat value as agentURI
     const uri = (await publicClient.readContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -220,7 +226,7 @@ export function createIdentityRegistryClient<
     return {
       agentId: id,
       owner: normalizeAddress(owner),
-      tokenURI: uri,
+      agentURI: uri,
     };
   }
 
@@ -260,8 +266,8 @@ export function createIdentityRegistryClient<
     if (!walletClient) {
       throw new Error('Wallet client required for register');
     }
-    if (!input.tokenURI) {
-      throw new Error('tokenURI is required');
+    if (!input.agentURI) {
+      throw new Error('agentURI is required');
     }
 
     if (!walletClient.account?.address) {
@@ -270,9 +276,10 @@ export function createIdentityRegistryClient<
 
     const agentAddress = normalizeAddress(walletClient.account.address);
 
+    // Contract register() function takes agentURI parameter (not tokenURI)
     const args = input.metadata
-      ? [input.tokenURI, input.metadata]
-      : [input.tokenURI];
+      ? [input.agentURI, input.metadata]
+      : [input.agentURI];
 
     const txHash = await walletClient.writeContract({
       address,
@@ -324,6 +331,15 @@ export function createIdentityRegistryClient<
       throw new Error('Wallet client required for setMetadata');
     }
 
+    // agentWallet is a reserved metadata key that cannot be set via setMetadata()
+    // It must be updated via the dedicated setAgentWallet() function with signature proof
+    if (key === 'agentWallet') {
+      throw new Error(
+        'agentWallet is a reserved metadata key and cannot be set via setMetadata(). ' +
+          'It must be updated via the dedicated setAgentWallet() function with signature proof.'
+      );
+    }
+
     const id = BigInt(agentId);
 
     // Convert Uint8Array to hex string if needed (viem expects hex for bytes type)
@@ -356,9 +372,42 @@ export function createIdentityRegistryClient<
       chainId,
       namespace,
       signature,
-      tokenURI: record.tokenURI,
+      agentURI: record.agentURI,
       agentRegistry: address,
     });
+  }
+
+  async function setAgentURI(
+    agentId: bigint | number | string,
+    agentURI: string
+  ): Promise<Hex> {
+    if (!walletClient) {
+      throw new Error('Wallet client required for setAgentURI');
+    }
+
+    const id = BigInt(agentId);
+
+    const txHash = await walletClient.writeContract({
+      address,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'setAgentURI',
+      args: [id, agentURI],
+    });
+
+    await waitForConfirmation(publicClient, txHash);
+
+    return txHash;
+  }
+
+  async function getVersion(): Promise<string> {
+    const result = (await publicClient.readContract({
+      address,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'getVersion',
+      args: [],
+    })) as string;
+
+    return result;
   }
 
   return {
@@ -367,8 +416,10 @@ export function createIdentityRegistryClient<
     get,
     getMetadata,
     register,
+    setAgentURI,
     setMetadata,
     toRegistrationEntry,
+    getVersion,
   };
 }
 
@@ -518,8 +569,8 @@ export async function bootstrapTrust(
   }
 
   if (!record && shouldRegister) {
-    const tokenURI = buildMetadataURI(normalizedDomain);
-    const registration = await client.register({ tokenURI });
+    const agentURI = buildMetadataURI(normalizedDomain);
+    const registration = await client.register({ agentURI });
     transactionHash = registration.transactionHash;
     didRegister = true;
 
@@ -527,7 +578,7 @@ export async function bootstrapTrust(
       record = {
         agentId: registration.agentId,
         owner: registration.agentAddress,
-        tokenURI,
+        agentURI,
       } satisfies IdentityRecord;
     }
   }

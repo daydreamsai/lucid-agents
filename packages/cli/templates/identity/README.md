@@ -68,10 +68,11 @@ await reputationClient.giveFeedback({
   comment: "Great service!",
 });
 
-// Create a validation request
-await validationClient.createRequest({
-  requestType: "inference-validation",
-  dataHash: "0x...",
+// Create a validation request (function renamed: createRequest → validationRequest)
+await validationClient.validationRequest({
+  validatorAddress: "0x...",
+  agentId: 1n,
+  requestUri: "ipfs://...",
 });
 ```
 

@@ -122,7 +122,8 @@ if (identityResult.clients?.validation && identityResult.record?.agentId) {
     console.log("Request URI:", requestUri);
 
     // requestHash will be computed automatically from requestUri
-    const txHash = await identityResult.clients.validation.createRequest({
+    // Note: Function renamed: createRequest → validationRequest
+    const txHash = await identityResult.clients.validation.validationRequest({
       validatorAddress,
       agentId,
       requestUri,
@@ -131,7 +132,7 @@ if (identityResult.clients?.validation && identityResult.record?.agentId) {
     console.log(
       "Note: The validator at",
       validatorAddress,
-      "should respond with validationResponse"
+      "should respond with validationResponse() (function renamed from submitResponse)"
     );
   } catch (error: any) {
     console.error("Could not create validation request:", error);

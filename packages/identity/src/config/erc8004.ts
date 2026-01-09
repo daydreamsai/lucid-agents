@@ -1,6 +1,13 @@
 /**
- * ERC-8004 v1.0 Configuration
+ * ERC-8004 January 2026 Specification Configuration
  * Contract addresses and constants
+ *
+ * Updated for ERC-8004 Jan 2026 spec update:
+ * - Only ETH Sepolia is deployed with new addresses as of Jan 2026
+ * - Other chains await new contract deployments
+ * - Validation Registry is under active development (see note below)
+ *
+ * Reference: https://github.com/erc-8004/erc-8004-contracts
  */
 
 import type { Hex } from '@lucid-agents/wallet';
@@ -8,7 +15,8 @@ import type { Hex } from '@lucid-agents/wallet';
 /**
  * Official ERC-8004 registry addresses by chain
  *
- * Reference: https://github.com/erc-8004/erc-8004-contracts
+ * NOTE: As of Jan 2026 spec update, only ETH Sepolia has deployed addresses.
+ * Other chains will be enabled once new contracts are deployed.
  */
 type RegistryAddresses = {
   IDENTITY_REGISTRY: Hex;
@@ -17,48 +25,50 @@ type RegistryAddresses = {
 };
 
 const CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
-  // ETH Sepolia (11155111)
+  // ETH Sepolia (11155111) - Jan 2026 spec update addresses
   11155111: {
-    IDENTITY_REGISTRY: '0x8004a6090Cd10A7288092483047B097295Fb8847' as Hex,
-    REPUTATION_REGISTRY: '0x8004B8FD1A363aa02fDC07635C0c5F94f6Af5B7E' as Hex,
+    IDENTITY_REGISTRY: '0x8004A818BFB912233c491871b3d84c89A494BD9e' as Hex,
+    REPUTATION_REGISTRY: '0x8004B663056A597Dffe9eCcC1965A193B7388713' as Hex,
+    // Validation Registry: Under active development, address kept for backward compatibility
+    // Will be updated in follow-up spec update later this year
     VALIDATION_REGISTRY: '0x8004CB39f29c09145F24Ad9dDe2A108C1A2cdfC5' as Hex,
   },
-  // Base Sepolia (84532)
-  84532: {
-    IDENTITY_REGISTRY: '0x8004AA63c570c570eBF15376c0dB199918BFe9Fb' as Hex,
-    REPUTATION_REGISTRY: '0x8004bd8daB57f14Ed299135749a5CB5c42d341BF' as Hex,
-    VALIDATION_REGISTRY: '0x8004C269D0A5647E51E121FeB226200ECE932d55' as Hex,
-  },
-  // Linea Sepolia (59141)
-  59141: {
-    IDENTITY_REGISTRY: '0x8004aa7C931bCE1233973a0C6A667f73F66282e7' as Hex,
-    REPUTATION_REGISTRY: '0x8004bd8483b99310df121c46ED8858616b2Bba02' as Hex,
-    VALIDATION_REGISTRY: '0x8004c44d1EFdd699B2A26e781eF7F77c56A9a4EB' as Hex,
-  },
-  // Polygon Amoy (80002)
-  80002: {
-    IDENTITY_REGISTRY: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898' as Hex,
-    REPUTATION_REGISTRY: '0x8004B12F4C2B42d00c46479e859C92e39044C930' as Hex,
-    VALIDATION_REGISTRY: '0x8004C11C213ff7BaD36489bcBDF947ba5eee289B' as Hex,
-  },
-  // Hedera Testnet (296)
-  296: {
-    IDENTITY_REGISTRY: '0x4c74ebd72921d537159ed2053f46c12a7d8e5923' as Hex,
-    REPUTATION_REGISTRY: '0xc565edcba77e3abeade40bfd6cf6bf583b3293e0' as Hex,
-    VALIDATION_REGISTRY: '0x18df085d85c586e9241e0cd121ca422f571c2da6' as Hex,
-  },
-  // HyperEVM Testnet (998)
-  998: {
-    IDENTITY_REGISTRY: '0x8004A9560C0edce880cbD24Ba19646470851C986' as Hex,
-    REPUTATION_REGISTRY: '0x8004b490779A65D3290a31fD96471122050dF671' as Hex,
-    VALIDATION_REGISTRY: '0x8004C86198fdB8d8169c0405D510EC86cc7B0551' as Hex,
-  },
-  // SKALE Base Sepolia Testnet (202402221200)
-  202402221200: {
-    IDENTITY_REGISTRY: '0x4fa7900596c9830664406d3796952c59ec4133d9' as Hex,
-    REPUTATION_REGISTRY: '0x9b9d23a47697691ef1016906d1f8ddfc009e6a69' as Hex,
-    VALIDATION_REGISTRY: '0x34ae1196b1609e01ebc90b75c802b2ea87203f13' as Hex,
-  },
+  // TODO: Base Sepolia (84532) - Awaiting Jan 2026 spec contract deployment
+  // 84532: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
+  // TODO: Linea Sepolia (59141) - Awaiting Jan 2026 spec contract deployment
+  // 59141: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
+  // TODO: Polygon Amoy (80002) - Awaiting Jan 2026 spec contract deployment
+  // 80002: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
+  // TODO: Hedera Testnet (296) - Awaiting Jan 2026 spec contract deployment
+  // 296: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
+  // TODO: HyperEVM Testnet (998) - Awaiting Jan 2026 spec contract deployment
+  // 998: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
+  // TODO: SKALE Base Sepolia Testnet (202402221200) - Awaiting Jan 2026 spec contract deployment
+  // 202402221200: {
+  //   IDENTITY_REGISTRY: '0x...' as Hex,
+  //   REPUTATION_REGISTRY: '0x...' as Hex,
+  //   VALIDATION_REGISTRY: '0x...' as Hex,
+  // },
 } as const;
 
 /**
