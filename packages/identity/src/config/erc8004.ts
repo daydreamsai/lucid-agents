@@ -3,7 +3,7 @@
  * Contract addresses and constants
  *
  * Updated for ERC-8004 Jan 2026 spec update:
- * - Only ETH Sepolia is deployed with new addresses as of Jan 2026
+ * - ETH Sepolia and Base Sepolia are deployed with new addresses as of Jan 2026
  * - Other chains await new contract deployments
  * - Validation Registry is under active development (see note below)
  *
@@ -15,7 +15,7 @@ import type { Hex } from '@lucid-agents/wallet';
 /**
  * Official ERC-8004 registry addresses by chain
  *
- * NOTE: As of Jan 2026 spec update, only ETH Sepolia has deployed addresses.
+ * NOTE: As of Jan 2026 spec update, ETH Sepolia and Base Sepolia have deployed addresses.
  * Other chains will be enabled once new contracts are deployed.
  */
 type RegistryAddresses = {
@@ -33,12 +33,14 @@ const CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
     // Will be updated in follow-up spec update later this year
     VALIDATION_REGISTRY: '0x8004CB39f29c09145F24Ad9dDe2A108C1A2cdfC5' as Hex,
   },
-  // TODO: Base Sepolia (84532) - Awaiting Jan 2026 spec contract deployment
-  // 84532: {
-  //   IDENTITY_REGISTRY: '0x...' as Hex,
-  //   REPUTATION_REGISTRY: '0x...' as Hex,
-  //   VALIDATION_REGISTRY: '0x...' as Hex,
-  // },
+  // Base Sepolia (84532) - Jan 2026 spec update addresses
+  84532: {
+    IDENTITY_REGISTRY: '0x8004A818BFB912233c491871b3d84c89A494BD9e' as Hex,
+    REPUTATION_REGISTRY: '0x8004B663056A597Dffe9eCcC1965A193B7388713' as Hex,
+    // Validation Registry: Placeholder (same as ETH Sepolia, under active development)
+    // Will be updated in follow-up spec update later this year
+    VALIDATION_REGISTRY: '0x8004CB39f29c09145F24Ad9dDe2A108C1A2cdfC5' as Hex,
+  },
   // TODO: Linea Sepolia (59141) - Awaiting Jan 2026 spec contract deployment
   // 59141: {
   //   IDENTITY_REGISTRY: '0x...' as Hex,
