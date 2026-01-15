@@ -233,123 +233,146 @@ async function main() {
   console.log('STEP 3: Validation Registry Operations');
   console.log('-'.repeat(80));
 
-  // 3.1: Get initial validation summary (read)
-  console.log('\n3.1: Reading validation summary...');
-  const initialSummary = await validation.getSummary(agent1Id);
-  console.log(`Initial validation summary:`);
-  console.log(`   Count: ${initialSummary.count.toString()}`);
-  console.log(`   Average Response: ${initialSummary.avgResponse}`);
-
-  // 3.2: Get agent validations (read)
-  console.log('\n3.2: Reading agent validation requests...');
-  const agentValidations = await validation.getAgentValidations(agent1Id);
-  console.log(`Agent 1 has ${agentValidations.length} validation request(s)`);
-  if (agentValidations.length > 0) {
+  if (!validation) {
     console.log(
-      `   Request hashes: ${agentValidations.slice(0, 3).join(', ')}${agentValidations.length > 3 ? '...' : ''}`
+      '\nValidation Registry client not available - skipping validation operations'
     );
-  }
+    console.log(
+      '(Validation Registry is deprecated and under active development)'
+    );
+    console.log('\n');
+  } else {
+    // 3.1: Get initial validation summary (read)
+    console.log('\n3.1: Reading validation summary...');
+    const initialSummary = await validation.getSummary(agent1Id);
+    console.log(`Initial validation summary:`);
+    console.log(`   Count: ${initialSummary.count.toString()}`);
+    console.log(`   Average Response: ${initialSummary.avgResponse}`);
 
-  // 3.3: Create validation request (write) - Agent 1 requests validation from Agent 2
-  console.log('\n3.3: Creating validation request (Agent 1 -> Agent 2)...');
-  let requestHash: `0x${string}` | null = null;
-  try {
-    // Use Agent 2's address as the validator (Agent 2 must be registered in Identity Registry)
-    const validatorAddress = agent2Address as `0x${string}`;
-    const requestUri = `https://${identity1.domain}/validation-request-${Date.now()}.json`;
-    const requestTx = await validation.validationRequest({
-      validatorAddress,
-      agentId: agent1Id,
-      requestUri,
-    });
-    console.log(`Validation request created:`);
-    console.log(`   Transaction: ${requestTx}`);
-    console.log(`   Validator (Agent 2): ${validatorAddress}`);
-    console.log(`   Agent (Agent 1): ${agent1Id.toString()}`);
-    console.log(`   Request URI: ${requestUri}`);
-
-    // Compute request hash to check status
-    requestHash = hashValidationRequest(requestUri);
-
-    // 3.4: Get validation status (read)
-    console.log('\n3.4: Reading validation status...');
-    const validationStatus = await validation.getValidationStatus(requestHash);
-    if (validationStatus) {
-      // Check if response is 0 (unresponded) or non-zero (responded)
-      const isResponded = validationStatus.response !== 0;
-      console.log(`Validation status retrieved:`);
-      console.log(`   Validator: ${validationStatus.validatorAddress}`);
-      console.log(`   Agent ID: ${validationStatus.agentId?.toString()}`);
+    // 3.2: Get agent validations (read)
+    console.log('\n3.2: Reading agent validation requests...');
+    const agentValidations = await validation.getAgentValidations(agent1Id);
+    console.log(`Agent 1 has ${agentValidations.length} validation request(s)`);
+    if (agentValidations.length > 0) {
       console.log(
-        `   Response: ${validationStatus.response} ${isResponded ? '(responded)' : '(pending)'}`
-      );
-      console.log(`   Last Update: ${validationStatus.lastUpdate?.toString()}`);
-    } else {
-      console.log(
-        `Validation status not yet available (may need more confirmations)`
+        `   Request hashes: ${agentValidations.slice(0, 3).join(', ')}${agentValidations.length > 3 ? '...' : ''}`
       );
     }
 
-    // 3.5: Get validator requests (read) - check Agent 2's pending requests
-    console.log('\n3.5: Reading validator requests (Agent 2)...');
-    const validatorRequests =
-      await validation.getValidatorRequests(validatorAddress);
-    console.log(
-      `Agent 2 (validator) has ${validatorRequests.length} request(s)`
-    );
-    if (validatorRequests.length > 0) {
-      console.log(
-        `   Request hashes: ${validatorRequests.slice(0, 3).join(', ')}${validatorRequests.length > 3 ? '...' : ''}`
-      );
-    }
-
-    // 3.6: Submit validation response (write) - Agent 2 responds as validator
-    console.log(
-      '\n3.6: Submitting validation response (Agent 2 as validator)...'
-    );
+    // 3.3: Create validation request (write) - Agent 1 requests validation from Agent 2
+    console.log('\n3.3: Creating validation request (Agent 1 -> Agent 2)...');
+    let requestHash: `0x${string}` | null = null;
     try {
-      // Use Agent 2's clients to submit the response
-      const responseHash =
-        '0x0000000000000000000000000000000000000000000000000000000000000001' as const;
-      const responseTx = await identity2.clients.validation.validationResponse({
-        requestHash,
-        response: 1, // 1 = valid
-        responseUri: `https://${identity2.domain}/validation-response-${Date.now()}.json`,
-        responseHash,
-        tag: 'validation',
+      // Use Agent 2's address as the validator (Agent 2 must be registered in Identity Registry)
+      const validatorAddress = agent2Address as `0x${string}`;
+      const requestUri = `https://${identity1.domain}/validation-request-${Date.now()}.json`;
+      const requestTx = await validation.validationRequest({
+        validatorAddress,
+        agentId: agent1Id,
+        requestUri,
       });
-      console.log(`Validation response submitted:`);
-      console.log(`   Transaction: ${responseTx}`);
-      console.log(`   Request Hash: ${requestHash}`);
-      console.log(`   Response: 1 (valid)`);
+      console.log(`Validation request created:`);
+      console.log(`   Transaction: ${requestTx}`);
+      console.log(`   Validator (Agent 2): ${validatorAddress}`);
+      console.log(`   Agent (Agent 1): ${agent1Id.toString()}`);
+      console.log(`   Request URI: ${requestUri}`);
 
-      // Re-check validation status
-      const updatedStatus = await validation.getValidationStatus(requestHash);
-      if (updatedStatus && updatedStatus.response !== 0) {
+      // Compute request hash to check status
+      requestHash = hashValidationRequest(requestUri);
+
+      // 3.4: Get validation status (read)
+      console.log('\n3.4: Reading validation status...');
+      const validationStatus =
+        await validation.getValidationStatus(requestHash);
+      if (validationStatus) {
+        // Check if response is 0 (unresponded) or non-zero (responded)
+        const isResponded = validationStatus.response !== 0;
+        console.log(`Validation status retrieved:`);
+        console.log(`   Validator: ${validationStatus.validatorAddress}`);
+        console.log(`   Agent ID: ${validationStatus.agentId?.toString()}`);
         console.log(
-          `   ✓ Confirmed: Validation status updated (response: ${updatedStatus.response})`
+          `   Response: ${validationStatus.response} ${isResponded ? '(responded)' : '(pending)'}`
+        );
+        console.log(
+          `   Last Update: ${validationStatus.lastUpdate?.toString()}`
+        );
+      } else {
+        console.log(
+          `Validation status not yet available (may need more confirmations)`
         );
       }
+
+      // 3.5: Get validator requests (read) - check Agent 2's pending requests
+      console.log('\n3.5: Reading validator requests (Agent 2)...');
+      const validatorRequests =
+        await validation.getValidatorRequests(validatorAddress);
+      console.log(
+        `Agent 2 (validator) has ${validatorRequests.length} request(s)`
+      );
+      if (validatorRequests.length > 0) {
+        console.log(
+          `   Request hashes: ${validatorRequests.slice(0, 3).join(', ')}${validatorRequests.length > 3 ? '...' : ''}`
+        );
+      }
+
+      // 3.6: Submit validation response (write) - Agent 2 responds as validator
+      console.log(
+        '\n3.6: Submitting validation response (Agent 2 as validator)...'
+      );
+      try {
+        if (!identity2.clients?.validation) {
+          console.log(
+            'Validation client not available for Agent 2 - skipping response'
+          );
+        } else {
+          // Use Agent 2's clients to submit the response
+          const responseHash =
+            '0x0000000000000000000000000000000000000000000000000000000000000001' as const;
+          const responseTx =
+            await identity2.clients.validation.validationResponse({
+              requestHash,
+              response: 1, // 1 = valid
+              responseUri: `https://${identity2.domain}/validation-response-${Date.now()}.json`,
+              responseHash,
+              tag: 'validation',
+            });
+          console.log(`Validation response submitted:`);
+          console.log(`   Transaction: ${responseTx}`);
+          console.log(`   Request Hash: ${requestHash}`);
+          console.log(`   Response: 1 (valid)`);
+
+          // Re-check validation status
+          if (validation) {
+            const updatedStatus =
+              await validation.getValidationStatus(requestHash);
+            if (updatedStatus && updatedStatus.response !== 0) {
+              console.log(
+                `   ✓ Confirmed: Validation status updated (response: ${updatedStatus.response})`
+              );
+            }
+          }
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`Could not submit validation response: ${message}`);
+        console.log(
+          `   Note: The validator address must be a registered agent in the Identity Registry`
+        );
+      }
+
+      // 3.7: Get updated summary (read)
+      console.log('\n3.7: Reading updated validation summary...');
+      const updatedSummary = await validation.getSummary(agent1Id);
+      console.log(`Updated validation summary:`);
+      console.log(`   Count: ${updatedSummary.count.toString()}`);
+      console.log(`   Average Response: ${updatedSummary.avgResponse}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      console.log(`Could not submit validation response: ${message}`);
-      console.log(
-        `   Note: The validator address must be a registered agent in the Identity Registry`
-      );
-    }
-
-    // 3.7: Get updated summary (read)
-    console.log('\n3.7: Reading updated validation summary...');
-    const updatedSummary = await validation.getSummary(agent1Id);
-    console.log(`Updated validation summary:`);
-    console.log(`   Count: ${updatedSummary.count.toString()}`);
-    console.log(`   Average Response: ${updatedSummary.avgResponse}`);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    const reason = (error as { reason?: string })?.reason;
-    console.log(`Could not create validation request: ${message}`);
-    if (reason) {
-      console.log(`   Reason: ${reason}`);
+      const reason = (error as { reason?: string })?.reason;
+      console.log(`Could not create validation request: ${message}`);
+      if (reason) {
+        console.log(`   Reason: ${reason}`);
+      }
     }
   }
 
