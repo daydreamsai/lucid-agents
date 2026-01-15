@@ -974,7 +974,7 @@
   const identity = await createAgentIdentity({ domain, autoRegister: true });
 
   // New: Access all three registries
-  await identity.clients.reputation.giveFeedback({ toAgentId: 42n, score: 90 });
+  await identity.clients.reputation.giveFeedback({ toAgentId: 42n, score: 90, endpoint: '' });
   await identity.clients.validation.createRequest({ ... });
   ```
 
@@ -1086,7 +1086,7 @@ const identity = await bootstrapIdentity({ domain, registerIfMissing: true });
 const identity = await createAgentIdentity({ domain, autoRegister: true });
 
 // New: Access all three registries
-await identity.clients.reputation.giveFeedback({ toAgentId: 42n, score: 90 });
+await identity.clients.reputation.giveFeedback({ toAgentId: 42n, score: 90, endpoint: '' });
 await identity.clients.validation.createRequest({ ... });
 ```
 

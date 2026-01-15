@@ -3,13 +3,11 @@
  * Handles peer feedback system for agent reputation
  */
 
-import type { Hex, SignerWalletClient } from '@lucid-agents/wallet';
-import { normalizeAddress } from '@lucid-agents/wallet';
+import type { Hex } from '@lucid-agents/wallet';
 
 import { REPUTATION_REGISTRY_ABI } from '../abi/types';
 import type { PublicClientLike, WalletClientLike } from './identity';
-import { signFeedbackAuth } from './signatures';
-import { stringToBytes32, waitForConfirmation } from './utils';
+import { waitForConfirmation } from './utils';
 
 export type ReputationRegistryClientOptions<
   PublicClient extends PublicClientLike,
@@ -27,8 +25,8 @@ export type FeedbackEntry = {
   clientAddress: Hex;
   feedbackIndex: bigint;
   score: number; // 0-100
-  tag1: Hex;
-  tag2: Hex;
+  tag1: string;
+  tag2: string;
   isRevoked: boolean;
   responseCount?: bigint;
 };
@@ -36,13 +34,11 @@ export type FeedbackEntry = {
 export type GiveFeedbackInput = {
   toAgentId: bigint;
   score: number; // 0-100
-  tag1?: string | Hex;
-  tag2?: string | Hex;
-  feedbackUri?: string;
+  tag1?: string;
+  tag2?: string;
+  endpoint?: string; // Optional for convenience (defaults to empty string if not provided)
+  feedbackURI?: string;
   feedbackHash?: Hex;
-  feedbackAuth?: Hex; // Pre-signed authorization, or we'll sign it
-  expiry?: number; // Unix timestamp for signature expiry
-  indexLimit?: bigint; // Max feedback index this signature is valid for
 };
 
 export type RevokeFeedbackInput = {
@@ -76,8 +72,8 @@ export type ReputationRegistryClient = {
     agentId: bigint,
     options?: {
       clientAddresses?: Hex[];
-      tag1?: Hex;
-      tag2?: Hex;
+      tag1?: string;
+      tag2?: string;
       includeRevoked?: boolean;
     }
   ): Promise<FeedbackEntry[]>;
@@ -85,10 +81,11 @@ export type ReputationRegistryClient = {
     agentId: bigint,
     options?: {
       clientAddresses?: Hex[];
-      tag1?: Hex;
-      tag2?: Hex;
+      tag1?: string;
+      tag2?: string;
     }
   ): Promise<ReputationSummary>;
+  getVersion(): Promise<string>;
   getClients(agentId: bigint): Promise<Hex[]>;
   getLastIndex(agentId: bigint, clientAddress: Hex): Promise<bigint>;
   getResponseCount(
@@ -116,9 +113,6 @@ export function createReputationRegistryClient<
     identityRegistryAddress,
   } = options;
 
-  const ZERO_BYTES32 =
-    '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
-
   async function getFeedback(
     agentId: bigint,
     clientAddress: Hex,
@@ -130,7 +124,7 @@ export function createReputationRegistryClient<
         abi: REPUTATION_REGISTRY_ABI,
         functionName: 'readFeedback',
         args: [agentId, clientAddress, feedbackIndex],
-      })) as [number, Hex, Hex, boolean];
+      })) as [number, string, string, boolean];
 
       const [score, tag1, tag2, isRevoked] = result;
 
@@ -152,14 +146,14 @@ export function createReputationRegistryClient<
     agentId: bigint,
     options: {
       clientAddresses?: Hex[];
-      tag1?: Hex;
-      tag2?: Hex;
+      tag1?: string;
+      tag2?: string;
       includeRevoked?: boolean;
     } = {}
   ): Promise<FeedbackEntry[]> {
     const clientAddresses = options.clientAddresses ?? [];
-    const tag1 = options.tag1 ?? ZERO_BYTES32;
-    const tag2 = options.tag2 ?? ZERO_BYTES32;
+    const tag1 = options.tag1 ?? '';
+    const tag2 = options.tag2 ?? '';
     const includeRevoked = options.includeRevoked ?? false;
 
     const result = (await publicClient.readContract({
@@ -167,14 +161,15 @@ export function createReputationRegistryClient<
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'readAllFeedback',
       args: [agentId, clientAddresses, tag1, tag2, includeRevoked],
-    })) as [Hex[], number[], Hex[], Hex[], boolean[]];
+    })) as [Hex[], bigint[], number[], string[], string[], boolean[]];
 
-    const [clients, scores, tag1s, tag2s, revokedStatuses] = result;
+    const [clients, feedbackIndexes, scores, tag1s, tag2s, revokedStatuses] =
+      result;
 
     return clients.map((client, i) => ({
       agentId,
       clientAddress: client,
-      feedbackIndex: BigInt(i),
+      feedbackIndex: feedbackIndexes[i],
       score: scores[i],
       tag1: tag1s[i],
       tag2: tag2s[i],
@@ -186,13 +181,13 @@ export function createReputationRegistryClient<
     agentId: bigint,
     options: {
       clientAddresses?: Hex[];
-      tag1?: Hex;
-      tag2?: Hex;
+      tag1?: string;
+      tag2?: string;
     } = {}
   ): Promise<ReputationSummary> {
     const clientAddresses = options.clientAddresses ?? [];
-    const tag1 = options.tag1 ?? ZERO_BYTES32;
-    const tag2 = options.tag2 ?? ZERO_BYTES32;
+    const tag1 = options.tag1 ?? '';
+    const tag2 = options.tag2 ?? '';
 
     const result = (await publicClient.readContract({
       address,
@@ -258,39 +253,14 @@ export function createReputationRegistryClient<
       throw new Error('Wallet account address is required');
     }
 
-    const clientAddress = normalizeAddress(walletClient.account.address);
-
-    // Normalize tags
-    const tag1 = input.tag1
-      ? typeof input.tag1 === 'string'
-        ? stringToBytes32(input.tag1)
-        : input.tag1
-      : ZERO_BYTES32;
-
-    const tag2 = input.tag2
-      ? typeof input.tag2 === 'string'
-        ? stringToBytes32(input.tag2)
-        : input.tag2
-      : ZERO_BYTES32;
-
-    // Generate feedback authorization signature if not provided
-    let feedbackAuth = input.feedbackAuth;
-    if (!feedbackAuth) {
-      const expiry = input.expiry ?? Math.floor(Date.now() / 1000) + 3600; // 1 hour default
-      const indexLimit = input.indexLimit ?? 1000n;
-
-      feedbackAuth = await signFeedbackAuth(
-        walletClient as unknown as SignerWalletClient,
-        {
-          fromAddress: clientAddress,
-          toAgentId: input.toAgentId,
-          chainId,
-          expiry,
-          indexLimit,
-          identityRegistry: identityRegistryAddress,
-        }
-      );
-    }
+    const tag1 = input.tag1 ?? '';
+    const tag2 = input.tag2 ?? '';
+    // endpoint is optional for convenience, defaults to empty string (contract accepts empty string)
+    const endpoint = input.endpoint ?? '';
+    const feedbackURI = input.feedbackURI ?? '';
+    const feedbackHash =
+      input.feedbackHash ??
+      ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
 
     const txHash = await walletClient.writeContract({
       address,
@@ -301,9 +271,9 @@ export function createReputationRegistryClient<
         input.score,
         tag1,
         tag2,
-        input.feedbackUri ?? '',
-        input.feedbackHash ?? ZERO_BYTES32,
-        feedbackAuth,
+        endpoint,
+        feedbackURI,
+        feedbackHash,
       ],
     });
 
@@ -352,6 +322,17 @@ export function createReputationRegistryClient<
     return txHash;
   }
 
+  async function getVersion(): Promise<string> {
+    const result = (await publicClient.readContract({
+      address,
+      abi: REPUTATION_REGISTRY_ABI,
+      functionName: 'getVersion',
+      args: [],
+    })) as string;
+
+    return result;
+  }
+
   return {
     address,
     chainId,
@@ -364,5 +345,6 @@ export function createReputationRegistryClient<
     giveFeedback,
     revokeFeedback,
     appendResponse,
+    getVersion,
   };
 }

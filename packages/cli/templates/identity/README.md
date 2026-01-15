@@ -64,14 +64,16 @@ import { identityClient, reputationClient, validationClient } from "./agent";
 await reputationClient.giveFeedback({
   toAgentId: 42n,
   score: 90,
-  tag: "helpful",
-  comment: "Great service!",
+  tag1: "helpful",
+  tag2: "reliable",
+  endpoint: "https://agent.example.com/api", // Optional parameter (defaults to empty string if not provided)
 });
 
-// Create a validation request
-await validationClient.createRequest({
-  requestType: "inference-validation",
-  dataHash: "0x...",
+// Create a validation request (function renamed: createRequest → validationRequest)
+await validationClient.validationRequest({
+  validatorAddress: "0x...",
+  agentId: 1n,
+  requestUri: "ipfs://...",
 });
 ```
 

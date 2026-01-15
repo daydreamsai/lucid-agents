@@ -133,7 +133,7 @@ async function main() {
     console.log(`Agent record retrieved:`);
     console.log(`   Agent ID: ${agentRecord.agentId?.toString()}`);
     console.log(`   Owner: ${agentRecord.owner}`);
-    console.log(`   Token URI: ${agentRecord.tokenURI}`);
+    console.log(`   Agent URI: ${agentRecord.agentURI}`);
   } else {
     console.log('Agent record not found (may need more confirmations)');
     // Use the record from identity if available
@@ -141,7 +141,7 @@ async function main() {
       console.log('Using record from registration:');
       console.log(`   Agent ID: ${identity1.record.agentId?.toString()}`);
       console.log(`   Owner: ${identity1.record.owner}`);
-      console.log(`   Token URI: ${identity1.record.tokenURI}`);
+      console.log(`   Agent URI: ${identity1.record.agentURI}`);
     }
   }
 
@@ -207,7 +207,7 @@ async function main() {
       ? {
           agentId: identity1.record.agentId!,
           owner: identity1.record.owner!,
-          tokenURI: identity1.record.tokenURI!,
+          agentURI: identity1.record.agentURI!,
         }
       : null);
   if (recordToUse) {
@@ -218,8 +218,8 @@ async function main() {
     if (registrationEntry.agentRegistry) {
       console.log(`   Registry: ${registrationEntry.agentRegistry}`);
     }
-    if (registrationEntry.tokenURI) {
-      console.log(`   Token URI: ${registrationEntry.tokenURI}`);
+    if (registrationEntry.agentURI) {
+      console.log(`   Agent URI: ${registrationEntry.agentURI}`);
     }
   } else {
     console.log('No record available for conversion');
@@ -257,7 +257,7 @@ async function main() {
     // Use Agent 2's address as the validator (Agent 2 must be registered in Identity Registry)
     const validatorAddress = agent2Address as `0x${string}`;
     const requestUri = `https://${identity1.domain}/validation-request-${Date.now()}.json`;
-    const requestTx = await validation.createRequest({
+    const requestTx = await validation.validationRequest({
       validatorAddress,
       agentId: agent1Id,
       requestUri,
@@ -311,11 +311,12 @@ async function main() {
       // Use Agent 2's clients to submit the response
       const responseHash =
         '0x0000000000000000000000000000000000000000000000000000000000000001' as const;
-      const responseTx = await identity2.clients.validation.submitResponse({
+      const responseTx = await identity2.clients.validation.validationResponse({
         requestHash,
         response: 1, // 1 = valid
         responseUri: `https://${identity2.domain}/validation-response-${Date.now()}.json`,
         responseHash,
+        tag: 'validation',
       });
       console.log(`Validation response submitted:`);
       console.log(`   Transaction: ${responseTx}`);
@@ -390,7 +391,8 @@ async function main() {
       score: 85,
       tag1: 'helpful',
       tag2: 'reliable',
-      feedbackUri: `https://${identity2.domain}/feedback-${Date.now()}.json`,
+      feedbackURI: `https://${identity2.domain}/feedback-${Date.now()}.json`,
+      endpoint: `https://${identity2.domain}/api`,
     });
     console.log(`Feedback given:`);
     console.log(`   Transaction: ${feedbackTx}`);

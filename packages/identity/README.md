@@ -175,7 +175,8 @@ await reputation.giveFeedback({
   score: 90, // 0-100
   tag1: 'reliable',
   tag2: 'fast',
-  feedbackUri: 'ipfs://QmFeedbackDetails',
+  endpoint: 'https://my-agent.example.com/api', // Optional parameter (defaults to empty string if not provided)
+  feedbackURI: 'ipfs://QmFeedbackDetails', // Optional, defaults to empty string
 });
 
 // Query reputation
@@ -205,31 +206,39 @@ await reputation.appendResponse({
 
 ### How to Validate Work
 
+> **Note**: Validation Registry is deprecated and under active development. It will be revised in a follow-up spec update later this year. The API has been updated to match the new ABI but remains deprecated.
+
 Request validation of your work or validate others:
 
 ```typescript
 const { validation } = identity.clients;
 
-// Create validation request
-await validation.createRequest({
-  validatorAddress: '0x...',
-  agentId: myAgentId,
-  requestUri: 'ipfs://QmMyWork',
-  requestHash: keccak256(toHex('work-data')),
-});
+if (validation) {
+  // Create validation request (function renamed: createRequest → validationRequest)
+  await validation.validationRequest({
+    validatorAddress: '0x...',
+    agentId: myAgentId,
+    requestUri: 'ipfs://QmMyWork',
+    requestHash: keccak256(toHex('work-data')),
+  });
 
-// Submit validation response (as validator)
-await validation.submitResponse({
-  requestHash: '0xabc...',
-  response: 1, // 1 = valid, 0 = invalid
-  responseUri: 'ipfs://QmValidationReport',
-  responseHash: '0x...',
-});
+  // Submit validation response (function renamed: submitResponse → validationResponse)
+  // Tag type changed: bytes32/Hex → string
+  await validation.validationResponse({
+    requestHash: '0xabc...',
+    response: 1, // 1 = valid, 0 = invalid
+    responseUri: 'ipfs://QmValidationReport',
+    responseHash: '0x...',
+    tag: 'validation', // Now a string, not bytes32
+  });
 
-// Query validations
-const requests = await validation.getAgentValidations(myAgentId);
-const summary = await validation.getSummary(myAgentId);
-console.log(`${summary.count} validations, avg: ${summary.avgResponse}`);
+  // Query validations (tag type changed: bytes32/Hex → string)
+  const requests = await validation.getAgentValidations(myAgentId);
+  const summary = await validation.getSummary(myAgentId, {
+    tag: 'validation', // Now a string, not bytes32
+  });
+  console.log(`${summary.count} validations, avg: ${summary.avgResponse}`);
+}
 ```
 
 ## Supported Networks
@@ -306,7 +315,7 @@ Main function to set up ERC-8004 identity for your agent.
   record?: {
     agentId: bigint;
     owner: string;
-    tokenURI: string;
+    agentURI: string;
   };
 
   // Trust config for agent manifest

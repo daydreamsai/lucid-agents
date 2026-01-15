@@ -25,10 +25,7 @@ import {
   createReputationRegistryClient,
   type ReputationRegistryClient,
 } from './registries/reputation';
-import {
-  createValidationRegistryClient,
-  type ValidationRegistryClient,
-} from './registries/validation';
+import { type ValidationRegistryClient } from './registries/validation';
 import { resolveAutoRegister, validateIdentityConfig } from './validation';
 
 export type { BootstrapIdentityResult };
@@ -139,11 +136,15 @@ export type CreateAgentIdentityOptions = {
 
 /**
  * Registry clients for interacting with ERC-8004 contracts
+ *
+ * @deprecated Validation Registry is under active development and will be revised
+ * in a follow-up spec update later this year. It is excluded from default client
+ * creation but can be manually created if needed for backward compatibility.
  */
 export type RegistryClients = {
   identity: IdentityRegistryClient;
   reputation: ReputationRegistryClient;
-  validation: ValidationRegistryClient;
+  validation?: ValidationRegistryClient; // Deprecated - under active development
 };
 
 /**
@@ -181,7 +182,8 @@ export type AgentIdentity = BootstrapIdentityResult & {
  * - Automatic registry lookup
  * - Optional auto-registration when not found
  * - Domain proof signature generation
- * - Creation of all three registry clients (identity, reputation, validation)
+ * - Creation of registry clients (identity, reputation)
+ * - Validation Registry is deprecated and not created by default (see note below)
  *
  * @example
  * ```ts
@@ -200,18 +202,17 @@ export type AgentIdentity = BootstrapIdentityResult & {
  *   await identity.clients.reputation.giveFeedback({
  *     toAgentId: 42n,
  *     score: 90,
- *     tags: ["reliable", "fast"],
- *   });
- *
- *   // Request validation
- *   await identity.clients.validation.createRequest({
- *     validatorAddress: "0x...",
- *     agentId: identity.record!.agentId,
- *     requestUri: "ipfs://...",
- *     requestHash: "0x...",
+ *     tag1: "reliable",
+ *     tag2: "fast",
+ *     endpoint: "https://agent.example.com",
  *   });
  * }
  * ```
+ *
+ * @note Validation Registry is under active development and will be revised in
+ * a follow-up spec update later this year. It is not included in default client
+ * creation. If you need it for backward compatibility, you can manually create
+ * a ValidationRegistryClient using createValidationRegistryClient().
  *
  * @example
  * ```ts
@@ -377,13 +378,9 @@ export async function createAgentIdentity(
             walletClient: vClients.walletClient,
             identityRegistryAddress: identityAddress,
           }),
-          validation: createValidationRegistryClient({
-            address: registryAddresses.VALIDATION_REGISTRY,
-            chainId: resolvedChainId,
-            publicClient: vClients.publicClient,
-            walletClient: vClients.walletClient,
-            identityRegistryAddress: identityAddress,
-          }),
+          // Validation Registry is deprecated and not created by default
+          // It is under active development and will be revised in a follow-up spec update
+          // validation: createValidationRegistryClient({ ... }),
         };
       }
     } catch (error) {
