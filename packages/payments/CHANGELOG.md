@@ -1,5 +1,7 @@
 # @lucid-agents/payments
 
+## 2.0.0
+
 ## 1.12.2
 
 ### Patch Changes

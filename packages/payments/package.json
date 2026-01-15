@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/payments",
-  "version": "1.12.2",
+  "version": "2.0.0",
   "description": "Payment logic for bidirectional agent-to-agent payments",
   "repository": {
     "type": "git",

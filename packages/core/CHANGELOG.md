@@ -1,5 +1,12 @@
 # @lucid-agents/core
 
+## 2.0.0
+
+### Patch Changes
+
+- @lucid-agents/payments@2.0.0
+- @lucid-agents/a2a@0.5.4
+
 ## 1.12.2
 
 ### Patch Changes

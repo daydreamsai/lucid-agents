@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/core",
-  "version": "1.12.2",
+  "version": "2.0.0",
   "description": "Build typed agent HTTP apps",
   "repository": {
     "type": "git",
