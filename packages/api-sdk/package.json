@@ -1,0 +1,58 @@
+{
+  "name": "@lucid-agents/api-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Lucid Agents Runtime API (auto-generated from OpenAPI)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/api-sdk"
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/sdk/client/index.ts",
+      "import": "./src/sdk/client/index.ts",
+      "default": "./src/sdk/client/index.ts"
+    },
+    "./react-query": {
+      "types": "./src/sdk/@tanstack/react-query.gen.ts",
+      "import": "./src/sdk/@tanstack/react-query.gen.ts",
+      "default": "./src/sdk/@tanstack/react-query.gen.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "clean": "rm -rf src/sdk",
+    "generate": "bun run codegen.ts"
+  },
+  "dependencies": {
+    "@hey-api/client-fetch": "^0.10.0"
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.88.2",
+    "@tanstack/react-query": "^5.90.12",
+    "typescript": "catalog:"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/react-query": {
+      "optional": true
+    }
+  }
+}
