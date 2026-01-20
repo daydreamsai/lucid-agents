@@ -4,46 +4,6 @@ High-level architecture overview of the Lucid Agents SDK.
 
 ## Package Structure
 
-The SDK is organized into five architectural layers, plus a companion client package:
-
-## Platform Client
-
-Before diving into the agent-building layers, there's a companion package for interacting with the hosted platform:
-
-```mermaid
-graph LR
-    subgraph "Platform Client"
-        apisdk["@lucid-agents/api-sdk<br/>TypeScript client for Runtime API"]
-    end
-
-    subgraph "Lucid Platform"
-        runtime["Lucid Runtime API<br/>(lucid-client)"]
-    end
-
-    subgraph "Your Agents"
-        agents["Agents built with<br/>Layers 0-4"]
-    end
-
-    apisdk -->|"manages"| runtime
-    agents -->|"deployed to"| runtime
-    apisdk -->|"discovers & invokes"| agents
-
-    style apisdk fill:#fff59d
-    style runtime fill:#e1bee7
-    style agents fill:#c8e6c9
-```
-
-**@lucid-agents/api-sdk** enables:
-- **Agent Factories**: Build agents that create and manage other agents
-- **Platform Dashboards**: Build UIs for agent management and analytics
-- **Agent-to-Agent**: Discover and invoke other agents with x402 payments
-
-See [API-SDK Documentation](./API-SDK.md) for full details.
-
----
-
-## Package Structure
-
 The SDK is organized into five architectural layers:
 
 ```mermaid
@@ -532,11 +492,10 @@ Note: Layer 0 packages (types, cli) have no internal dependencies. Layer 1 exten
 
 ## Package Responsibilities
 
-| Package                   | Layer    | Responsibility                                               |
-| ------------------------- | -------- | ------------------------------------------------------------ |
-| `@lucid-agents/api-sdk`   | Client   | TypeScript client for Runtime API (agent management, invocation, analytics) |
-| `@lucid-agents/types`     | 0        | Shared type definitions (zero dependencies)                  |
-| `@lucid-agents/cli`       | 0        | CLI tool, templates, project scaffolding (no runtime deps)   |
+| Package                   | Layer | Responsibility                                               |
+| ------------------------- | ----- | ------------------------------------------------------------ |
+| `@lucid-agents/types`     | 0     | Shared type definitions (zero dependencies)                  |
+| `@lucid-agents/cli`       | 0     | CLI tool, templates, project scaffolding (no runtime deps)   |
 | `@lucid-agents/identity`  | 1     | ERC-8004 on-chain identity, registries, trust models         |
 | `@lucid-agents/payments`  | 1     | x402 protocol, EntrypointDef, pricing, payment client/server |
 | `@lucid-agents/wallet`    | 1     | Wallet connectors and helpers for agent operations           |
@@ -689,12 +648,11 @@ graph TB
 
 The Lucid Agents SDK follows a **layered, modular architecture**:
 
-- **Platform Client** - `@lucid-agents/api-sdk` for interacting with the hosted runtime
-- **Layer 0: Base Packages** - Types and CLI (no internal dependencies)
-- **Layer 1: Extensions** - Independent capabilities (identity, payments, wallet, a2a, ap2, analytics, http, scheduler)
-- **Layer 2: Core** - Framework-agnostic runtime
-- **Layer 3: Adapters** - Framework-specific integrations (hono, tanstack, express)
-- **Layer 4: Examples** - Integration examples and test scenarios
+1. **Layer 0: Base Packages** - Types and CLI (no internal dependencies)
+2. **Layer 1: Extensions** - Independent capabilities (identity, payments, wallet, a2a, ap2, analytics, http, scheduler)
+3. **Layer 2: Core** - Framework-agnostic runtime
+4. **Layer 3: Adapters** - Framework-specific integrations (hono, tanstack, express)
+5. **Layer 4: Examples** - Integration examples and test scenarios
 
 This enables:
 
