@@ -2,6 +2,8 @@
   "title": "Packages",
   "pages": [
     "index",
+    "---Platform Client---",
+    "api-sdk",
     "---Foundation---",
     "types",
     "core",

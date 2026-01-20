@@ -4,7 +4,19 @@ description: Reference documentation for all Lucid Agents packages.
 icon: Package
 ---
 
-Lucid Agents is organized as a monorepo with packages in four layers:
+Lucid Agents is organized as a monorepo with packages across several categories:
+
+## Platform Client
+
+Interact with the Lucid Agents Runtime API:
+
+<Cards>
+  <Card
+    title="@lucid-agents/api-sdk"
+    description="TypeScript client for the Runtime API - create agents, invoke entrypoints, analytics"
+    href="/docs/packages/api-sdk"
+  />
+</Cards>
 
 ## Foundation
 
@@ -94,6 +106,25 @@ Integrate agents with your preferred web framework:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│                   Platform Client                        │
+│                  @lucid-agents/api-sdk                   │
+│          (TypeScript client for Runtime API)             │
+└─────────────────────────────────────────────────────────┘
+                            │
+                    interacts with
+                            │
+                            ▼
+┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+│               Lucid Runtime (hosted)                     │
+│        ┌─────────────────────────────────────┐          │
+         │         Deployed Agents              │
+│        │    (built with packages below)       │          │
+         └─────────────────────────────────────┘
+└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+                            ▲
+                     deployed to
+                            │
+┌─────────────────────────────────────────────────────────┐
 │                    Developer Tools                       │
 │                      @lucid-agents/cli                   │
 └─────────────────────────────────────────────────────────┘
@@ -119,4 +150,4 @@ Integrate agents with your preferred web framework:
 └─────────────────────────────────────────────────────────┘
 ```
 
-Dependencies flow downward. The core runtime is protocol-agnostic; HTTP is provided as an extension.
+The **api-sdk** is a client for the hosted Lucid Runtime. The packages below are for **building** agents that get deployed to the runtime. Dependencies flow downward; HTTP is provided as an extension.

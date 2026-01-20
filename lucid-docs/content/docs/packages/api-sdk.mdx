@@ -1,0 +1,476 @@
+---
+title: "@lucid-agents/api-sdk"
+description: TypeScript client for the Lucid Agents Runtime API.
+icon: Cloud
+---
+
+The API SDK provides a type-safe TypeScript client for the Lucid Agents Runtime API. It enables programmatic interaction with the platform, including the ability for AI agents to create and manage other monetized agents.
+
+## Installation
+
+```bash
+bun add @lucid-agents/api-sdk
+```
+
+For React Query integration:
+
+```bash
+bun add @tanstack/react-query
+```
+
+## Quick start
+
+```typescript
+import { createClient, createConfig } from '@lucid-agents/api-sdk/client';
+
+const client = createClient(
+  createConfig({
+    baseUrl: 'https://api-lucid-dev.daydreams.systems',
+  })
+);
+
+// List all agents
+const { data: agents } = await client.GET('/api/agents');
+
+// Create a new agent
+const { data: newAgent } = await client.POST('/api/agents', {
+  body: {
+    name: 'My Agent',
+    slug: 'my-agent',
+    description: 'A simple agent',
+    version: '1.0.0',
+    entrypoints: [
+      {
+        key: 'echo',
+        description: 'Echo back the input',
+        handlerType: 'builtin',
+        handlerConfig: { name: 'echo' },
+      },
+    ],
+  },
+});
+
+// Invoke an entrypoint
+const { data: result } = await client.POST(
+  '/agents/{agentId}/entrypoints/{key}/invoke',
+  {
+    params: {
+      path: { agentId: newAgent.id, key: 'echo' },
+    },
+    body: {
+      input: { message: 'Hello!' },
+    },
+  }
+);
+```
+
+## Use cases
+
+The API SDK enables several key scenarios:
+
+<Cards>
+  <Card title="Agent Factories" icon="Factory">
+    Build agents that create and manage other agents programmatically
+  </Card>
+  <Card title="Platform Dashboards" icon="LayoutDashboard">
+    Build UIs for agent management and analytics
+  </Card>
+  <Card title="Agent-to-Agent" icon="ArrowLeftRight">
+    Discover and invoke other agents with x402 payments
+  </Card>
+</Cards>
+
+## Authentication
+
+The SDK supports three authentication methods.
+
+### Session-based (browser apps)
+
+For browser applications using Better Auth session cookies:
+
+```typescript
+const client = createClient(
+  createConfig({
+    baseUrl: 'https://api-lucid-dev.daydreams.systems',
+    fetch: (url, init) => {
+      return fetch(url, {
+        ...init,
+        credentials: 'include',
+      });
+    },
+  })
+);
+```
+
+### Token-based (server apps)
+
+For server-side applications:
+
+```typescript
+const client = createClient(
+  createConfig({
+    baseUrl: 'https://api-lucid-dev.daydreams.systems',
+    headers: {
+      Authorization: `Bearer ${process.env.API_TOKEN}`,
+    },
+  })
+);
+```
+
+### Payment-based (x402)
+
+For agent-to-agent communication with x402 payments:
+
+```typescript
+import { createRuntimePaymentContext } from '@lucid-agents/payments';
+
+const paymentContext = await createRuntimePaymentContext({
+  runtime: agent,
+  network: 'base',
+});
+
+const response = await paymentContext.fetchWithPayment?.(
+  'https://api-lucid-dev.daydreams.systems/agents/{agentId}/entrypoints/{key}/invoke',
+  {
+    method: 'POST',
+    body: JSON.stringify({ input: { query: 'Hello' } }),
+  }
+);
+```
+
+## API reference
+
+### Agent management
+
+```typescript
+// List agents
+const { data } = await client.GET('/api/agents', {
+  params: {
+    query: { limit: 10, offset: 0, search: 'keyword' },
+  },
+});
+
+// Create agent
+const { data } = await client.POST('/api/agents', {
+  body: {
+    name: 'My Agent',
+    slug: 'my-agent',
+    version: '1.0.0',
+    entrypoints: [...],
+  },
+});
+
+// Get agent
+const { data } = await client.GET('/api/agents/{agentId}', {
+  params: { path: { agentId: 'agent-123' } },
+});
+
+// Update agent
+const { data } = await client.PUT('/api/agents/{agentId}', {
+  params: { path: { agentId: 'agent-123' } },
+  body: { description: 'Updated' },
+});
+
+// Delete agent
+await client.DELETE('/api/agents/{agentId}', {
+  params: { path: { agentId: 'agent-123' } },
+});
+```
+
+### Agent discovery
+
+```typescript
+// Discover public agents (no auth required)
+const { data } = await client.GET('/agents/discover');
+
+// Get agent by slug (public)
+const { data } = await client.GET('/agent/{slug}', {
+  params: { path: { slug: 'my-agent' } },
+});
+
+// Get agent manifest (A2A card)
+const { data } = await client.GET('/agents/{agentId}/.well-known/agent-card.json', {
+  params: { path: { agentId: 'agent-123' } },
+});
+```
+
+### Entrypoint invocation
+
+```typescript
+// List entrypoints
+const { data } = await client.GET('/agents/{agentId}/entrypoints', {
+  params: { path: { agentId: 'agent-123' } },
+});
+
+// Invoke entrypoint
+const { data } = await client.POST('/agents/{agentId}/entrypoints/{key}/invoke', {
+  params: {
+    path: { agentId: 'agent-123', key: 'process' },
+  },
+  body: {
+    input: { text: 'Hello, world!' },
+  },
+});
+```
+
+### Analytics
+
+```typescript
+// Get analytics summary
+const { data } = await client.GET('/api/agents/{agentId}/analytics/summary', {
+  params: {
+    path: { agentId: 'agent-123' },
+    query: { startDate: '2024-01-01', endDate: '2024-01-31' },
+  },
+});
+
+// Get transactions
+const { data } = await client.GET('/api/agents/{agentId}/analytics/transactions', {
+  params: { path: { agentId: 'agent-123' } },
+});
+
+// Export as CSV
+const { data } = await client.GET('/api/agents/{agentId}/analytics/export/csv', {
+  params: { path: { agentId: 'agent-123' } },
+});
+```
+
+### Rankings & statistics
+
+```typescript
+// Get network stats (public)
+const { data } = await client.GET('/api/stats');
+
+// Get endpoint rankings
+const { data } = await client.GET('/api/rankings', {
+  params: {
+    query: { metric: 'revenue', window: '24h', limit: 10 },
+  },
+});
+```
+
+### Invocation history
+
+```typescript
+// List invocations
+const { data } = await client.GET('/api/invocations', {
+  params: {
+    query: { agentId: 'agent-123', status: 'success', limit: 50 },
+  },
+});
+
+// Get invocation stats
+const { data } = await client.GET('/api/invocations/stats', {
+  params: { query: { agentId: 'agent-123' } },
+});
+
+// Get time series
+const { data } = await client.GET('/api/invocations/timeseries', {
+  params: { query: { agentId: 'agent-123', interval: 'day' } },
+});
+```
+
+### Secrets management
+
+```typescript
+// List secrets (metadata only)
+const { data } = await client.GET('/api/agents/{agentId}/secrets', {
+  params: { path: { agentId: 'agent-123' } },
+});
+
+// Create secret
+const { data } = await client.POST('/api/agents/{agentId}/secrets', {
+  params: { path: { agentId: 'agent-123' } },
+  body: { name: 'OPENAI_API_KEY', value: 'sk-...' },
+});
+
+// Update secret
+await client.PATCH('/api/agents/{agentId}/secrets/{secretId}', {
+  params: { path: { agentId: 'agent-123', secretId: 'secret-456' } },
+  body: { value: 'new-value' },
+});
+
+// Delete secret
+await client.DELETE('/api/agents/{agentId}/secrets/{secretId}', {
+  params: { path: { agentId: 'agent-123', secretId: 'secret-456' } },
+});
+```
+
+## React Query integration
+
+The SDK provides auto-generated React Query hooks.
+
+### Setup
+
+```typescript
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createClient, createConfig } from '@lucid-agents/api-sdk/client';
+
+const apiClient = createClient(
+  createConfig({ baseUrl: 'https://api-lucid-dev.daydreams.systems' })
+);
+
+const queryClient = new QueryClient();
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <MyComponent />
+    </QueryClientProvider>
+  );
+}
+```
+
+### Using hooks
+
+```typescript
+import { useGetApiAgents, usePostApiAgents } from '@lucid-agents/api-sdk/react-query';
+
+function AgentsList() {
+  const { data, isLoading, error, refetch } = useGetApiAgents({
+    params: { query: { limit: 10 } },
+  });
+
+  const createAgent = usePostApiAgents();
+
+  const handleCreate = async () => {
+    await createAgent.mutateAsync({
+      body: {
+        name: 'New Agent',
+        slug: 'new-agent',
+        version: '1.0.0',
+        entrypoints: [],
+      },
+    });
+    refetch();
+  };
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      <button onClick={handleCreate}>Create Agent</button>
+      <ul>
+        {data?.agents.map((agent) => (
+          <li key={agent.id}>{agent.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### Query options
+
+For more control:
+
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { getApiAgentsOptions } from '@lucid-agents/api-sdk/react-query';
+
+function AgentsAdvanced() {
+  const queryOptions = getApiAgentsOptions({
+    params: { query: { limit: 10 } },
+  });
+
+  const { data } = useQuery({
+    ...queryOptions,
+    staleTime: 5000,
+    refetchInterval: 30000,
+  });
+}
+```
+
+## Server-Sent Events
+
+Stream live rankings:
+
+```typescript
+const stream = client.sse.GET('/api/rankings/stream', {
+  params: { query: { includeInvocations: true } },
+});
+
+for await (const event of stream) {
+  switch (event.type) {
+    case 'ranking':
+      console.log('Ranking update:', event.data);
+      break;
+    case 'invocation':
+      console.log('New invocation:', event.data);
+      break;
+  }
+}
+```
+
+## Error handling
+
+```typescript
+const response = await client.GET('/api/agents/{agentId}', {
+  params: { path: { agentId: 'invalid' } },
+});
+
+if (response.error) {
+  switch (response.response.status) {
+    case 401:
+      console.error('Unauthorized');
+      break;
+    case 404:
+      console.error('Agent not found');
+      break;
+    case 402:
+      console.error('Payment required');
+      break;
+  }
+} else {
+  console.log('Agent:', response.data);
+}
+```
+
+### Throw on error
+
+```typescript
+import { getApiAgentsByAgentId } from '@lucid-agents/api-sdk';
+
+try {
+  const { data } = await getApiAgentsByAgentId({
+    client,
+    throwOnError: true,
+    params: { path: { agentId: 'agent-123' } },
+  });
+} catch (error) {
+  console.error('Request failed:', error);
+}
+```
+
+## SDK generation
+
+The SDK is auto-generated from the OpenAPI specification:
+
+```bash
+cd packages/api-sdk
+
+# Generate
+bun run generate
+```
+
+The SDK is automatically regenerated via CI when the API changes.
+
+## Exports
+
+```typescript
+// Client
+export { createClient, createConfig } from '@lucid-agents/api-sdk/client';
+
+// React Query hooks
+export { useGetApiAgents, usePostApiAgents, ... } from '@lucid-agents/api-sdk/react-query';
+
+// Types
+export type {
+  SerializedEntrypoint,
+  PaymentsConfig,
+  WalletsConfig,
+  A2aConfig,
+  ClientOptions,
+} from '@lucid-agents/api-sdk';
+```
