@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/hono",
-  "version": "0.7.12",
+  "version": "0.7.13",
   "description": "Hono adapter for Lucid agent runtime",
   "repository": {
     "type": "git",
