@@ -36,7 +36,7 @@ This template accepts the following configuration arguments (see `template.schem
 - `AGENT_DESCRIPTION` - Human-readable description of the agent
 - `AGENT_VERSION` - Semantic version (e.g., "0.1.0")
 - `PAYMENTS_FACILITATOR_URL` - x402 facilitator endpoint
-- `PAYMENTS_NETWORK` - Network identifier (e.g., "base-sepolia")
+- `PAYMENTS_NETWORK` - Network identifier (e.g., "ethereum")
 - `PAYMENTS_RECEIVABLE_ADDRESS` - Address that receives payments
 - `PRIVATE_KEY` - Wallet private key (optional)
 
@@ -164,7 +164,7 @@ AGENT_DESCRIPTION=My custom agent
 
 # Optional: Payment configuration
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
-PAYMENTS_NETWORK=base-sepolia
+PAYMENTS_NETWORK=ethereum
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 
 # Optional: Wallet private key for authenticated operations

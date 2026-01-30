@@ -35,11 +35,11 @@
     "PAYMENTS_NETWORK": {
       "type": "string",
       "description": "Payment network (EVM or Solana)",
-      "default": "base-sepolia",
+      "default": "ethereum",
       "enum": [
+        "ethereum",
         "base",
         "base-sepolia",
-        "ethereum",
         "sepolia",
         "solana",
         "solana-devnet"
@@ -58,15 +58,15 @@
     "RPC_URL": {
       "type": "string",
       "description": "Blockchain RPC endpoint URL for on-chain operations",
-      "default": "https://sepolia.base.org",
+      "default": "https://eth.llamarpc.com",
       "format": "uri",
-      "examples": ["https://sepolia.base.org", "https://mainnet.base.org"]
+      "examples": ["https://eth.llamarpc.com", "https://mainnet.base.org", "https://sepolia.base.org"]
     },
     "CHAIN_ID": {
       "type": "string",
       "description": "Blockchain network chain ID",
-      "default": "84532",
-      "examples": ["84532", "8453", "1"]
+      "default": "1",
+      "examples": ["1", "8453", "84532"]
     },
     "IDENTITY_AUTO_REGISTER": {
       "type": "boolean",

@@ -262,7 +262,7 @@ async function main() {
         payTo:
           (process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`) ??
           '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
-        network: (process.env.NETWORK as any) ?? 'base-sepolia',
+        network: (process.env.NETWORK as any) ?? 'ethereum',
       },
     };
 

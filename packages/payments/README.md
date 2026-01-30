@@ -408,7 +408,7 @@ storage: { type: 'sqlite' } // or omit for default
 # Required for payments
 PAYMENTS_RECEIVABLE_ADDRESS=0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0
 FACILITATOR_URL=https://facilitator.daydreams.systems
-NETWORK=base-sepolia
+NETWORK=ethereum
 
 # Optional for Postgres storage
 DATABASE_URL=postgresql://user:password@host:5432/dbname

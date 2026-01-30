@@ -398,7 +398,7 @@ IDENTITY_AUTO_REGISTER=true
 
 # Payment configuration
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
-PAYMENTS_NETWORK=base-sepolia
+PAYMENTS_NETWORK=ethereum
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 ```
 

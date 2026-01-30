@@ -65,7 +65,7 @@ bunx @lucid-agents/cli my-agent \
   --AGENT_DESCRIPTION="AI-powered assistant" \
   --OPENAI_API_KEY=your_api_key_here \
   --PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddress \
-  --NETWORK=base-sepolia \
+  --NETWORK=ethereum \
   --DEFAULT_PRICE=1000
 ```
 

@@ -56,7 +56,7 @@ agent.entrypoints.add({
       try {
         const paymentContext = await createRuntimePaymentContext({
           runtime: agent,
-          network: process.env.PAYMENTS_NETWORK || 'base-sepolia',
+          network: process.env.PAYMENTS_NETWORK || 'ethereum',
         });
         fetchWithPayment = paymentContext.fetchWithPayment;
       } catch (error) {
@@ -218,7 +218,7 @@ agent.entrypoints.add({
       try {
         const paymentContext = await createRuntimePaymentContext({
           runtime: agent,
-          network: process.env.PAYMENTS_NETWORK || 'base-sepolia',
+          network: process.env.PAYMENTS_NETWORK || 'ethereum',
         });
         fetchWithPayment = paymentContext.fetchWithPayment;
       } catch (error) {

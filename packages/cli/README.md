@@ -200,11 +200,11 @@ bunx @lucid-agents/cli@latest verified-agent \
   --AGENT_VERSION="0.1.0" \
   --AGENT_DOMAIN="agent.example.com" \
   --PAYMENTS_FACILITATOR_URL="https://facilitator.daydreams.systems" \
-  --PAYMENTS_NETWORK="base-sepolia" \
+  --PAYMENTS_NETWORK="ethereum" \
   --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
   --PAYMENTS_DEFAULT_PRICE="0.1" \
-  --RPC_URL="https://sepolia.base.org" \
-  --CHAIN_ID="84532" \
+  --RPC_URL="https://eth.llamarpc.com" \
+  --CHAIN_ID="1" \
   --IDENTITY_AUTO_REGISTER="true"
 
 # AxLLM template
@@ -237,7 +237,7 @@ AGENT_DESCRIPTION=Your agent description
 # Payments
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
 PAYMENTS_RECEIVABLE_ADDRESS=0xYourWalletAddress
-PAYMENTS_NETWORK=base-sepolia
+PAYMENTS_NETWORK=ethereum
 PAYMENTS_DEFAULT_PRICE=0.1
 
 # Wallet for transactions
@@ -251,9 +251,8 @@ Additional variables for ERC-8004:
 ```bash
 AGENT_DOMAIN=agent.example.com
 IDENTITY_AUTO_REGISTER=true
-RPC_URL=https://sepolia.base.org
-CHAIN_ID=84532
-```
+RPC_URL=https://eth.llamarpc.com
+CHAIN_ID=1
 
 ### AxLLM Templates
 

@@ -20,7 +20,7 @@ import {
  * Optional environment variables:
  *   - FIRECRAWL_SEARCH_URL (override the Firecrawl on-demand search endpoint)
  *   - FIRECRAWL_AUTH_TOKEN (Bearer token for the endpoint, if required)
- *   - X402_NETWORK        (chain identifier for createSigner, defaults to base-sepolia)
+ *   - X402_NETWORK        (chain identifier for createSigner, defaults to ethereum)
  */
 
 const axClient = createAxLLMClient({

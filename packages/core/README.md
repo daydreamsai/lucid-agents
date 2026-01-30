@@ -305,7 +305,7 @@ configureAgentKit({
   payments: {
     facilitatorUrl: 'https://facilitator.example',
     payTo: '0x...',
-    network: 'base-sepolia',
+    network: 'ethereum',
   },
   wallets: {
     agent: {
@@ -466,7 +466,7 @@ addEntrypoint({
     // Create payment-enabled fetch (optional)
     const paymentContext = await createRuntimePaymentContext({
       runtime,
-      network: 'base-sepolia',
+      network: 'ethereum',
     });
 
     // Fetch worker agent's card
