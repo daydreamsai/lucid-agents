@@ -10,6 +10,7 @@ import type {
 import type { Chain, SignableMessage, Transport, WalletClient } from 'viem';
 import { createWalletClient, http } from 'viem';
 import { toAccount, privateKeyToAccount } from 'viem/accounts';
+import * as chains from 'viem/chains';
 
 import { detectMessageEncoding, normalizeChallenge } from './base-connector';
 
@@ -177,10 +178,24 @@ export class LocalEoaWalletConnector implements WalletConnector {
       );
     }
 
+    // Try to use viem's built-in chain definition for proper fee estimation (EIP-1559 support)
+    const builtInChain = findBuiltInChain(chainId);
+    if (builtInChain) {
+      // Override RPC URL if custom one provided, but keep all other chain config (fees, etc.)
+      return {
+        ...builtInChain,
+        rpcUrls: {
+          ...builtInChain.rpcUrls,
+          default: { http: [rpcUrl] },
+        },
+      };
+    }
+
+    // Fallback to custom chain config for unknown chains
     const chainName =
       this.walletClientConfig?.chainName ??
       this.metadata?.chain ??
-      'Local Chain';
+      'Custom Chain';
     const nativeCurrency =
       this.walletClientConfig?.nativeCurrency ?? DEFAULT_NATIVE_CURRENCY;
 
@@ -192,7 +207,11 @@ export class LocalEoaWalletConnector implements WalletConnector {
         default: { http: [rpcUrl] },
         public: { http: [rpcUrl] },
       },
-    };
+      // Add default EIP-1559 fee estimation for custom chains
+      fees: {
+        baseFeeMultiplier: 1.2,
+      },
+    } as Chain;
   }
 
   private resolveRpcUrl(): string {
@@ -241,6 +260,25 @@ const DEFAULT_NATIVE_CURRENCY = {
   name: 'Ether',
   symbol: 'ETH',
   decimals: 18,
+};
+
+/**
+ * Find a built-in viem chain definition by chainId.
+ * This ensures proper fee estimation (EIP-1559) for known networks.
+ */
+const findBuiltInChain = (chainId: number): Chain | undefined => {
+  // Search through viem's exported chains for a matching chainId
+  for (const chain of Object.values(chains)) {
+    if (
+      chain &&
+      typeof chain === 'object' &&
+      'id' in chain &&
+      chain.id === chainId
+    ) {
+      return chain as Chain;
+    }
+  }
+  return undefined;
 };
 
 const extractTypedDataPayload = (payload: unknown): TypedDataPayload | null => {
