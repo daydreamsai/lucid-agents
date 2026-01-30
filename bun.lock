@@ -98,14 +98,13 @@
     },
     "packages/api-sdk": {
       "name": "@lucid-agents/api-sdk",
-      "version": "0.1.0",
+      "version": "2.1.1",
       "dependencies": {
         "@hey-api/client-fetch": "^0.10.0",
       },
       "devDependencies": {
         "@hey-api/openapi-ts": "^0.88.2",
         "@tanstack/react-query": "^5.90.12",
-        "tsup": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
@@ -117,7 +116,7 @@
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "2.0.0",
+      "version": "2.1.1",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -132,7 +131,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "2.0.0",
+      "version": "2.1.1",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -166,7 +165,7 @@
     },
     "packages/examples": {
       "name": "@lucid-agents/examples",
-      "version": "0.2.8",
+      "version": "0.2.10",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
@@ -196,7 +195,7 @@
     },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.3.12",
+      "version": "0.3.14",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -215,7 +214,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.7.12",
+      "version": "0.7.14",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -251,7 +250,7 @@
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "2.0.0",
+      "version": "2.1.1",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -266,7 +265,7 @@
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "2.0.0",
+      "version": "2.1.1",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -299,7 +298,7 @@
     },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.6.12",
+      "version": "0.6.14",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",

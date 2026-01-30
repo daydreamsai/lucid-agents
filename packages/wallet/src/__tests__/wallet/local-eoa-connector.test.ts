@@ -5,6 +5,8 @@ import type {
   LocalEoaSigner,
 } from '@lucid-agents/types/wallets';
 
+import { mainnet } from 'viem/chains';
+
 import { LocalEoaWalletConnector } from '../../connectors/local-eoa-connector';
 
 const baseChallenge: AgentChallengeResponse['challenge'] = {
@@ -152,6 +154,62 @@ describe('LocalEoaWalletConnector', () => {
     expect(walletClient?.account?.address).toBe(
       '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6'
     );
+  });
+
+  it('uses built-in chain definition when chainId is known', async () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+      async getAddress() {
+        return '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6';
+      },
+    };
+
+    const rpcUrl = 'https://mainnet.example.test';
+    const connector = new LocalEoaWalletConnector({
+      signer,
+      walletClient: {
+        chainId: mainnet.id,
+        chainName: 'Not Ethereum',
+        rpcUrl,
+      },
+    });
+
+    const walletClient = await connector.getWalletClient();
+    expect(walletClient?.chain?.id).toBe(mainnet.id);
+    expect(walletClient?.chain?.name).toBe(mainnet.name);
+    expect(walletClient?.chain?.rpcUrls.default.http).toEqual([rpcUrl]);
+  });
+
+  it('adds default fees for unknown chains', async () => {
+    const signer: LocalEoaSigner = {
+      async signMessage() {
+        return '0xsigned';
+      },
+      async getAddress() {
+        return '0x742d35Cc6634C0532925a3b8D43C67B8c8B3E9C6';
+      },
+    };
+
+    const rpcUrl = 'https://unknown-chain.example.test';
+    const chainId = 999999;
+    const chainName = 'Unknown Chain';
+
+    const connector = new LocalEoaWalletConnector({
+      signer,
+      walletClient: {
+        chainId,
+        chainName,
+        rpcUrl,
+      },
+    });
+
+    const walletClient = await connector.getWalletClient();
+    expect(walletClient?.chain?.id).toBe(chainId);
+    expect(walletClient?.chain?.name).toBe(chainName);
+    expect(walletClient?.chain?.rpcUrls.default.http).toEqual([rpcUrl]);
+    expect(walletClient?.chain?.fees?.baseFeeMultiplier).toBe(1.2);
   });
 
   it('caches wallet client on subsequent calls', async () => {
