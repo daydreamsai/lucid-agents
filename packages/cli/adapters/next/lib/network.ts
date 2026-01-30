@@ -7,6 +7,12 @@ export type NetworkInfo = {
 };
 
 const NETWORKS: Record<string, NetworkInfo> = {
+  ethereum: {
+    id: 'ethereum',
+    label: 'Ethereum Mainnet',
+    chainId: 1,
+    explorerUrl: 'https://etherscan.io',
+  },
   base: {
     id: 'base',
     label: 'Base Mainnet',
@@ -37,13 +43,13 @@ const NETWORKS: Record<string, NetworkInfo> = {
 
 export function getNetworkInfo(id?: string | null): NetworkInfo {
   if (!id) {
-    return NETWORKS['base-sepolia'];
+    return NETWORKS['ethereum'];
   }
   return (
     NETWORKS[id] ?? {
       id,
       label: id,
-      chainId: 84532,
+      chainId: 1,
     }
   );
 }

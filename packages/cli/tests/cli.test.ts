@@ -408,7 +408,7 @@ describe('create-agent-kit CLI', () => {
 
     // Should have values from wizard (defaults in this case)
     expect(env).toContain('AGENT_NAME=env-agent');
-    expect(env).toContain('PAYMENTS_NETWORK=base-sepolia');
+    expect(env).toContain('PAYMENTS_NETWORK=ethereum');
     expect(env).toContain(
       'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems'
     );
@@ -483,7 +483,7 @@ describe('create-agent-kit CLI', () => {
     expect(pkg.name).toBe('no-prompt-agent');
     expect(envFile).toContain('AGENT_NAME=no-prompt-agent');
     expect(envFile).toContain('AGENT_VERSION=0.1.0');
-    expect(envFile).toContain('PAYMENTS_NETWORK=base-sepolia');
+    expect(envFile).toContain('PAYMENTS_NETWORK=ethereum');
   });
 
   it('accepts template arguments via CLI flags in non-interactive mode', async () => {
@@ -547,7 +547,7 @@ describe('create-agent-kit CLI', () => {
 
     // Should still have defaults for non-provided values
     expect(envFile).toContain('AGENT_NAME=override-agent');
-    expect(envFile).toContain('PAYMENTS_NETWORK=base-sepolia');
+    expect(envFile).toContain('PAYMENTS_NETWORK=ethereum');
   });
 
   it('handles empty string values in CLI arguments', async () => {

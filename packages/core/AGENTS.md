@@ -90,7 +90,7 @@ const agent = await createAgent({
   .use(
     payments({
       payTo: '0xabc0000000000000000000000000000000000000',
-      network: 'base-sepolia',
+      network: 'ethereum',
       facilitatorUrl: 'https://facilitator.daydreams.systems',
     })
   )
@@ -273,7 +273,7 @@ handler: async ctx => {
   // Create payment-enabled fetch
   const paymentContext = await createRuntimePaymentContext({
     runtime,
-    network: 'base-sepolia',
+    network: 'ethereum',
   });
 
   // Use payment-enabled fetch for A2A calls

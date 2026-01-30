@@ -186,13 +186,13 @@ PORT=8787
 # Payments (optional)
 FACILITATOR_URL=https://facilitator.x402.org
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
-NETWORK=base-sepolia
+NETWORK=ethereum
 
 # Identity (optional)
 AGENT_WALLET_PRIVATE_KEY=0x...
 AGENT_DOMAIN=my-agent.example.com
-RPC_URL=https://sepolia.base.org
-CHAIN_ID=84532
+RPC_URL=https://eth.llamarpc.com
+CHAIN_ID=1
 REGISTER_IDENTITY=true
 ```
 
@@ -203,7 +203,7 @@ REGISTER_IDENTITY=true
 bun run packages/examples/src/core/full-agent.ts
 
 # With payments
-PAYMENTS_RECEIVABLE_ADDRESS=0x... NETWORK=base-sepolia \
+PAYMENTS_RECEIVABLE_ADDRESS=0x... NETWORK=ethereum \
   bun run packages/examples/src/core/full-agent.ts
 ```
 

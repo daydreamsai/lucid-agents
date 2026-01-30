@@ -40,7 +40,7 @@ const entrypoint: EntrypointDef = {
   key: 'echo',
   description: 'Echo back input',
   price: '1000',
-  network: 'base-sepolia',
+  network: 'ethereum',
   handler: async (ctx) => {
     return {
       output: ctx.input,

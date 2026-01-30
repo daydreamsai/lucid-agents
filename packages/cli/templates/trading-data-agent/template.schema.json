@@ -19,7 +19,8 @@
     },
     "PAYMENTS_NETWORK": {
       "type": "string",
-      "enum": ["base-sepolia", "base", "solana-devnet", "solana"],
+      "enum": ["ethereum", "base", "base-sepolia", "solana", "solana-devnet"],
+      "default": "ethereum",
       "description": "Payment network"
     },
     "PAYMENTS_RECEIVABLE_ADDRESS": {

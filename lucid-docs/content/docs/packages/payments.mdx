@@ -37,7 +37,7 @@ const agent = await createAgent({
 PAYMENTS_RECEIVABLE_ADDRESS=0x...  # EVM address or Solana address
 
 # Network for payments
-NETWORK=base-sepolia  # base, base-sepolia, ethereum, solana, solana-devnet
+NETWORK=ethereum      # ethereum, base, base-sepolia, solana, solana-devnet
 
 # Default price for entrypoints (in cents)
 DEFAULT_PRICE=100  # $1.00
@@ -214,7 +214,7 @@ Payment information is included in the Agent Card:
     {
       "method": "x402",
       "payee": "0x...",
-      "network": "base-sepolia"
+      "network": "ethereum"
     }
   ],
   "skills": [

@@ -41,12 +41,13 @@
         "type": "select",
         "message": "Payment network",
         "choices": [
-          { "value": "base-sepolia", "title": "Base Sepolia (EVM testnet)" },
+          { "value": "ethereum", "title": "Ethereum (EVM mainnet)" },
           { "value": "base", "title": "Base (EVM mainnet)" },
-          { "value": "solana-devnet", "title": "Solana Devnet" },
-          { "value": "solana", "title": "Solana Mainnet" }
+          { "value": "base-sepolia", "title": "Base Sepolia (EVM testnet)" },
+          { "value": "solana", "title": "Solana Mainnet" },
+          { "value": "solana-devnet", "title": "Solana Devnet" }
         ],
-        "defaultValue": "base-sepolia"
+        "defaultValue": "ethereum"
       },
       {
         "key": "PAYMENTS_RECEIVABLE_ADDRESS",
@@ -58,13 +59,13 @@
         "key": "RPC_URL",
         "type": "input",
         "message": "RPC URL (blockchain endpoint)",
-        "defaultValue": "https://sepolia.base.org"
+        "defaultValue": "https://eth.llamarpc.com"
       },
       {
         "key": "CHAIN_ID",
         "type": "input",
         "message": "Chain ID",
-        "defaultValue": "84532"
+        "defaultValue": "1"
       },
       {
         "key": "IDENTITY_AUTO_REGISTER",

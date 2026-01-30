@@ -68,7 +68,7 @@ const devWorkflow = [
 const integrationExample = `// Using x402-fetch to invoke an entrypoint
 import { createSigner, wrapFetchWithPayment } from "x402-fetch";
 
-const signer = await createSigner("base-sepolia", process.env.PRIVATE_KEY!);
+const signer = await createSigner("ethereum", process.env.PRIVATE_KEY!);
 const fetchWithPayment = wrapFetchWithPayment(fetch, signer);
 
 const response = await fetchWithPayment(

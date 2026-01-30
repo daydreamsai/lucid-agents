@@ -25,6 +25,13 @@ type RegistryAddresses = {
 };
 
 const CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
+  // Ethereum Mainnet (1)
+  1: {
+    IDENTITY_REGISTRY: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432' as Hex,
+    REPUTATION_REGISTRY: '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63' as Hex,
+    // Validation Registry: Not yet deployed on mainnet
+    VALIDATION_REGISTRY: '0x0000000000000000000000000000000000000000' as Hex,
+  },
   // ETH Sepolia (11155111) - Jan 2026 spec update addresses
   11155111: {
     IDENTITY_REGISTRY: '0x8004A818BFB912233c491871b3d84c89A494BD9e' as Hex,

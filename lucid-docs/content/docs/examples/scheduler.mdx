@@ -108,7 +108,7 @@ async function main() {
 
   const paymentContext = await createRuntimePaymentContext({
     runtime: schedulerClient,
-    network: process.env.NETWORK || 'base-sepolia',
+    network: process.env.NETWORK || 'ethereum',
   });
 
   // Step 3: Create the SCHEDULER runtime
@@ -187,7 +187,7 @@ Creates a payment context for automatic x402 payments:
 ```typescript
 const paymentContext = await createRuntimePaymentContext({
   runtime: schedulerClient,
-  network: 'base-sepolia',
+  network: 'ethereum',
 });
 ```
 
@@ -230,7 +230,7 @@ worker.stop();
 export AGENT_WALLET_PRIVATE_KEY=0x...
 export PAYMENTS_RECEIVABLE_ADDRESS=0x...
 export FACILITATOR_URL=https://facilitator.x402.org
-export NETWORK=base-sepolia
+export NETWORK=ethereum
 
 # Run
 bun run packages/examples/src/scheduler/hello-interval.ts
@@ -366,7 +366,7 @@ async function main() {
 
   const paymentContext = await createRuntimePaymentContext({
     runtime: schedulerClient,
-    network: process.env.NETWORK || 'base-sepolia',
+    network: process.env.NETWORK || 'ethereum',
   });
 
   // Create scheduler with card lookup
@@ -451,7 +451,7 @@ A single wallet pays for all scheduled calls:
 ```typescript
 const paymentContext = await createRuntimePaymentContext({
   runtime: schedulerClient,
-  network: 'base-sepolia',
+  network: 'ethereum',
 });
 ```
 
