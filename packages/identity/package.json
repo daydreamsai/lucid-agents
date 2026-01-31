@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/identity",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "ERC-8004 identity helpers for Lucid agent kit surfaces",
   "repository": {
     "type": "git",

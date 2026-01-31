@@ -1,5 +1,12 @@
 # @lucid-agents/identity
 
+## 2.1.2
+
+### Patch Changes
+
+- Updated dependencies [25e480a]
+  - @lucid-agents/wallet@0.5.7
+
 ## 2.1.1
 
 ### Patch Changes

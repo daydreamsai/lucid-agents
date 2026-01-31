@@ -1,5 +1,11 @@
 # @lucid-agents/wallet
 
+## 0.5.7
+
+### Patch Changes
+
+- 25e480a: Add tests covering built-in chain resolution and custom-chain fee defaults.
+
 ## 0.5.6
 
 ### Patch Changes
