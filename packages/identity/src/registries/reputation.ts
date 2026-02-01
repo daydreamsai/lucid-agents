@@ -111,9 +111,9 @@ function normalizeFeedbackValue(input: GiveFeedbackInput['value']): bigint {
     return input;
   }
   if (typeof input === 'number') {
-    if (!Number.isInteger(input)) {
+    if (!Number.isSafeInteger(input)) {
       throw new Error(
-        'value must be an integer; use valueDecimals for scaling'
+        'value must be a safe integer number; use bigint, a base-10 string, or valueDecimals for scaling'
       );
     }
     return BigInt(input);

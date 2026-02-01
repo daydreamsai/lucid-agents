@@ -73,7 +73,7 @@ if (identity.didRegister) {
 
 After successful registration, the package automatically generates and logs the registration JSON you need to host. Simply copy it and save it at:
 
-```
+```text
 https://my-agent.example.com/.well-known/agent-registration.json
 ```
 

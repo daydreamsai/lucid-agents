@@ -200,9 +200,9 @@ export function createValidationRegistryClient<
 
     const requestHash =
       input.requestHash ??
-      (input.requestBody
-        ? hashValidationRequest(input.requestBody)
-        : hashValidationRequest(input.requestUri));
+      (input.requestBody === undefined
+        ? hashValidationRequest(input.requestUri)
+        : hashValidationRequest(input.requestBody));
 
     const txHash = await walletClient.writeContract({
       address,
