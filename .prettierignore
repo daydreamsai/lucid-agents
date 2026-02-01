@@ -1,6 +1,8 @@
 # Build outputs
 dist/
 build/
+**/dist/**
+**/build/**
 .cache/
 *.tsbuildinfo
 
@@ -33,6 +35,10 @@ packages/agent-kit/dist/
 packages/agent-kit-identity/dist/
 packages/create-agent-kit/dist/
 packages/create-agent-kit/templates/
+packages/cli/templates/
+packages/api-sdk/src/sdk/
+packages/identity/src/abi/*.json
+packages/identity/src/abi/**/*.json
 
 # Config files
 tsconfig.json
@@ -47,4 +53,3 @@ tsconfig.*.json
 
 # Documentation that should be manually formatted
 CHANGELOG.md
-

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { EntrypointDef, EntrypointHandler } from './entrypoint';
+
+import type { EntrypointDef } from './entrypoint';
 
 /**
  * Return type for adapter-specific `createAgentApp` functions.

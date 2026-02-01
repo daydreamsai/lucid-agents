@@ -1,7 +1,11 @@
 /**
  * AP2 (Agent Payments Protocol) role types.
  */
-export type AP2Role = 'merchant' | 'shopper' | 'credentials-provider' | 'payment-processor';
+export type AP2Role =
+  | 'merchant'
+  | 'shopper'
+  | 'credentials-provider'
+  | 'payment-processor';
 
 /**
  * Parameters for AP2 extension configuration.
@@ -37,4 +41,3 @@ export type AP2Config = {
 export type AP2Runtime = {
   readonly config: AP2Config;
 };
-

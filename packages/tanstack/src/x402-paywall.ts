@@ -1,12 +1,12 @@
+import type { SolanaAddress } from '@lucid-agents/types/payments';
 import {
   createMiddleware,
   type RequestServerOptions,
   type RequestServerResult,
 } from '@tanstack/react-start';
-import type { SolanaAddress } from '@lucid-agents/types/payments';
 import { Address, getAddress } from 'viem';
-import { exact } from 'x402/schemes';
 import { getPaywallHtml } from 'x402/paywall';
+import { exact } from 'x402/schemes';
 import {
   computeRoutePatterns,
   findMatchingPaymentRequirements,
@@ -380,5 +380,5 @@ export type TanStackRequestMiddleware = ReturnType<
   ReturnType<typeof createMiddleware>['server']
 >;
 
-export type { Money, Network, RouteConfig, RoutesConfig } from 'x402/types';
 export type { SolanaAddress } from '@lucid-agents/types/payments';
+export type { Money, Network, RouteConfig, RoutesConfig } from 'x402/types';

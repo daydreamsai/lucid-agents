@@ -1,9 +1,10 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { createSchedulerWorker } from '../worker';
 import type {
   OperationResult,
   SchedulerRuntime,
 } from '@lucid-agents/types/scheduler';
+import { describe, expect, it, mock } from 'bun:test';
+
+import { createSchedulerWorker } from '../worker';
 
 function createMockRuntime(
   overrides: Partial<SchedulerRuntime> = {}

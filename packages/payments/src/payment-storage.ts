@@ -1,4 +1,7 @@
-import type { PaymentDirection, PaymentRecord } from '@lucid-agents/types/payments';
+import type {
+  PaymentDirection,
+  PaymentRecord,
+} from '@lucid-agents/types/payments';
 
 /**
  * Interface for payment data storage.

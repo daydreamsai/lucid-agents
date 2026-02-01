@@ -32,4 +32,3 @@ export function sanitizeAddress(value: string | null | undefined): Hex {
   }
   return trimmed.toLowerCase() as Hex;
 }
-

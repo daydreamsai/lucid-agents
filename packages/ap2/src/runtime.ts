@@ -13,4 +13,3 @@ export function createAP2Runtime(config?: AP2Config): AP2Runtime | undefined {
     config,
   };
 }
-

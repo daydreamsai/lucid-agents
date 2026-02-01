@@ -1,10 +1,8 @@
-import { describe, expect, it } from 'bun:test';
-
 import type {
   AgentChallengeResponse,
   LocalEoaSigner,
 } from '@lucid-agents/types/wallets';
-
+import { describe, expect, it } from 'bun:test';
 import { mainnet } from 'viem/chains';
 
 import { LocalEoaWalletConnector } from '../../connectors/local-eoa-connector';

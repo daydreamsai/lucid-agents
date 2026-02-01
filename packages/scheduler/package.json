@@ -32,8 +32,8 @@
     "test": "bun test",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*"

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import { describe, expect, it } from 'bun:test';
 
 import { createAgentCardWithAP2 } from '../manifest';
 import { AP2_EXTENSION_URI } from '../types';
@@ -139,4 +139,3 @@ describe('createAgentCardWithAP2', () => {
     expect(otherExtension).toBeDefined();
   });
 });
-

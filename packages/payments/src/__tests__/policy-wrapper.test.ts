@@ -1,8 +1,9 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
-import { wrapBaseFetchWithPolicy } from '../policy-wrapper';
-import { createPaymentTracker } from '../payment-tracker';
+import { beforeEach, describe, expect, it } from 'bun:test';
+
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
+import { createPaymentTracker } from '../payment-tracker';
+import { wrapBaseFetchWithPolicy } from '../policy-wrapper';
 import { createRateLimiter } from '../rate-limiter';
 
 type FetchLike = (

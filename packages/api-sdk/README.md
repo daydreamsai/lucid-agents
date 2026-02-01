@@ -24,7 +24,7 @@ const client = createClient(
     baseUrl: 'https://api-lucid-dev.daydreams.systems',
     // Optional: Add authentication headers
     headers: {
-      'Authorization': 'Bearer your-token',
+      Authorization: 'Bearer your-token',
     },
   })
 );
@@ -51,17 +51,20 @@ const newAgent = await client.POST('/api/agents', {
 });
 
 // Invoke an entrypoint
-const result = await client.POST('/agents/{agentId}/entrypoints/{entrypointKey}/invoke', {
-  params: {
-    path: {
-      agentId: 'agent-123',
-      entrypointKey: 'echo',
+const result = await client.POST(
+  '/agents/{agentId}/entrypoints/{entrypointKey}/invoke',
+  {
+    params: {
+      path: {
+        agentId: 'agent-123',
+        entrypointKey: 'echo',
+      },
     },
-  },
-  body: {
-    input: { text: 'Hello, world!' },
-  },
-});
+    body: {
+      input: { text: 'Hello, world!' },
+    },
+  }
+);
 ```
 
 ### React Query Integration
@@ -134,7 +137,7 @@ const client = createClient(
   createConfig({
     baseUrl: 'https://api-lucid-dev.daydreams.systems',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
   })
 );

@@ -1,5 +1,12 @@
-import type { AgentCardWithEntrypoints, AgentCapabilities } from '@lucid-agents/types/a2a';
-import type { AP2Config, AP2ExtensionDescriptor, AP2Role } from '@lucid-agents/types/ap2';
+import type {
+  AgentCapabilities,
+  AgentCardWithEntrypoints,
+} from '@lucid-agents/types/a2a';
+import type {
+  AP2Config,
+  AP2ExtensionDescriptor,
+  AP2Role,
+} from '@lucid-agents/types/ap2';
 
 import { AP2_EXTENSION_URI } from './types';
 
@@ -43,4 +50,3 @@ export function createAgentCardWithAP2(
     capabilities,
   };
 }
-

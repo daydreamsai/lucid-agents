@@ -17,6 +17,7 @@ module.exports = {
     '@typescript-eslint/no-empty-object-type': 'warn',
     '@typescript-eslint/no-wrapper-object-types': 'warn',
     '@typescript-eslint/no-require-imports': 'warn',
+    '@typescript-eslint/no-redeclare': 'error',
 
     // Import sorting rules - using simple-import-sort for auto-fixing
     'simple-import-sort/imports': 'error',
@@ -41,8 +42,17 @@ module.exports = {
     'no-unused-vars': 'off', // Disabled in favor of @typescript-eslint and unused-imports rules
     'prefer-const': 'error',
     'no-var': 'error',
+    'no-redeclare': 'off',
   },
   settings: {},
+  globals: {
+    RequestInfo: 'readonly',
+    RequestInit: 'readonly',
+    HeadersInit: 'readonly',
+    BodyInit: 'readonly',
+    NodeJS: 'readonly',
+    ResponseInit: 'readonly',
+  },
   env: {
     es2022: true,
     node: true,
@@ -55,4 +65,3 @@ module.exports = {
     '*.config.ts',
   ],
 };
-

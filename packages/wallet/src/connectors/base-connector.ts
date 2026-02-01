@@ -1,7 +1,5 @@
 import type {
   AgentChallengeResponse,
-  ChallengeSigner,
-  WalletConnector,
   WalletMetadata,
 } from '@lucid-agents/types/wallets';
 

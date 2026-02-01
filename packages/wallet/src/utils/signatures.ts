@@ -4,7 +4,7 @@
  */
 
 import type { Account, WalletClient } from 'viem';
-import { signMessage, signTypedData, verifyMessage } from 'viem/actions';
+import { signMessage, signTypedData } from 'viem/actions';
 
 import type { Hex } from './types';
 
@@ -25,10 +25,13 @@ export async function signMessageWithViem(
 ): Promise<Hex> {
   // Call the account's signMessage directly if it's available
   // This works better with custom account wrappers
-  if (walletClient.account && typeof walletClient.account.signMessage === 'function') {
+  if (
+    walletClient.account &&
+    typeof walletClient.account.signMessage === 'function'
+  ) {
     return await walletClient.account.signMessage({ message });
   }
-  
+
   // Fallback to viem's signMessage action (handles both string and Hex)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return signMessage(walletClient as any, {
@@ -66,4 +69,3 @@ export async function signTypedDataWithViem<
     } as any
   );
 }
-

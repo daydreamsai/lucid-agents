@@ -11,27 +11,19 @@ import type {
 import type {
   AgentRuntime,
   BuildContext,
-  EntrypointDef,
   Extension,
 } from '@lucid-agents/types/core';
+import { ZodValidationError } from '@lucid-agents/types/core';
 import type {
-  HttpExtensionOptions,
   AgentHttpHandlers,
-  StreamResult,
+  HttpExtensionOptions,
 } from '@lucid-agents/types/http';
 
-import { ZodValidationError } from '@lucid-agents/types/core';
 import { invoke, invokeHandler } from './invoke';
-import {
-  errorResponse,
-  extractInput,
-  jsonResponse,
-  normalizeOrigin,
-  readJson,
-} from './utils';
 import { renderLandingPage } from './landing-page';
-import { stream } from './stream';
 import { createSSEStream, type SSEStreamRunnerContext } from './sse';
+import { stream } from './stream';
+import { jsonResponse, normalizeOrigin, readJson } from './utils';
 
 type TaskEntry = {
   task: Task;

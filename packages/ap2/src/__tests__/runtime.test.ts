@@ -31,4 +31,3 @@ describe('createAP2Runtime', () => {
     expect(runtime?.config.required).toBe(false);
   });
 });
-

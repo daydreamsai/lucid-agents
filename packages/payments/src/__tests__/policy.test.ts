@@ -1,13 +1,14 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
+import { beforeEach, describe, expect, it } from 'bun:test';
+
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
+import { createPaymentTracker } from '../payment-tracker';
 import {
-  evaluateRecipient,
-  evaluateRateLimit,
   evaluateOutgoingLimits,
   evaluatePolicyGroups,
+  evaluateRateLimit,
+  evaluateRecipient,
 } from '../policy';
-import { createPaymentTracker } from '../payment-tracker';
-import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createRateLimiter } from '../rate-limiter';
 
 describe('Policy Evaluation', () => {

@@ -1,9 +1,8 @@
-import { describe, expect, it, mock } from 'bun:test';
 import type { AgentRuntime } from '@lucid-agents/types/core';
+import { describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 
 import { createA2ARuntime } from '../runtime';
-import { buildAgentCard } from '../card';
 
 describe('createA2ARuntime', () => {
   const mockRuntime: Partial<AgentRuntime> = {
@@ -73,7 +72,12 @@ describe('createA2ARuntime', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -84,7 +88,10 @@ describe('createA2ARuntime', () => {
 
     const a2a = createA2ARuntime(mockRuntime as AgentRuntime);
 
-    const card = await a2a?.fetchCard('https://remote.example.com', mockFetch as unknown as typeof fetch);
+    const card = await a2a?.fetchCard(
+      'https://remote.example.com',
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(card).toBeDefined();
     expect(card?.name).toBe('remote-agent');
@@ -99,4 +106,3 @@ describe('createA2ARuntime', () => {
     expect(a2a?.client.fetchAndInvoke).toBeDefined();
   });
 });
-

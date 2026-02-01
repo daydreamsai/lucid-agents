@@ -1,11 +1,10 @@
 import type { Network, Resource } from 'x402/types';
-import type { EntrypointPrice, SolanaAddress } from '../payments';
-import type { RegistrationEntry, TrustModel } from '../identity';
-import type { EntrypointDef } from '../core';
-import type { AgentRuntime } from '../core';
-import type { Usage } from '../core';
-import type { FetchFunction } from '../http';
+
 import type { AP2ExtensionDescriptor } from '../ap2';
+import type { EntrypointDef, Usage } from '../core';
+import type { FetchFunction } from '../http';
+import type { RegistrationEntry, TrustModel } from '../identity';
+import type { SolanaAddress } from '../payments';
 
 /**
  * Metadata describing an agent.
@@ -71,9 +70,7 @@ export type AgentCapabilities = {
   streaming?: boolean;
   pushNotifications?: boolean;
   stateTransitionHistory?: boolean;
-  extensions?: Array<
-    AP2ExtensionDescriptor | Record<string, unknown>
-  >;
+  extensions?: Array<AP2ExtensionDescriptor | Record<string, unknown>>;
 };
 
 /**

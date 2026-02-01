@@ -1,9 +1,9 @@
-import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { FetchFunction } from '@lucid-agents/types/http';
 import type {
   A2ARuntime,
   CreateA2ARuntimeOptions,
 } from '@lucid-agents/types/a2a';
+import type { AgentRuntime } from '@lucid-agents/types/core';
+import type { FetchFunction } from '@lucid-agents/types/http';
 
 import {
   buildAgentCard,
@@ -11,15 +11,15 @@ import {
   fetchAgentCardWithEntrypoints,
 } from './card';
 import {
-  invokeAgent,
-  streamAgent,
-  fetchAndInvoke,
-  sendMessage,
-  getTask,
-  subscribeTask,
-  fetchAndSendMessage,
-  listTasks,
   cancelTask,
+  fetchAndInvoke,
+  fetchAndSendMessage,
+  getTask,
+  invokeAgent,
+  listTasks,
+  sendMessage,
+  streamAgent,
+  subscribeTask,
 } from './client';
 
 /**
@@ -44,10 +44,7 @@ export function createA2ARuntime(
       return fetchAgentCard(baseUrl, fetchImpl);
     },
 
-    async fetchCardWithEntrypoints(
-      baseUrl: string,
-      fetchImpl?: FetchFunction
-    ) {
+    async fetchCardWithEntrypoints(baseUrl: string, fetchImpl?: FetchFunction) {
       return fetchAgentCardWithEntrypoints(baseUrl, fetchImpl);
     },
 

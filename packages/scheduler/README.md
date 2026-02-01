@@ -15,7 +15,10 @@ const runtime = createSchedulerRuntime({
   store: createMemoryStore(),
   invoke: async ({ manifest, entrypointKey, input, wallet }) => {
     // Bridge into your agent runtime: resolve entrypoint and charge via the bound wallet.
-    console.log(`Invoke ${entrypointKey} on ${manifest.name} using ${wallet.address}`, input);
+    console.log(
+      `Invoke ${entrypointKey} on ${manifest.name} using ${wallet.address}`,
+      input
+    );
   },
 });
 
@@ -39,6 +42,7 @@ worker.start();
 ```
 
 Notes:
+
 - Agent discovery uses `.well-known/agent-card.json` (with fallbacks) and caches the card per hire.
 - Wallet bindings ride along each invocation so payments/x402 can charge that wallet.
 - Supported schedules: `interval` and `once` (cron parsing is not implemented yet).

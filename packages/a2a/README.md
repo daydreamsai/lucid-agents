@@ -42,7 +42,9 @@ console.log(card.skills); // Array of skills/entrypoints
 
 ```typescript
 // Fetch another agent's card
-const otherAgentCard = await runtime.a2a.fetchCard('https://other-agent.example.com');
+const otherAgentCard = await runtime.a2a.fetchCard(
+  'https://other-agent.example.com'
+);
 
 // Find a specific skill
 import { findSkill } from '@lucid-agents/a2a';
@@ -79,7 +81,11 @@ console.log(task.status); // 'running' | 'completed' | 'failed' | 'cancelled'
 
 // Wait for task completion
 import { waitForTask } from '@lucid-agents/a2a';
-const completedTask = await waitForTask(runtime.a2a.client, otherAgentCard, taskId);
+const completedTask = await waitForTask(
+  runtime.a2a.client,
+  otherAgentCard,
+  taskId
+);
 console.log(completedTask.result?.output);
 ```
 
@@ -139,12 +145,17 @@ await a2a.client.cancelTask(otherAgentCard, taskId);
 ### Streaming Responses
 
 ```typescript
-await a2a.client.stream(otherAgentCard, 'generate', { prompt: '...' }, async chunk => {
-  console.log(chunk.type, chunk.data);
-  // 'delta' { text: 'Hello' }
-  // 'delta' { text: ' world' }
-  // 'done' { output: {...}, usage: {...} }
-});
+await a2a.client.stream(
+  otherAgentCard,
+  'generate',
+  { prompt: '...' },
+  async chunk => {
+    console.log(chunk.type, chunk.data);
+    // 'delta' { text: 'Hello' }
+    // 'delta' { text: ' world' }
+    // 'done' { output: {...}, usage: {...} }
+  }
+);
 ```
 
 ### Convenience Functions
@@ -244,9 +255,15 @@ const contextId = `conversation-${Date.now()}`;
 await a2a.client.sendMessage(card, 'chat', { message: 'Hello' }, undefined, {
   contextId,
 });
-await a2a.client.sendMessage(card, 'chat', { message: 'How are you?' }, undefined, {
-  contextId,
-});
+await a2a.client.sendMessage(
+  card,
+  'chat',
+  { message: 'How are you?' },
+  undefined,
+  {
+    contextId,
+  }
+);
 
 // List all tasks in conversation
 const tasks = await a2a.client.listTasks(card, { contextId });
@@ -263,7 +280,11 @@ addEntrypoint({
   handler: async ctx => {
     // Agent 2 calls Agent 1 (Worker)
     const agent1Card = await a2a.fetchCard('http://agent1:8787');
-    const { taskId } = await a2a.client.sendMessage(agent1Card, 'process', ctx.input);
+    const { taskId } = await a2a.client.sendMessage(
+      agent1Card,
+      'process',
+      ctx.input
+    );
     const task = await waitForTask(a2a.client, agent1Card, taskId);
 
     // Return Agent 1's result to Agent 3
@@ -286,4 +307,3 @@ See `packages/a2a/examples/full-integration.ts` for a complete example.
 - [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/) - Complete protocol documentation
 - [A2A Protocol Overview](https://a2a-protocol.org/) - Protocol introduction and concepts
 - [Full Integration Example](examples/full-integration.ts) - Complete facilitating agent example
-

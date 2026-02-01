@@ -1,4 +1,5 @@
-import type { PaymentDirection, PaymentTracker as PaymentTrackerInterface } from '@lucid-agents/types/payments';
+import type { PaymentTracker as PaymentTrackerInterface } from '@lucid-agents/types/payments';
+
 import type { PaymentStorage } from './payment-storage';
 import { createSQLitePaymentStorage } from './sqlite-payment-storage';
 
@@ -105,7 +106,11 @@ export class PaymentTracker implements PaymentTrackerInterface {
    * @param scope - Scope key ("global", target URL, or endpoint URL)
    * @param amount - Amount spent in base units
    */
-  async recordOutgoing(groupName: string, scope: string, amount: bigint): Promise<void> {
+  async recordOutgoing(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void> {
     await this.storage.recordPayment({
       groupName,
       scope,
@@ -120,7 +125,11 @@ export class PaymentTracker implements PaymentTrackerInterface {
    * @param scope - Scope key ("global", sender address, or endpoint URL)
    * @param amount - Amount received in base units
    */
-  async recordIncoming(groupName: string, scope: string, amount: bigint): Promise<void> {
+  async recordIncoming(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void> {
     await this.storage.recordPayment({
       groupName,
       scope,

@@ -1,7 +1,6 @@
 import type { AgentCardWithEntrypoints } from '../a2a';
-import type { WalletConnector, WalletMetadata } from '../wallets';
-import type { AgentRuntime } from '../core';
 import type { FetchFunction } from '../http';
+import type { WalletConnector, WalletMetadata } from '../wallets';
 
 export type JsonValue =
   | string
@@ -203,4 +202,3 @@ export type PaymentContext = {
   walletAddress: `0x${string}` | null;
   chainId: number | null;
 };
-

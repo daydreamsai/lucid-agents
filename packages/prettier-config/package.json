@@ -12,8 +12,8 @@
   "scripts": {
     "build": "node -c index.js",
     "lint": "eslint . --ext .js,.cjs",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore",
     "type-check": "node -c index.js",
     "test": "bun test"
   }

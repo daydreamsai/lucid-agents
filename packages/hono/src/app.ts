@@ -1,10 +1,11 @@
+import type {
+  AgentRuntime,
+  CreateAgentAppReturn,
+  EntrypointDef,
+} from '@lucid-agents/types/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type {
-  EntrypointDef,
-  CreateAgentAppReturn,
-  AgentRuntime,
-} from '@lucid-agents/types/core';
+
 import { withPayments } from './paywall';
 
 export type CreateAgentAppOptions = {

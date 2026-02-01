@@ -1,9 +1,9 @@
+import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import type {
   AgentRuntime,
   BuildContext,
   Extension,
 } from '@lucid-agents/types/core';
-import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import type { PaymentTracker } from '@lucid-agents/types/payments';
 
 export function analytics(): Extension<{ analytics: AnalyticsRuntime }> {

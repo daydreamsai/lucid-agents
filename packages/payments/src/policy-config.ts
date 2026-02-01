@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
 
 import { PaymentPolicyGroupsSchema } from './policy-schema';
@@ -49,4 +50,3 @@ export function loadPoliciesFromConfig(
     throw new Error('Failed to load payment policies config');
   }
 }
-

@@ -1,8 +1,9 @@
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { createAgentApp } from '../app';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
+
+import { createAgentApp } from '../app';
 
 describe('@lucid-agents/express', () => {
   it('creates an Express app and registers entrypoints', async () => {

@@ -1,14 +1,12 @@
 export { http } from './extension';
-export type { HttpExtensionOptions } from '@lucid-agents/types/http';
-export type { AgentHttpHandlers } from '@lucid-agents/types/http';
-export { invokeHandler } from './invoke';
 export type { InvokeResult } from './invoke';
-
+export { invokeHandler } from './invoke';
 export {
   createSSEStream,
-  writeSSE,
   type SSEStreamRunner,
   type SSEStreamRunnerContext,
   type SSEWriteOptions,
+  writeSSE,
 } from './sse';
-
+export type { HttpExtensionOptions } from '@lucid-agents/types/http';
+export type { AgentHttpHandlers } from '@lucid-agents/types/http';

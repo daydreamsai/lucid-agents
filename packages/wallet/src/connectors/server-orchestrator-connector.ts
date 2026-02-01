@@ -23,15 +23,15 @@ export interface ServerOrchestratorWalletConnectorOptions {
 }
 
 const DEFAULT_AUTHORIZATION_CONTEXT: Record<string, unknown> = {
-  reason: "lucid.agent.auth.exchange",
+  reason: 'lucid.agent.auth.exchange',
 };
 
 export class ServerOrchestratorMissingAccessTokenError extends Error {
   constructor() {
     super(
-      "Server orchestrator connector requires a bearer token. Call setAccessToken() first.",
+      'Server orchestrator connector requires a bearer token. Call setAccessToken() first.'
     );
-    this.name = "ServerOrchestratorMissingAccessTokenError";
+    this.name = 'ServerOrchestratorMissingAccessTokenError';
   }
 }
 
@@ -48,12 +48,12 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
   constructor(options: ServerOrchestratorWalletConnectorOptions) {
     if (!options?.baseUrl) {
       throw new Error(
-        "ServerOrchestratorWalletConnector requires a baseUrl option",
+        'ServerOrchestratorWalletConnector requires a baseUrl option'
       );
     }
     if (!options.agentRef) {
       throw new Error(
-        "ServerOrchestratorWalletConnector requires an agentRef option",
+        'ServerOrchestratorWalletConnector requires an agentRef option'
       );
     }
 
@@ -61,11 +61,11 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
       options.fetch ?? (globalThis.fetch as FetchExecutor | undefined);
     if (!fetchCandidate) {
       throw new Error(
-        "No fetch implementation available. Provide one via options.fetch.",
+        'No fetch implementation available. Provide one via options.fetch.'
       );
     }
 
-    this.baseUrl = options.baseUrl.replace(/\/?$/, "");
+    this.baseUrl = options.baseUrl.replace(/\/?$/, '');
     this.agentRef = options.agentRef;
     this.fetchImpl = fetchCandidate;
     this.defaultHeaders = options.headers;
@@ -81,7 +81,7 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
   }
 
   async signChallenge(
-    challenge: AgentChallengeResponse["challenge"],
+    challenge: AgentChallengeResponse['challenge']
   ): Promise<string> {
     const token = this.accessToken;
     if (!token) {
@@ -92,14 +92,14 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
     const message = normalized.message;
     if (!message) {
       throw new Error(
-        "Server orchestrator challenge payload did not include a signable message",
+        'Server orchestrator challenge payload did not include a signable message'
       );
     }
 
     const response = await this.fetchImpl(
       buildWalletSignUrl(this.baseUrl, this.agentRef),
       {
-        method: "POST",
+        method: 'POST',
         headers: this.buildHeaders(token),
         body: JSON.stringify({
           message,
@@ -110,7 +110,7 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
             challenge_id: normalized.id,
           },
         }),
-      },
+      }
     );
 
     const rawBody = await response.text();
@@ -122,7 +122,7 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
     const signature = extractSignature(parsed);
     if (!signature) {
       throw new Error(
-        "Server orchestrator response did not contain a signature field",
+        'Server orchestrator response did not contain a signature field'
       );
     }
 
@@ -149,8 +149,8 @@ export class ServerOrchestratorWalletConnector implements WalletConnector {
 
   private buildHeaders(token: string): HeadersInit {
     const headers = new Headers(this.defaultHeaders);
-    headers.set("content-type", "application/json");
-    headers.set("authorization", normalizeAuthorizationHeader(token));
+    headers.set('content-type', 'application/json');
+    headers.set('authorization', normalizeAuthorizationHeader(token));
     return Object.fromEntries(headers.entries());
   }
 }
@@ -164,12 +164,10 @@ const normalizeAuthorizationHeader = (token: string): string =>
 const buildSigningError = (response: Response, body: string): Error => {
   const details = safeJsonParse(body);
   const serialized =
-    details && typeof details === "object"
-      ? JSON.stringify(details)
-      : body;
+    details && typeof details === 'object' ? JSON.stringify(details) : body;
 
   return new Error(
-    `Server wallet signing failed: ${response.status} ${response.statusText}${serialized ? ` - ${serialized}` : ""}`,
+    `Server wallet signing failed: ${response.status} ${response.statusText}${serialized ? ` - ${serialized}` : ''}`
   );
 };
 
@@ -181,4 +179,3 @@ const safeJsonParse = (text: string): unknown => {
     return text;
   }
 };
-

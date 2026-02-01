@@ -52,7 +52,6 @@ export type WalletCapability = 'signer' | 'walletClient';
 
 export type WalletCapabilities = Partial<Record<WalletCapability, true>>;
 
-
 /**
  * Options for configuring local wallet metadata.
  */

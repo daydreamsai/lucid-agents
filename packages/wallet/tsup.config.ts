@@ -1,8 +1,7 @@
-import { definePackageConfig } from "../tsup.config.base";
+import { definePackageConfig } from '../tsup.config.base';
 
 export default definePackageConfig({
-  entry: ["src/index.ts"],
+  entry: ['src/index.ts'],
   dts: true,
-  external: ["viem"],
+  external: ['viem'],
 });
-

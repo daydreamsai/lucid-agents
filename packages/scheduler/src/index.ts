@@ -1,7 +1,8 @@
+export type { SchedulerExtensionOptions } from './extension';
 export { scheduler } from './extension';
 export { createSchedulerRuntime } from './runtime';
-export { createSchedulerWorker } from './worker';
 export { createMemoryStore } from './store/memory';
+export { createSchedulerWorker } from './worker';
 export type {
   AgentRef,
   Hire,
@@ -18,4 +19,3 @@ export type {
   WalletRef,
   WalletResolver,
 } from '@lucid-agents/types/scheduler';
-export type { SchedulerExtensionOptions } from './extension';

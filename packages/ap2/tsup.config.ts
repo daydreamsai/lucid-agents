@@ -5,4 +5,3 @@ export default definePackageConfig({
   dts: true,
   external: ['@lucid-agents/types', 'zod'],
 });
-

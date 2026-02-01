@@ -5,7 +5,6 @@ import type {
   WalletCapabilities,
   WalletConnector,
   WalletMetadata,
-  ThirdwebWalletOptions,
 } from '@lucid-agents/types/wallets';
 import type { WalletClient } from 'viem';
 
@@ -175,14 +174,18 @@ export class ThirdwebWalletConnector implements WalletConnector {
   async getWalletMetadata(): Promise<WalletMetadata | null> {
     try {
       await this.initialize();
-    } catch {}
+    } catch {
+      // Ignore initialization errors and return cached metadata.
+    }
     return this.metadata;
   }
 
   async getAddress(): Promise<string | null> {
     try {
       await this.initialize();
-    } catch {}
+    } catch {
+      // Ignore initialization errors and return cached address.
+    }
     return this.metadata.address;
   }
 

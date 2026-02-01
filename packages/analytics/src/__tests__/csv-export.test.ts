@@ -1,7 +1,10 @@
+import {
+  createInMemoryPaymentStorage,
+  createPaymentTracker,
+} from '@lucid-agents/payments';
 import { describe, expect, it } from 'bun:test';
+
 import { exportToCSV } from '../api';
-import { createPaymentTracker } from '@lucid-agents/payments';
-import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
 
 describe('CSV Export Escaping', () => {
   it('escapes commas in field values', async () => {
@@ -76,7 +79,7 @@ describe('CSV Export Escaping', () => {
     const lines = csv.split('\n');
     const dataLine = lines[1];
 
-    expect(dataLine).toMatch(/^[^,]*,"'\-2\+5/);
+    expect(dataLine).toMatch(/^[^,]*,"'-2\+5/);
   });
 
   it('prevents formula injection with @ character', async () => {

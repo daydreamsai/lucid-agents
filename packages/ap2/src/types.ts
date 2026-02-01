@@ -2,7 +2,8 @@
 // These mirror the published PYDantic models so TypeScript agents can share
 // the same shapes when constructing mandates or AgentCard extensions.
 
-export const CONTACT_ADDRESS_DATA_KEY = 'contact_picker.ContactAddress' as const;
+export const CONTACT_ADDRESS_DATA_KEY =
+  'contact_picker.ContactAddress' as const;
 
 export type ContactAddress = {
   city?: string | null;
@@ -17,7 +18,8 @@ export type ContactAddress = {
   address_line?: string[] | null;
 };
 
-export const PAYMENT_METHOD_DATA_KEY = 'payment_request.PaymentMethodData' as const;
+export const PAYMENT_METHOD_DATA_KEY =
+  'payment_request.PaymentMethodData' as const;
 
 export type PaymentCurrencyAmount = {
   currency: string;
@@ -124,6 +126,11 @@ export type PaymentMandate = {
   user_authorization?: string | null;
 };
 
-export const AP2_EXTENSION_URI = 'https://github.com/google-agentic-commerce/ap2/tree/v0.1' as const;
-export type { AP2Config, AP2ExtensionDescriptor, AP2ExtensionParams, AP2Role } from '@lucid-agents/types/ap2';
-
+export const AP2_EXTENSION_URI =
+  'https://github.com/google-agentic-commerce/ap2/tree/v0.1' as const;
+export type {
+  AP2Config,
+  AP2ExtensionDescriptor,
+  AP2ExtensionParams,
+  AP2Role,
+} from '@lucid-agents/types/ap2';

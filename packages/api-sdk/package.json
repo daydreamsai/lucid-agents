@@ -40,8 +40,8 @@
     "generate": "bun run codegen.ts",
     "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "bun test"
   },

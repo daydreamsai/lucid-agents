@@ -41,7 +41,7 @@ const entrypoint: EntrypointDef = {
   description: 'Echo back input',
   price: '1000',
   network: 'ethereum',
-  handler: async (ctx) => {
+  handler: async ctx => {
     return {
       output: ctx.input,
       usage: { total_tokens: 0 },
@@ -69,4 +69,3 @@ This package has no dependencies on other `@lucid-agents` packages. It only depe
 ## License
 
 MIT
-

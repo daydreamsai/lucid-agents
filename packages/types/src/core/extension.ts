@@ -1,5 +1,4 @@
-import type { AgentCardWithEntrypoints } from '../a2a';
-import type { AgentMeta } from '../a2a';
+import type { AgentCardWithEntrypoints, AgentMeta } from '../a2a';
 import type { EntrypointDef } from './entrypoint';
 import type { AgentRuntime } from './runtime';
 

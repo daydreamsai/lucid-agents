@@ -54,13 +54,15 @@ const agent = await createAgent({
   version: '1.0.0',
 })
   .use(http())
-  .use(payments({
-    config: {
-      payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS!,
-      network: 'base-sepolia',
-      facilitatorUrl: 'https://facilitator.example.com',
-    },
-  }))
+  .use(
+    payments({
+      config: {
+        payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS!,
+        network: 'base-sepolia',
+        facilitatorUrl: 'https://facilitator.example.com',
+      },
+    })
+  )
   .use(ap2({ roles: ['merchant'] })) // Explicitly add AP2 extension
   .build();
 
@@ -132,6 +134,7 @@ An agent can have multiple roles (e.g., both `merchant` and `shopper`).
 **To participate in AP2 ecosystem:** Explicitly add the `ap2()` extension with appropriate roles (e.g., `merchant` for accepting payments).
 
 **Common pattern:** If you're accepting payments and want to be discoverable in the AP2 ecosystem, use both:
+
 ```typescript
 .use(payments({ config: {...} }))  // Enable payment processing
 .use(ap2({ roles: ['merchant'] }))  // Advertise merchant role
@@ -147,4 +150,3 @@ An agent can have multiple roles (e.g., both `merchant` and `shopper`).
 
 - [A2A Protocol Specification](https://a2a-protocol.org/) - Agent-to-Agent communication protocol
 - [AP2 Extension Documentation](https://ap2.daydreams.systems) - AP2 extension details
-

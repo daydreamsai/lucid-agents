@@ -3,26 +3,26 @@ export * from './sdk/index.js';
 
 // Re-export client utilities (excluding types that are already exported from sdk/index.js)
 export {
-  formDataBodySerializer,
-  jsonBodySerializer,
-  urlSearchParamsBodySerializer,
   buildClientParams,
-  serializeQueryKeyValue,
   createClient,
   createConfig,
+  formDataBodySerializer,
+  jsonBodySerializer,
   mergeHeaders,
+  serializeQueryKeyValue,
+  urlSearchParamsBodySerializer,
 } from './sdk/client/index.js';
 
 // Re-export client types (excluding Options and ClientOptions which conflict)
 export type {
+  Auth,
   Client,
   Config,
   CreateClientConfig,
+  QuerySerializerOptions,
   RequestOptions,
   RequestResult,
   ResolvedRequestOptions,
   ResponseStyle,
   TDataShape,
-  Auth,
-  QuerySerializerOptions,
 } from './sdk/client/index.js';
