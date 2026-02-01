@@ -92,11 +92,15 @@ function createRoutePatternResolver(
 }
 
 function jsonResponse(payload: unknown, status = 402) {
+  const safePayload = toJsonSafe(payload);
   const headers = new Headers({ 'Content-Type': 'application/json' });
   if (status === 402) {
-    headers.set('PAYMENT-REQUIRED', safeBase64Encode(JSON.stringify(payload)));
+    headers.set(
+      'PAYMENT-REQUIRED',
+      safeBase64Encode(JSON.stringify(safePayload))
+    );
   }
-  return new Response(JSON.stringify(payload), {
+  return new Response(JSON.stringify(safePayload), {
     status,
     headers,
   });
@@ -257,12 +261,12 @@ function createPaymentHandler({
               appName: paywall?.appName,
               sessionTokenEndpoint: paywall?.sessionTokenEndpoint,
             });
-          const paymentRequiredPayload = {
+          const paymentRequiredPayload = toJsonSafe({
             x402Version,
             error:
               errorMessages?.paymentRequired ?? 'PAYMENT header is required',
             accepts: paymentRequirements,
-          };
+          });
           return respond(
             new Response(html, {
               status: 402,
