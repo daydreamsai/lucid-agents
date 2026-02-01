@@ -206,12 +206,30 @@ export function withPayments({
           : paymentHeader;
       }
       const originalEnd = res.end.bind(res) as typeof res.end;
-      res.end = function (
-        ...args: Parameters<typeof res.end>
-      ): ReturnType<typeof res.end> {
+      type EndFn = typeof res.end;
+      type EndChunk = Parameters<EndFn>[0];
+      type EndEncoding = Parameters<EndFn>[1];
+      type EndCallback = Parameters<EndFn>[2];
+      function wrappedEnd(cb?: EndCallback): ReturnType<EndFn>;
+      function wrappedEnd(chunk: EndChunk, cb?: EndCallback): ReturnType<EndFn>;
+      function wrappedEnd(
+        chunk: EndChunk,
+        encoding: EndEncoding,
+        cb?: EndCallback
+      ): ReturnType<EndFn>;
+      function wrappedEnd(
+        chunk?: EndChunk | EndCallback,
+        encoding?: EndEncoding | EndCallback,
+        cb?: EndCallback
+      ): ReturnType<EndFn> {
         normalizePaymentHeaders(res);
-        return originalEnd.apply(res, args);
-      };
+        return originalEnd(
+          chunk as EndChunk,
+          encoding as EndEncoding,
+          cb
+        );
+      }
+      res.end = wrappedEnd;
       return middleware(req, res, next);
     }
     return next();
