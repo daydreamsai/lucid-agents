@@ -1,14 +1,14 @@
-import type { AgentRuntime } from '@lucid-agents/types/core';
-import { z } from 'zod';
+import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
-import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
 import type {
   FacilitatorConfig,
   PaywallConfig,
   RouteConfig,
   RoutesConfig,
 } from 'x402/types';
+import { z } from 'zod';
+
 import {
   paymentMiddleware,
   type TanStackRequestMiddleware,

@@ -1,17 +1,19 @@
 import type { AgentMeta } from '@lucid-agents/types/a2a';
+import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { html } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
-
 import { z } from 'zod';
-import type { EntrypointDef } from '@lucid-agents/types/core';
 
 type LandingPageOptions = {
   meta: AgentMeta;
   origin: string;
   entrypoints: EntrypointDef[];
   activePayments?: PaymentsConfig;
-  resolvePrice?: (entrypoint: EntrypointDef, which: 'invoke' | 'stream') => string | null;
+  resolvePrice?: (
+    entrypoint: EntrypointDef,
+    which: 'invoke' | 'stream'
+  ) => string | null;
   manifestPath: string;
   faviconDataUrl: string;
   x402ClientExample: string;
@@ -753,9 +755,10 @@ export const renderLandingPage = ({
                     );
                     const description =
                       entrypoint.description ?? 'No description provided yet.';
-                    const invokePrice = resolvePrice?.(entrypoint, 'invoke') ?? null;
+                    const invokePrice =
+                      resolvePrice?.(entrypoint, 'invoke') ?? null;
                     const streamPrice = streaming
-                      ? resolvePrice?.(entrypoint, 'stream') ?? null
+                      ? (resolvePrice?.(entrypoint, 'stream') ?? null)
                       : undefined;
                     const hasPricing = Boolean(invokePrice || streamPrice);
                     const network = entrypoint.network ?? defaultNetwork;
@@ -770,8 +773,12 @@ export const renderLandingPage = ({
                       : 'Free';
                     const invokePath = `/entrypoints/${entrypoint.key}/invoke`;
                     const streamPath = `/entrypoints/${entrypoint.key}/stream`;
-                    const inputSchema = entrypoint.input ? z.toJSONSchema(entrypoint.input) : undefined;
-                    const outputSchema = entrypoint.output ? z.toJSONSchema(entrypoint.output) : undefined;
+                    const inputSchema = entrypoint.input
+                      ? z.toJSONSchema(entrypoint.input)
+                      : undefined;
+                    const outputSchema = entrypoint.output
+                      ? z.toJSONSchema(entrypoint.output)
+                      : undefined;
                     const exampleInputValue = inputSchema
                       ? buildExampleFromJsonSchema(inputSchema)
                       : undefined;

@@ -1,13 +1,10 @@
-import { formatUnits } from 'viem';
 import type {
-  PaymentRecord,
-  PaymentTracker,
-} from '@lucid-agents/types/payments';
-import type {
+  AnalyticsData,
   AnalyticsSummary,
   Transaction,
-  AnalyticsData,
 } from '@lucid-agents/types/analytics';
+import type { PaymentTracker } from '@lucid-agents/types/payments';
+import { formatUnits } from 'viem';
 
 /**
  * Formats a BigInt amount (in base units with 6 decimals) to a human-friendly USDC string.

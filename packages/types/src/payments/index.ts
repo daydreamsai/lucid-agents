@@ -1,4 +1,5 @@
 import type { Network, Resource } from 'x402/types';
+
 import type { AgentRuntime, EntrypointDef } from '../core';
 
 /**
@@ -200,5 +201,7 @@ export type PaymentsRuntime = {
   getFetchWithPayment: (
     runtime: AgentRuntime,
     network?: string
-  ) => Promise<((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null>;
+  ) => Promise<
+    ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null
+  >;
 };

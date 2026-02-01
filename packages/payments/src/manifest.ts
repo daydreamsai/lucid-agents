@@ -1,4 +1,8 @@
-import type { AgentCardWithEntrypoints, Manifest, PaymentMethod } from '@lucid-agents/types/a2a';
+import type {
+  AgentCardWithEntrypoints,
+  Manifest,
+  PaymentMethod,
+} from '@lucid-agents/types/a2a';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
@@ -26,7 +30,9 @@ export function createAgentCardWithPayments(
     }
 
     const invP = resolvePrice(entrypointDef, paymentsConfig, 'invoke');
-    const strP = entrypointDef.stream ? resolvePrice(entrypointDef, paymentsConfig, 'stream') : undefined;
+    const strP = entrypointDef.stream
+      ? resolvePrice(entrypointDef, paymentsConfig, 'stream')
+      : undefined;
 
     const manifestEntry: Manifest['entrypoints'][string] = {
       ...entrypoint,
@@ -59,4 +65,3 @@ export function createAgentCardWithPayments(
     payments: [paymentMethod],
   };
 }
-

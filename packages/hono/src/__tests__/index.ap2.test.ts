@@ -1,8 +1,8 @@
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
 import { ap2, AP2_EXTENSION_URI } from '@lucid-agents/ap2';
-import { payments } from '@lucid-agents/payments';
+import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
 import { describe, expect, it } from 'bun:test';
 
 describe('createAgentApp AP2 extension', () => {

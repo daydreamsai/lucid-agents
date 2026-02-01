@@ -1,6 +1,6 @@
-import { describe, it, expect, mock } from 'bun:test';
-import { createSchedulerRuntime } from '../runtime';
-import { createMemoryStore } from '../store/memory';
+import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
+import type { A2AClient, A2ARuntime } from '@lucid-agents/types/a2a';
+import type { AgentRuntime } from '@lucid-agents/types/core';
 import type {
   InvokeArgs,
   Job,
@@ -9,9 +9,10 @@ import type {
   SchedulerStore,
   WalletRef,
 } from '@lucid-agents/types/scheduler';
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
-import type { A2AClient, A2ARuntime } from '@lucid-agents/types/a2a';
-import type { AgentRuntime } from '@lucid-agents/types/core';
+import { describe, expect, it, mock } from 'bun:test';
+
+import { createSchedulerRuntime } from '../runtime';
+import { createMemoryStore } from '../store/memory';
 
 function expectError(result: OperationResult, substring: string): void {
   expect(result.success).toBe(false);

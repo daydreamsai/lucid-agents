@@ -1,8 +1,18 @@
-import { describe, expect, it, beforeEach, jest } from 'bun:test';
-import type { Context } from 'hono';
-import type { PaymentsConfig, PaymentPolicyGroup } from '@lucid-agents/types/payments';
 import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
-import { createPaymentTracker, extractPayerAddress, extractSenderDomain, parsePriceAmount, findMostSpecificIncomingLimit, type PaymentTracker } from '@lucid-agents/payments';
+import {
+  createPaymentTracker,
+  extractPayerAddress,
+  extractSenderDomain,
+  findMostSpecificIncomingLimit,
+  parsePriceAmount,
+  type PaymentTracker,
+} from '@lucid-agents/payments';
+import type {
+  PaymentPolicyGroup,
+  PaymentsConfig,
+} from '@lucid-agents/types/payments';
+import { beforeEach, describe, expect, it, jest } from 'bun:test';
+import type { Context } from 'hono';
 
 describe('Hono Incoming Payment Recording Middleware', () => {
   let paymentTracker: ReturnType<typeof createPaymentTracker>;
@@ -97,11 +107,7 @@ describe('Hono Incoming Payment Recording Middleware', () => {
                 );
                 const scope = limitInfo?.scope ?? 'global';
 
-                await tracker.recordIncoming(
-                  group.name,
-                  scope,
-                  paymentAmount
-                );
+                await tracker.recordIncoming(group.name, scope, paymentAmount);
               }
             }
           }
@@ -131,8 +137,14 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     const mockContext = createMockContext(undefined, 200);
     await middleware(mockContext, async () => {});
 
-    const total1 = await paymentTracker.getIncomingTotal('test-group-1', 'global');
-    const total2 = await paymentTracker.getIncomingTotal('test-group-2', 'global');
+    const total1 = await paymentTracker.getIncomingTotal(
+      'test-group-1',
+      'global'
+    );
+    const total2 = await paymentTracker.getIncomingTotal(
+      'test-group-2',
+      'global'
+    );
 
     expect(total1).toBe(initialTotal1);
     expect(total2).toBe(initialTotal2);
@@ -164,8 +176,14 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     const mockContext = createMockContext(paymentResponse, 404);
     await middleware(mockContext, async () => {});
 
-    const total1 = await paymentTracker.getIncomingTotal('test-group-1', 'global');
-    const total2 = await paymentTracker.getIncomingTotal('test-group-2', 'global');
+    const total1 = await paymentTracker.getIncomingTotal(
+      'test-group-1',
+      'global'
+    );
+    const total2 = await paymentTracker.getIncomingTotal(
+      'test-group-2',
+      'global'
+    );
 
     expect(total1).toBe(initialTotal1);
     expect(total2).toBe(initialTotal2);
@@ -189,7 +207,9 @@ describe('Hono Incoming Payment Recording Middleware', () => {
       throw new Error('Simulated recording error');
     };
 
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     const middleware = createIncomingPaymentMiddleware(
       testPayments.policyGroups!,
@@ -208,8 +228,10 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     consoleErrorSpy.mockRestore();
     paymentTracker.recordIncoming = originalRecordIncoming;
 
-    const total = await paymentTracker.getIncomingTotal('test-group-1', 'global');
+    const total = await paymentTracker.getIncomingTotal(
+      'test-group-1',
+      'global'
+    );
     expect(total).toBe(initialTotal);
   });
 });
-

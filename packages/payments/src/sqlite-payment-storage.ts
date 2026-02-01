@@ -1,10 +1,11 @@
+import type {
+  PaymentDirection,
+  PaymentRecord,
+} from '@lucid-agents/types/payments';
+import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { Database } from 'bun:sqlite';
-import type {
-  PaymentRecord,
-  PaymentDirection,
-} from '@lucid-agents/types/payments';
+
 import type { PaymentStorage } from './payment-storage';
 
 /**

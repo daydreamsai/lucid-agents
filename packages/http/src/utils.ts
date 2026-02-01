@@ -80,4 +80,3 @@ export function normalizeOrigin(req: Request): string {
 
   return `${protocol}//${host}`;
 }
-

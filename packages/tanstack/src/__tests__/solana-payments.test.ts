@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'bun:test';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
-import { createTanStackPaywall } from '../paywall';
+import { describe, expect, it } from 'bun:test';
 import type { RoutesConfig } from 'x402/types';
+
+import { createTanStackPaywall } from '../paywall';
 import type { TanStackRequestMiddleware } from '../x402-paywall';
 
 describe('TanStack Solana Payments', () => {
@@ -50,7 +51,9 @@ describe('TanStack Solana Payments', () => {
 
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
-        Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+        Promise.resolve(
+          new Response()
+        )) as unknown as TanStackRequestMiddleware;
     }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
@@ -88,7 +91,11 @@ describe('TanStack Solana Payments', () => {
     // Verify route configuration includes Solana network
     const translateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/translate/invoke'];
-    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'network' in translateInvokeConfig) {
+    if (
+      typeof translateInvokeConfig === 'object' &&
+      translateInvokeConfig &&
+      'network' in translateInvokeConfig
+    ) {
       expect(translateInvokeConfig.network).toBe('solana-devnet');
       expect(translateInvokeConfig.price).toBe('5000');
     }
@@ -100,7 +107,11 @@ describe('TanStack Solana Payments', () => {
 
     const generateStreamConfig =
       streamRoutes['POST /api/agent/entrypoints/generate/stream'];
-    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'network' in generateStreamConfig) {
+    if (
+      typeof generateStreamConfig === 'object' &&
+      generateStreamConfig &&
+      'network' in generateStreamConfig
+    ) {
       expect(generateStreamConfig.network).toBe('solana-devnet');
       expect(generateStreamConfig.price).toBe('8000');
     }
@@ -171,7 +182,11 @@ describe('TanStack Solana Payments', () => {
       // Verify all routes use the correct Solana network
       for (const key of routeKeys) {
         const routeConfig = invokeRoutes[key];
-        if (typeof routeConfig === 'object' && routeConfig && 'network' in routeConfig) {
+        if (
+          typeof routeConfig === 'object' &&
+          routeConfig &&
+          'network' in routeConfig
+        ) {
           expect(routeConfig.network).toBe(network);
         }
       }
@@ -184,7 +199,9 @@ describe('TanStack Solana Payments', () => {
 
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
-        Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+        Promise.resolve(
+          new Response()
+        )) as unknown as TanStackRequestMiddleware;
     }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
@@ -228,7 +245,9 @@ describe('TanStack Solana Payments', () => {
 
     const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
       return (() =>
-        Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+        Promise.resolve(
+          new Response()
+        )) as unknown as TanStackRequestMiddleware;
     }) satisfies typeof import('../x402-paywall').paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
@@ -251,21 +270,33 @@ describe('TanStack Solana Payments', () => {
     // Check invoke price for translate (explicit price)
     const translateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/translate/invoke'];
-    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'price' in translateInvokeConfig) {
+    if (
+      typeof translateInvokeConfig === 'object' &&
+      translateInvokeConfig &&
+      'price' in translateInvokeConfig
+    ) {
       expect(translateInvokeConfig.price).toBe('5000');
     }
 
     // Check invoke price for generate (from price.invoke)
     const generateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/generate/invoke'];
-    if (typeof generateInvokeConfig === 'object' && generateInvokeConfig && 'price' in generateInvokeConfig) {
+    if (
+      typeof generateInvokeConfig === 'object' &&
+      generateInvokeConfig &&
+      'price' in generateInvokeConfig
+    ) {
       expect(generateInvokeConfig.price).toBe('2000');
     }
 
     // Check stream price for generate (from price.stream)
     const generateStreamConfig =
       streamRoutes['POST /api/agent/entrypoints/generate/stream'];
-    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'price' in generateStreamConfig) {
+    if (
+      typeof generateStreamConfig === 'object' &&
+      generateStreamConfig &&
+      'price' in generateStreamConfig
+    ) {
       expect(generateStreamConfig.price).toBe('8000');
     }
   });

@@ -1,7 +1,10 @@
+import {
+  createInMemoryPaymentStorage,
+  createPaymentTracker,
+} from '@lucid-agents/payments';
 import { describe, expect, it } from 'bun:test';
+
 import { getAllTransactions } from '../api';
-import { createPaymentTracker } from '@lucid-agents/payments';
-import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
 
 describe('formatUsdcAmount (via getAllTransactions)', () => {
   it('formats small amounts correctly', async () => {
@@ -126,5 +129,3 @@ describe('formatUsdcAmount (via getAllTransactions)', () => {
     expect(formatted.split('.')[1]).toHaveLength(6);
   });
 });
-
-

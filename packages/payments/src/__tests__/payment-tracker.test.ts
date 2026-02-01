@@ -1,13 +1,16 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
-import { createPaymentTracker } from '../payment-tracker';
+import { beforeEach, describe, expect, it } from 'bun:test';
+
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
+import { createPaymentTracker } from '../payment-tracker';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 
 // Use test database connection string from env
 // Only use default in local dev (when not in CI)
 const TEST_DB_URL =
   process.env.TEST_POSTGRES_URL ||
-  (process.env.CI ? undefined : 'postgresql://postgres:test_password@localhost:5435/lucid_agents_test?schema=public');
+  (process.env.CI
+    ? undefined
+    : 'postgresql://postgres:test_password@localhost:5435/lucid_agents_test?schema=public');
 
 describe('PaymentTracker', () => {
   let tracker: ReturnType<typeof createPaymentTracker>;
@@ -188,7 +191,11 @@ describe('PaymentTracker', () => {
       // Verify the transaction is actually recorded
       const allData = await tracker.getAllData();
       const zeroAmountRecords = allData.filter(
-        r => r.groupName === 'group1' && r.scope === 'global' && r.direction === 'outgoing' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.scope === 'global' &&
+          r.direction === 'outgoing' &&
+          r.amount === 0n
       );
       expect(zeroAmountRecords).toHaveLength(1);
       expect(zeroAmountRecords[0].amount).toBe(0n);
@@ -220,7 +227,10 @@ describe('PaymentTracker', () => {
       await tracker.recordOutgoing('group1', 'global', 0n);
       const allData = await tracker.getAllData();
       const zeroRecords = allData.filter(
-        r => r.groupName === 'group1' && r.direction === 'outgoing' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.direction === 'outgoing' &&
+          r.amount === 0n
       );
       expect(zeroRecords).toHaveLength(1);
     });
@@ -235,7 +245,9 @@ describe('PaymentTracker', () => {
       expect(total).toBe(150_000_000n);
 
       const allData = await tracker.getAllData();
-      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'outgoing');
+      const group1Records = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'outgoing'
+      );
       expect(group1Records).toHaveLength(4);
       const zeroRecords = group1Records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(2);
@@ -260,7 +272,10 @@ describe('PaymentTracker', () => {
       await tracker.recordIncoming('group1', 'global', 0n);
       const allData = await tracker.getAllData();
       const zeroRecords = allData.filter(
-        r => r.groupName === 'group1' && r.direction === 'incoming' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.direction === 'incoming' &&
+          r.amount === 0n
       );
       expect(zeroRecords).toHaveLength(1);
     });
@@ -274,7 +289,9 @@ describe('PaymentTracker', () => {
       expect(total).toBe(150_000_000n);
 
       const allData = await tracker.getAllData();
-      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'incoming');
+      const group1Records = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'incoming'
+      );
       expect(group1Records).toHaveLength(3);
       const zeroRecords = group1Records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(1);
@@ -335,7 +352,10 @@ describe('PaymentTracker', () => {
     const agentId = 'test-agent-123';
 
     beforeEach(async () => {
-      const storageWithAgent = createPostgresPaymentStorage(TEST_DB_URL!, agentId);
+      const storageWithAgent = createPostgresPaymentStorage(
+        TEST_DB_URL!,
+        agentId
+      );
       const storageWithoutAgent = createPostgresPaymentStorage(TEST_DB_URL!);
       trackerWithAgent = createPaymentTracker(storageWithAgent);
       trackerWithoutAgent = createPaymentTracker(storageWithoutAgent);
@@ -402,7 +422,11 @@ describe('PaymentTracker', () => {
       const tracker2 = createPaymentTracker(storage2);
 
       // Agent 1 records payment
-      await trackerWithAgent.recordOutgoing('shared-group', 'global', 50_000_000n);
+      await trackerWithAgent.recordOutgoing(
+        'shared-group',
+        'global',
+        50_000_000n
+      );
 
       // Agent 2 should still be able to make payments (separate tracking)
       const result = await tracker2.checkOutgoingLimit(

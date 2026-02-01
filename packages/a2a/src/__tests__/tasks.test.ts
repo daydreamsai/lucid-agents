@@ -1,5 +1,5 @@
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
 import type {
+  AgentCardWithEntrypoints,
   SendMessageResponse,
   Task,
   TaskStatus,
@@ -7,14 +7,13 @@ import type {
 import { describe, expect, it, mock } from 'bun:test';
 
 import {
-  sendMessage,
-  getTask,
-  subscribeTask,
-  fetchAndSendMessage,
-  listTasks,
   cancelTask,
+  fetchAndSendMessage,
+  getTask,
+  listTasks,
+  sendMessage,
+  subscribeTask,
 } from '../client';
-import { fetchAgentCard } from '../card';
 
 // Helper to create Response with statusText
 function createResponse(
@@ -411,10 +410,19 @@ describe('Task-based A2A Client Methods', () => {
 
       // fetchAgentCard tries multiple URLs, so we need to handle all of them
       const responses = new Map<string, Response>([
-        ['https://agent.example.com', new Response('Not Found', { status: 404 })], // First attempt
+        [
+          'https://agent.example.com',
+          new Response('Not Found', { status: 404 }),
+        ], // First attempt
         ['https://agent.example.com/.well-known/agent-card.json', cardResponse], // Spec path (succeeds)
-        ['https://agent.example.com/.well-known/agent.json', new Response('Not Found', { status: 404 })], // Alternative
-        ['https://agent.example.com/agentcard.json', new Response('Not Found', { status: 404 })], // Legacy
+        [
+          'https://agent.example.com/.well-known/agent.json',
+          new Response('Not Found', { status: 404 }),
+        ], // Alternative
+        [
+          'https://agent.example.com/agentcard.json',
+          new Response('Not Found', { status: 404 }),
+        ], // Legacy
         ['https://agent.example.com/tasks', taskResponse],
       ]);
 
@@ -437,8 +445,14 @@ describe('Task-based A2A Client Methods', () => {
       // Return 404 for all possible agent card URLs that fetchAgentCard tries
       // Note: fetchAgentCard tries baseUrl as-is first (may have trailing slash), then normalized versions
       const responses = new Map<string, Response>([
-        ['https://agent.example.com', new Response('Not Found', { status: 404 })], // First attempt (as-is)
-        ['https://agent.example.com/', new Response('Not Found', { status: 404 })], // If baseUrl has trailing slash
+        [
+          'https://agent.example.com',
+          new Response('Not Found', { status: 404 }),
+        ], // First attempt (as-is)
+        [
+          'https://agent.example.com/',
+          new Response('Not Found', { status: 404 }),
+        ], // If baseUrl has trailing slash
         [
           'https://agent.example.com/.well-known/agent-card.json',
           new Response('Not Found', { status: 404 }),

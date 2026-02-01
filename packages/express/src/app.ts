@@ -1,3 +1,12 @@
+import { Readable } from 'node:stream';
+import type { ReadableStream as WebReadableStream } from 'node:stream/web';
+import type { TLSSocket } from 'node:tls';
+
+import type { EntrypointDef } from '@lucid-agents/core';
+import type {
+  AgentRuntime,
+  CreateAgentAppReturn,
+} from '@lucid-agents/types/core';
 import express, {
   type Express,
   type NextFunction,
@@ -5,16 +14,8 @@ import express, {
   type RequestHandler,
   type Response as ExpressResponse,
 } from 'express';
-import { Readable } from 'node:stream';
-import type { ReadableStream as WebReadableStream } from 'node:stream/web';
-import type { TLSSocket } from 'node:tls';
 import { z } from 'zod';
-import type { EntrypointDef } from '@lucid-agents/core';
-import type {
-  AgentRuntime,
-  CreateAgentAppReturn,
-} from '@lucid-agents/types/core';
-import { AgentBuilder } from '@lucid-agents/core';
+
 import { withPayments } from './paywall';
 
 type NodeRequestInit = RequestInit & { duplex?: 'half' };

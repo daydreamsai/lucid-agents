@@ -1,6 +1,19 @@
+import type {
+  AgentWalletConfig,
+  AgentWalletHandle,
+  DeveloperWalletConfig,
+  DeveloperWalletHandle,
+  LocalWalletOptions,
+  LucidWalletOptions,
+  SignerWalletOptions,
+  ThirdwebWalletOptions,
+  WalletsConfig,
+  WalletsRuntime,
+} from '@lucid-agents/types/wallets';
+
 import {
-  LocalEoaWalletConnector,
   createPrivateKeySigner,
+  LocalEoaWalletConnector,
   type LocalEoaWalletConnectorOptions,
 } from './connectors/local-eoa-connector';
 import {
@@ -11,23 +24,7 @@ import {
   ThirdwebWalletConnector,
   type ThirdwebWalletConnectorOptions,
 } from './connectors/thirdweb-connector';
-import {
-  ViemWalletConnector,
-  type ViemWalletConnectorOptions,
-} from './connectors/viem-wallet-connector';
-import type {
-  AgentWalletConfig,
-  AgentWalletHandle,
-  DeveloperWalletConfig,
-  DeveloperWalletHandle,
-  LocalWalletOptions,
-  LucidWalletOptions,
-  SignerWalletOptions,
-  ThirdwebWalletOptions,
-  WalletConnector,
-  WalletsConfig,
-  WalletsRuntime,
-} from '@lucid-agents/types/wallets';
+import { ViemWalletConnector } from './connectors/viem-wallet-connector';
 
 export const createAgentWallet = (
   options: AgentWalletConfig

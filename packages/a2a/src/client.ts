@@ -1,18 +1,16 @@
-import type { FetchFunction } from '@lucid-agents/types/http';
-import type { AgentCard } from '@lucid-agents/types/a2a';
 import type {
-  InvokeAgentResult,
-  StreamEmit,
-  SendMessageRequest,
-  SendMessageResponse,
-  Task,
-  TaskUpdateEvent,
   A2AClient,
+  AgentCard,
+  InvokeAgentResult,
   ListTasksRequest,
   ListTasksResponse,
-  CancelTaskRequest,
-  CancelTaskResponse,
+  SendMessageRequest,
+  SendMessageResponse,
+  StreamEmit,
+  Task,
+  TaskUpdateEvent,
 } from '@lucid-agents/types/a2a';
+import type { FetchFunction } from '@lucid-agents/types/http';
 
 import { fetchAgentCard, findSkill } from './card';
 
@@ -108,6 +106,7 @@ export async function streamAgent(
   let currentEvent: { type: string; data: string } | null = null;
 
   try {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -304,6 +303,7 @@ export async function subscribeTask(
   let currentEvent: { type: string; data: string } | null = null;
 
   try {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;

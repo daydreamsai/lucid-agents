@@ -25,7 +25,10 @@ export function parseInput(entrypoint: EntrypointDef, value: unknown): unknown {
  * Validates output against entrypoint output schema.
  * @throws {ZodValidationError} If validation fails
  */
-export function parseOutput(entrypoint: EntrypointDef, value: unknown): unknown {
+export function parseOutput(
+  entrypoint: EntrypointDef,
+  value: unknown
+): unknown {
   const schema = entrypoint.output;
   if (!schema) return value;
   if (!isZodSchema(schema)) return value;
@@ -35,4 +38,3 @@ export function parseOutput(entrypoint: EntrypointDef, value: unknown): unknown 
   }
   return parsed.data;
 }
-

@@ -2,9 +2,10 @@ import type { AgentRuntime } from '@lucid-agents/types/core';
 import type { WalletConnector } from '@lucid-agents/types/wallets';
 import type { Signer } from 'x402/types';
 import { createSigner, type Hex, wrapFetchWithPayment } from 'x402-fetch';
+
 import { sanitizeAddress, ZERO_ADDRESS } from './crypto';
-import { wrapBaseFetchWithPolicy } from './policy-wrapper';
 import type { PaymentTracker } from './payment-tracker';
+import { wrapBaseFetchWithPolicy } from './policy-wrapper';
 import type { RateLimiter } from './rate-limiter';
 
 type FetchLike = (

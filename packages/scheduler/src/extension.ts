@@ -3,10 +3,13 @@ import type {
   BuildContext,
   Extension,
 } from '@lucid-agents/types/core';
-import type { SchedulerRuntime } from '@lucid-agents/types/scheduler';
-import { createMemoryStore } from './store/memory';
+import type {
+  SchedulerRuntime,
+  SchedulerStore,
+} from '@lucid-agents/types/scheduler';
+
 import { createSchedulerRuntime } from './runtime';
-import type { SchedulerStore } from '@lucid-agents/types/scheduler';
+import { createMemoryStore } from './store/memory';
 
 export type SchedulerExtensionOptions = {
   store?: SchedulerStore;

@@ -14,4 +14,3 @@ module.exports = {
   htmlWhitespaceSensitivity: 'css',
   embeddedLanguageFormatting: 'auto',
 };
-

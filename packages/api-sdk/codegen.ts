@@ -1,8 +1,7 @@
 import { createClient } from '@hey-api/openapi-ts';
 
 const OPENAPI_URL =
-  process.env.OPENAPI_URL ||
-  'https://api-lucid-dev.daydreams.systems/doc';
+  process.env.OPENAPI_URL || 'https://api-lucid-dev.daydreams.systems/doc';
 
 // Validate URL format
 function isValidUrl(url: string): boolean {

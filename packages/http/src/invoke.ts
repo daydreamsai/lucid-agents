@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  AgentContext,
   AgentRuntime,
   EntrypointDef,
-  AgentContext,
 } from '@lucid-agents/types/core';
 import { ZodValidationError } from '@lucid-agents/types/core';
 
@@ -136,4 +136,3 @@ export async function invoke(
     );
   }
 }
-

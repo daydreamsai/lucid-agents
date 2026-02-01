@@ -1,10 +1,10 @@
 import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { payments } from '@lucid-agents/payments';
-import { createAgentApp } from '@lucid-agents/hono';
+import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
 describe('Hono Solana Payments', () => {
   const solanaPayments: PaymentsConfig = {
@@ -181,4 +181,3 @@ describe('Hono Solana Payments', () => {
     }).toThrow(/Unsupported payment network: solana-mainnet/);
   });
 });
-

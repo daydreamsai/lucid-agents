@@ -1,13 +1,12 @@
-import type { ManifestRuntime } from '../a2a';
+import type { A2ARuntime, ManifestRuntime } from '../a2a';
+import type { AnalyticsRuntime } from '../analytics';
+import type { AP2Runtime } from '../ap2';
 import type { AgentHttpHandlers } from '../http';
 import type { PaymentsRuntime } from '../payments';
-import type { WalletsRuntime } from '../wallets';
-import type { A2ARuntime } from '../a2a';
-import type { AP2Runtime } from '../ap2';
-import type { EntrypointsRuntime } from './entrypoint';
-import type { AnalyticsRuntime } from '../analytics';
 import type { SchedulerRuntime } from '../scheduler';
+import type { WalletsRuntime } from '../wallets';
 import type { AgentCore } from './agent';
+import type { EntrypointsRuntime } from './entrypoint';
 
 /**
  * Agent runtime interface.

@@ -1,9 +1,9 @@
+import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import type {
   AgentRuntime,
   BuildContext,
   Extension,
 } from '@lucid-agents/types/core';
-import type { A2ARuntime } from '@lucid-agents/types/a2a';
 
 import { createA2ARuntime } from './runtime';
 

@@ -1,8 +1,7 @@
 import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { payments } from '@lucid-agents/payments';
 import { createAgentApp, withPayments } from '@lucid-agents/hono';
-import { resolvePrice } from '@lucid-agents/payments';
+import { http } from '@lucid-agents/http';
+import { payments, resolvePrice } from '@lucid-agents/payments';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { describe, expect, it } from 'bun:test';

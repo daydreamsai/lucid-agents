@@ -1,19 +1,19 @@
-import type { Express, RequestHandler, Request, Response } from 'express';
-import { paymentMiddleware } from 'x402-express';
-import type { FacilitatorConfig } from 'x402/types';
-import { z } from 'zod';
-import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
-  resolvePrice,
-  validatePaymentsConfig,
   evaluateSender,
-  findMostSpecificIncomingLimit,
-  extractSenderDomain,
   extractPayerAddress,
+  extractSenderDomain,
+  findMostSpecificIncomingLimit,
   parsePriceAmount,
   type PaymentTracker,
+  resolvePrice,
+  validatePaymentsConfig,
 } from '@lucid-agents/payments';
+import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { Express, RequestHandler } from 'express';
+import type { FacilitatorConfig } from 'x402/types';
+import { paymentMiddleware } from 'x402-express';
+import { z } from 'zod';
 
 type PaymentMiddlewareFactory = typeof paymentMiddleware;
 

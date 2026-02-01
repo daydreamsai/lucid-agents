@@ -1,32 +1,34 @@
-import { describe, expect, it } from "bun:test";
-import { createAgent } from "@lucid-agents/core";
-import { http } from "@lucid-agents/http";
-import { createTanStackRuntime } from "../runtime";
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { describe, expect, it } from 'bun:test';
+
+import { createTanStackRuntime } from '../runtime';
 
 const meta = {
-  name: "test-agent",
-  version: "0.0.1",
-  description: "test",
+  name: 'test-agent',
+  version: '0.0.1',
+  description: 'test',
 };
 
-describe("createTanStackRuntime", () => {
-  it("exposes tanstack handlers alongside the core runtime", async () => {
+describe('createTanStackRuntime', () => {
+  it('exposes tanstack handlers alongside the core runtime', async () => {
     const agent = await createAgent(meta)
       .use(http())
       .addEntrypoint({
-        key: "echo",
+        key: 'echo',
         handler: async ({ input }) => ({
           output: input ?? {},
         }),
       })
       .build();
-    const { runtime: tanstackRuntime, handlers } = await createTanStackRuntime(agent);
+    const { runtime: tanstackRuntime, handlers } =
+      await createTanStackRuntime(agent);
 
-    expect(typeof tanstackRuntime.entrypoints.add).toBe("function");
-    expect(typeof handlers.invoke).toBe("function");
+    expect(typeof tanstackRuntime.entrypoints.add).toBe('function');
+    expect(typeof handlers.invoke).toBe('function');
 
     const healthResponse = await handlers.health({
-      request: new Request("https://agent.test/health"),
+      request: new Request('https://agent.test/health'),
     });
     expect(healthResponse.status).toBe(200);
     expect(await healthResponse.json()).toEqual({
@@ -35,22 +37,22 @@ describe("createTanStackRuntime", () => {
     });
 
     const invokeRequest = new Request(
-      "https://agent.test/entrypoints/echo/invoke",
+      'https://agent.test/entrypoints/echo/invoke',
       {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ input: { text: "hello" } }),
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: { text: 'hello' } }),
       }
     );
 
     const invokeResponse = await handlers.invoke({
       request: invokeRequest,
-      params: { key: "echo" },
+      params: { key: 'echo' },
     });
 
     expect(invokeResponse.status).toBe(200);
     const payload = await invokeResponse.json();
-    expect(payload.output).toEqual({ text: "hello" });
-    expect(payload.status).toBe("succeeded");
+    expect(payload.output).toEqual({ text: 'hello' });
+    expect(payload.status).toBe('succeeded');
   });
 });

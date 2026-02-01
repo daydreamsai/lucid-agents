@@ -32,9 +32,10 @@
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",

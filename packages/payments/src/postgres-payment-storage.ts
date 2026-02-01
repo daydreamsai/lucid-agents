@@ -1,8 +1,9 @@
-import { Pool } from 'pg';
 import type {
-  PaymentRecord,
   PaymentDirection,
+  PaymentRecord,
 } from '@lucid-agents/types/payments';
+import { Pool } from 'pg';
+
 import type { PaymentStorage } from './payment-storage';
 
 /**

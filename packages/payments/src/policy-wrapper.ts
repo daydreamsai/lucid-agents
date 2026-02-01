@@ -1,7 +1,8 @@
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
+
 import type { PaymentTracker } from './payment-tracker';
-import type { RateLimiter } from './rate-limiter';
 import { evaluatePolicyGroups, findMostSpecificOutgoingLimit } from './policy';
+import type { RateLimiter } from './rate-limiter';
 
 type FetchLike = (
   input: RequestInfo | URL,

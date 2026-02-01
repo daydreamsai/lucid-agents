@@ -1,6 +1,7 @@
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
-import { createPostgresPaymentStorage } from '../postgres-payment-storage';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+
 import type { PaymentStorage } from '../payment-storage';
+import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 
 // Use test database connection string from env
 // Only use default in local dev (when not in CI)
@@ -383,10 +384,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(total).toBe(0n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(records).toHaveLength(1);
       expect(records[0].amount).toBe(0n);
     });
@@ -399,10 +408,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'incoming');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'incoming'
+      );
       expect(total).toBe(0n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'incoming');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'incoming'
+      );
       expect(records).toHaveLength(1);
       expect(records[0].amount).toBe(0n);
     });
@@ -433,10 +450,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(total).toBe(3000n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(records).toHaveLength(4);
       const zeroRecords = records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(2);

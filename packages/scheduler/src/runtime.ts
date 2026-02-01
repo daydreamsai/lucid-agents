@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import type { AgentRuntime } from '@lucid-agents/types/core';
 import type {
   Hire,
   InvokeArgs,
@@ -8,7 +8,7 @@ import type {
   SchedulerRuntime,
   SchedulerStore,
 } from '@lucid-agents/types/scheduler';
-import type { AgentRuntime } from '@lucid-agents/types/core';
+import { randomUUID } from 'crypto';
 
 export type CreateSchedulerRuntimeOptions = {
   runtime: AgentRuntime;

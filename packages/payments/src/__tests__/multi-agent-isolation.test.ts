@@ -1,7 +1,8 @@
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
-import { createPostgresPaymentStorage } from '../postgres-payment-storage';
-import { createPaymentTracker } from '../payment-tracker';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+
 import type { PaymentStorage } from '../payment-storage';
+import { createPaymentTracker } from '../payment-tracker';
+import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 
 // Use test database connection string from env
 // Only use default in local dev (when not in CI)

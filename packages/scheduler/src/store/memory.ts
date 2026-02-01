@@ -76,6 +76,6 @@ class MemoryStore implements SchedulerStore {
   private clone<T>(value: T): T {
     return globalThis.structuredClone
       ? globalThis.structuredClone(value)
-      : JSON.parse(JSON.stringify(value)) as T;
+      : (JSON.parse(JSON.stringify(value)) as T);
   }
 }

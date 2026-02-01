@@ -44,4 +44,3 @@ export const PaymentPolicyGroupSchema = z.object({
  * Zod schema for PaymentPolicyGroup array.
  */
 export const PaymentPolicyGroupsSchema = z.array(PaymentPolicyGroupSchema);
-

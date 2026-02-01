@@ -79,6 +79,7 @@ const agent = await createAgent({ ... })
 ```
 
 **When to use:**
+
 - Traditional server deployments
 - VMs with persistent disk
 - Local development
@@ -109,6 +110,7 @@ const agent = await createAgent({ ... })
 ```
 
 **When to use:**
+
 - Serverless functions without file system access (e.g., AWS Lambda with read-only filesystem)
 - Unit tests and integration tests
 - Temporary tracking that doesn't need persistence
@@ -148,6 +150,7 @@ DATABASE_URL=postgresql://user:password@host:5432/dbname
 ```
 
 **When to use:**
+
 - Serverless functions with database access (e.g., Vercel, Netlify with Postgres)
 - Multi-instance deployments where agents need shared state
 - Production environments requiring high availability
@@ -243,16 +246,18 @@ Control which payments your agent accepts:
 }
 ```
 
-**Important:** Due to x402 protocol limitations, wallet-based sender checks and incoming limits can only be evaluated *after* payment is received. Domain-based checks can block before payment.
+**Important:** Due to x402 protocol limitations, wallet-based sender checks and incoming limits can only be evaluated _after_ payment is received. Domain-based checks can block before payment.
 
 ### Policy Enforcement Flow
 
 **Outgoing Payments:**
+
 1. Policy check happens **before** payment
 2. If policy violation → Payment is blocked (403 Forbidden)
 3. If policy passes → Payment proceeds
 
 **Incoming Payments:**
+
 1. **Domain-based checks** happen **before** payment (using `Origin`/`Referer` headers)
    - If blocked → Return 403 Forbidden (payment not received)
 2. **x402 payment validation** happens
@@ -282,7 +287,10 @@ See `packages/examples/src/payments/payment-policies.json.example` for a complet
 Tracks both outgoing and incoming payments:
 
 ```typescript
-import { createPaymentTracker, createSQLitePaymentStorage } from '@lucid-agents/payments';
+import {
+  createPaymentTracker,
+  createSQLitePaymentStorage,
+} from '@lucid-agents/payments';
 
 const storage = createSQLitePaymentStorage();
 const tracker = createPaymentTracker(storage);
@@ -301,9 +309,9 @@ const incomingTotal = await tracker.getIncomingTotal('group-name', 'global');
 const result = await tracker.checkOutgoingLimit(
   'group-name',
   'global',
-  100.0,        // maxTotalUsd
-  86400000,     // windowMs (24 hours)
-  1_000_000n    // requestedAmount
+  100.0, // maxTotalUsd
+  86400000, // windowMs (24 hours)
+  1_000_000n // requestedAmount
 );
 if (!result.allowed) {
   console.log('Limit exceeded:', result.reason);
@@ -327,9 +335,7 @@ const sqliteStorageCustom = createSQLitePaymentStorage('.data/custom.db');
 const memoryStorage = createInMemoryPaymentStorage();
 
 // Postgres
-const postgresStorage = createPostgresPaymentStorage(
-  process.env.DATABASE_URL!
-);
+const postgresStorage = createPostgresPaymentStorage(process.env.DATABASE_URL!);
 ```
 
 ### Utility Functions
@@ -342,15 +348,10 @@ import {
 } from '@lucid-agents/payments';
 
 // Extract domain from request headers
-const domain = extractSenderDomain(
-  req.headers.origin,
-  req.headers.referer
-);
+const domain = extractSenderDomain(req.headers.origin, req.headers.referer);
 
 // Extract payer address from x402 response header
-const payerAddress = extractPayerAddress(
-  res.headers.get('X-PAYMENT-RESPONSE')
-);
+const payerAddress = extractPayerAddress(res.headers.get('X-PAYMENT-RESPONSE'));
 
 // Parse price string to bigint (USDC has 6 decimals)
 const amount = parsePriceAmount('1.5'); // Returns 1_500_000n
@@ -361,20 +362,26 @@ const amount = parsePriceAmount('1.5'); // Returns 1_500_000n
 ### AWS Lambda
 
 **Option 1: In-Memory (Ephemeral)**
+
 ```typescript
-storage: { type: 'in-memory' }
+storage: {
+  type: 'in-memory';
+}
 ```
+
 - Data lost between invocations
 - Fastest option
 - No file system or database required
 
 **Option 2: Postgres (Persistent)**
+
 ```typescript
 storage: {
   type: 'postgres',
   postgres: { connectionString: process.env.DATABASE_URL }
 }
 ```
+
 - Data persists across invocations
 - Requires RDS or managed Postgres
 - Shared state across Lambda instances
@@ -382,12 +389,14 @@ storage: {
 ### Vercel / Netlify
 
 **Postgres (Recommended)**
+
 ```typescript
 storage: {
   type: 'postgres',
   postgres: { connectionString: process.env.DATABASE_URL }
 }
 ```
+
 - Use Vercel Postgres or Netlify Postgres
 - Data persists across deployments
 - Shared state across serverless functions
@@ -395,9 +404,13 @@ storage: {
 ### Traditional Servers / VMs
 
 **SQLite (Recommended)**
+
 ```typescript
-storage: { type: 'sqlite' } // or omit for default
+storage: {
+  type: 'sqlite';
+} // or omit for default
 ```
+
 - Zero configuration
 - Persistent local storage
 - Best performance for single-instance deployments
@@ -441,4 +454,3 @@ import type {
   IncomingLimit,
 } from '@lucid-agents/types/payments';
 ```
-

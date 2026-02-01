@@ -72,7 +72,6 @@ export function createTanStackHandlers(
 export async function createTanStackRuntime(
   runtime: AgentRuntime
 ): Promise<TanStackRuntime> {
-
   return {
     runtime,
     handlers: createTanStackHandlers(runtime),

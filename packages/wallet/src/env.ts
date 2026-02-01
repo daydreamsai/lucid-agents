@@ -311,6 +311,8 @@ function parseJsonObject(
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
     }
-  } catch {}
+  } catch {
+    // Invalid JSON payloads are treated as unset.
+  }
   return undefined;
 }

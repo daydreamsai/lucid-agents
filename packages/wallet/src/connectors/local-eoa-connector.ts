@@ -9,7 +9,7 @@ import type {
 } from '@lucid-agents/types/wallets';
 import type { Chain, SignableMessage, Transport, WalletClient } from 'viem';
 import { createWalletClient, http } from 'viem';
-import { toAccount, privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, toAccount } from 'viem/accounts';
 import * as chains from 'viem/chains';
 
 import { detectMessageEncoding, normalizeChallenge } from './base-connector';
