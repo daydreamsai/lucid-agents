@@ -205,10 +205,12 @@ export function withPayments({
           ? paymentHeader[0]
           : paymentHeader;
       }
-      const originalEnd = res.end.bind(res);
-      res.end = function (chunk?: any, encoding?: any, cb?: any) {
+      const originalEnd = res.end.bind(res) as typeof res.end;
+      res.end = function (
+        ...args: Parameters<typeof res.end>
+      ): ReturnType<typeof res.end> {
         normalizePaymentHeaders(res);
-        return originalEnd(chunk, encoding, cb);
+        return originalEnd.apply(res, args);
       };
       return middleware(req, res, next);
     }

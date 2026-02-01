@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { PaymentsConfig } from "@lucid-agents/types/payments";
+import { decodePaymentRequiredHeader } from "@lucid-agents/payments";
 import { createTanStackPaywall } from "../paywall";
 import { paymentMiddleware } from "../x402-paywall";
 import type { RoutesConfig } from "x402/types";
@@ -116,7 +117,11 @@ describe("createTanStackPaywall", () => {
     );
 
     const request = new Request("http://localhost/pay", { method: "POST" });
-    const server = (middleware as any).options?.server;
+    type MiddlewareWithOptions = unknown & {
+      options?: { server?: (args: any) => Promise<any> };
+    };
+    const middlewareWithOptions = middleware as MiddlewareWithOptions;
+    const server = middlewareWithOptions.options?.server;
     expect(server).toBeDefined();
     const result = await server({
       request,
@@ -131,8 +136,13 @@ describe("createTanStackPaywall", () => {
     });
 
     expect(result.response.status).toBe(402);
-    expect(result.response.headers.get("PAYMENT-REQUIRED")).toBeTruthy();
+    const paymentRequiredHeader = result.response.headers.get("PAYMENT-REQUIRED");
+    expect(paymentRequiredHeader).toBeTruthy();
     expect(result.response.headers.get("X-Price")).toBeNull();
+    const decoded = decodePaymentRequiredHeader(paymentRequiredHeader);
+    expect(decoded?.price).toBe("1.0");
+    expect(decoded?.network).toBe("base-sepolia");
+    expect(decoded?.payTo?.toLowerCase()).toBe(payments.payTo.toLowerCase());
     const body = await result.response.json();
     expect(body.x402Version).toBe(2);
   });

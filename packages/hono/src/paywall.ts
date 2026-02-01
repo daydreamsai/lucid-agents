@@ -29,6 +29,43 @@ export type WithPaymentsParams = {
   runtime?: AgentRuntime;
 };
 
+function withPaymentHeader(c: Context, paymentHeader: string): Context {
+  const mergedHeaders = new Headers(c.req.raw.headers);
+  if (!mergedHeaders.has('X-PAYMENT')) {
+    mergedHeaders.set('X-PAYMENT', paymentHeader);
+  }
+  const requestWithPayment = new Request(c.req.raw, {
+    headers: mergedHeaders,
+  });
+  const originalHeader = c.req.header.bind(c.req);
+  const reqProxy = new Proxy(c.req, {
+    get(target, prop, receiver) {
+      if (prop === 'raw') {
+        return requestWithPayment;
+      }
+      if (prop === 'header') {
+        return (name?: string) => {
+          if (!name) return originalHeader();
+          if (name.toLowerCase() === 'x-payment') {
+            return requestWithPayment.headers.get('X-PAYMENT') ?? undefined;
+          }
+          return originalHeader(name);
+        };
+      }
+      return Reflect.get(target as object, prop, receiver);
+    },
+  });
+  const contextProxy = new Proxy(c, {
+    get(target, prop, receiver) {
+      if (prop === 'req') {
+        return reqProxy;
+      }
+      return Reflect.get(target as object, prop, receiver);
+    },
+  });
+  return contextProxy as Context;
+}
+
 function normalizePaymentHeaders(response: Response) {
   const paymentResponseHeader =
     response.headers.get('PAYMENT-RESPONSE') ??
@@ -174,10 +211,11 @@ export function withPayments({
 
   app.use(path, async (c, next) => {
     const paymentHeader = c.req.header('PAYMENT');
-    if (paymentHeader && !c.req.header('X-PAYMENT')) {
-      c.req.raw.headers.set('X-PAYMENT', paymentHeader);
-    }
-    const result = await baseMiddleware(c, next);
+    const contextForPayment =
+      paymentHeader && !c.req.header('X-PAYMENT')
+        ? withPaymentHeader(c, paymentHeader)
+        : c;
+    const result = await baseMiddleware(contextForPayment, next);
     if (result instanceof Response) {
       normalizePaymentHeaders(result);
       return result;
