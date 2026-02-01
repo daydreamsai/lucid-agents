@@ -1,5 +1,12 @@
 # @lucid-agents/http
 
+## 1.9.8
+
+### Patch Changes
+
+- Updated dependencies [23a7254]
+  - @lucid-agents/types@1.5.7
+
 ## 1.9.7
 
 ### Patch Changes

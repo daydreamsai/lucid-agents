@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/analytics",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Analytics and reporting for payment tracking data",
   "repository": {
     "type": "git",

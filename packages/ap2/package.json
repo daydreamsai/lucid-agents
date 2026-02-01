@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/ap2",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "AP2 (Agent Payments Protocol) extension for Lucid agents",
   "repository": {
     "type": "git",

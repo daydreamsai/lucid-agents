@@ -1,5 +1,15 @@
 # @lucid-agents/hono
 
+## 0.7.16
+
+### Patch Changes
+
+- Updated dependencies [23a7254]
+  - @lucid-agents/types@1.5.7
+  - @lucid-agents/core@2.1.3
+  - @lucid-agents/ap2@0.3.8
+  - @lucid-agents/payments@2.1.3
+
 ## 0.7.15
 
 ### Patch Changes
