@@ -8,6 +8,13 @@
     "index.js",
     ".prettierignore.example",
     "README.md"
-  ]
+  ],
+  "scripts": {
+    "build": "node -c index.js",
+    "lint": "eslint . --ext .js,.cjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "node -c index.js",
+    "test": "bun test"
+  }
 }
-

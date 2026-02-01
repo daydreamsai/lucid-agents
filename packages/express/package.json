@@ -23,7 +23,12 @@
   },
   "scripts": {
     "build": "tsup",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@lucid-agents/core": "workspace:*",
@@ -38,6 +43,8 @@
     "@lucid-agents/http": "workspace:*",
     "@types/express": "^4.17.21",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@lucid-agents/prettier-config": "workspace:*"
   }
 }

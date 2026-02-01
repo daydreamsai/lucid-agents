@@ -37,7 +37,13 @@
   },
   "scripts": {
     "clean": "rm -rf src/sdk",
-    "generate": "bun run codegen.ts"
+    "generate": "bun run codegen.ts",
+    "build": "tsc -p tsconfig.build.json --noEmit",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.10.0"
@@ -45,7 +51,9 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.88.2",
     "@tanstack/react-query": "^5.90.12",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@lucid-agents/prettier-config": "workspace:*"
   },
   "peerDependencies": {
     "@tanstack/react-query": "^5.0.0"

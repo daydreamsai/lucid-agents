@@ -11,7 +11,8 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "bun test"
   },
   "dependencies": {
     "@ax-llm/ax": "^14.0.37",
