@@ -20,6 +20,7 @@ import { createSQLitePaymentStorage } from './sqlite-payment-storage';
 import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
 import { createPostgresPaymentStorage } from './postgres-payment-storage';
 import type { PaymentStorage } from './payment-storage';
+import { encodePaymentRequiredHeader } from './utils';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -139,15 +140,19 @@ export const paymentRequiredResponse = (
 ) => {
   const headers = new Headers({
     'Content-Type': 'application/json; charset=utf-8',
-    'X-Price': requirement.price,
-    'X-Network': requirement.network,
-    'X-Pay-To': requirement.payTo,
   });
-  if (requirement.facilitatorUrl) {
-    headers.set('X-Facilitator', requirement.facilitatorUrl);
-  }
+  headers.set(
+    'PAYMENT-REQUIRED',
+    encodePaymentRequiredHeader({
+      price: requirement.price,
+      network: requirement.network,
+      payTo: requirement.payTo,
+      facilitatorUrl: requirement.facilitatorUrl,
+    })
+  );
   return new Response(
     JSON.stringify({
+      x402Version: 2,
       error: {
         code: 'payment_required',
         price: requirement.price,

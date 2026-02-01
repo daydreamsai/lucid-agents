@@ -92,7 +92,7 @@ describe('runtime payments', () => {
         if (attempt === 1) {
           return new Response(
             JSON.stringify({
-              x402Version: 1,
+              x402Version: 2,
               accepts: [paymentRequirements],
             }),
             {
@@ -105,7 +105,7 @@ describe('runtime payments', () => {
           status: 200,
           headers: {
             'content-type': 'application/json',
-            'X-PAYMENT-RESPONSE': 'settled',
+            'PAYMENT-RESPONSE': 'settled',
           },
         });
       }

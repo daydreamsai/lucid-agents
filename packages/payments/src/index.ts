@@ -17,6 +17,9 @@ export {
 } from './runtime';
 export {
   paymentsFromEnv,
+  encodePaymentRequiredHeader,
+  decodePaymentRequiredHeader,
+  type PaymentRequiredHeaderDetails,
   extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,

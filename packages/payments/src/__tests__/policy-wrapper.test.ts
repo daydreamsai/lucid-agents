@@ -10,6 +10,16 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Response>;
 
+const buildPaymentRequiredHeader = (details: {
+  price: string;
+  payTo: string;
+  network?: string;
+}) =>
+  Buffer.from(JSON.stringify({ x402Version: 2, ...details })).toString('base64');
+
+const buildPaymentResponseHeader = (details: Record<string, unknown> = {}) =>
+  Buffer.from(JSON.stringify(details)).toString('base64');
+
 describe('wrapBaseFetchWithPolicy', () => {
   let baseFetch: FetchLike;
   let paymentTracker: ReturnType<typeof createPaymentTracker>;
@@ -59,8 +69,10 @@ describe('wrapBaseFetchWithPolicy', () => {
         status: 402,
         headers: {
           'Content-Type': 'application/json',
-          'X-Price': '15.0', // 15 USDC (over 10 USDC limit)
-          'X-Pay-To': '0x123...',
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '15.0', // 15 USDC (over 10 USDC limit)
+            payTo: '0x123...',
+          }),
         },
       });
     };
@@ -85,8 +97,10 @@ describe('wrapBaseFetchWithPolicy', () => {
         status: 402,
         headers: {
           'Content-Type': 'application/json',
-          'X-Price': '5.0', // 5 USDC (under 10 USDC limit)
-          'X-Pay-To': '0x123...',
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '5.0', // 5 USDC (under 10 USDC limit)
+            payTo: '0x123...',
+          }),
         },
       });
     };
@@ -111,8 +125,10 @@ describe('wrapBaseFetchWithPolicy', () => {
         return new Response(JSON.stringify({ error: 'Payment required' }), {
           status: 402,
           headers: {
-            'X-Price': '5.0',
-            'X-Pay-To': '0x123...',
+            'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+              price: '5.0',
+              payTo: '0x123...',
+            }),
           },
         });
       }
@@ -120,8 +136,10 @@ describe('wrapBaseFetchWithPolicy', () => {
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: {
-          'X-PAYMENT-RESPONSE': 'settled',
-          'X-Price': '5.0',
+          'PAYMENT-RESPONSE': buildPaymentResponseHeader({
+            success: true,
+            payer: '0xpayer',
+          }),
         },
       });
     };
@@ -149,6 +167,47 @@ describe('wrapBaseFetchWithPolicy', () => {
     expect(Number(total) / 1_000_000).toBe(5.0);
   });
 
+  it('accepts legacy v1 payment headers for policy evaluation', async () => {
+    let callCount = 0;
+    baseFetch = async () => {
+      callCount++;
+      if (callCount === 1) {
+        return new Response(JSON.stringify({ error: 'Payment required' }), {
+          status: 402,
+          headers: {
+            'X-Price': '4.0',
+            'X-Pay-To': '0xlegacy...',
+          },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          'X-PAYMENT-RESPONSE': buildPaymentResponseHeader({
+            success: true,
+            payer: '0xpayer',
+          }),
+        },
+      });
+    };
+
+    const wrappedFetch = wrapBaseFetchWithPolicy(
+      baseFetch,
+      policyGroups,
+      paymentTracker,
+      rateLimiter
+    );
+
+    await wrappedFetch('https://example.com');
+    await wrappedFetch('https://example.com');
+
+    const total = await paymentTracker.getOutgoingTotal(
+      'test-policy',
+      'global'
+    );
+    expect(Number(total) / 1_000_000).toBe(4.0);
+  });
+
   it('should extract domain from URL for recipient matching', async () => {
     const blockingPolicy: PaymentPolicyGroup[] = [
       {
@@ -161,8 +220,10 @@ describe('wrapBaseFetchWithPolicy', () => {
       return new Response(JSON.stringify({ error: 'Payment required' }), {
         status: 402,
         headers: {
-          'X-Price': '1.0',
-          'X-Pay-To': '0x123...',
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '1.0',
+            payTo: '0x123...',
+          }),
         },
       });
     };
@@ -208,16 +269,17 @@ describe('wrapBaseFetchWithPolicy', () => {
           return new Response(JSON.stringify({ error: 'Payment required' }), {
             status: 402,
             headers: {
-              'X-Price': '5.0',
-              'X-Pay-To': '0x123...',
+              'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+                price: '5.0',
+                payTo: '0x123...',
+              }),
             },
           });
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
-            'X-PAYMENT-RESPONSE': 'settled',
-            'X-Price': '5.0',
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
           },
         });
       };
@@ -263,16 +325,17 @@ describe('wrapBaseFetchWithPolicy', () => {
           return new Response(JSON.stringify({ error: 'Payment required' }), {
             status: 402,
             headers: {
-              'X-Price': '5.0',
-              'X-Pay-To': '0x123...',
+              'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+                price: '5.0',
+                payTo: '0x123...',
+              }),
             },
           });
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
-            'X-PAYMENT-RESPONSE': 'settled',
-            'X-Price': '5.0',
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
           },
         });
       };
@@ -317,16 +380,17 @@ describe('wrapBaseFetchWithPolicy', () => {
           return new Response(JSON.stringify({ error: 'Payment required' }), {
             status: 402,
             headers: {
-              'X-Price': '5.0',
-              'X-Pay-To': '0x123...',
+              'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+                price: '5.0',
+                payTo: '0x123...',
+              }),
             },
           });
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
-            'X-PAYMENT-RESPONSE': 'settled',
-            'X-Price': '5.0',
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
           },
         });
       };
@@ -380,16 +444,17 @@ describe('wrapBaseFetchWithPolicy', () => {
           return new Response(JSON.stringify({ error: 'Payment required' }), {
             status: 402,
             headers: {
-              'X-Price': '5.0',
-              'X-Pay-To': '0x123...',
+              'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+                price: '5.0',
+                payTo: '0x123...',
+              }),
             },
           });
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
-            'X-PAYMENT-RESPONSE': 'settled',
-            'X-Price': '5.0',
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
           },
         });
       };

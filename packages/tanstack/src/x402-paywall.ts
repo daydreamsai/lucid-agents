@@ -92,9 +92,13 @@ function createRoutePatternResolver(
 }
 
 function jsonResponse(payload: unknown, status = 402) {
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (status === 402) {
+    headers.set('PAYMENT-REQUIRED', safeBase64Encode(JSON.stringify(payload)));
+  }
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   });
 }
 
@@ -115,7 +119,7 @@ function createPaymentHandler({
   getRoutePatterns,
 }: PaymentHandlerDeps) {
   const { verify, settle, supported } = useFacilitator(facilitator);
-  const x402Version = 1;
+  const x402Version = 2;
 
   return async function handleRequest(
     options: AnyRequestServerOptions
@@ -225,7 +229,8 @@ function createPaymentHandler({
       throw new Error(`Unsupported network: ${network}`);
     }
 
-    const paymentHeader = request.headers.get('X-PAYMENT');
+    const paymentHeader =
+      request.headers.get('PAYMENT') ?? request.headers.get('X-PAYMENT');
     if (!paymentHeader) {
       const accept = request.headers.get('Accept');
       if (accept?.includes('text/html')) {
@@ -252,10 +257,21 @@ function createPaymentHandler({
               appName: paywall?.appName,
               sessionTokenEndpoint: paywall?.sessionTokenEndpoint,
             });
+          const paymentRequiredPayload = {
+            x402Version,
+            error:
+              errorMessages?.paymentRequired ?? 'PAYMENT header is required',
+            accepts: paymentRequirements,
+          };
           return respond(
             new Response(html, {
               status: 402,
-              headers: { 'Content-Type': 'text/html' },
+              headers: {
+                'Content-Type': 'text/html',
+                'PAYMENT-REQUIRED': safeBase64Encode(
+                  JSON.stringify(paymentRequiredPayload)
+                ),
+              },
             })
           );
         }
@@ -265,7 +281,7 @@ function createPaymentHandler({
         jsonResponse({
           x402Version,
           error:
-            errorMessages?.paymentRequired ?? 'X-PAYMENT header is required',
+            errorMessages?.paymentRequired ?? 'PAYMENT header is required',
           accepts: paymentRequirements,
         })
       );
@@ -329,7 +345,7 @@ function createPaymentHandler({
           nextResult.response
         );
         enriched.headers.set(
-          'X-PAYMENT-RESPONSE',
+          'PAYMENT-RESPONSE',
           safeBase64Encode(
             JSON.stringify({
               success: true,

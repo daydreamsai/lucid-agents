@@ -64,7 +64,9 @@ export const createX402Fetch = ({
       );
       try {
         const response = await paymentFetch(input, init ?? {});
-        const paymentHeader = response.headers.get('X-PAYMENT-RESPONSE');
+        const paymentHeader =
+          response.headers.get('PAYMENT-RESPONSE') ??
+          response.headers.get('X-PAYMENT-RESPONSE');
         console.info(
           '[agent-kit-payments:x402] fetch response',
           requestUrl,

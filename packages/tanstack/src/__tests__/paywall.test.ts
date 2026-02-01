@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { PaymentsConfig } from "@lucid-agents/types/payments";
 import { createTanStackPaywall } from "../paywall";
+import { paymentMiddleware } from "../x402-paywall";
 import type { RoutesConfig } from "x402/types";
 import type { TanStackRequestMiddleware } from "../x402-paywall";
 
@@ -93,5 +94,44 @@ describe("createTanStackPaywall", () => {
     if (typeof streamConfig === 'object' && 'config' in streamConfig) {
       expect(streamConfig.config?.mimeType).toBe("text/event-stream");
     }
+  });
+
+  it("returns PAYMENT-REQUIRED header with x402Version=2 when payment is missing", async () => {
+    const routes: RoutesConfig = {
+      "POST /pay": {
+        price: "1.0",
+        network: "base-sepolia",
+        config: {
+          description: "Pay",
+          mimeType: "application/json",
+          discoverable: true,
+        },
+      },
+    };
+
+    const middleware = paymentMiddleware(
+      payments.payTo,
+      routes,
+      { url: payments.facilitatorUrl }
+    );
+
+    const request = new Request("http://localhost/pay", { method: "POST" });
+    const result = await (middleware as any)({
+      request,
+      pathname: "/pay",
+      context: {},
+      next: async () => ({
+        request,
+        pathname: "/pay",
+        context: {},
+        response: new Response("ok"),
+      }),
+    });
+
+    expect(result.response.status).toBe(402);
+    expect(result.response.headers.get("PAYMENT-REQUIRED")).toBeTruthy();
+    expect(result.response.headers.get("X-Price")).toBeNull();
+    const body = await result.response.json();
+    expect(body.x402Version).toBe(2);
   });
 });

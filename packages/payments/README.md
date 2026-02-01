@@ -349,7 +349,7 @@ const domain = extractSenderDomain(
 
 // Extract payer address from x402 response header
 const payerAddress = extractPayerAddress(
-  res.headers.get('X-PAYMENT-RESPONSE')
+  res.headers.get('PAYMENT-RESPONSE') ?? res.headers.get('X-PAYMENT-RESPONSE')
 );
 
 // Parse price string to bigint (USDC has 6 decimals)
@@ -441,4 +441,3 @@ import type {
   IncomingLimit,
 } from '@lucid-agents/types/payments';
 ```
-

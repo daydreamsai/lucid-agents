@@ -41,11 +41,12 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     paymentResponseHeader?: string,
     status: number = 200,
     origin?: string,
-    referer?: string
+    referer?: string,
+    headerName: 'PAYMENT-RESPONSE' | 'X-PAYMENT-RESPONSE' = 'PAYMENT-RESPONSE'
   ): Context => {
     const headers = new Headers();
     if (paymentResponseHeader) {
-      headers.set('X-PAYMENT-RESPONSE', paymentResponseHeader);
+      headers.set(headerName, paymentResponseHeader);
     }
 
     const req = {
@@ -76,7 +77,9 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     return async (c: Context, next: () => Promise<void>) => {
       await next();
 
-      const paymentResponseHeader = c.res.headers.get('X-PAYMENT-RESPONSE');
+      const paymentResponseHeader =
+        c.res.headers.get('PAYMENT-RESPONSE') ??
+        c.res.headers.get('X-PAYMENT-RESPONSE');
       if (paymentResponseHeader && c.res.status >= 200 && c.res.status < 300) {
         try {
           const payerAddress = extractPayerAddress(paymentResponseHeader);
@@ -112,7 +115,7 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     };
   };
 
-  it('does not record payment when X-PAYMENT-RESPONSE header is missing', async () => {
+  it('does not record payment when PAYMENT-RESPONSE header is missing', async () => {
     const initialTotal1 = await paymentTracker.getIncomingTotal(
       'test-group-1',
       'global'
@@ -211,5 +214,31 @@ describe('Hono Incoming Payment Recording Middleware', () => {
     const total = await paymentTracker.getIncomingTotal('test-group-1', 'global');
     expect(total).toBe(initialTotal);
   });
-});
 
+  it('accepts legacy X-PAYMENT-RESPONSE header', async () => {
+    const paymentResponse = Buffer.from(
+      JSON.stringify({
+        payer: '0x1234567890123456789012345678901234567890',
+        settled: true,
+      })
+    ).toString('base64');
+
+    const middleware = createIncomingPaymentMiddleware(
+      testPayments.policyGroups!,
+      paymentTracker,
+      '1000'
+    );
+
+    const mockContext = createMockContext(
+      paymentResponse,
+      200,
+      undefined,
+      undefined,
+      'X-PAYMENT-RESPONSE'
+    );
+    await middleware(mockContext, async () => {});
+
+    const total = await paymentTracker.getIncomingTotal('test-group-1', 'global');
+    expect(total).toBeGreaterThan(0n);
+  });
+});

@@ -21,6 +21,46 @@ export function paymentsFromEnv(
   };
 }
 
+export type PaymentRequiredHeaderDetails = {
+  price?: string;
+  payTo?: string;
+  network?: string;
+  facilitatorUrl?: string;
+  x402Version?: number;
+};
+
+function parseHeaderJson(raw: string): PaymentRequiredHeaderDetails | undefined {
+  try {
+    return JSON.parse(raw) as PaymentRequiredHeaderDetails;
+  } catch {
+    return undefined;
+  }
+}
+
+export function encodePaymentRequiredHeader(
+  details: PaymentRequiredHeaderDetails
+): string {
+  const payload = {
+    x402Version: 2,
+    ...details,
+  };
+  return Buffer.from(JSON.stringify(payload)).toString('base64');
+}
+
+export function decodePaymentRequiredHeader(
+  headerValue: string | null | undefined
+): PaymentRequiredHeaderDetails | undefined {
+  if (!headerValue) return undefined;
+  const direct = parseHeaderJson(headerValue);
+  if (direct) return direct;
+  try {
+    const decoded = Buffer.from(headerValue, 'base64').toString('utf-8');
+    return parseHeaderJson(decoded);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Extracts domain from a URL string or request headers.
  * @param urlOrOrigin - URL string or origin header value
@@ -49,7 +89,7 @@ export function extractSenderDomain(
 }
 
 /**
- * Extracts payer address from X-PAYMENT-RESPONSE header.
+ * Extracts payer address from PAYMENT-RESPONSE header (v2) or legacy header.
  * @param paymentResponseHeader - Base64-encoded JSON payment response header
  * @returns Payer address or undefined
  */
@@ -82,4 +122,3 @@ export function parsePriceAmount(price: string): bigint | undefined {
     return undefined;
   }
 }
-

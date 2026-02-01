@@ -12,6 +12,7 @@ import {
   extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,
+  encodePaymentRequiredHeader,
   type PaymentTracker,
 } from '@lucid-agents/payments';
 
@@ -27,6 +28,41 @@ export type WithPaymentsParams = {
   middlewareFactory?: PaymentMiddlewareFactory;
   runtime?: AgentRuntime;
 };
+
+function normalizePaymentHeaders(res: Response) {
+  if (res.headersSent) return;
+
+  const paymentResponseHeader =
+    (res.getHeader('PAYMENT-RESPONSE') as string | undefined) ??
+    (res.getHeader('X-PAYMENT-RESPONSE') as string | undefined);
+  if (paymentResponseHeader) {
+    res.setHeader('PAYMENT-RESPONSE', paymentResponseHeader);
+  }
+  res.removeHeader('X-PAYMENT-RESPONSE');
+
+  const paymentRequiredHeader = res.getHeader('PAYMENT-REQUIRED');
+  if (!paymentRequiredHeader) {
+    const price = res.getHeader('X-Price');
+    const payTo = res.getHeader('X-Pay-To');
+    if (price && payTo) {
+      res.setHeader(
+        'PAYMENT-REQUIRED',
+        encodePaymentRequiredHeader({
+          price: String(price),
+          payTo: String(payTo),
+          network: (res.getHeader('X-Network') as string | undefined) ?? undefined,
+          facilitatorUrl:
+            (res.getHeader('X-Facilitator') as string | undefined) ?? undefined,
+        })
+      );
+    }
+  }
+
+  res.removeHeader('X-Price');
+  res.removeHeader('X-Pay-To');
+  res.removeHeader('X-Network');
+  res.removeHeader('X-Facilitator');
+}
 
 export function withPayments({
   app,
@@ -161,6 +197,19 @@ export function withPayments({
       req.originalUrl === path ||
       req.originalUrl?.startsWith(`${path}?`)
     ) {
+      const paymentHeader =
+        (req.headers['payment'] as string | string[] | undefined) ??
+        (req.headers['Payment'] as string | string[] | undefined);
+      if (paymentHeader && !req.headers['x-payment']) {
+        req.headers['x-payment'] = Array.isArray(paymentHeader)
+          ? paymentHeader[0]
+          : paymentHeader;
+      }
+      const originalEnd = res.end.bind(res);
+      res.end = function (chunk?: any, encoding?: any, cb?: any) {
+        normalizePaymentHeaders(res);
+        return originalEnd(chunk, encoding, cb);
+      };
       return middleware(req, res, next);
     }
     return next();
@@ -198,9 +247,9 @@ export function withPayments({
 
         await next();
 
-        const paymentResponseHeader = res.getHeader('X-PAYMENT-RESPONSE') as
-          | string
-          | undefined;
+        const paymentResponseHeader =
+          (res.getHeader('PAYMENT-RESPONSE') as string | undefined) ??
+          (res.getHeader('X-PAYMENT-RESPONSE') as string | undefined);
         if (
           paymentResponseHeader &&
           res.statusCode >= 200 &&
