@@ -116,7 +116,9 @@ describe("createTanStackPaywall", () => {
     );
 
     const request = new Request("http://localhost/pay", { method: "POST" });
-    const result = await (middleware as any)({
+    const server = (middleware as any).options?.server;
+    expect(server).toBeDefined();
+    const result = await server({
       request,
       pathname: "/pay",
       context: {},
