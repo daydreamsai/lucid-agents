@@ -91,7 +91,7 @@ function createRoutePatternResolver(
   return async () => compiled;
 }
 
-function jsonResponse(payload: unknown, status = 402) {
+function jsonResponse(payload: Record<string, unknown>, status = 402) {
   const safePayload = toJsonSafe(payload);
   const headers = new Headers({ 'Content-Type': 'application/json' });
   if (status === 402) {
