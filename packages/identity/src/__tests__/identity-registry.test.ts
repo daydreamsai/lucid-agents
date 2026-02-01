@@ -5,6 +5,7 @@ import {
   bootstrapIdentity,
   bootstrapTrust,
   buildMetadataURI,
+  buildRegistrationURI,
   buildTrustConfigFromIdentity,
   createIdentityRegistryClient,
   type IdentityRecord,
@@ -20,22 +21,30 @@ const REGISTRY_ADDRESS = '0x000000000000000000000000000000000000dEaD' as const;
 const REGISTERED_EVENT_SIG =
   '0xca52e62c367d81bb2e328eb795f7c7ba24afb478408a26c0e201d155c449bc4a' as const;
 
-describe('buildMetadataURI', () => {
-  it('constructs metadata URI from domain', () => {
-    expect(buildMetadataURI('agent.example.com')).toBe(
-      'https://agent.example.com/.well-known/agent-metadata.json'
+describe('buildRegistrationURI', () => {
+  it('constructs registration URI from domain', () => {
+    expect(buildRegistrationURI('agent.example.com')).toBe(
+      'https://agent.example.com/.well-known/agent-registration.json'
     );
   });
 
   it('handles domains with https protocol', () => {
-    expect(buildMetadataURI('https://agent.example.com')).toBe(
-      'https://agent.example.com/.well-known/agent-metadata.json'
+    expect(buildRegistrationURI('https://agent.example.com')).toBe(
+      'https://agent.example.com/.well-known/agent-registration.json'
     );
   });
 
   it('normalizes domain', () => {
-    expect(buildMetadataURI('  Agent.Example.COM  ')).toBe(
-      'https://agent.example.com/.well-known/agent-metadata.json'
+    expect(buildRegistrationURI('  Agent.Example.COM  ')).toBe(
+      'https://agent.example.com/.well-known/agent-registration.json'
+    );
+  });
+});
+
+describe('buildMetadataURI', () => {
+  it('is an alias for buildRegistrationURI', () => {
+    expect(buildMetadataURI('agent.example.com')).toBe(
+      'https://agent.example.com/.well-known/agent-registration.json'
     );
   });
 });
@@ -51,7 +60,7 @@ describe('createIdentityRegistryClient', () => {
           return '0xAaAA000000000000000000000000000000000001';
         }
         if (args.functionName === 'tokenURI') {
-          return 'https://agent.example.com/.well-known/agent-metadata.json';
+          return 'https://agent.example.com/.well-known/agent-registration.json';
         }
         throw new Error(`Unexpected function: ${args.functionName}`);
       },
@@ -67,7 +76,7 @@ describe('createIdentityRegistryClient', () => {
     expect(record?.agentId).toBe(1n);
     expect(record?.owner).toBe('0xaaaa000000000000000000000000000000000001');
     expect(record?.agentURI).toBe(
-      'https://agent.example.com/.well-known/agent-metadata.json'
+      'https://agent.example.com/.well-known/agent-registration.json'
     );
 
     expect(calls).toContainEqual({
@@ -144,7 +153,7 @@ describe('createIdentityRegistryClient', () => {
     });
 
     const result = await client.register({
-      agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://agent.example.com/.well-known/agent-registration.json',
     });
 
     expect(result.transactionHash).toBe('0xtxhash');
@@ -154,7 +163,7 @@ describe('createIdentityRegistryClient', () => {
     expect(result.agentId).toBe(42n); // Parsed from event!
     expect(writeArgs.functionName).toBe('register');
     expect(writeArgs.args).toEqual([
-      'https://agent.example.com/.well-known/agent-metadata.json',
+      'https://agent.example.com/.well-known/agent-registration.json',
     ]);
   });
 
@@ -204,7 +213,7 @@ describe('createIdentityRegistryClient', () => {
     const metadata = [{ key: 'version', value: new Uint8Array([1, 0, 0]) }];
 
     const result = await client.register({
-      agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://agent.example.com/.well-known/agent-registration.json',
       metadata,
     });
 
@@ -212,9 +221,145 @@ describe('createIdentityRegistryClient', () => {
     expect(result.agentId).toBe(100n); // Parsed from event!
     expect(writeArgs.functionName).toBe('register');
     expect(writeArgs.args).toEqual([
-      'https://agent.example.com/.well-known/agent-metadata.json',
+      'https://agent.example.com/.well-known/agent-registration.json',
       metadata,
     ]);
+  });
+
+  it('registers agent with no args', async () => {
+    let writeArgs: any;
+    const mockWalletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234' as const,
+      },
+      async writeContract(args: any) {
+        writeArgs = args;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const mockPublicClient = {
+      async readContract() {
+        return true;
+      },
+      async waitForTransactionReceipt() {
+        return { logs: [] };
+      },
+    } as any;
+
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient: mockPublicClient,
+      walletClient: mockWalletClient,
+    });
+
+    await client.register();
+
+    expect(writeArgs.functionName).toBe('register');
+    expect(writeArgs.args).toEqual([]);
+  });
+
+  it('gets agent wallet by ID', async () => {
+    const mockPublicClient = {
+      async readContract(args: any) {
+        if (args.functionName === 'getAgentWallet') {
+          return '0x000000000000000000000000000000000000beef';
+        }
+        throw new Error(`Unexpected: ${args.functionName}`);
+      },
+    } as PublicClientLike;
+
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient: mockPublicClient,
+    });
+
+    const wallet = await client.getAgentWallet(1n);
+    expect(wallet).toBe('0x000000000000000000000000000000000000beef');
+  });
+
+  it('sets agent wallet with signature', async () => {
+    let writeArgs: any;
+    const mockWalletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234' as const,
+      },
+      async writeContract(args: any) {
+        writeArgs = args;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const mockPublicClient = {
+      async readContract() {
+        return true;
+      },
+      async waitForTransactionReceipt() {
+        return { logs: [] };
+      },
+    } as any;
+
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient: mockPublicClient,
+      walletClient: mockWalletClient,
+    });
+
+    await client.setAgentWallet({
+      agentId: 1n,
+      newWallet: '0x000000000000000000000000000000000000beef',
+      deadline: 123n,
+      signature: '0x1234',
+    });
+
+    expect(writeArgs.functionName).toBe('setAgentWallet');
+    expect(writeArgs.args).toEqual([
+      1n,
+      '0x000000000000000000000000000000000000beef',
+      123n,
+      '0x1234',
+    ]);
+  });
+
+  it('unsets agent wallet via helper', async () => {
+    let writeArgs: any;
+    const mockWalletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234' as const,
+      },
+      async writeContract(args: any) {
+        writeArgs = args;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const mockPublicClient = {
+      async readContract() {
+        return true;
+      },
+      async waitForTransactionReceipt() {
+        return { logs: [] };
+      },
+    } as any;
+
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient: mockPublicClient,
+      walletClient: mockWalletClient,
+    });
+
+    await client.unsetAgentWallet({
+      agentId: 1n,
+      deadline: 123n,
+      signature: '0x1234',
+    });
+
+    expect(writeArgs.functionName).toBe('setAgentWallet');
+    expect(writeArgs.args).toEqual([1n, ZERO_ADDRESS, 123n, '0x1234']);
   });
 
   it('transfer calls safeTransferFrom with correct args', async () => {
@@ -505,13 +650,14 @@ describe('buildTrustConfigFromIdentity', () => {
       {
         agentId: 5n,
         owner: '0x0000000000000000000000000000000000000005',
-        agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://agent.example.com/.well-known/agent-registration.json',
       },
-      { chainId: 84532 }
+      { chainId: 84532, registryAddress: REGISTRY_ADDRESS }
     );
     expect(trust.registrations?.[0]).toEqual({
       agentId: '5',
       agentAddress: 'eip155:84532:0x0000000000000000000000000000000000000005',
+      agentRegistry: 'eip155:84532:0x000000000000000000000000000000000000dead',
     });
   });
 
@@ -521,9 +667,9 @@ describe('buildTrustConfigFromIdentity', () => {
       {
         agentId: largeId,
         owner: '0x0000000000000000000000000000000000000abc',
-        agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://agent.example.com/.well-known/agent-registration.json',
       },
-      { chainId: 84532 }
+      { chainId: 84532, registryAddress: REGISTRY_ADDRESS }
     );
 
     expect(trust.registrations?.[0].agentId).toBe(largeId.toString());
@@ -618,7 +764,7 @@ describe('bootstrapTrust', () => {
 
     expect(result.didRegister).toBe(true);
     expect(registeredAgentURI).toBe(
-      'https://example.com/.well-known/agent-metadata.json'
+      'https://example.com/.well-known/agent-registration.json'
     );
     expect(result.transactionHash).toBe('0xtxhash');
     expect(result.record?.agentId).toBe(7n);
@@ -630,7 +776,7 @@ describe('bootstrapTrust', () => {
     const record: IdentityRecord = {
       agentId: 7n,
       owner: '0x0000000000000000000000000000000000000007',
-      agentURI: 'https://example.com/.well-known/agent-metadata.json',
+      agentURI: 'https://example.com/.well-known/agent-registration.json',
     };
 
     const publicClient: PublicClientLike = {
@@ -651,8 +797,12 @@ describe('bootstrapTrust', () => {
     });
 
     expect(callbackInvoked).toBe(true);
-    expect(result.trust?.registrations?.[0].agentAddress).toBe(
+    const registration = result.trust?.registrations?.[0];
+    expect(registration?.agentAddress).toBe(
       'eip155:84532:0x0000000000000000000000000000000000000007'
+    );
+    expect(registration?.agentRegistry).toBe(
+      'eip155:84532:0x000000000000000000000000000000000000dead'
     );
   });
 });

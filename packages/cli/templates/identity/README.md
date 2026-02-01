@@ -63,7 +63,8 @@ import { identityClient, reputationClient, validationClient } from "./agent";
 // Give feedback to another agent
 await reputationClient.giveFeedback({
   toAgentId: 42n,
-  score: 90,
+  value: 90,
+  valueDecimals: 0,
   tag1: "helpful",
   tag2: "reliable",
   endpoint: "https://agent.example.com/api", // Optional parameter (defaults to empty string if not provided)
@@ -74,6 +75,7 @@ await validationClient.validationRequest({
   validatorAddress: "0x...",
   agentId: 1n,
   requestUri: "ipfs://...",
+  requestBody: '{"input":"work-data"}',
 });
 ```
 
@@ -111,7 +113,7 @@ await validationClient.validationRequest({
 1. **Deploy your agent** - Both well-known files are auto-served:
 
    - `/.well-known/agent-card.json` - Full agent manifest
-   - `/.well-known/agent-metadata.json` - ERC-8004 identity metadata (only if registered)
+   - `/.well-known/agent-registration.json` - ERC-8004 registration file (only if registered)
 
 2. **Customize your agent** in `src/agent.ts`
 

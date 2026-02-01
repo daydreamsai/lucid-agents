@@ -98,7 +98,7 @@
     },
     "packages/api-sdk": {
       "name": "@lucid-agents/api-sdk",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "dependencies": {
         "@hey-api/client-fetch": "^0.10.0",
       },
@@ -116,7 +116,7 @@
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -131,7 +131,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -165,7 +165,7 @@
     },
     "packages/examples": {
       "name": "@lucid-agents/examples",
-      "version": "0.2.10",
+      "version": "0.2.11",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
@@ -195,7 +195,7 @@
     },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.3.14",
+      "version": "0.3.15",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -214,7 +214,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.7.14",
+      "version": "0.7.15",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -250,7 +250,7 @@
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -265,7 +265,7 @@
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "2.1.1",
+      "version": "2.1.2",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -298,7 +298,7 @@
     },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.6.14",
+      "version": "0.6.15",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -331,7 +331,7 @@
     },
     "packages/wallet": {
       "name": "@lucid-agents/wallet",
-      "version": "0.5.6",
+      "version": "0.5.7",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "viem": "catalog:",

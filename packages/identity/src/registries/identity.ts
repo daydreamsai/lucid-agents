@@ -48,12 +48,12 @@ type AgentIdentifierInput = bigint | number | string;
 
 type RegistrationEntryParams = {
   agentId: AgentIdentifierInput;
-  address: string;
+  ownerAddress?: string;
   chainId: number | string;
   namespace?: string;
   signature?: string;
   agentURI?: string;
-  agentRegistry?: Hex;
+  registryAddress: Hex;
 };
 
 type TrustOverridesInput = Partial<
@@ -100,20 +100,24 @@ function createRegistrationEntry(
 ): RegistrationEntry {
   const entry: RegistrationEntry = {
     agentId: normalizeAgentId(params.agentId),
-    agentAddress: toCaip10({
+    agentRegistry: toCaip10({
       namespace: params.namespace,
       chainId: params.chainId,
-      address: params.address,
+      address: params.registryAddress,
     }),
   };
+  if (params.ownerAddress) {
+    entry.agentAddress = toCaip10({
+      namespace: params.namespace,
+      chainId: params.chainId,
+      address: params.ownerAddress,
+    });
+  }
   if (params.signature) {
     entry.signature = params.signature;
   }
   if (params.agentURI) {
     entry.agentURI = params.agentURI;
-  }
-  if (params.agentRegistry) {
-    entry.agentRegistry = params.agentRegistry;
   }
   return entry;
 }
@@ -133,15 +137,18 @@ export type IdentityRegistryClient = {
   readonly chainId: number;
 
   get(agentId: bigint | number | string): Promise<IdentityRecord | null>;
+  getAgentWallet(agentId: bigint | number | string): Promise<Hex>;
   getMetadata(
     agentId: bigint | number | string,
     key: string
   ): Promise<Uint8Array | null>;
-  register(input: RegisterAgentInput): Promise<RegisterAgentResult>;
+  register(input?: RegisterAgentInput): Promise<RegisterAgentResult>;
   setAgentURI(
     agentId: bigint | number | string,
     agentURI: string
   ): Promise<Hex>;
+  setAgentWallet(input: SetAgentWalletInput): Promise<Hex>;
+  unsetAgentWallet(input: UnsetAgentWalletInput): Promise<Hex>;
   setMetadata(
     agentId: bigint | number | string,
     key: string,
@@ -200,7 +207,7 @@ export type WalletClientLike = {
 };
 
 export type RegisterAgentInput = {
-  agentURI: string;
+  agentURI?: string;
   metadata?: Array<{ key: string; value: Uint8Array }>;
 };
 
@@ -208,6 +215,19 @@ export type RegisterAgentResult = {
   transactionHash: Hex;
   agentAddress: Hex;
   agentId?: bigint;
+};
+
+export type SetAgentWalletInput = {
+  agentId: bigint | number | string;
+  newWallet: Hex;
+  deadline: bigint;
+  signature: Hex;
+};
+
+export type UnsetAgentWalletInput = {
+  agentId: bigint | number | string;
+  deadline: bigint;
+  signature: Hex;
 };
 
 export function createIdentityRegistryClient<
@@ -256,6 +276,20 @@ export function createIdentityRegistryClient<
     };
   }
 
+  async function getAgentWallet(
+    agentId: bigint | number | string
+  ): Promise<Hex> {
+    const id = BigInt(agentId);
+    const wallet = (await publicClient.readContract({
+      address,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'getAgentWallet',
+      args: [id],
+    })) as string;
+
+    return normalizeAddress(wallet);
+  }
+
   async function getMetadata(
     agentId: bigint | number | string,
     key: string
@@ -287,15 +321,11 @@ export function createIdentityRegistryClient<
   }
 
   async function register(
-    input: RegisterAgentInput
+    input?: RegisterAgentInput
   ): Promise<RegisterAgentResult> {
     if (!walletClient) {
       throw new Error('Wallet client required for register');
     }
-    if (!input.agentURI) {
-      throw new Error('agentURI is required');
-    }
-
     if (!walletClient.account?.address) {
       throw new Error('wallet account address is required');
     }
@@ -303,9 +333,12 @@ export function createIdentityRegistryClient<
     const agentAddress = normalizeAddress(walletClient.account.address);
 
     // Contract register() function takes agentURI parameter (not tokenURI)
-    const args = input.metadata
-      ? [input.agentURI, input.metadata]
-      : [input.agentURI];
+    let args: readonly unknown[] = [];
+    if (input?.agentURI) {
+      args = input.metadata ? [input.agentURI, input.metadata] : [input.agentURI];
+    } else if (input?.metadata) {
+      throw new Error('agentURI is required when metadata is provided');
+    }
 
     const txHash = await walletClient.writeContract({
       address,
@@ -388,18 +421,18 @@ export function createIdentityRegistryClient<
     return txHash;
   }
 
-  function toRegistrationEntry(
+function toRegistrationEntry(
     record: IdentityRecord,
     signature?: string
   ): RegistrationEntry {
     return createRegistrationEntry({
       agentId: record.agentId,
-      address: record.owner,
       chainId,
       namespace,
       signature,
       agentURI: record.agentURI,
-      agentRegistry: address,
+      ownerAddress: record.owner,
+      registryAddress: address,
     });
   }
 
@@ -423,6 +456,35 @@ export function createIdentityRegistryClient<
     await waitForConfirmation(publicClient, txHash);
 
     return txHash;
+  }
+
+  async function setAgentWallet(input: SetAgentWalletInput): Promise<Hex> {
+    if (!walletClient) {
+      throw new Error('Wallet client required for setAgentWallet');
+    }
+
+    const id = BigInt(input.agentId);
+    const txHash = await walletClient.writeContract({
+      address,
+      abi: IDENTITY_REGISTRY_ABI,
+      functionName: 'setAgentWallet',
+      args: [id, input.newWallet, input.deadline, input.signature],
+    });
+
+    await waitForConfirmation(publicClient, txHash);
+
+    return txHash;
+  }
+
+  async function unsetAgentWallet(
+    input: UnsetAgentWalletInput
+  ): Promise<Hex> {
+    return setAgentWallet({
+      agentId: input.agentId,
+      newWallet: ZERO_ADDRESS,
+      deadline: input.deadline,
+      signature: input.signature,
+    });
   }
 
   async function getVersion(): Promise<string> {
@@ -556,9 +618,12 @@ export function createIdentityRegistryClient<
     address,
     chainId,
     get,
+    getAgentWallet,
     getMetadata,
     register,
     setAgentURI,
+    setAgentWallet,
+    unsetAgentWallet,
     setMetadata,
     toRegistrationEntry,
     getVersion,
@@ -605,6 +670,7 @@ export function buildTrustConfigFromIdentity(
     signature?: string;
     chainId: number | string;
     namespace?: string;
+    registryAddress: Hex;
     trustOverrides?: TrustOverridesInput;
   }
 ): TrustConfig {
@@ -615,13 +681,20 @@ export function buildTrustConfigFromIdentity(
     );
   }
 
+  if (!options?.registryAddress) {
+    throw new Error(
+      'registryAddress is required to generate trust config registration entry'
+    );
+  }
+
   return createTrustConfig(
     {
       agentId: record.agentId,
-      address: record.owner,
+      ownerAddress: record.owner,
       chainId: chainRef,
       namespace: options?.namespace,
       signature: options?.signature,
+      registryAddress: options.registryAddress,
     },
     options?.trustOverrides
   );
@@ -664,10 +737,10 @@ export type BootstrapTrustResult = {
 };
 
 /**
- * Constructs the metadata URI for an agent's domain
- * Points to /.well-known/agent-metadata.json
+ * Constructs the registration URI for an agent's domain
+ * Points to /.well-known/agent-registration.json
  */
-export function buildMetadataURI(domain: string): string {
+export function buildRegistrationURI(domain: string): string {
   const normalized = normalizeDomain(domain);
   if (!normalized) {
     throw new Error('domain is required');
@@ -678,7 +751,14 @@ export function buildMetadataURI(domain: string): string {
     ? normalized
     : `https://${normalized}`;
 
-  return `${origin}/.well-known/agent-metadata.json`;
+  return `${origin}/.well-known/agent-registration.json`;
+}
+
+/**
+ * @deprecated Use buildRegistrationURI instead.
+ */
+export function buildMetadataURI(domain: string): string {
+  return buildRegistrationURI(domain);
 }
 
 export async function bootstrapTrust(
@@ -716,7 +796,7 @@ export async function bootstrapTrust(
   }
 
   if (!record && shouldRegister) {
-    const agentURI = buildMetadataURI(normalizedDomain);
+    const agentURI = buildRegistrationURI(normalizedDomain);
     const registration = await client.register({ agentURI });
     transactionHash = registration.transactionHash;
     didRegister = true;
@@ -774,6 +854,7 @@ export async function bootstrapTrust(
     chainId: options.chainId,
     namespace: options.namespace,
     signature,
+    registryAddress: options.registryAddress,
     trustOverrides: options.trustOverrides,
   });
 

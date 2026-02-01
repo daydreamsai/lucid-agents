@@ -49,7 +49,8 @@ export type CreateValidationRequestInput = {
   validatorAddress: Hex;
   agentId: bigint;
   requestUri: string;
-  requestHash?: Hex; // Optional - will be computed from requestUri if not provided
+  requestHash?: Hex; // Optional - computed from requestBody (preferred) or requestUri
+  requestBody?: string | Uint8Array;
 };
 
 export type SubmitValidationResponseInput = {
@@ -69,6 +70,7 @@ export type ValidationRegistryClient = {
   readonly address: Hex;
   readonly chainId: number;
 
+  getIdentityRegistry(): Promise<Hex>;
   getValidationStatus(requestHash: Hex): Promise<ValidationStatus | null>;
   getAgentValidations(agentId: bigint): Promise<Hex[]>;
   getValidatorRequests(validatorAddress: Hex): Promise<Hex[]>;
@@ -91,6 +93,17 @@ export function createValidationRegistryClient<
   options: ValidationRegistryClientOptions<PublicClient, WalletClient>
 ): ValidationRegistryClient {
   const { address, chainId, publicClient, walletClient } = options;
+
+  async function getIdentityRegistry(): Promise<Hex> {
+    const result = (await publicClient.readContract({
+      address,
+      abi: VALIDATION_REGISTRY_ABI,
+      functionName: 'getIdentityRegistry',
+      args: [],
+    })) as Hex;
+
+    return result;
+  }
 
   async function getValidationStatus(
     requestHash: Hex
@@ -185,9 +198,11 @@ export function createValidationRegistryClient<
       throw new Error('Wallet client required for validationRequest');
     }
 
-    // Compute request hash from URI if not provided
     const requestHash =
-      input.requestHash ?? hashValidationRequest(input.requestUri);
+      input.requestHash ??
+      (input.requestBody
+        ? hashValidationRequest(input.requestBody)
+        : hashValidationRequest(input.requestUri));
 
     const txHash = await walletClient.writeContract({
       address,
@@ -247,6 +262,7 @@ export function createValidationRegistryClient<
   return {
     address,
     chainId,
+    getIdentityRegistry,
     getValidationStatus,
     getAgentValidations,
     getValidatorRequests,

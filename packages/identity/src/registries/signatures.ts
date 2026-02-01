@@ -4,7 +4,7 @@
  */
 
 import type { Hex, SignerWalletClient } from '@lucid-agents/wallet';
-import { signMessageWithViem } from '@lucid-agents/wallet';
+import { signMessageWithViem, signTypedDataWithViem } from '@lucid-agents/wallet';
 import { keccak256, stringToBytes } from 'viem';
 
 /**
@@ -45,11 +45,12 @@ export async function signDomainProof(
 }
 
 /**
- * Hash a validation request URI or content to create a request hash
- * This is used to uniquely identify validation requests on-chain
+ * Hash a validation request payload to create a request hash.
+ * Pass the canonical request body when available; legacy callers may pass a URI.
  */
-export function hashValidationRequest(content: string): Hex {
-  return keccak256(stringToBytes(content));
+export function hashValidationRequest(content: string | Uint8Array): Hex {
+  const bytes = typeof content === 'string' ? stringToBytes(content) : content;
+  return keccak256(bytes);
 }
 
 /**
@@ -87,4 +88,76 @@ export async function signValidationRequest(
 ): Promise<Hex> {
   const message = buildValidationRequestMessage(params);
   return signMessageWithViem(walletClient, message);
+}
+
+export type AgentWalletTypedData = {
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: Hex;
+  };
+  types: {
+    AgentWallet: Array<{ name: string; type: string }>;
+  };
+  primaryType: 'AgentWallet';
+  message: {
+    agentId: string;
+    newWallet: Hex;
+    deadline: string;
+  };
+};
+
+/**
+ * Build EIP-712 typed data for setting an agent wallet.
+ */
+export function buildAgentWalletTypedData(params: {
+  agentId: bigint;
+  newWallet: Hex;
+  deadline: bigint;
+  chainId: number;
+  verifyingContract: Hex;
+  name?: string;
+  version?: string;
+}): AgentWalletTypedData {
+  return {
+    domain: {
+      name: params.name ?? 'ERC-8004 Identity Registry',
+      version: params.version ?? '1',
+      chainId: params.chainId,
+      verifyingContract: params.verifyingContract,
+    },
+    types: {
+      AgentWallet: [
+        { name: 'agentId', type: 'uint256' },
+        { name: 'newWallet', type: 'address' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+    },
+    primaryType: 'AgentWallet',
+    message: {
+      agentId: params.agentId.toString(10),
+      newWallet: params.newWallet,
+      deadline: params.deadline.toString(10),
+    },
+  };
+}
+
+/**
+ * Sign an agent wallet update using EIP-712 typed data.
+ */
+export async function signAgentWalletProof(
+  walletClient: SignerWalletClient,
+  params: {
+    agentId: bigint;
+    newWallet: Hex;
+    deadline: bigint;
+    chainId: number;
+    verifyingContract: Hex;
+    name?: string;
+    version?: string;
+  }
+): Promise<Hex> {
+  const typedData = buildAgentWalletTypedData(params);
+  return signTypedDataWithViem(walletClient, typedData);
 }

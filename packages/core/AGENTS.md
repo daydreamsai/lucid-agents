@@ -98,7 +98,13 @@ const agent = await createAgent({
   .use(
     identity({
       trustModels: ['feedback'],
-      registrations: [{ agentId: 1, agentAddress: 'eip155:8453:0xabc' }],
+      registrations: [
+        {
+          agentId: 1,
+          agentRegistry: 'eip155:8453:0xregistry',
+          agentAddress: 'eip155:8453:0xabc',
+        },
+      ],
     })
   )
   .build();
@@ -210,7 +216,7 @@ All fields are optional. If `url` is not provided, it defaults to the agent's or
 - `pricing` — `{ invoke?, stream? }` when payments are configured
 - `payments[]` — vendor-neutral payments: `[{ method: 'x402', payee, network, endpoint?, priceModel? }]`
 - `capabilities.extensions[]` — includes AP2 descriptor `{ uri: 'https://github.com/google-agentic-commerce/ap2/tree/v0.1', params: { roles }, required? }`
-- `registrations[]` — optional ERC-8004 identity attestations (`agentId`, CAIP-10 `agentAddress`, optional `signature`)
+- `registrations[]` — optional ERC-8004 identity attestations (`agentId`, CAIP-10 `agentRegistry`, optional `agentAddress`, optional `signature`)
 - `trustModels[]` — enumerate supported trust tiers (e.g. `feedback`, `inference-validation`, `tee-attestation`)
 - `ValidationRequestsURI` / `ValidationResponsesURI` / `FeedbackDataURI` — off-chain mirrors for validation and feedback payloads
 
@@ -442,7 +448,7 @@ const trustConfig: TrustConfig = {
 };
 ```
 
-`buildTrustConfigFromIdentity` can shape a `TrustConfig` from a registry hit plus any URIs you already host today. TODOs for later phases are called out inline in `src/erc8004.ts` (e.g., parsing logs, caching, multi-chain fan-out).
+`buildTrustConfigFromIdentity` can shape a `TrustConfig` from a registry hit plus any URIs you already host today. It now requires the identity registry contract address (`registryAddress`) to populate `agentRegistry`. TODOs for later phases are called out inline in `src/erc8004.ts` (e.g., parsing logs, caching, multi-chain fan-out).
 
 ## Types
 

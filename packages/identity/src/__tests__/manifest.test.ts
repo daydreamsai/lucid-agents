@@ -18,6 +18,7 @@ describe('createAgentCardWithIdentity', () => {
       {
         agentId: 'agent-123',
         agentAddress: 'eip155:8453:0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+        agentRegistry: 'eip155:8453:0x000000000000000000000000000000000000dead',
       },
     ],
     trustModels: ['feedback', 'inference-validation'],

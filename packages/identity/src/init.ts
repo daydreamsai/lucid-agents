@@ -4,7 +4,7 @@
  */
 
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { TrustConfig } from '@lucid-agents/types/identity';
+import type { AgentRegistration, TrustConfig } from '@lucid-agents/types/identity';
 import type {
   AgentWalletHandle,
   DeveloperWalletHandle,
@@ -60,6 +60,24 @@ function resolveRequiredChainId(
 /**
  * Options for creating agent identity with automatic registration.
  */
+export type AgentRegistrationOptions = {
+  name?: string;
+  description?: string;
+  image?: string;
+  url?: string;
+  services?: Array<{
+    id?: string;
+    type?: string;
+    serviceEndpoint: string;
+    description?: string;
+    [key: string]: unknown;
+  }>;
+  x402Support?: boolean;
+  active?: boolean;
+  registrations?: TrustConfig['registrations'];
+  supportedTrust?: TrustConfig['trustModels'];
+};
+
 export type CreateAgentIdentityOptions = {
   /**
    * Agent runtime instance (optional if walletHandle is provided).
@@ -118,6 +136,11 @@ export type CreateAgentIdentityOptions = {
     validationResponsesUri?: string;
     feedbackDataUri?: string;
   };
+
+  /**
+   * Optional registration file overrides for logging and generation.
+   */
+  registration?: AgentRegistrationOptions;
 
   /**
    * Custom environment variables object.
@@ -201,7 +224,8 @@ export type AgentIdentity = BootstrapIdentityResult & {
  *   // Give feedback to another agent
  *   await identity.clients.reputation.giveFeedback({
  *     toAgentId: 42n,
- *     score: 90,
+ *     value: 90,
+ *     valueDecimals: 0,
  *     tag1: "reliable",
  *     tag2: "fast",
  *     endpoint: "https://agent.example.com",
@@ -403,13 +427,13 @@ export async function createAgentIdentity(
 
   if (identity.didRegister && identity.domain) {
     const log = logger ?? { info: console.log };
-    const metadata = generateAgentMetadata(identity);
+    const registration = generateAgentRegistration(identity, options.registration);
 
-    log.info?.('\nHost this metadata at your domain:');
+    log.info?.('\nHost this registration file at your domain:');
     log.info?.(
-      `   https://${identity.domain}/.well-known/agent-metadata.json\n`
+      `   https://${identity.domain}/.well-known/agent-registration.json\n`
     );
-    log.info?.(JSON.stringify(metadata, null, 2));
+    log.info?.(JSON.stringify(registration, null, 2));
     log.info?.('');
   }
 
@@ -466,18 +490,76 @@ export function getTrustConfig(result: AgentIdentity): TrustConfig | undefined {
 }
 
 /**
- * Generate agent metadata JSON for hosting at /.well-known/agent-metadata.json
+ * Generate agent registration JSON for hosting at /.well-known/agent-registration.json
  *
  * @example
  * ```ts
  * const identity = await createAgentIdentity({ autoRegister: true });
- * const metadata = generateAgentMetadata(identity, {
+ * const registration = generateAgentRegistration(identity, {
  *   name: "My Agent",
  *   description: "An intelligent assistant",
- *   capabilities: [{ name: "chat", description: "Natural language conversation" }]
+ *   image: "https://your-domain/og.png",
+ *   services: [
+ *     {
+ *       id: "a2a",
+ *       type: "a2a",
+ *       serviceEndpoint: "https://your-domain/.well-known/agent-card.json"
+ *     }
+ *   ]
  * });
- * // Host this JSON at https://your-domain/.well-known/agent-metadata.json
+ * // Host this JSON at https://your-domain/.well-known/agent-registration.json
  * ```
+ */
+export function generateAgentRegistration(
+  identity: AgentIdentity,
+  options?: AgentRegistrationOptions
+) {
+  const registration: AgentRegistration = {
+    type: 'agent',
+    name: options?.name || 'Agent',
+    description: options?.description || 'An AI agent',
+    domain: identity.domain,
+  };
+
+  if (options?.image) {
+    registration.image = options.image;
+  }
+
+  if (options?.url) {
+    registration.url = options.url;
+  }
+
+  if (options?.services && options.services.length > 0) {
+    registration.services = options.services;
+  }
+
+  if (options?.x402Support !== undefined) {
+    registration.x402Support = options.x402Support;
+  }
+
+  if (options?.active !== undefined) {
+    registration.active = options.active;
+  }
+
+  if (identity.record?.owner) {
+    registration.owner = identity.record.owner;
+  }
+
+  const registrations = options?.registrations ?? identity.trust?.registrations;
+  if (registrations && registrations.length > 0) {
+    registration.registrations = registrations;
+  }
+
+  const supportedTrust = options?.supportedTrust ?? identity.trust?.trustModels;
+  if (supportedTrust && supportedTrust.length > 0) {
+    registration.supportedTrust = supportedTrust;
+  }
+
+  return registration;
+}
+
+/**
+ * @deprecated Use generateAgentRegistration instead.
  */
 export function generateAgentMetadata(
   identity: AgentIdentity,
@@ -487,23 +569,8 @@ export function generateAgentMetadata(
     capabilities?: Array<{ name: string; description: string }>;
   }
 ) {
-  const metadata: Record<string, unknown> = {
-    name: options?.name || 'Agent',
-    description: options?.description || 'An AI agent',
-    domain: identity.domain,
-  };
-
-  if (identity.record?.owner) {
-    metadata.address = identity.record.owner;
-  }
-
-  if (options?.capabilities && options.capabilities.length > 0) {
-    metadata.capabilities = options.capabilities;
-  }
-
-  if (identity.trust?.trustModels && identity.trust.trustModels.length > 0) {
-    metadata.trustModels = identity.trust.trustModels;
-  }
-
-  return metadata;
+  return generateAgentRegistration(identity, {
+    name: options?.name,
+    description: options?.description,
+  });
 }

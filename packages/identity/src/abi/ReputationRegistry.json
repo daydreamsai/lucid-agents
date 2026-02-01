@@ -145,8 +145,14 @@
             },
             {
                 "indexed": false,
+                "internalType": "int128",
+                "name": "value",
+                "type": "int128"
+            },
+            {
+                "indexed": false,
                 "internalType": "uint8",
-                "name": "score",
+                "name": "valueDecimals",
                 "type": "uint8"
             },
             {
@@ -425,8 +431,13 @@
                 "type": "uint64"
             },
             {
+                "internalType": "int128",
+                "name": "summaryValue",
+                "type": "int128"
+            },
+            {
                 "internalType": "uint8",
-                "name": "averageScore",
+                "name": "summaryValueDecimals",
                 "type": "uint8"
             }
         ],
@@ -454,8 +465,13 @@
                 "type": "uint256"
             },
             {
+                "internalType": "int128",
+                "name": "value",
+                "type": "int128"
+            },
+            {
                 "internalType": "uint8",
-                "name": "score",
+                "name": "valueDecimals",
                 "type": "uint8"
             },
             {
@@ -569,8 +585,13 @@
                 "type": "uint64[]"
             },
             {
+                "internalType": "int128[]",
+                "name": "values",
+                "type": "int128[]"
+            },
+            {
                 "internalType": "uint8[]",
-                "name": "scores",
+                "name": "valueDecimals",
                 "type": "uint8[]"
             },
             {
@@ -613,8 +634,13 @@
         "name": "readFeedback",
         "outputs": [
             {
+                "internalType": "int128",
+                "name": "value",
+                "type": "int128"
+            },
+            {
                 "internalType": "uint8",
-                "name": "score",
+                "name": "valueDecimals",
                 "type": "uint8"
             },
             {

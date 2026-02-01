@@ -6,7 +6,7 @@ This guide helps you migrate your code from the previous ERC-8004 implementation
 
 The January 2026 spec update introduces breaking changes to align with the latest ERC-8004 standard:
 
-- **Reputation Registry**: Removed `feedbackAuth`, changed tags from `bytes32`/`Hex` to `string`, added optional `endpoint` parameter (defaults to empty string if not provided)
+- **Reputation Registry**: Replaced `score` with `value` + `valueDecimals`, removed `feedbackAuth`, changed tags from `bytes32`/`Hex` to `string`, added optional `endpoint` parameter (defaults to empty string if not provided)
 - **Identity Registry**: Renamed `tokenURI` to `agentURI` throughout
 - **Validation Registry**: Deprecated and removed from default client creation (under active development). Function names changed (`createRequest` → `validationRequest`, `submitResponse` → `validationResponse`). Tag types changed from `bytes32`/`Hex` to `string` in `getSummary()`, `getValidationStatus()`, and `validationResponse()`
 
@@ -35,7 +35,8 @@ await reputationClient.giveFeedback({
 ```typescript
 await reputationClient.giveFeedback({
   toAgentId: 42n,
-  score: 90,
+  value: 90,
+  valueDecimals: 0,
   tag1: 'reliable', // String
   tag2: 'fast', // String
   endpoint: 'https://agent.example.com', // Optional parameter (defaults to empty string if not provided)
@@ -82,7 +83,7 @@ const record = await identityClient.get(42n);
 console.log(record.tokenURI); // Uses tokenURI
 
 await identityClient.register({
-  tokenURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+  tokenURI: 'https://agent.example.com/.well-known/agent-registration.json',
 });
 
 const entry = identityClient.toRegistrationEntry(record);
@@ -96,7 +97,7 @@ const record = await identityClient.get(42n);
 console.log(record.agentURI); // Now uses agentURI
 
 await identityClient.register({
-  agentURI: 'https://agent.example.com/.well-known/agent-metadata.json',
+  agentURI: 'https://agent.example.com/.well-known/agent-registration.json',
 });
 
 const entry = identityClient.toRegistrationEntry(record);
@@ -105,9 +106,37 @@ console.log(entry.agentURI); // Now uses agentURI in RegistrationEntry
 // New function: setAgentURI()
 await identityClient.setAgentURI(
   42n,
-  'https://new-agent.example.com/.well-known/agent-metadata.json'
+  'https://new-agent.example.com/.well-known/agent-registration.json'
 );
 ```
+
+### 3.1. Registration entries now include `agentRegistry`
+
+**Before:**
+
+```typescript
+const trustConfig = {
+  registrations: [
+    { agentId: '1', agentAddress: 'eip155:84532:0xabc' },
+  ],
+};
+```
+
+**After:**
+
+```typescript
+const trustConfig = {
+  registrations: [
+    {
+      agentId: '1',
+      agentRegistry: 'eip155:84532:0xregistry',
+      agentAddress: 'eip155:84532:0xabc', // optional legacy field
+    },
+  ],
+};
+```
+
+`buildTrustConfigFromIdentity()` now requires `registryAddress` so it can populate `agentRegistry`.
 
 ### 4. Validation Registry Deprecation
 
@@ -149,6 +178,8 @@ if (identity.clients?.validation) {
     validatorAddress: '0x...',
     agentId: identity.record!.agentId,
     requestUri: 'ipfs://...',
+    requestBody: '{"input":"work-data"}', // preferred for hashing
+    // requestHash: '0xabc...', // optional if you already computed it
   });
 
   // Function names changed: submitResponse → validationResponse
@@ -169,6 +200,7 @@ if (identity.clients?.validation) {
 
 // Note: Validation Registry is under active development and will be
 // revised in a follow-up spec update later this year.
+// If requestBody is omitted, the client hashes requestUri for backward compatibility.
 ```
 
 ### 5. Contract Addresses
@@ -231,6 +263,7 @@ const addresses = getRegistryAddresses(11155111); // ETH Sepolia
 - [ ] Update tag types from `Hex` to `string` in tests
 - [ ] Optionally add `endpoint` parameter to `giveFeedback()` test calls (optional, defaults to empty string)
 - [ ] Update test expectations for `getAllFeedback()` return values
+- [ ] Update `score` usages to `value` + `valueDecimals` (and adjust any average score math)
 
 ## Common Issues and Solutions
 
@@ -259,7 +292,8 @@ await reputationClient.giveFeedback({
 // After
 await reputationClient.giveFeedback({
   toAgentId: 42n,
-  score: 90,
+  value: 90,
+  valueDecimals: 0,
   tag1: 'reliable', // Use string directly
   // endpoint is optional (defaults to empty string if not provided)
 });
@@ -278,7 +312,8 @@ await reputationClient.giveFeedback({ ..., feedbackAuth });
 // After
 await reputationClient.giveFeedback({
   toAgentId: 42n,
-  score: 90,
+  value: 90,
+  valueDecimals: 0,
   // endpoint is optional (defaults to empty string if not provided)
   // No feedbackAuth needed
 });
@@ -335,7 +370,7 @@ This is a **major version bump** with breaking changes. Update your code followi
 // Update an agent's URI after registration
 await identityClient.setAgentURI(
   42n,
-  'https://new-uri.example.com/.well-known/agent-metadata.json'
+  'https://new-uri.example.com/.well-known/agent-registration.json'
 );
 ```
 

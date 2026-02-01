@@ -125,7 +125,7 @@ function createMockRuntime(
         throw new Error('ERC721NonexistentToken');
       }
       if (functionName === 'tokenURI') {
-        return 'https://example.com/.well-known/agent-metadata.json';
+        return 'https://example.com/.well-known/agent-registration.json';
       }
       return true;
     },
@@ -208,7 +208,7 @@ describe('createAgentIdentity', () => {
           throw new Error('ERC721NonexistentToken');
         }
         if (functionName === 'tokenURI') {
-          return 'https://example.com/.well-known/agent-metadata.json';
+          return 'https://example.com/.well-known/agent-registration.json';
         }
         return true;
       },
@@ -352,7 +352,7 @@ describe('createAgentIdentity', () => {
           throw new Error('ERC721NonexistentToken');
         }
         if (functionName === 'tokenURI') {
-          return 'https://new-agent.example.com/.well-known/agent-metadata.json';
+          return 'https://new-agent.example.com/.well-known/agent-registration.json';
         }
         return true;
       },
@@ -620,7 +620,7 @@ describe('registerAgent', () => {
           throw new Error('ERC721NonexistentToken');
         }
         if (functionName === 'tokenURI') {
-          return 'https://register.example.com/.well-known/agent-metadata.json';
+          return 'https://register.example.com/.well-known/agent-registration.json';
         }
         return true;
       },
@@ -695,6 +695,8 @@ describe('getTrustConfig', () => {
             agentId: '1',
             agentAddress:
               'eip155:84532:0x0000000000000000000000000000000000000001',
+            agentRegistry:
+              'eip155:84532:0x000000000000000000000000000000000000dead',
           },
         ],
         trustModels: ['feedback'],
@@ -702,7 +704,7 @@ describe('getTrustConfig', () => {
       record: {
         agentId: 1n,
         owner: '0x0000000000000000000000000000000000000001',
-        agentURI: 'https://test.example.com/.well-known/agent-metadata.json',
+        agentURI: 'https://test.example.com/.well-known/agent-registration.json',
       },
     };
 

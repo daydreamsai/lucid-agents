@@ -9,7 +9,7 @@ ERC-8004 identity helpers for Lucid agents. Register your agent on the ERC-8004 
 ### Key Concepts
 
 - **Agent Identity**: Agents are NFTs - registering mints an NFT to your address
-- **Metadata**: Agent metadata (domain, capabilities) is hosted at your domain
+- **Registration file**: Agent registration JSON is hosted at your domain
 - **Ownership**: Transfer the NFT to transfer agent ownership
 - **On-Chain Verification**: Anyone can verify agent ownership via the blockchain
 
@@ -65,28 +65,33 @@ console.log(identity.status);
 
 if (identity.didRegister) {
   console.log('Transaction:', identity.transactionHash);
-  // The package will automatically log the metadata JSON you need to host
+  // The package will automatically log the registration JSON you need to host
 }
 ```
 
-### 3. Host Your Metadata
+### 3. Host Your Registration File
 
-After successful registration, the package automatically generates and logs the metadata JSON you need to host. Simply copy it and save it at:
+After successful registration, the package automatically generates and logs the registration JSON you need to host. Simply copy it and save it at:
 
 ```
-https://my-agent.example.com/.well-known/agent-metadata.json
+https://my-agent.example.com/.well-known/agent-registration.json
 ```
 
-You can also generate custom metadata using the helper:
+You can also generate a custom registration file using the helper:
 
 ```typescript
-import { generateAgentMetadata } from '@lucid-agents/identity';
+import { generateAgentRegistration } from '@lucid-agents/identity';
 
-const metadata = generateAgentMetadata(identity, {
+const registration = generateAgentRegistration(identity, {
   name: 'My Agent',
   description: 'An intelligent assistant',
-  capabilities: [
-    { name: 'chat', description: 'Natural language conversation' },
+  image: 'https://my-agent.example.com/og.png',
+  services: [
+    {
+      id: 'a2a',
+      type: 'a2a',
+      serviceEndpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
+    },
   ],
 });
 
@@ -122,7 +127,11 @@ if (identity.clients) {
   const agentToHire = 42n;
   const reputation = await identity.clients.reputation.getSummary(agentToHire);
 
-  if (reputation.averageScore > 80) {
+  const score =
+    reputation.valueDecimals === 0
+      ? Number(reputation.value)
+      : Number(reputation.value) / 10 ** reputation.valueDecimals;
+  if (score > 80) {
     console.log('Agent has good reputation, proceeding...');
   }
 }
@@ -200,7 +209,7 @@ Addresses must be valid EVM (0x-prefixed) addresses; Solana addresses are not su
 
 ```typescript
 const result = await client.register({
-  agentURI: 'https://my-agent.example.com/.well-known/agent-metadata.json',
+  agentURI: 'https://my-agent.example.com/.well-known/agent-registration.json',
 });
 if (result.agentId) {
   await client.transfer(userEvmAddress, result.agentId);
@@ -225,7 +234,8 @@ const { reputation } = identity.clients;
 // Give feedback to another agent
 await reputation.giveFeedback({
   toAgentId: 42n,
-  score: 90, // 0-100
+  value: 90, // integer; use valueDecimals for fixed-point
+  valueDecimals: 0,
   tag1: 'reliable',
   tag2: 'fast',
   endpoint: 'https://my-agent.example.com/api', // Optional parameter (defaults to empty string if not provided)
@@ -234,8 +244,12 @@ await reputation.giveFeedback({
 
 // Query reputation
 const summary = await reputation.getSummary(42n);
+const average =
+  summary.valueDecimals === 0
+    ? Number(summary.value)
+    : Number(summary.value) / 10 ** summary.valueDecimals;
 console.log(
-  `Agent #42: ${summary.averageScore}/100 (${summary.count} reviews)`
+  `Agent #42: ${average}/100 (${summary.count} reviews)`
 );
 
 // Get all feedback
@@ -260,6 +274,7 @@ await reputation.appendResponse({
 ### How to Validate Work
 
 > **Note**: Validation Registry is deprecated and under active development. It will be revised in a follow-up spec update later this year. The API has been updated to match the new ABI but remains deprecated.
+> If `requestBody` is not provided, the client hashes `requestUri` for backward compatibility.
 
 Request validation of your work or validate others:
 
@@ -272,7 +287,10 @@ if (validation) {
     validatorAddress: '0x...',
     agentId: myAgentId,
     requestUri: 'ipfs://QmMyWork',
-    requestHash: keccak256(toHex('work-data')),
+    // Prefer hashing the canonical request body (spec-compliant)
+    requestBody: '{"input":"work-data"}',
+    // Or pass requestHash directly if you already have one
+    // requestHash: keccak256(toHex('work-data')),
   });
 
   // Submit validation response (function renamed: submitResponse → validationResponse)
@@ -404,21 +422,25 @@ const trustConfig = getTrustConfig(identity);
 createAgentApp({ name: 'my-agent' }, { trust: trustConfig });
 ```
 
-### `generateAgentMetadata(identity, options?)`
+### `generateAgentRegistration(identity, options?)`
 
-Generate the metadata JSON to host at your domain. Automatically called after registration, but you can also use it to customize the metadata.
+Generate the registration JSON to host at your domain. Automatically called after registration, but you can also use it to customize the registration file.
 
 ```typescript
-const metadata = generateAgentMetadata(identity, {
+const registration = generateAgentRegistration(identity, {
   name: 'My Agent',
   description: 'An intelligent assistant',
-  capabilities: [
-    { name: 'chat', description: 'Natural language conversation' },
-    { name: 'search', description: 'Web search' },
+  image: 'https://my-agent.example.com/og.png',
+  services: [
+    {
+      id: 'a2a',
+      type: 'a2a',
+      serviceEndpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
+    },
   ],
 });
 
-// Save to: https://your-domain/.well-known/agent-metadata.json
+// Save to: https://your-domain/.well-known/agent-registration.json
 ```
 
 ## How It Works
@@ -429,7 +451,7 @@ When you call `createAgentIdentity({ autoRegister: true })`:
 2. Returns a trust config for your agent manifest
 3. Provides clients for reputation and validation
 
-You must host metadata at: `https://{your-domain}/.well-known/agent-metadata.json`
+You must host the registration file at: `https://{your-domain}/.well-known/agent-registration.json`
 
 The trust config allows other agents to verify your identity and access reputation data.
 
@@ -451,11 +473,11 @@ After successful registration (`didRegister: true`), the package can't immediate
 
 **Solution**: Query by agent ID later, or trust that the transaction succeeded.
 
-### Metadata Not Accessible
+### Registration File Not Accessible
 
-Make sure your metadata is:
+Make sure your registration file is:
 
-1. Hosted at the exact URL: `https://{domain}/.well-known/agent-metadata.json`
+1. Hosted at the exact URL: `https://{domain}/.well-known/agent-registration.json`
 2. Returns valid JSON with `Content-Type: application/json`
 3. Accessible over HTTPS (not HTTP)
 4. Not blocked by CORS (if accessed from browsers)

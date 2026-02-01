@@ -214,9 +214,9 @@ async function main() {
     const registrationEntry = identityClient.toRegistrationEntry(recordToUse);
     console.log(`Registration entry created:`);
     console.log(`   Agent ID: ${registrationEntry.agentId}`);
-    console.log(`   Agent Address: ${registrationEntry.agentAddress}`);
-    if (registrationEntry.agentRegistry) {
-      console.log(`   Registry: ${registrationEntry.agentRegistry}`);
+    console.log(`   Registry: ${registrationEntry.agentRegistry}`);
+    if (registrationEntry.agentAddress) {
+      console.log(`   Agent Address: ${registrationEntry.agentAddress}`);
     }
     if (registrationEntry.agentURI) {
       console.log(`   Agent URI: ${registrationEntry.agentURI}`);
@@ -266,10 +266,16 @@ async function main() {
       // Use Agent 2's address as the validator (Agent 2 must be registered in Identity Registry)
       const validatorAddress = agent2Address as `0x${string}`;
       const requestUri = `https://${identity1.domain}/validation-request-${Date.now()}.json`;
+      const requestBody = JSON.stringify({
+        agentId: agent1Id.toString(),
+        validator: validatorAddress,
+        requestUri,
+      });
       const requestTx = await validation.validationRequest({
         validatorAddress,
         agentId: agent1Id,
         requestUri,
+        requestBody,
       });
       console.log(`Validation request created:`);
       console.log(`   Transaction: ${requestTx}`);
@@ -278,7 +284,7 @@ async function main() {
       console.log(`   Request URI: ${requestUri}`);
 
       // Compute request hash to check status
-      requestHash = hashValidationRequest(requestUri);
+      requestHash = hashValidationRequest(requestBody);
 
       // 3.4: Get validation status (read)
       console.log('\n3.4: Reading validation status...');
@@ -389,7 +395,11 @@ async function main() {
   const initialRepSummary = await reputation.getSummary(agent1Id);
   console.log(`Initial reputation summary:`);
   console.log(`   Count: ${initialRepSummary.count.toString()}`);
-  console.log(`   Average Score: ${initialRepSummary.averageScore}`);
+  const initialAverage =
+    initialRepSummary.valueDecimals === 0
+      ? Number(initialRepSummary.value)
+      : Number(initialRepSummary.value) / 10 ** initialRepSummary.valueDecimals;
+  console.log(`   Average Score: ${initialAverage}`);
 
   // 4.2: Get clients (read)
   console.log('\n4.2: Reading feedback clients (Agent 1)...');
@@ -411,7 +421,8 @@ async function main() {
     // Use Agent 2's reputation client to give feedback to Agent 1
     const feedbackTx = await identity2.clients.reputation.giveFeedback({
       toAgentId: agent1Id,
-      score: 85,
+      value: 85,
+      valueDecimals: 0,
       tag1: 'helpful',
       tag2: 'reliable',
       feedbackURI: `https://${identity2.domain}/feedback-${Date.now()}.json`,
@@ -477,7 +488,11 @@ async function main() {
     console.log(`   Agent ID: ${feedbackEntry.agentId?.toString()}`);
     console.log(`   Client: ${feedbackEntry.clientAddress}`);
     console.log(`   Index: ${feedbackEntry.feedbackIndex?.toString()}`);
-    console.log(`   Score: ${feedbackEntry.score}/100`);
+    const entryScore =
+      feedbackEntry.valueDecimals === 0
+        ? Number(feedbackEntry.value)
+        : Number(feedbackEntry.value) / 10 ** feedbackEntry.valueDecimals;
+    console.log(`   Score: ${entryScore}/100`);
     console.log(`   Tag1: ${feedbackEntry.tag1}`);
     console.log(`   Tag2: ${feedbackEntry.tag2}`);
     console.log(`   Revoked: ${feedbackEntry.isRevoked}`);
@@ -491,7 +506,13 @@ async function main() {
   console.log(`Agent 1 has ${allFeedback.length} feedback entry/entries`);
   if (allFeedback.length > 0) {
     const avgScore =
-      allFeedback.reduce((sum, f) => sum + f.score, 0) / allFeedback.length;
+      allFeedback.reduce((sum, f) => {
+        const score =
+          f.valueDecimals === 0
+            ? Number(f.value)
+            : Number(f.value) / 10 ** f.valueDecimals;
+        return sum + score;
+      }, 0) / allFeedback.length;
     console.log(`   Average score: ${avgScore.toFixed(1)}/100`);
     console.log(
       `   Active entries: ${allFeedback.filter(f => !f.isRevoked).length}`
@@ -542,7 +563,11 @@ async function main() {
   const updatedRepSummary = await reputation.getSummary(agent1Id);
   console.log(`Updated reputation summary:`);
   console.log(`   Count: ${updatedRepSummary.count.toString()}`);
-  console.log(`   Average Score: ${updatedRepSummary.averageScore}`);
+  const updatedAverage =
+    updatedRepSummary.valueDecimals === 0
+      ? Number(updatedRepSummary.value)
+      : Number(updatedRepSummary.value) / 10 ** updatedRepSummary.valueDecimals;
+  console.log(`   Average Score: ${updatedAverage}`);
 
   // 4.10: Revoke feedback (write) - Agent 2 revokes their feedback
   console.log('\n4.10: Revoking feedback (Agent 2 revokes)...');

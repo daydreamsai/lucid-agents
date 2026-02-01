@@ -24,7 +24,10 @@ export type FeedbackEntry = {
   agentId: bigint;
   clientAddress: Hex;
   feedbackIndex: bigint;
-  score: number; // 0-100
+  /** Signed integer value; interpret with valueDecimals. */
+  value: bigint;
+  /** Number of decimal places for value. */
+  valueDecimals: number;
   tag1: string;
   tag2: string;
   isRevoked: boolean;
@@ -33,7 +36,9 @@ export type FeedbackEntry = {
 
 export type GiveFeedbackInput = {
   toAgentId: bigint;
-  score: number; // 0-100
+  /** Signed integer value; interpret with valueDecimals. */
+  value: bigint | number | string;
+  valueDecimals?: number;
   tag1?: string;
   tag2?: string;
   endpoint?: string; // Optional for convenience (defaults to empty string if not provided)
@@ -56,13 +61,15 @@ export type AppendResponseInput = {
 
 export type ReputationSummary = {
   count: bigint;
-  averageScore: number; // 0-100
+  value: bigint;
+  valueDecimals: number;
 };
 
 export type ReputationRegistryClient = {
   readonly address: Hex;
   readonly chainId: number;
 
+  getIdentityRegistry(): Promise<Hex>;
   getFeedback(
     agentId: bigint,
     clientAddress: Hex,
@@ -99,6 +106,31 @@ export type ReputationRegistryClient = {
   appendResponse(input: AppendResponseInput): Promise<Hex>;
 };
 
+function normalizeFeedbackValue(input: GiveFeedbackInput['value']): bigint {
+  if (typeof input === 'bigint') {
+    return input;
+  }
+  if (typeof input === 'number') {
+    if (!Number.isInteger(input)) {
+      throw new Error('value must be an integer; use valueDecimals for scaling');
+    }
+    return BigInt(input);
+  }
+  const trimmed = input.trim();
+  if (!/^-?\d+$/.test(trimmed)) {
+    throw new Error('value must be a base-10 integer string');
+  }
+  return BigInt(trimmed);
+}
+
+function normalizeValueDecimals(input: number | undefined): number {
+  const valueDecimals = input ?? 0;
+  if (!Number.isInteger(valueDecimals) || valueDecimals < 0) {
+    throw new Error('valueDecimals must be a non-negative integer');
+  }
+  return valueDecimals;
+}
+
 export function createReputationRegistryClient<
   PublicClient extends PublicClientLike,
   WalletClient extends WalletClientLike | undefined = undefined,
@@ -124,15 +156,16 @@ export function createReputationRegistryClient<
         abi: REPUTATION_REGISTRY_ABI,
         functionName: 'readFeedback',
         args: [agentId, clientAddress, feedbackIndex],
-      })) as [number, string, string, boolean];
+      })) as [bigint, number, string, string, boolean];
 
-      const [score, tag1, tag2, isRevoked] = result;
+      const [value, valueDecimals, tag1, tag2, isRevoked] = result;
 
       return {
         agentId,
         clientAddress,
         feedbackIndex,
-        score,
+        value,
+        valueDecimals,
         tag1,
         tag2,
         isRevoked,
@@ -161,16 +194,32 @@ export function createReputationRegistryClient<
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'readAllFeedback',
       args: [agentId, clientAddresses, tag1, tag2, includeRevoked],
-    })) as [Hex[], bigint[], number[], string[], string[], boolean[]];
+    })) as [
+      Hex[],
+      bigint[],
+      bigint[],
+      number[],
+      string[],
+      string[],
+      boolean[],
+    ];
 
-    const [clients, feedbackIndexes, scores, tag1s, tag2s, revokedStatuses] =
-      result;
+    const [
+      clients,
+      feedbackIndexes,
+      values,
+      valueDecimals,
+      tag1s,
+      tag2s,
+      revokedStatuses,
+    ] = result;
 
     return clients.map((client, i) => ({
       agentId,
       clientAddress: client,
       feedbackIndex: feedbackIndexes[i],
-      score: scores[i],
+      value: values[i],
+      valueDecimals: valueDecimals[i],
       tag1: tag1s[i],
       tag2: tag2s[i],
       isRevoked: revokedStatuses[i],
@@ -194,13 +243,14 @@ export function createReputationRegistryClient<
       abi: REPUTATION_REGISTRY_ABI,
       functionName: 'getSummary',
       args: [agentId, clientAddresses, tag1, tag2],
-    })) as [bigint, number];
+    })) as [bigint, bigint, number];
 
-    const [count, averageScore] = result;
+    const [count, value, valueDecimals] = result;
 
     return {
       count,
-      averageScore,
+      value,
+      valueDecimals,
     };
   }
 
@@ -211,6 +261,17 @@ export function createReputationRegistryClient<
       functionName: 'getClients',
       args: [agentId],
     })) as Hex[];
+
+    return result;
+  }
+
+  async function getIdentityRegistry(): Promise<Hex> {
+    const result = (await publicClient.readContract({
+      address,
+      abi: REPUTATION_REGISTRY_ABI,
+      functionName: 'getIdentityRegistry',
+      args: [],
+    })) as Hex;
 
     return result;
   }
@@ -261,6 +322,8 @@ export function createReputationRegistryClient<
     const feedbackHash =
       input.feedbackHash ??
       ('0x0000000000000000000000000000000000000000000000000000000000000000' as Hex);
+    const value = normalizeFeedbackValue(input.value);
+    const valueDecimals = normalizeValueDecimals(input.valueDecimals);
 
     const txHash = await walletClient.writeContract({
       address,
@@ -268,7 +331,8 @@ export function createReputationRegistryClient<
       functionName: 'giveFeedback',
       args: [
         input.toAgentId,
-        input.score,
+        value,
+        valueDecimals,
         tag1,
         tag2,
         endpoint,
@@ -336,6 +400,7 @@ export function createReputationRegistryClient<
   return {
     address,
     chainId,
+    getIdentityRegistry,
     getFeedback,
     getAllFeedback,
     getSummary,

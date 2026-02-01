@@ -444,7 +444,7 @@ The package also exports lower-level helpers for advanced use cases:
 
 - `createIdentityRegistryClient({ address, chainId, publicClient, walletClient })` — direct registry access for advanced workflows.
 - `signAgentDomainProof({ domain, address, chainId, signer })` — manually sign domain ownership proofs.
-- `buildTrustConfigFromIdentity(record, { signature, chainId, namespace, trustOverrides })` — convert registry records into `TrustConfig`.
+- `buildTrustConfigFromIdentity(record, { signature, chainId, namespace, registryAddress, trustOverrides })` — convert registry records into `TrustConfig`.
 
 See [`@lucid-agents/identity` documentation](../@lucid-agents/identity/README.md) for complete examples and API reference.
 

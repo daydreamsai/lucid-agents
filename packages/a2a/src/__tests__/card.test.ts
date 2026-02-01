@@ -556,9 +556,8 @@ describe('hasTrustInfo', () => {
       version: '1.0.0',
       registrations: [
         {
-          chainId: 84532,
-          contractAddress: '0xabc',
           agentId: '0xdef',
+          agentRegistry: 'eip155:84532:0xabc',
           agentAddress: '0xdef',
         },
       ],

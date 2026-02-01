@@ -76,7 +76,11 @@ async function main() {
         );
         console.log('\nReputation Summary:');
         console.log('   - Total Feedback:', summary.count.toString());
-        console.log('   - Average Score:', summary.averageScore);
+        const average =
+          summary.valueDecimals === 0
+            ? Number(summary.value)
+            : Number(summary.value) / 10 ** summary.valueDecimals;
+        console.log('   - Average Score:', average);
       } catch {
         console.log(
           '\nReputation Summary: No feedback yet (this is normal for new agents)'
