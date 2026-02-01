@@ -38,7 +38,7 @@
   "scripts": {
     "clean": "rm -rf src/sdk",
     "generate": "bun run codegen.ts",
-    "build": "tsc -p tsconfig.build.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
