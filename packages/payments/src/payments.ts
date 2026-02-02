@@ -24,13 +24,30 @@ import { encodePaymentRequiredHeader } from './utils';
 
 /**
  * Checks if an entrypoint has an explicit price set.
+ * Also validates the price format and warns about common mistakes.
  */
 export function entrypointHasExplicitPrice(entrypoint: EntrypointDef): boolean {
   const { price } = entrypoint;
+
+  if (!price) {
+    return false;
+  }
+
   if (typeof price === 'string') {
     return price.trim().length > 0;
   }
-  if (price && typeof price === 'object') {
+
+  if (typeof price === 'object') {
+    if ('amount' in price) {
+      const priceObj = price as Record<string, unknown>;
+      console.warn(
+        `[lucid-agents/payments] Invalid price format for entrypoint "${entrypoint.key}": ` +
+          `{ amount: ${priceObj.amount} } is not valid. ` +
+          `Use string format: price: "${priceObj.amount}" or object format: { invoke: "${priceObj.amount}" }`
+      );
+      return false;
+    }
+
     const hasInvoke = price.invoke;
     const hasStream = price.stream;
     const invokeDefined =
@@ -43,6 +60,14 @@ export function entrypointHasExplicitPrice(entrypoint: EntrypointDef): boolean {
         : hasStream !== undefined;
     return invokeDefined || streamDefined;
   }
+
+  if (typeof price === 'number') {
+    console.warn(
+      `[lucid-agents/payments] Invalid price format for entrypoint "${entrypoint.key}": ` +
+        `Price must be a string, not a number. Use: price: "${price}"`
+    );
+  }
+
   return false;
 }
 
