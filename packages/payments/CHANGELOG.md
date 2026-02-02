@@ -1,5 +1,11 @@
 # @lucid-agents/payments
 
+## 2.2.0
+
+### Minor Changes
+
+- b9c294c: Adopt x402 v2 payment headers, add encode/decode helpers, and normalize payment header handling across adapters.
+
 ## 2.1.3
 
 ### Patch Changes

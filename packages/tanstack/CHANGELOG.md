@@ -1,5 +1,14 @@
 # @lucid-agents/tanstack
 
+## 0.6.17
+
+### Patch Changes
+
+- b9c294c: Adopt x402 v2 payment headers, add encode/decode helpers, and normalize payment header handling across adapters.
+- Updated dependencies [b9c294c]
+  - @lucid-agents/payments@2.2.0
+  - @lucid-agents/core@2.2.0
+
 ## 0.6.16
 
 ### Patch Changes

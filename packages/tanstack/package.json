@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/tanstack",
-  "version": "0.6.16",
+  "version": "0.6.17",
   "description": "TanStack Start adapter for Lucid agent runtime",
   "repository": {
     "type": "git",
