@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/express",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "Express adapter for Lucid agent runtime",
   "type": "module",
   "main": "./dist/index.js",

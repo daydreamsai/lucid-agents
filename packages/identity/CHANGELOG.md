@@ -1,5 +1,7 @@
 # @lucid-agents/identity
 
+## 2.2.0
+
 ## 2.1.3
 
 ### Patch Changes
