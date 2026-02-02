@@ -29,6 +29,7 @@ import {
   SupportedSVMNetworks,
 } from 'x402/types';
 import { useFacilitator } from 'x402/verify';
+import { encodePaymentRequiredHeader } from '@lucid-agents/payments';
 
 type RoutesConfigResolver =
   | RoutesConfig
@@ -91,10 +92,61 @@ function createRoutePatternResolver(
   return async () => compiled;
 }
 
-function jsonResponse(payload: unknown, status = 402) {
-  return new Response(JSON.stringify(payload), {
+function formatAtomicAmount(
+  amount: string | number | bigint,
+  decimals: number
+): string {
+  try {
+    const atomic = typeof amount === 'bigint' ? amount : BigInt(amount);
+    const base = 10n ** BigInt(decimals);
+    const whole = atomic / base;
+    const fraction = atomic % base;
+    if (fraction === 0n) return whole.toString();
+    const fractionStr = fraction
+      .toString()
+      .padStart(decimals, '0')
+      .replace(/0+$/, '');
+    return `${whole.toString()}.${fractionStr}`;
+  } catch {
+    return String(amount);
+  }
+}
+
+function formatPriceForHeader(price: unknown): string {
+  if (typeof price === 'string' || typeof price === 'number') {
+    return String(price);
+  }
+  if (price && typeof price === 'object') {
+    const candidate = price as {
+      amount?: string | number | bigint;
+      asset?: { decimals?: number };
+    };
+    if (candidate.amount !== undefined) {
+      const decimals = candidate.asset?.decimals;
+      if (typeof decimals === 'number') {
+        return formatAtomicAmount(candidate.amount, decimals);
+      }
+      return String(candidate.amount);
+    }
+  }
+  const parsed = moneySchema.safeParse(price);
+  if (parsed.success) return String(parsed.data);
+  return String(price);
+}
+
+function jsonResponse(
+  payload: Record<string, unknown>,
+  status = 402,
+  paymentRequiredHeader?: string
+) {
+  const safePayload = toJsonSafe(payload);
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (status === 402 && paymentRequiredHeader) {
+    headers.set('PAYMENT-REQUIRED', paymentRequiredHeader);
+  }
+  return new Response(JSON.stringify(safePayload), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers,
   });
 }
 
@@ -115,7 +167,7 @@ function createPaymentHandler({
   getRoutePatterns,
 }: PaymentHandlerDeps) {
   const { verify, settle, supported } = useFacilitator(facilitator);
-  const x402Version = 1;
+  const x402Version = 2;
 
   return async function handleRequest(
     options: AnyRequestServerOptions
@@ -154,6 +206,7 @@ function createPaymentHandler({
       return respond(new Response(atomicAmountForAsset.error, { status: 500 }));
     }
     const { maxAmountRequired, asset } = atomicAmountForAsset;
+    let resolvedPayTo: Address | SolanaAddress = payTo;
 
     const resourceUrl = resolveResource(request, pathname, resource);
     const paymentRequirements: PaymentRequirements[] = [];
@@ -163,6 +216,7 @@ function createPaymentHandler({
       if (!erc20Asset.eip712) {
         throw new Error('EIP-712 configuration missing for EVM network asset');
       }
+      resolvedPayTo = getAddress(payTo as Address);
       paymentRequirements.push({
         scheme: 'exact',
         network,
@@ -170,7 +224,7 @@ function createPaymentHandler({
         resource: resourceUrl,
         description: description ?? '',
         mimeType: mimeType ?? 'application/json',
-        payTo: getAddress(payTo),
+        payTo: resolvedPayTo,
         maxTimeoutSeconds: maxTimeoutSeconds ?? 300,
         asset: getAddress(asset.address),
         outputSchema: {
@@ -205,7 +259,7 @@ function createPaymentHandler({
         resource: resourceUrl,
         description: description ?? '',
         mimeType: mimeType ?? '',
-        payTo,
+        payTo: resolvedPayTo,
         maxTimeoutSeconds: maxTimeoutSeconds ?? 60,
         asset: asset.address,
         outputSchema: {
@@ -225,7 +279,15 @@ function createPaymentHandler({
       throw new Error(`Unsupported network: ${network}`);
     }
 
-    const paymentHeader = request.headers.get('X-PAYMENT');
+    const paymentRequiredHeader = encodePaymentRequiredHeader({
+      price: formatPriceForHeader(price),
+      payTo: String(resolvedPayTo),
+      network,
+      facilitatorUrl: facilitator?.url,
+    });
+
+    const paymentHeader =
+      request.headers.get('PAYMENT') ?? request.headers.get('X-PAYMENT');
     if (!paymentHeader) {
       const accept = request.headers.get('Accept');
       if (accept?.includes('text/html')) {
@@ -255,7 +317,10 @@ function createPaymentHandler({
           return respond(
             new Response(html, {
               status: 402,
-              headers: { 'Content-Type': 'text/html' },
+              headers: {
+                'Content-Type': 'text/html',
+                'PAYMENT-REQUIRED': paymentRequiredHeader,
+              },
             })
           );
         }
@@ -265,9 +330,9 @@ function createPaymentHandler({
         jsonResponse({
           x402Version,
           error:
-            errorMessages?.paymentRequired ?? 'X-PAYMENT header is required',
+            errorMessages?.paymentRequired ?? 'PAYMENT header is required',
           accepts: paymentRequirements,
-        })
+        }, 402, paymentRequiredHeader)
       );
     }
 
@@ -283,7 +348,7 @@ function createPaymentHandler({
             errorMessages?.invalidPayment ??
             (error instanceof Error ? error.message : 'Invalid payment'),
           accepts: paymentRequirements,
-        })
+        }, 402, paymentRequiredHeader)
       );
     }
 
@@ -299,7 +364,7 @@ function createPaymentHandler({
             errorMessages?.noMatchingRequirements ??
             'Unable to find matching payment requirements',
           accepts: toJsonSafe(paymentRequirements),
-        })
+        }, 402, paymentRequiredHeader)
       );
     }
 
@@ -312,7 +377,7 @@ function createPaymentHandler({
             errorMessages?.verificationFailed ?? verification.invalidReason,
           accepts: paymentRequirements,
           payer: verification.payer,
-        })
+        }, 402, paymentRequiredHeader)
       );
     }
 
@@ -329,7 +394,7 @@ function createPaymentHandler({
           nextResult.response
         );
         enriched.headers.set(
-          'X-PAYMENT-RESPONSE',
+          'PAYMENT-RESPONSE',
           safeBase64Encode(
             JSON.stringify({
               success: true,
@@ -352,7 +417,7 @@ function createPaymentHandler({
             errorMessages?.settlementFailed ??
             (error instanceof Error ? error.message : 'Settlement failed'),
           accepts: paymentRequirements,
-        })
+        }, 402, paymentRequiredHeader)
       );
     }
 

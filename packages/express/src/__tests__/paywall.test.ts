@@ -73,7 +73,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     app = agentApp;
   });
 
-  it('records incoming payment when X-PAYMENT-RESPONSE header is present', async () => {
+  it('records incoming payment when PAYMENT-RESPONSE header is present', async () => {
     const mockReq = {
       path: '/entrypoints/test-endpoint/invoke',
       url: '/entrypoints/test-endpoint/invoke',
@@ -88,7 +88,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     const mockRes = {
       statusCode: 200,
       getHeader: (name: string) => {
-        if (name === 'X-PAYMENT-RESPONSE') {
+        if (name === 'PAYMENT-RESPONSE') {
           return Buffer.from(
             JSON.stringify({
               payer: '0x1234567890123456789012345678901234567890',
@@ -100,7 +100,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
       },
       json: async function (body: any) {
         const originalJson = this.originalJson;
-        const paymentResponseHeader = this.getHeader('X-PAYMENT-RESPONSE') as
+        const paymentResponseHeader = this.getHeader('PAYMENT-RESPONSE') as
           | string
           | undefined;
 
@@ -145,14 +145,14 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     expect(recordedAmounts.every(a => a === 1000n)).toBe(true);
   });
 
-  it('does not record payment when X-PAYMENT-RESPONSE header is missing', async () => {
+  it('does not record payment when PAYMENT-RESPONSE header is missing', async () => {
     let recordingAttempted = false;
 
     const mockRes = {
       statusCode: 200,
       getHeader: () => undefined,
       json: async function (body: any) {
-        const paymentResponseHeader = this.getHeader('X-PAYMENT-RESPONSE');
+        const paymentResponseHeader = this.getHeader('PAYMENT-RESPONSE');
         if (paymentResponseHeader) {
           recordingAttempted = true;
         }
@@ -171,7 +171,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     const mockRes = {
       statusCode: 404,
       getHeader: (name: string) => {
-        if (name === 'X-PAYMENT-RESPONSE') {
+        if (name === 'PAYMENT-RESPONSE') {
           return Buffer.from(
             JSON.stringify({
               payer: '0x1234567890123456789012345678901234567890',
@@ -182,7 +182,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
         return undefined;
       },
       json: async function (body: any) {
-        const paymentResponseHeader = this.getHeader('X-PAYMENT-RESPONSE');
+        const paymentResponseHeader = this.getHeader('PAYMENT-RESPONSE');
         if (
           paymentResponseHeader &&
           this.statusCode >= 200 &&
@@ -203,7 +203,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     const mockRes = {
       statusCode: 200,
       getHeader: (name: string) => {
-        if (name === 'X-PAYMENT-RESPONSE') {
+        if (name === 'PAYMENT-RESPONSE') {
           return Buffer.from(
             JSON.stringify({
               payer: '0x1234567890123456789012345678901234567890',
@@ -215,7 +215,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
       },
       json: async function (body: any) {
         const originalJson = this.originalJson;
-        const paymentResponseHeader = this.getHeader('X-PAYMENT-RESPONSE') as
+        const paymentResponseHeader = this.getHeader('PAYMENT-RESPONSE') as
           | string
           | undefined;
 

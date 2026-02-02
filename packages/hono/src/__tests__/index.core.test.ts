@@ -60,12 +60,17 @@ describe('withPayments helper', () => {
 
   it('registers middleware when price/network resolved', () => {
     const calls: Array<[string, any]> = [];
+    let capturedMapping: Record<string, { price: string; network: string }> | null =
+      null;
+    let capturedFacilitator: { url: string } | null = null;
     const app = { use: (...args: any[]) => calls.push([...args] as any) };
     const middlewareFactory = (
       payTo: string,
       mapping: Record<string, { price: string; network: string }>,
       facilitatorConfig: { url: string }
     ) => {
+      capturedMapping = mapping;
+      capturedFacilitator = facilitatorConfig;
       return { payTo, mapping, facilitator: facilitatorConfig };
     };
     const didRegister = withPayments({
@@ -78,20 +83,21 @@ describe('withPayments helper', () => {
     });
     expect(didRegister).toBe(true);
     expect(calls.length).toBe(1);
-    const [path, middleware] = calls[0];
+    const [path] = calls[0];
     expect(path).toBe('/entrypoints/test/invoke');
-    const routeKeys = Object.keys(middleware.mapping);
+    expect(capturedMapping).toBeTruthy();
+    const routeKeys = Object.keys(capturedMapping ?? {});
     expect(routeKeys).toContain('POST /entrypoints/test/invoke');
     expect(routeKeys).toContain('GET /entrypoints/test/invoke');
 
-    const postConfig = middleware.mapping['POST /entrypoints/test/invoke'];
+    const postConfig = capturedMapping?.['POST /entrypoints/test/invoke'] ?? null;
     expect(postConfig.price).toBe('42');
     expect(postConfig.config?.mimeType).toBe('application/json');
 
-    const getConfig = middleware.mapping['GET /entrypoints/test/invoke'];
+    const getConfig = capturedMapping?.['GET /entrypoints/test/invoke'] ?? null;
     expect(getConfig.price).toBe('42');
     expect(getConfig.config?.mimeType).toBe('application/json');
-    expect(middleware.facilitator).toEqual({
+    expect(capturedFacilitator).toEqual({
       url: payments.facilitatorUrl,
     });
   });
@@ -125,13 +131,17 @@ describe('withPayments helper', () => {
 
   it('allows overriding facilitator config', () => {
     const calls: Array<[string, any]> = [];
+    let capturedFacilitator: { url: string } | null = null;
     const app = { use: (...args: any[]) => calls.push([...args] as any) };
     const customFacilitator = { url: 'https://override.example' as any };
     const middlewareFactory = (
       payTo: string,
       mapping: Record<string, { price: string; network: string }>,
       facilitatorConfig: { url: string }
-    ) => ({ payTo, mapping, facilitator: facilitatorConfig });
+    ) => {
+      capturedFacilitator = facilitatorConfig;
+      return { payTo, mapping, facilitator: facilitatorConfig };
+    };
     const didRegister = withPayments({
       app: app as any,
       path: '/entrypoints/test/invoke',
@@ -142,8 +152,7 @@ describe('withPayments helper', () => {
       middlewareFactory: middlewareFactory as any,
     });
     expect(didRegister).toBe(true);
-    const [, middleware] = calls[0];
-    expect(middleware.facilitator).toBe(customFacilitator);
+    expect(capturedFacilitator).toBe(customFacilitator);
   });
 });
 

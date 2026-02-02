@@ -2,6 +2,7 @@ import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
 import type { PaymentTracker } from './payment-tracker';
 import type { RateLimiter } from './rate-limiter';
 import { evaluatePolicyGroups, findMostSpecificOutgoingLimit } from './policy';
+import { decodePaymentRequiredHeader } from './utils';
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -56,10 +57,13 @@ function parsePriceToBaseUnits(
 /**
  * Extracts payment amount from response headers.
  * @param response - HTTP response object
- * @returns Payment amount in base units from X-Price header, or undefined
+ * @returns Payment amount in base units from PAYMENT-REQUIRED header or legacy headers
  */
 function extractPaymentAmount(response: Response): bigint | undefined {
-  const priceHeader = response.headers.get('X-Price');
+  const required = decodePaymentRequiredHeader(
+    response.headers.get('PAYMENT-REQUIRED')
+  );
+  const priceHeader = required?.price ?? response.headers.get('X-Price');
   return parsePriceToBaseUnits(priceHeader);
 }
 
@@ -67,13 +71,16 @@ function extractPaymentAmount(response: Response): bigint | undefined {
  * Extracts recipient address from payment request headers or response.
  * @param request - HTTP request object
  * @param response - HTTP response object
- * @returns Recipient address from X-Pay-To header, or undefined
+ * @returns Recipient address from PAYMENT-REQUIRED header or legacy headers
  */
 function extractRecipientAddress(
-  request: Request,
+  _request: Request,
   response: Response
 ): string | undefined {
-  const payToHeader = response.headers.get('X-Pay-To');
+  const required = decodePaymentRequiredHeader(
+    response.headers.get('PAYMENT-REQUIRED')
+  );
+  const payToHeader = required?.payTo ?? response.headers.get('X-Pay-To');
   if (payToHeader) return payToHeader;
   return undefined;
 }
@@ -165,7 +172,9 @@ export function wrapBaseFetchWithPolicy(
     }
 
     if (response.ok && response.status >= 200 && response.status < 300) {
-      const paymentResponseHeader = response.headers.get('X-PAYMENT-RESPONSE');
+      const paymentResponseHeader =
+        response.headers.get('PAYMENT-RESPONSE') ??
+        response.headers.get('X-PAYMENT-RESPONSE');
       if (paymentResponseHeader) {
         const paymentInfo = paymentInfoCache.get(requestKey);
         if (paymentInfo) {
