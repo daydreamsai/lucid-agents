@@ -1,5 +1,14 @@
 # @lucid-agents/core
 
+## 2.2.3
+
+### Patch Changes
+
+- a14c47c: Bump x402 and x402-fetch dependencies to 1.1.0 across adapters and templates.
+- Updated dependencies [a14c47c]
+  - @lucid-agents/payments@2.2.3
+  - @lucid-agents/a2a@0.5.5
+
 ## 2.2.2
 
 ### Patch Changes

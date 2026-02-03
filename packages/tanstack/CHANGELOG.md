@@ -1,5 +1,13 @@
 # @lucid-agents/tanstack
 
+## 0.6.20
+
+### Patch Changes
+
+- Updated dependencies [a14c47c]
+  - @lucid-agents/core@2.2.3
+  - @lucid-agents/payments@2.2.3
+
 ## 0.6.19
 
 ### Patch Changes
