@@ -1,9 +1,27 @@
-import {
-  SupportedEVMNetworks,
-  SupportedSVMNetworks,
-  type Network,
-} from 'x402/types';
+import type { Network } from '@x402/core/types';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
+
+/**
+ * Supported EVM networks (CAIP-2 format)
+ */
+const SupportedEVMNetworks: Network[] = [
+  'eip155:1',        // Ethereum mainnet
+  'eip155:11155111', // Ethereum Sepolia
+  'eip155:8453',     // Base mainnet
+  'eip155:84532',    // Base Sepolia
+  'eip155:137',      // Polygon
+  'eip155:80002',    // Polygon Amoy
+  'eip155:43114',    // Avalanche
+  'eip155:43113',    // Avalanche Fuji
+];
+
+/**
+ * Supported SVM networks (CAIP-2 format)
+ */
+const SupportedSVMNetworks: Network[] = [
+  'solana:mainnet',
+  'solana:devnet',
+];
 
 const SUPPORTED_NETWORKS: Network[] = [
   ...SupportedEVMNetworks,
