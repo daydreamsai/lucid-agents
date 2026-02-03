@@ -57,21 +57,20 @@ function parsePriceToBaseUnits(
 /**
  * Extracts payment amount from response headers.
  * @param response - HTTP response object
- * @returns Payment amount in base units from PAYMENT-REQUIRED header or legacy headers
+ * @returns Payment amount in base units from PAYMENT-REQUIRED header
  */
 function extractPaymentAmount(response: Response): bigint | undefined {
   const required = decodePaymentRequiredHeader(
     response.headers.get('PAYMENT-REQUIRED')
   );
-  const priceHeader = required?.price ?? response.headers.get('X-Price');
-  return parsePriceToBaseUnits(priceHeader);
+  return parsePriceToBaseUnits(required?.price);
 }
 
 /**
  * Extracts recipient address from payment request headers or response.
  * @param request - HTTP request object
  * @param response - HTTP response object
- * @returns Recipient address from PAYMENT-REQUIRED header or legacy headers
+ * @returns Recipient address from PAYMENT-REQUIRED header
  */
 function extractRecipientAddress(
   _request: Request,
@@ -80,9 +79,7 @@ function extractRecipientAddress(
   const required = decodePaymentRequiredHeader(
     response.headers.get('PAYMENT-REQUIRED')
   );
-  const payToHeader = required?.payTo ?? response.headers.get('X-Pay-To');
-  if (payToHeader) return payToHeader;
-  return undefined;
+  return required?.payTo;
 }
 
 type PaymentInfo = {
@@ -172,9 +169,7 @@ export function wrapBaseFetchWithPolicy(
     }
 
     if (response.ok && response.status >= 200 && response.status < 300) {
-      const paymentResponseHeader =
-        response.headers.get('PAYMENT-RESPONSE') ??
-        response.headers.get('X-PAYMENT-RESPONSE');
+      const paymentResponseHeader = response.headers.get('PAYMENT-RESPONSE');
       if (paymentResponseHeader) {
         const paymentInfo = paymentInfoCache.get(requestKey);
         if (paymentInfo) {

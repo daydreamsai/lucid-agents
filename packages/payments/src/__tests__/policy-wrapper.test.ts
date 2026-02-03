@@ -167,47 +167,6 @@ describe('wrapBaseFetchWithPolicy', () => {
     expect(Number(total) / 1_000_000).toBe(5.0);
   });
 
-  it('accepts legacy v1 payment headers for policy evaluation', async () => {
-    let callCount = 0;
-    baseFetch = async () => {
-      callCount++;
-      if (callCount === 1) {
-        return new Response(JSON.stringify({ error: 'Payment required' }), {
-          status: 402,
-          headers: {
-            'X-Price': '4.0',
-            'X-Pay-To': '0xlegacy...',
-          },
-        });
-      }
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: {
-          'X-PAYMENT-RESPONSE': buildPaymentResponseHeader({
-            success: true,
-            payer: '0xpayer',
-          }),
-        },
-      });
-    };
-
-    const wrappedFetch = wrapBaseFetchWithPolicy(
-      baseFetch,
-      policyGroups,
-      paymentTracker,
-      rateLimiter
-    );
-
-    await wrappedFetch('https://example.com');
-    await wrappedFetch('https://example.com');
-
-    const total = await paymentTracker.getOutgoingTotal(
-      'test-policy',
-      'global'
-    );
-    expect(Number(total) / 1_000_000).toBe(4.0);
-  });
-
   it('should extract domain from URL for recipient matching', async () => {
     const blockingPolicy: PaymentPolicyGroup[] = [
       {

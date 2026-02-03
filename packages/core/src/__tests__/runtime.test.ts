@@ -63,15 +63,23 @@ const makeRuntimeStub = (): {
 
 const paymentRequirements = {
   scheme: 'exact',
-  network: 'base-sepolia',
-  maxAmountRequired: '1000',
-  resource: 'https://example.com/pay',
+  network: 'eip155:84532',
+  amount: '1000',
   description: 'payment',
   mimeType: 'application/json',
   payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
   maxTimeoutSeconds: 30,
   asset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  // EIP-712 domain parameters required for v2
+  extra: {
+    name: 'USDC',
+    version: '2',
+  },
 };
+
+// Helper to encode payment required header for v2
+const encodePaymentRequired = (obj: unknown): string =>
+  Buffer.from(JSON.stringify(obj)).toString('base64');
 
 describe('runtime payments', () => {
   it('wraps fetch with x402 handling using the runtime wallet', async () => {
@@ -90,22 +98,26 @@ describe('runtime payments', () => {
         fetchCalls.push({ input, init: init ?? undefined });
         attempt += 1;
         if (attempt === 1) {
-          return new Response(
-            JSON.stringify({
-              x402Version: 2,
-              accepts: [paymentRequirements],
-            }),
-            {
-              status: 402,
-              headers: { 'content-type': 'application/json' },
-            }
-          );
+          const paymentRequired = {
+            x402Version: 2,
+            accepts: [paymentRequirements],
+            resource: {
+              url: 'https://example.com',
+              method: 'POST',
+            },
+          };
+          return new Response(null, {
+            status: 402,
+            headers: {
+              'PAYMENT-REQUIRED': encodePaymentRequired(paymentRequired),
+            },
+          });
         }
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: {
             'content-type': 'application/json',
-            'PAYMENT-RESPONSE': 'settled',
+            'PAYMENT-RESPONSE': encodePaymentRequired({ success: true }),
           },
         });
       }

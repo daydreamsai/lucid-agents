@@ -1,4 +1,4 @@
-import type { Express, RequestHandler, Request, Response } from 'express';
+import type { Express, RequestHandler } from 'express';
 import { paymentMiddleware } from 'x402-express';
 import type { FacilitatorConfig } from 'x402/types';
 import { z } from 'zod';
@@ -12,7 +12,6 @@ import {
   extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,
-  encodePaymentRequiredHeader,
   type PaymentTracker,
 } from '@lucid-agents/payments';
 
@@ -28,41 +27,6 @@ export type WithPaymentsParams = {
   middlewareFactory?: PaymentMiddlewareFactory;
   runtime?: AgentRuntime;
 };
-
-function normalizePaymentHeaders(res: Response) {
-  if (res.headersSent) return;
-
-  const paymentResponseHeader =
-    (res.getHeader('PAYMENT-RESPONSE') as string | undefined) ??
-    (res.getHeader('X-PAYMENT-RESPONSE') as string | undefined);
-  if (paymentResponseHeader) {
-    res.setHeader('PAYMENT-RESPONSE', paymentResponseHeader);
-  }
-  res.removeHeader('X-PAYMENT-RESPONSE');
-
-  const paymentRequiredHeader = res.getHeader('PAYMENT-REQUIRED');
-  if (!paymentRequiredHeader) {
-    const price = res.getHeader('X-Price');
-    const payTo = res.getHeader('X-Pay-To');
-    if (price && payTo) {
-      res.setHeader(
-        'PAYMENT-REQUIRED',
-        encodePaymentRequiredHeader({
-          price: String(price),
-          payTo: String(payTo),
-          network: (res.getHeader('X-Network') as string | undefined) ?? undefined,
-          facilitatorUrl:
-            (res.getHeader('X-Facilitator') as string | undefined) ?? undefined,
-        })
-      );
-    }
-  }
-
-  res.removeHeader('X-Price');
-  res.removeHeader('X-Pay-To');
-  res.removeHeader('X-Network');
-  res.removeHeader('X-Facilitator');
-}
 
 export function withPayments({
   app,
@@ -205,31 +169,6 @@ export function withPayments({
           ? paymentHeader[0]
           : paymentHeader;
       }
-      const originalEnd = res.end.bind(res) as typeof res.end;
-      type EndFn = typeof res.end;
-      type EndChunk = Parameters<EndFn>[0];
-      type EndEncoding = Parameters<EndFn>[1];
-      type EndCallback = Parameters<EndFn>[2];
-      function wrappedEnd(cb?: EndCallback): ReturnType<EndFn>;
-      function wrappedEnd(chunk: EndChunk, cb?: EndCallback): ReturnType<EndFn>;
-      function wrappedEnd(
-        chunk: EndChunk,
-        encoding: EndEncoding,
-        cb?: EndCallback
-      ): ReturnType<EndFn>;
-      function wrappedEnd(
-        chunk?: EndChunk | EndCallback,
-        encoding?: EndEncoding | EndCallback,
-        cb?: EndCallback
-      ): ReturnType<EndFn> {
-        normalizePaymentHeaders(res);
-        return originalEnd(
-          chunk as EndChunk,
-          encoding as EndEncoding,
-          cb
-        );
-      }
-      res.end = wrappedEnd;
       return middleware(req, res, next);
     }
     return next();
@@ -265,11 +204,11 @@ export function withPayments({
           return originalEnd(chunk, encoding, cb);
         };
 
-        await next();
+        next();
 
-        const paymentResponseHeader =
-          (res.getHeader('PAYMENT-RESPONSE') as string | undefined) ??
-          (res.getHeader('X-PAYMENT-RESPONSE') as string | undefined);
+        const paymentResponseHeader = res.getHeader('PAYMENT-RESPONSE') as
+          | string
+          | undefined;
         if (
           paymentResponseHeader &&
           res.statusCode >= 200 &&
