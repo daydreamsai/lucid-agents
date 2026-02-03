@@ -26,7 +26,7 @@
     "viem": "catalog:",
     "wagmi": "^2.19.2",
     "x402-fetch": "catalog:",
-    "x402-next": "^0.7.1",
+    "x402-next": "^1.1.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
