@@ -31,7 +31,7 @@
     "@lucid-agents/types": "workspace:*",
     "express": "^4.19.2",
     "x402": "catalog:",
-    "x402-express": "^0.7.1",
+    "x402-express": "^1.1.0",
     "zod": "catalog:"
   },
   "devDependencies": {
