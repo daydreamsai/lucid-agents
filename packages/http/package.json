@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/http",
-  "version": "1.9.8",
+  "version": "1.9.9",
   "description": "HTTP extension for agent runtime",
   "repository": {
     "type": "git",

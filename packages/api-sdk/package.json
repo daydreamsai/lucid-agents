@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/api-sdk",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "TypeScript SDK for the Lucid Agents Runtime API (auto-generated from OpenAPI)",
   "repository": {
     "type": "git",
