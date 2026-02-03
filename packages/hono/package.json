@@ -37,8 +37,8 @@
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "hono": "catalog:",
-    "x402-hono": "^1.1.0",
-    "x402": "catalog:",
+    "@x402/hono": "catalog:",
+    "@x402/core": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

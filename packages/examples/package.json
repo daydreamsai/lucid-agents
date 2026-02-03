@@ -28,8 +28,9 @@
     "@lucid-dreams/agent-auth": "latest",
     "thirdweb": "^5.113.0",
     "viem": "catalog:",
-    "x402": "catalog:",
-    "x402-fetch": "catalog:",
+    "@x402/core": "catalog:",
+    "@x402/fetch": "catalog:",
+    "@x402/evm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

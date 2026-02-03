@@ -8,9 +8,9 @@ import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
 describe('Hono Solana Payments', () => {
   const solanaPayments: PaymentsConfig = {
-    payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana Base58 address
+    payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
     facilitatorUrl: 'https://facilitator.test',
-    network: 'solana-devnet',
+    network: 'solana:devnet',
   };
 
   it('creates agent with Solana network configuration', async () => {
@@ -81,7 +81,7 @@ describe('Hono Solana Payments', () => {
       const config: PaymentsConfig = {
         payTo: address,
         facilitatorUrl: 'https://facilitator.test',
-        network: 'solana',
+        network: 'solana:mainnet',
       };
 
       const agent = await createAgent({ name: 'test', version: '1.0.0' })
@@ -95,15 +95,12 @@ describe('Hono Solana Payments', () => {
   });
 
   it('accepts both Solana mainnet and devnet configurations', async () => {
-    // Note: Testing actual payment flow requires mocking x402-hono middleware.
-    // This test verifies that Solana network configs are accepted by the app.
-
     const networks = [
-      { value: 'solana', name: 'mainnet' },
-      { value: 'solana-devnet', name: 'devnet' },
+      'solana:mainnet',
+      'solana:devnet',
     ] as const;
 
-    for (const { value: network, name } of networks) {
+    for (const network of networks) {
       const agent = await createAgent({ name: 'test', version: '1.0.0' })
         .use(http())
         .use(
@@ -153,7 +150,7 @@ describe('Hono Solana Payments', () => {
 
     const payment = manifest.payments[0];
     expect(payment.method).toBe('x402');
-    expect(payment.network).toBe('solana-devnet');
+    expect(payment.network).toBe('solana:devnet');
     expect(payment.payee).toBe('9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz');
   });
 

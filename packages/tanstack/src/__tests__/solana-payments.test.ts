@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { createTanStackPaywall } from '../paywall';
-import type { RoutesConfig } from 'x402/types';
+import type { RoutesConfig } from '@x402/core/server';
 import type { TanStackRequestMiddleware } from '../x402-paywall';
+import { paymentMiddleware } from '../x402-paywall';
 
 describe('TanStack Solana Payments', () => {
   const solanaPayments: PaymentsConfig = {
-    payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana Base58 address
+    payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
     facilitatorUrl: 'https://facilitator.test',
-    network: 'solana-devnet',
+    network: 'solana:devnet',
   };
 
   const entrypoints = [
@@ -37,32 +38,27 @@ describe('TanStack Solana Payments', () => {
     } as const;
   }
 
-  // Note: These tests validate route configuration but do not test middleware execution.
-  // Actual payment verification happens in x402 library and would require:
-  // - Mocking facilitator's supported() call
-  // - Creating full HTTP request/response cycle
-  // - Mocking payment signature validation
-  // The core validation logic is in ../x402-paywall.ts (lines 143-179)
-
   it('creates paywall middleware for Solana network', () => {
     const runtime = createRuntime(solanaPayments);
     const capturedRoutes: RoutesConfig[] = [];
 
-    const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
+    const middlewareFactory = ((
+      _routes,
+      _facilitator,
+      _paywall
+    ) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
+    }) satisfies typeof paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
-      payTo,
       routes,
       facilitator,
       paywall
     ) => {
       capturedRoutes.push(routes as RoutesConfig);
-      expect(payTo as string).toBe(solanaPayments.payTo);
       expect(facilitator?.url).toBe(solanaPayments.facilitatorUrl);
-      return middlewareFactory(payTo, routes, facilitator, paywall);
+      return middlewareFactory(routes, facilitator, paywall);
     };
 
     const paywall = createTanStackPaywall({
@@ -77,7 +73,6 @@ describe('TanStack Solana Payments', () => {
 
     const [invokeRoutes, streamRoutes] = capturedRoutes;
 
-    // Verify invoke routes
     expect(Object.keys(invokeRoutes)).toContain(
       'POST /api/agent/entrypoints/translate/invoke'
     );
@@ -85,24 +80,26 @@ describe('TanStack Solana Payments', () => {
       'GET /api/agent/entrypoints/translate/invoke'
     );
 
-    // Verify route configuration includes Solana network
     const translateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/translate/invoke'];
-    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'network' in translateInvokeConfig) {
-      expect(translateInvokeConfig.network).toBe('solana-devnet');
-      expect(translateInvokeConfig.price).toBe('5000');
+    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'accepts' in translateInvokeConfig) {
+      const accepts = translateInvokeConfig.accepts;
+      if (typeof accepts === 'object' && accepts && 'network' in accepts) {
+        expect(accepts.network).toBe('solana:devnet');
+      }
     }
 
-    // Verify stream routes
     expect(Object.keys(streamRoutes)).toContain(
       'POST /api/agent/entrypoints/generate/stream'
     );
 
     const generateStreamConfig =
       streamRoutes['POST /api/agent/entrypoints/generate/stream'];
-    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'network' in generateStreamConfig) {
-      expect(generateStreamConfig.network).toBe('solana-devnet');
-      expect(generateStreamConfig.price).toBe('8000');
+    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'accepts' in generateStreamConfig) {
+      const accepts = generateStreamConfig.accepts;
+      if (typeof accepts === 'object' && accepts && 'network' in accepts) {
+        expect(accepts.network).toBe('solana:devnet');
+      }
     }
   });
 
@@ -117,7 +114,7 @@ describe('TanStack Solana Payments', () => {
       const config: PaymentsConfig = {
         payTo: address,
         facilitatorUrl: 'https://facilitator.test',
-        network: 'solana',
+        network: 'solana:mainnet',
       };
 
       const runtime = createRuntime(config);
@@ -130,11 +127,11 @@ describe('TanStack Solana Payments', () => {
 
   it('supports both Solana mainnet and devnet', () => {
     const networks = [
-      { value: 'solana', name: 'mainnet' },
-      { value: 'solana-devnet', name: 'devnet' },
-    ] as const;
+      'solana:mainnet' as const,
+      'solana:devnet' as const,
+    ];
 
-    networks.forEach(({ value: network, name }) => {
+    networks.forEach(network => {
       const config: PaymentsConfig = {
         ...solanaPayments,
         network,
@@ -143,18 +140,21 @@ describe('TanStack Solana Payments', () => {
       const runtime = createRuntime(config);
       const capturedRoutes: RoutesConfig[] = [];
 
-      const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
-        return (() => Promise.resolve(new Response())) as any;
-      }) satisfies typeof import('../x402-paywall').paymentMiddleware;
+      const middlewareFactory = ((
+        _routes,
+        _facilitator,
+        _paywall
+      ) => {
+        return (() => Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+      }) satisfies typeof paymentMiddleware;
 
       const spyingFactory: typeof middlewareFactory = (
-        payTo,
         routes,
         facilitator,
         paywall
       ) => {
         capturedRoutes.push(routes as RoutesConfig);
-        return middlewareFactory(payTo, routes, facilitator, paywall);
+        return middlewareFactory(routes, facilitator, paywall);
       };
 
       const paywall = createTanStackPaywall({
@@ -171,8 +171,11 @@ describe('TanStack Solana Payments', () => {
       // Verify all routes use the correct Solana network
       for (const key of routeKeys) {
         const routeConfig = invokeRoutes[key];
-        if (typeof routeConfig === 'object' && routeConfig && 'network' in routeConfig) {
-          expect(routeConfig.network).toBe(network);
+        if (typeof routeConfig === 'object' && routeConfig && 'accepts' in routeConfig) {
+          const accepts = routeConfig.accepts;
+          if (typeof accepts === 'object' && accepts && 'network' in accepts) {
+            expect(accepts.network).toBe(network);
+          }
         }
       }
     });
@@ -182,19 +185,22 @@ describe('TanStack Solana Payments', () => {
     const runtime = createRuntime(solanaPayments);
     const capturedRoutes: RoutesConfig[] = [];
 
-    const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
+    const middlewareFactory = ((
+      _routes,
+      _facilitator,
+      _paywall
+    ) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
+    }) satisfies typeof paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
-      payTo,
       routes,
       facilitator,
       paywall
     ) => {
       capturedRoutes.push(routes as RoutesConfig);
-      return middlewareFactory(payTo, routes, facilitator, paywall);
+      return middlewareFactory(routes, facilitator, paywall);
     };
 
     createTanStackPaywall({
@@ -226,19 +232,22 @@ describe('TanStack Solana Payments', () => {
     const runtime = createRuntime(solanaPayments);
     const capturedRoutes: RoutesConfig[] = [];
 
-    const middlewareFactory = ((_payTo, _routes, _facilitator, _paywall) => {
+    const middlewareFactory = ((
+      _routes,
+      _facilitator,
+      _paywall
+    ) => {
       return (() =>
         Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
-    }) satisfies typeof import('../x402-paywall').paymentMiddleware;
+    }) satisfies typeof paymentMiddleware;
 
     const spyingFactory: typeof middlewareFactory = (
-      payTo,
       routes,
       facilitator,
       paywall
     ) => {
       capturedRoutes.push(routes as RoutesConfig);
-      return middlewareFactory(payTo, routes, facilitator, paywall);
+      return middlewareFactory(routes, facilitator, paywall);
     };
 
     createTanStackPaywall({
@@ -251,22 +260,31 @@ describe('TanStack Solana Payments', () => {
     // Check invoke price for translate (explicit price)
     const translateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/translate/invoke'];
-    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'price' in translateInvokeConfig) {
-      expect(translateInvokeConfig.price).toBe('5000');
+    if (typeof translateInvokeConfig === 'object' && translateInvokeConfig && 'accepts' in translateInvokeConfig) {
+      const accepts = translateInvokeConfig.accepts;
+      if (typeof accepts === 'object' && accepts && 'price' in accepts) {
+        expect(accepts.price).toBe('5000');
+      }
     }
 
     // Check invoke price for generate (from price.invoke)
     const generateInvokeConfig =
       invokeRoutes['POST /api/agent/entrypoints/generate/invoke'];
-    if (typeof generateInvokeConfig === 'object' && generateInvokeConfig && 'price' in generateInvokeConfig) {
-      expect(generateInvokeConfig.price).toBe('2000');
+    if (typeof generateInvokeConfig === 'object' && generateInvokeConfig && 'accepts' in generateInvokeConfig) {
+      const accepts = generateInvokeConfig.accepts;
+      if (typeof accepts === 'object' && accepts && 'price' in accepts) {
+        expect(accepts.price).toBe('2000');
+      }
     }
 
     // Check stream price for generate (from price.stream)
     const generateStreamConfig =
       streamRoutes['POST /api/agent/entrypoints/generate/stream'];
-    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'price' in generateStreamConfig) {
-      expect(generateStreamConfig.price).toBe('8000');
+    if (typeof generateStreamConfig === 'object' && generateStreamConfig && 'accepts' in generateStreamConfig) {
+      const accepts = generateStreamConfig.accepts;
+      if (typeof accepts === 'object' && accepts && 'price' in accepts) {
+        expect(accepts.price).toBe('8000');
+      }
     }
   });
 
@@ -274,7 +292,7 @@ describe('TanStack Solana Payments', () => {
     const invalidPayments: PaymentsConfig = {
       payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
       facilitatorUrl: 'https://facilitator.test',
-      network: 'solana-mainnet' as any, // Invalid - should be 'solana'
+      network: 'solana-mainnet' as any, // Invalid - should be 'solana:mainnet'
     };
 
     const runtime = createRuntime(invalidPayments);

@@ -303,7 +303,7 @@ import {
 
 configureAgentKit({
   payments: {
-    facilitatorUrl: 'https://facilitator.example',
+    facilitatorUrl: 'https://facilitator.daydreams.systems',
     payTo: '0x...',
     network: 'ethereum',
   },

@@ -126,7 +126,7 @@ describe('runtime payments', () => {
     const context = await createRuntimePaymentContext({
       runtime: runtime as unknown as AgentRuntime,
       fetch: baseFetch,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     } as unknown as RuntimePaymentOptions);
 
     expect(context.fetchWithPayment).toBeDefined();
@@ -222,7 +222,7 @@ describe('createAgent payments activation', () => {
   const paymentsConfig: PaymentsConfig = {
     payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
     facilitatorUrl: 'https://facilitator.test',
-    network: 'base-sepolia',
+    network: 'eip155:84532',
   };
 
   it('starts with payments undefined when no priced entrypoints', async () => {
@@ -503,7 +503,7 @@ describe('createAgentRuntime entrypoints', () => {
         config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
-          network: 'base-sepolia',
+          network: 'eip155:84532',
         },
       })
     );
@@ -528,7 +528,7 @@ describe('createAgentRuntime entrypoints', () => {
         config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
-          network: 'base-sepolia',
+          network: 'eip155:84532',
         },
       })
     );
@@ -577,7 +577,7 @@ describe('createAgentRuntime manifest', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
       facilitatorUrl: 'https://facilitator.test',
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
 
     const agent = await createAgent({ name: 'test', version: '1.0.0' })
@@ -637,7 +637,7 @@ describe('createAgentRuntime integration', () => {
         config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
           facilitatorUrl: 'https://facilitator.test',
-          network: 'base-sepolia',
+          network: 'eip155:84532',
         },
       })
     );
@@ -686,7 +686,7 @@ describe('createAgentRuntime integration', () => {
           config: {
             payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
             facilitatorUrl: 'https://facilitator.test',
-            network: 'base-sepolia',
+            network: 'eip155:84532',
           },
         })
       )
@@ -747,7 +747,7 @@ describe('Analytics Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
 
     const agent = await createAgent({
@@ -771,7 +771,7 @@ describe('Analytics Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
       policyGroups: [
         {
           name: 'Daily Spending Limit',
@@ -806,7 +806,7 @@ describe('Analytics Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
       policyGroups: [
         {
           name: 'Receivables Limit',
@@ -838,7 +838,7 @@ describe('Analytics Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
       policyGroups: [
         {
           name: 'Per-Target Limits',
@@ -872,7 +872,7 @@ describe('Analytics Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
       policyGroups: [
         {
           name: 'Rate Limit Only',
@@ -1183,7 +1183,7 @@ describe('Scheduler Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
 
     await expect(
@@ -1213,7 +1213,7 @@ describe('Scheduler Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
 
     const agent = await createAgent({
@@ -1241,7 +1241,7 @@ describe('Scheduler Extension', () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
 
     const agent = await createAgent({

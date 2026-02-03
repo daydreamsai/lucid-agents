@@ -34,13 +34,8 @@ export type WalletRef = WalletMetadata & {
  */
 export type WalletBinding = {
   walletId: string;
-  network:
-    | 'base'
-    | 'ethereum'
-    | 'sepolia'
-    | 'base-sepolia'
-    | 'solana'
-    | 'solana-devnet';
+  /** Network in CAIP-2 format (e.g., 'eip155:8453' for Base) */
+  network: string;
   address: string;
 };
 

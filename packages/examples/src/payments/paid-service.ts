@@ -23,7 +23,7 @@ const agent = await createAgent({
     payments({
       config: {
         payTo: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // Hardhat account #1
-        network: 'base-sepolia',
+        network: 'eip155:84532',
         facilitatorUrl: 'https://facilitator.daydreams.systems',
       },
     })

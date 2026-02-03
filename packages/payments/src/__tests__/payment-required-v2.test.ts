@@ -7,7 +7,7 @@ describe('paymentRequiredResponse (x402 v2)', () => {
       required: true,
       payTo: '0xabc1230000000000000000000000000000000000',
       price: '1.5',
-      network: 'base-sepolia',
+      network: 'eip155:84532',
       facilitatorUrl: 'https://facilitator.test',
     });
 

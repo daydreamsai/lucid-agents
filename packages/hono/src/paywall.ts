@@ -1,7 +1,10 @@
 import type { Hono, Context } from 'hono';
-import { paymentMiddleware } from 'x402-hono';
-import type { FacilitatorConfig } from 'x402/types';
-import { z } from 'zod';
+import { paymentMiddlewareFromConfig } from '@x402/hono';
+import {
+  HTTPFacilitatorClient,
+  type FacilitatorConfig,
+  type RouteConfig,
+} from '@x402/core/server';
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
@@ -15,7 +18,7 @@ import {
   type PaymentTracker,
 } from '@lucid-agents/payments';
 
-type PaymentMiddlewareFactory = typeof paymentMiddleware;
+type PaymentMiddlewareFactory = typeof paymentMiddlewareFromConfig;
 
 export type WithPaymentsParams = {
   app: Hono;
@@ -27,6 +30,8 @@ export type WithPaymentsParams = {
   middlewareFactory?: PaymentMiddlewareFactory;
   runtime?: AgentRuntime;
 };
+
+const DEFAULT_SCHEME = 'exact';
 
 function withPaymentHeader(c: Context, paymentHeader: string): Context {
   const mergedHeaders = new Headers(c.req.raw.headers);
@@ -73,7 +78,7 @@ export function withPayments({
   kind,
   payments,
   facilitator,
-  middlewareFactory = paymentMiddleware,
+  middlewareFactory = paymentMiddlewareFromConfig,
   runtime,
 }: WithPaymentsParams): boolean {
   if (!payments) return false;
@@ -85,53 +90,37 @@ export function withPayments({
 
   if (!price) return false;
   if (!payments.payTo) return false;
-  const requestSchema = entrypoint.input
-    ? z.toJSONSchema(entrypoint.input, { unrepresentable: 'any' })
-    : undefined;
-  const responseSchema = entrypoint.output
-    ? z.toJSONSchema(entrypoint.output, { unrepresentable: 'any' })
-    : undefined;
 
   const description =
     entrypoint.description ??
     `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
   const postMimeType =
     kind === 'stream' ? 'text/event-stream' : 'application/json';
-  const inputSchema = {
-    bodyType: 'json' as const,
-    ...(requestSchema ? { bodyFields: { input: requestSchema } } : {}),
-  };
-  const outputSchema =
-    kind === 'invoke' && responseSchema
-      ? { output: responseSchema }
-      : undefined;
 
   const resolvedFacilitator: FacilitatorConfig =
     facilitator ??
     ({ url: payments.facilitatorUrl } satisfies FacilitatorConfig);
 
-  const postRoute = {
-    price,
-    network,
-    config: {
-      description,
-      mimeType: postMimeType,
-      discoverable: true,
-      inputSchema,
-      outputSchema,
+  const postRoute: RouteConfig = {
+    accepts: {
+      scheme: DEFAULT_SCHEME,
+      payTo: payments.payTo,
+      price,
+      network,
     },
+    description,
+    mimeType: postMimeType,
   };
 
-  const getRoute = {
-    price,
-    network,
-    config: {
-      description,
-      mimeType: 'application/json',
-      discoverable: true,
-      inputSchema,
-      outputSchema,
+  const getRoute: RouteConfig = {
+    accepts: {
+      scheme: DEFAULT_SCHEME,
+      payTo: payments.payTo,
+      price,
+      network,
     },
+    description,
+    mimeType: 'application/json',
   };
 
   const policyGroups = runtime?.payments?.policyGroups;
@@ -168,14 +157,13 @@ export function withPayments({
     });
   }
 
-  const baseMiddleware = middlewareFactory(
-    payments.payTo as Parameters<PaymentMiddlewareFactory>[0],
-    {
-      [`POST ${path}`]: postRoute,
-      [`GET ${path}`]: getRoute,
-    },
-    resolvedFacilitator
-  );
+  const facilitatorClient = new HTTPFacilitatorClient(resolvedFacilitator);
+  const routes = {
+    [`POST ${path}`]: postRoute,
+    [`GET ${path}`]: getRoute,
+  };
+
+  const baseMiddleware = middlewareFactory(routes, facilitatorClient);
 
   app.use(path, async (c, next) => {
     const paymentHeader = c.req.header('PAYMENT');

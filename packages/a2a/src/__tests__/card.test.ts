@@ -466,7 +466,7 @@ describe('supportsPayments', () => {
         {
           method: 'x402',
           payee: '0x123',
-          network: 'base',
+          network: 'eip155:8453',
         },
       ],
       skills: [],

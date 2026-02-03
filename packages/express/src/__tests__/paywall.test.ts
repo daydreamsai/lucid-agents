@@ -19,7 +19,7 @@ describe('Express Paywall - Incoming Payment Recording', () => {
   const testPayments: PaymentsConfig = {
     payTo: '0xabc1230000000000000000000000000000000000',
     facilitatorUrl: 'https://facilitator.test',
-    network: 'base-sepolia',
+    network: 'eip155:84532',
     storage: { type: 'in-memory' },
     policyGroups: [
       {

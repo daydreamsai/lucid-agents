@@ -16,9 +16,6 @@ export {
 export {
   paymentMiddleware,
   type TanStackRequestMiddleware,
-  type Money,
   type Network,
-  type RouteConfig,
-  type RoutesConfig,
   type SolanaAddress,
 } from "./x402-paywall";

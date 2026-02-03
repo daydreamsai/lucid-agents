@@ -39,7 +39,7 @@ const agent = await createAgent({
     payments({
       config: {
         payTo: '0x1234567890123456789012345678901234567890',
-        network: 'base-sepolia',
+        network: 'eip155:84532',
         facilitatorUrl: 'https://facilitator.daydreams.systems',
       },
       policies: 'packages/examples/src/payments/payment-policies.json',
@@ -291,7 +291,7 @@ addEntrypoint({
     // Create payment-enabled fetch (policies are automatically enforced)
     const paymentContext = await createRuntimePaymentContext({
       runtime,
-      network: runtime.payments?.config.network || 'base-sepolia',
+      network: runtime.payments?.config.network || 'eip155:84532',
     });
 
     if (!paymentContext.fetchWithPayment) {

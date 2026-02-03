@@ -1,4 +1,4 @@
-import type { Network } from 'x402/types';
+import type { Network } from './network';
 import { z } from 'zod';
 
 import type { EntrypointPrice } from '../payments';

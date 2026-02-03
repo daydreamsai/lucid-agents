@@ -30,8 +30,8 @@
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "express": "^4.19.2",
-    "x402": "catalog:",
-    "x402-express": "^1.1.0",
+    "@x402/core": "catalog:",
+    "@x402/express": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

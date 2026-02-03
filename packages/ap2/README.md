@@ -58,7 +58,7 @@ const agent = await createAgent({
     config: {
       payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS!,
       network: 'base-sepolia',
-      facilitatorUrl: 'https://facilitator.example.com',
+      facilitatorUrl: 'https://facilitator.daydreams.systems',
     },
   }))
   .use(ap2({ roles: ['merchant'] })) // Explicitly add AP2 extension

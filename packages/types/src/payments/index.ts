@@ -1,4 +1,9 @@
-import type { Network, Resource } from 'x402/types';
+import type { Network } from '../core/network';
+
+/**
+ * Resource URL type for x402 facilitator endpoints
+ */
+export type Resource = string;
 import type { AgentRuntime, EntrypointDef } from '../core';
 
 /**

@@ -7,8 +7,8 @@ import type {
   PaywallConfig,
   RouteConfig,
   RoutesConfig,
-} from 'x402/types';
-import { paymentMiddleware } from 'x402-next';
+} from '@x402/core/server';
+import { paymentMiddleware } from '@x402/next';
 
 const DEFAULT_BASE_PATH = '/api/agent';
 

@@ -157,7 +157,7 @@ describe('create-agent-kit CLI', () => {
     const inputResponses = new Map<string, string>([
       ['How would you describe your agent?', 'Quote assistant for pricing.'],
       ['What version should the agent start at?', '1.0.0'],
-      ['Facilitator URL', 'https://facilitator.example'],
+      ['Facilitator URL', 'https://facilitator.daydreams.systems'],
       ['Payment network identifier', 'base'],
       [
         'Receivable address (address that receives payments)',
@@ -208,7 +208,7 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain('AGENT_VERSION=1.0.0');
     expect(envFile).toContain('AGENT_DESCRIPTION=Quote assistant for pricing.');
     expect(envFile).toContain(
-      'PAYMENTS_FACILITATOR_URL=https://facilitator.example'
+      'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems'
     );
     expect(envFile).toContain(
       'PAYMENTS_RECEIVABLE_ADDRESS=0xabc0000000000000000000000000000000000000'
@@ -272,7 +272,7 @@ describe('create-agent-kit CLI', () => {
     expect(agentSrc).toContain('createAgent');
     expect(proxySrc).toContain('createNextPaywall');
     expect(pkg.dependencies?.next).toBeDefined();
-    expect(pkg.dependencies?.['x402-next']).toBeDefined();
+    expect(pkg.dependencies?.['@x402/next']).toBeDefined();
     expect(envFile).toContain('OPENAI_API_KEY=');
     expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=');
   });
@@ -592,7 +592,7 @@ describe('create-agent-kit CLI', () => {
         '--template=blank',
         '--non-interactive',
         '--AGENT_DESCRIPTION=Agent with special chars: @#$%&',
-        '--PAYMENTS_FACILITATOR_URL=https://facilitator.example.com/api?key=test',
+        '--PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems/api?key=test',
       ],
       {
         cwd,
@@ -607,7 +607,7 @@ describe('create-agent-kit CLI', () => {
       'AGENT_DESCRIPTION=Agent with special chars: @#$%&'
     );
     expect(envFile).toContain(
-      'PAYMENTS_FACILITATOR_URL=https://facilitator.example.com/api?key=test'
+      'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems/api?key=test'
     );
   });
 

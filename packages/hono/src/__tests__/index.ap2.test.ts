@@ -46,7 +46,7 @@ describe('createAgentApp AP2 extension', () => {
           config: {
             payTo: '0xabc000000000000000000000000000000000c0de',
             facilitatorUrl: 'https://facilitator.local' as any,
-            network: 'base-sepolia' as any,
+            network: 'eip155:84532' as any,
             defaultPrice: '$0.01',
           },
         })

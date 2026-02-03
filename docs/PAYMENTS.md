@@ -80,7 +80,7 @@ const agent = await createAgent({
     payments({
       config: {
         payTo: '0x1234567890123456789012345678901234567890',
-        facilitatorUrl: 'https://facilitator.example.com',
+        facilitatorUrl: 'https://facilitator.daydreams.systems',
         network: 'base',
       },
       policies: 'payment-policies.json',
@@ -97,7 +97,7 @@ The `paymentsFromEnv()` helper loads configuration from environment variables:
 
 ```bash
 PAYMENTS_RECEIVABLE_ADDRESS=0x1234567890123456789012345678901234567890
-FACILITATOR_URL=https://facilitator.example.com
+FACILITATOR_URL=https://facilitator.daydreams.systems
 NETWORK=base
 ```
 

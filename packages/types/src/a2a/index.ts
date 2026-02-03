@@ -1,4 +1,5 @@
-import type { Network, Resource } from 'x402/types';
+import type { Network } from '../core/network';
+import type { Resource } from '../payments';
 import type { EntrypointPrice, SolanaAddress } from '../payments';
 import type { RegistrationEntry, TrustModel } from '../identity';
 import type { EntrypointDef } from '../core';

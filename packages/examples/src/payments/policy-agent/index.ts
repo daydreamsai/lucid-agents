@@ -20,7 +20,7 @@ import { z } from 'zod';
  * Required environment variables (see env.example):
  *   - FACILITATOR_URL - x402 facilitator endpoint
  *   - PAYMENTS_RECEIVABLE_ADDRESS - This agent's payment address (not used for making payments)
- *   - NETWORK - Network identifier (e.g., base-sepolia)
+ *   - NETWORK - Network identifier in CAIP-2 format (e.g., eip155:84532 for Base Sepolia)
  *   - WALLET_PRIVATE_KEY - Private key for making payments to other agents
  *
  * How to test:
@@ -511,7 +511,7 @@ addEntrypoint({
     // Create payment-enabled fetch (policies are automatically enforced)
     const paymentContext = await createRuntimePaymentContext({
       runtime,
-      network: runtime.payments?.config.network || 'base-sepolia',
+      network: runtime.payments?.config.network || 'eip155:84532',
     });
 
     if (!paymentContext.fetchWithPayment) {

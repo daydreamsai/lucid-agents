@@ -36,8 +36,8 @@
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@tanstack/react-start": "^1.134.13",
+    "@x402/core": "catalog:",
     "viem": "catalog:",
-    "x402": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

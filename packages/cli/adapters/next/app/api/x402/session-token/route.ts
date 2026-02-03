@@ -1,1 +1,1 @@
-export { POST } from 'x402-next';
+export { POST } from '@x402/next';

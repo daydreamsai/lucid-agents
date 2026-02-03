@@ -3,11 +3,13 @@ import { createAgentApp } from '@lucid-agents/hono';
 import { AgentKitConfig, createAxLLMClient } from '@lucid-agents/core';
 import { flow } from '@ax-llm/ax';
 import {
-  createSigner,
-  decodeXPaymentResponse,
   wrapFetchWithPayment,
-  type Hex,
-} from 'x402-fetch';
+  x402Client,
+  decodePaymentResponseHeader,
+} from '@x402/fetch';
+import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
+import { privateKeyToAccount } from 'viem/accounts';
+import type { Hex } from 'viem';
 
 /**
  * This example shows how to combine `createAxLLMClient` with a small AxFlow
@@ -20,7 +22,6 @@ import {
  * Optional environment variables:
  *   - FIRECRAWL_SEARCH_URL (override the Firecrawl on-demand search endpoint)
  *   - FIRECRAWL_AUTH_TOKEN (Bearer token for the endpoint, if required)
- *   - X402_NETWORK        (chain identifier for createSigner, defaults to ethereum)
  */
 
 const axClient = createAxLLMClient({
@@ -49,9 +50,6 @@ const firecrawlAuthToken = process.env.FIRECRAWL_AUTH_TOKEN as
   | string
   | undefined;
 const privateKey = process.env.PRIVATE_KEY as Hex | undefined;
-const x402Network = (process.env.X402_NETWORK ?? 'base') as Parameters<
-  typeof createSigner
->[0];
 
 if (!privateKey) {
   console.warn(
@@ -86,11 +84,17 @@ async function getFetchWithPayment(): Promise<FetchWithPayment> {
   }
 
   if (!fetchWithPaymentPromise) {
-    fetchWithPaymentPromise = createSigner(x402Network, key).then(signer => {
-      const prepared = wrapFetchWithPayment(fetch, signer);
+    fetchWithPaymentPromise = (async () => {
+      const account = privateKeyToAccount(key);
+      const signer = toClientEvmSigner(account);
+      const client = new x402Client()
+        .register('eip155:8453', new ExactEvmScheme(signer)) // Base
+        .register('eip155:84532', new ExactEvmScheme(signer)) // Base Sepolia
+        .register('eip155:1', new ExactEvmScheme(signer)); // Ethereum
+      const prepared = wrapFetchWithPayment(fetch, client);
       fetchWithPaymentInstance = prepared;
       return prepared;
-    });
+    })();
   }
 
   return fetchWithPaymentPromise;
@@ -139,7 +143,7 @@ async function scrapePageContent(url: string): Promise<FirecrawlSearchResult> {
   const paymentHeader = response.headers.get('x-payment-response');
   if (paymentHeader) {
     try {
-      decodeXPaymentResponse(paymentHeader);
+      decodePaymentResponseHeader(paymentHeader);
     } catch (error) {
       console.warn(
         '[examples] Failed to decode x-payment-response header.',

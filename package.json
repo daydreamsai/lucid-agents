@@ -12,11 +12,12 @@
       "hono": "4.10.1",
       "express": "^4.19.2",
       "viem": "^2.41.2",
-      "x402": "^1.1.0",
-      "x402-fetch": "^1.1.0",
       "@x402/core": "^2.2.0",
       "@x402/fetch": "^2.2.0",
       "@x402/evm": "^2.2.0",
+      "@x402/hono": "^2.2.0",
+      "@x402/express": "^2.2.0",
+      "@x402/next": "^2.2.0",
       "tsup": "^8.5.0"
     }
   },
@@ -47,14 +48,17 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",
-    "eslint": "^8.57.1",
     "@typescript-eslint/eslint-plugin": "^8.39.1",
     "@typescript-eslint/parser": "^8.39.1",
+    "@x402/core": "2.2.0",
+    "@x402/express": "2.2.0",
+    "@x402/hono": "2.2.0",
+    "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.1.4",
-    "prettier": "^3.0.0",
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "prettier": "^3.0.0"
   }
 }
