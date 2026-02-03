@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/cli",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "Scaffold a Bun agent app powered by @lucid-agents/core.",
   "repository": {
     "type": "git",

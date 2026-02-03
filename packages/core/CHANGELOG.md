@@ -1,5 +1,13 @@
 # @lucid-agents/core
 
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [58cdac4]
+  - @lucid-agents/payments@2.3.0
+  - @lucid-agents/a2a@0.5.5
+
 ## 2.2.3
 
 ### Patch Changes
