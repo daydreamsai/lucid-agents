@@ -1,5 +1,13 @@
 # @lucid-agents/examples
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [affe9a2]
+  - @lucid-agents/hono@0.9.2
+  - @lucid-agents/a2a@0.6.0
+
 ## 0.3.1
 
 ### Patch Changes
