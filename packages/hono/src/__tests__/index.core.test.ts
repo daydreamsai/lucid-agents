@@ -108,13 +108,16 @@ describe('withPayments helper', () => {
     const calls: Array<[string, any]> = [];
     let capturedRoutes: Record<string, any> | null = null;
     let capturedFacilitator: any = null;
+    let capturedSchemes: any[] | null = null;
     const app = { use: (...args: any[]) => calls.push([...args] as any) };
     const middlewareFactory = (
       routes: Record<string, any>,
-      facilitatorClient: any
+      facilitatorClient: any,
+      schemes?: any[]
     ) => {
       capturedRoutes = routes;
       capturedFacilitator = facilitatorClient;
+      capturedSchemes = schemes ?? null;
       return { routes, facilitator: facilitatorClient };
     };
     const didRegister = withPayments({
@@ -142,6 +145,9 @@ describe('withPayments helper', () => {
     expect(getConfig.accepts?.price).toBe('42');
     expect(getConfig.mimeType).toBe('application/json');
     expect(capturedFacilitator).toBeTruthy();
+
+    // Verify schemes parameter is passed as empty array (facilitator-based approach)
+    expect(capturedSchemes).toEqual([]);
   });
 
   it('skips registration when no payments provided', () => {
@@ -178,7 +184,8 @@ describe('withPayments helper', () => {
     const customFacilitator = { url: 'https://override.example' };
     const middlewareFactory = (
       routes: Record<string, any>,
-      facilitatorClient: any
+      facilitatorClient: any,
+      schemes?: any[]
     ) => {
       capturedFacilitator = facilitatorClient;
       return { routes, facilitator: facilitatorClient };

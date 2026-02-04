@@ -138,7 +138,7 @@ export function withPayments({
     [`GET ${path}`]: getRoute,
   };
 
-  const middleware = middlewareFactory(routes, facilitatorClient) as RequestHandler;
+  const middleware = middlewareFactory(routes, facilitatorClient, []) as RequestHandler;
 
   app.use((req, res, next) => {
     const reqPath = req.path ?? req.url ?? '';

@@ -163,7 +163,7 @@ export function withPayments({
     [`GET ${path}`]: getRoute,
   };
 
-  const baseMiddleware = middlewareFactory(routes, facilitatorClient);
+  const baseMiddleware = middlewareFactory(routes, facilitatorClient, []);
 
   app.use(path, async (c, next) => {
     const paymentHeader = c.req.header('PAYMENT');
