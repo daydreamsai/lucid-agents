@@ -146,8 +146,10 @@ describe('withPayments helper', () => {
     expect(getConfig.mimeType).toBe('application/json');
     expect(capturedFacilitator).toBeTruthy();
 
-    // Verify schemes parameter is passed as empty array (facilitator-based approach)
-    expect(capturedSchemes).toEqual([]);
+    expect(capturedSchemes).toBeTruthy();
+    expect(capturedSchemes?.length).toBe(1);
+    expect(capturedSchemes?.[0]?.network).toBe('eip155:*');
+    expect(capturedSchemes?.[0]?.server?.scheme).toBe('exact');
   });
 
   it('skips registration when no payments provided', () => {
