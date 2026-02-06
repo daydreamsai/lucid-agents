@@ -1,5 +1,13 @@
 # @lucid-agents/express
 
+## 0.5.3
+
+### Patch Changes
+
+- d5f5326: Fix x402 scheme registration in adapter paywall middleware by registering `ExactEvmScheme` for `eip155:*` instead of passing an empty schemes array.
+
+  This resolves payment failures such as `No scheme implementation registered for "exact"` on EVM networks (for example Base Sepolia).
+
 ## 0.5.2
 
 ### Patch Changes
