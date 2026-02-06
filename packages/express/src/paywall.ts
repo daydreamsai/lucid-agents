@@ -1,5 +1,9 @@
 import type { Express, RequestHandler } from 'express';
-import { paymentMiddlewareFromConfig } from '@x402/express';
+import {
+  paymentMiddlewareFromConfig,
+  type SchemeRegistration,
+} from '@x402/express';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
 import {
   HTTPFacilitatorClient,
   type FacilitatorConfig,
@@ -19,6 +23,12 @@ import {
 } from '@lucid-agents/payments';
 
 const DEFAULT_SCHEME = 'exact';
+const DEFAULT_SCHEMES: SchemeRegistration[] = [
+  {
+    network: 'eip155:*',
+    server: new ExactEvmScheme(),
+  },
+];
 
 type PaymentMiddlewareFactory = typeof paymentMiddlewareFromConfig;
 
@@ -138,7 +148,11 @@ export function withPayments({
     [`GET ${path}`]: getRoute,
   };
 
-  const middleware = middlewareFactory(routes, facilitatorClient, []) as RequestHandler;
+  const middleware = middlewareFactory(
+    routes,
+    facilitatorClient,
+    DEFAULT_SCHEMES
+  ) as RequestHandler;
 
   app.use((req, res, next) => {
     const reqPath = req.path ?? req.url ?? '';

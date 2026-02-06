@@ -1,5 +1,9 @@
 import type { Hono, Context } from 'hono';
-import { paymentMiddlewareFromConfig } from '@x402/hono';
+import {
+  paymentMiddlewareFromConfig,
+  type SchemeRegistration,
+} from '@x402/hono';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
 import {
   HTTPFacilitatorClient,
   type FacilitatorConfig,
@@ -32,6 +36,12 @@ export type WithPaymentsParams = {
 };
 
 const DEFAULT_SCHEME = 'exact';
+const DEFAULT_SCHEMES: SchemeRegistration[] = [
+  {
+    network: 'eip155:*',
+    server: new ExactEvmScheme(),
+  },
+];
 
 function withPaymentHeader(c: Context, paymentHeader: string): Context {
   const mergedHeaders = new Headers(c.req.raw.headers);
@@ -69,7 +79,6 @@ function withPaymentHeader(c: Context, paymentHeader: string): Context {
   });
   return contextProxy as Context;
 }
-
 
 export function withPayments({
   app,
@@ -163,7 +172,11 @@ export function withPayments({
     [`GET ${path}`]: getRoute,
   };
 
-  const baseMiddleware = middlewareFactory(routes, facilitatorClient, []);
+  const baseMiddleware = middlewareFactory(
+    routes,
+    facilitatorClient,
+    DEFAULT_SCHEMES
+  );
 
   app.use(path, async (c, next) => {
     const paymentHeader = c.req.header('PAYMENT');
