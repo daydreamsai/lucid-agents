@@ -275,7 +275,7 @@ Extensions add optional capabilities. They are independent and don't depend on e
 
 - Task scheduling and execution
 - Interval-based tasks
-- Cron-like scheduling
+- One-off scheduled tasks
 
 **Dependencies:** `@lucid-agents/types`
 
