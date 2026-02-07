@@ -120,7 +120,9 @@ const agent = await createAgent({
   version: '1.0.0',
 })
   .use(http())
-  .use(identity({ config: { domain: 'my-agent.example.com', autoRegister: true } }))
+  .use(
+    identity({ config: { domain: 'my-agent.example.com', autoRegister: true } })
+  )
   .build();
 
 // 3. Create the app from the runtime

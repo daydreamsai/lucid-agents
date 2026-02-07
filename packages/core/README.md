@@ -219,13 +219,15 @@ const agent = await createAgent({
   description: 'Agent accepting Solana USDC payments',
 })
   .use(http())
-  .use(payments({
-    config: {
-      payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
-      network: 'solana-devnet',
-      facilitatorUrl: 'https://facilitator.daydreams.systems',
-    },
-  }))
+  .use(
+    payments({
+      config: {
+        payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
+        network: 'solana-devnet',
+        facilitatorUrl: 'https://facilitator.daydreams.systems',
+      },
+    })
+  )
   .build();
 
 const { app, addEntrypoint } = await createAgentApp(agent);
