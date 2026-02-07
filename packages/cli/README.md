@@ -176,7 +176,7 @@ bunx @lucid-agents/cli my-agent --network=base --non-interactive
 - For identity template: EVM private key is for identity registration, payment address can be Solana
 - Payment address can be shared across multiple agents
 
-````bash
+```
 
 ### Non-Interactive Mode with Template Arguments
 
@@ -213,7 +213,7 @@ bunx @lucid-agents/cli@latest ai-agent \
   --non-interactive \
   --AGENT_DESCRIPTION="AI-powered agent" \
   --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
-````
+```
 
 **How it works:**
 
@@ -248,11 +248,12 @@ PRIVATE_KEY=
 
 Additional variables for ERC-8004:
 
-````bash
+```bash
 AGENT_DOMAIN=agent.example.com
 IDENTITY_AUTO_REGISTER=true
 RPC_URL=https://eth.llamarpc.com
 CHAIN_ID=1
+```
 
 ### AxLLM Templates
 
@@ -262,7 +263,7 @@ Additional variables for LLM:
 OPENAI_API_KEY=sk-...
 AX_MODEL=gpt-4o
 AX_PROVIDER=openai
-````
+```
 
 ## Project Structure
 
