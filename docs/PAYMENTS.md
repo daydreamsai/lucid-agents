@@ -145,9 +145,9 @@ Without the `policies` option, no policy enforcement occurs.
 
 ### Policy Types
 
-#### 1. Spending Limits
+#### 1. Outgoing Limits
 
-Control how much your agent can spend:
+Control how much your agent can spend (configured via `outgoingLimits`):
 
 - **`maxPaymentUsd`**: Maximum amount per individual payment (stateless check)
 - **`maxTotalUsd`**: Maximum total spending across all payments (stateful, tracked)
@@ -181,7 +181,7 @@ Create a `payment-policies.json` file in your project root:
 [
   {
     "name": "Daily Spending Limit",
-    "spendingLimits": {
+    "outgoingLimits": {
       "global": {
         "maxPaymentUsd": 10.0,
         "maxTotalUsd": 1000.0,
@@ -213,7 +213,7 @@ Create a `payment-policies.json` file in your project root:
   },
   {
     "name": "Strict API Usage",
-    "spendingLimits": {
+    "outgoingLimits": {
       "global": {
         "maxPaymentUsd": 5.0,
         "maxTotalUsd": 200.0,
@@ -251,7 +251,7 @@ Create a `payment-policies.json` file in your project root:
 ```json
 {
   "name": "Daily Budget",
-  "spendingLimits": {
+  "outgoingLimits": {
     "global": {
       "maxTotalUsd": 1000.0,
       "windowMs": 86400000
@@ -265,7 +265,7 @@ Create a `payment-policies.json` file in your project root:
 ```json
 {
   "name": "Per-Agent Limits",
-  "spendingLimits": {
+  "outgoingLimits": {
     "perTarget": {
       "https://expensive-api.example.com": {
         "maxPaymentUsd": 50.0,
@@ -356,7 +356,7 @@ import { wrapBaseFetchWithPolicy } from '@lucid-agents/payments';
 const policyGroups = [
   {
     name: 'My Policy',
-    spendingLimits: {
+    outgoingLimits: {
       global: { maxTotalUsd: 1000.0 },
     },
   },
@@ -459,7 +459,7 @@ Evaluates all policy groups against a payment.
 
 **Returns:** `PolicyEvaluationResult`
 
-#### `evaluateSpendingLimits(policyGroups, paymentInfo, spendingTracker?)`
+#### `evaluateOutgoingLimits(policyGroups, paymentInfo, spendingTracker?)`
 
 Evaluates spending limits for policy groups.
 
@@ -497,7 +497,7 @@ const agent = await createAgent({
   .use(payments({ config: paymentsFromEnv() }))
   .build();
 
-agent.addEntrypoint({
+agent.entrypoints.add({
   key: 'process',
   description: 'Process data',
   input: z.object({ data: z.string() }),
@@ -533,7 +533,7 @@ const agent = await createAgent({
   )
   .build();
 
-agent.addEntrypoint({
+agent.entrypoints.add({
   key: 'orchestrate',
   description: 'Orchestrate multiple agents',
   input: z.object({ task: z.string() }),
@@ -568,7 +568,7 @@ agent.addEntrypoint({
 [
   {
     "name": "Daily Budget",
-    "spendingLimits": {
+    "outgoingLimits": {
       "global": {
         "maxPaymentUsd": 10.0,
         "maxTotalUsd": 1000.0,
@@ -599,7 +599,7 @@ agent.addEntrypoint({
 [
   {
     "name": "Per-Agent Budgets",
-    "spendingLimits": {
+    "outgoingLimits": {
       "perTarget": {
         "https://expensive-api.example.com": {
           "maxPaymentUsd": 50.0,

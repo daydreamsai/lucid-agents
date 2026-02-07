@@ -106,9 +106,10 @@ curl -X POST http://localhost:3000/entrypoints/echo/invoke \
 
 Lucid Agents is a TypeScript monorepo built for protocol-agnostic, multi-runtime agent deployment with a compositional extension architecture:
 
-- **Layer 1: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`) - no protocol-specific code
-- **Layer 2: Extensions** - Optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol)
-- **Layer 3: Adapters** - Framework integrations (hono, tanstack, express, next) that use the HTTP extension
+- **Layer 0: Base** - Shared type definitions (`@lucid-agents/types`) and CLI scaffolding (`@lucid-agents/cli`) - no internal dependencies
+- **Layer 1: Extensions** - Independent, optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol), `analytics()`, `scheduler()`
+- **Layer 2: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`) - no protocol-specific code
+- **Layer 3: Adapters** - Framework integrations (hono, tanstack, express) that wire core to HTTP frameworks
 
 The core runtime is completely protocol-agnostic. Protocols like HTTP are provided as extensions that get merged into the runtime. Future protocols (gRPC, WebSocket, etc.) can be added as additional extensions.
 
@@ -128,6 +129,7 @@ The core runtime is completely protocol-agnostic. Protocols like HTTP are provid
 - **`@lucid-agents/hono`** - Hono HTTP server adapter
 - **`@lucid-agents/express`** - Express HTTP server adapter
 - **`@lucid-agents/tanstack`** - TanStack Start adapter (UI and headless variants)
+- **`@lucid-agents/scheduler`** - Pull-style scheduler for hiring and invoking agents on a schedule
 - **`@lucid-agents/cli`** - CLI scaffolding tool for creating new agent projects
 
 ### Key Concepts
@@ -152,7 +154,7 @@ The core runtime is completely protocol-agnostic. Protocols like HTTP are provid
 - **Multi-Turn Conversations**: Group related tasks with `contextId` for conversational agents
 - **Agent Composition**: Agents can act as both clients and servers, enabling complex supply chains
 
-**Manifests**: Auto-generated AgentCard (`.well-known/agent-card.json`) that describes your agent's capabilities, pricing, and identity for discovery tools and A2A protocols. Built using immutable composition pattern.
+**Manifests**: Auto-generated AgentCard served at both `/.well-known/agent.json` (A2A Protocol convention) and `/.well-known/agent-card.json` (legacy/alternate path). Both return the same manifest describing your agent's capabilities, pricing, and identity. Built using immutable composition pattern.
 
 **Payment Networks**: Accept payments on:
 
