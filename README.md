@@ -106,9 +106,10 @@ curl -X POST http://localhost:3000/entrypoints/echo/invoke \
 
 Lucid Agents is a TypeScript monorepo built for protocol-agnostic, multi-runtime agent deployment with a compositional extension architecture:
 
-- **Layer 1: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`) - no protocol-specific code
-- **Layer 2: Extensions** - Optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol)
-- **Layer 3: Adapters** - Framework integrations (hono, tanstack, express, next) that use the HTTP extension
+- **Layer 0: Base** - Shared type definitions (`@lucid-agents/types`) and CLI scaffolding (`@lucid-agents/cli`) - no internal dependencies
+- **Layer 1: Extensions** - Independent, optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol), `analytics()`, `scheduler()`
+- **Layer 2: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`) - no protocol-specific code
+- **Layer 3: Adapters** - Framework integrations (hono, tanstack, express) that wire core to HTTP frameworks
 
 The core runtime is completely protocol-agnostic. Protocols like HTTP are provided as extensions that get merged into the runtime. Future protocols (gRPC, WebSocket, etc.) can be added as additional extensions.
 
