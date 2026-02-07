@@ -9,7 +9,7 @@
 
 ## Summary
 
-The lucid-agents SDK has extensive documentation across 20+ README files, a docs site (`lucid-docs/`), architecture docs, and inline JSDoc. The documentation is generally well-structured and covers most features. However, the audit found **10 critical issues**, **16 warnings**, and **10 informational items**. The most significant problems are stale API references from the pre-refactor era (old `agent-kit` package names, removed functions like `configureAgentKit`), broken code examples with wrong variable names, and missing READMEs for 6 major packages.
+The lucid-agents SDK has extensive documentation across 20+ README files, a docs site (`lucid-docs/`), architecture docs, and inline JSDoc. The documentation is generally well-structured and covers most features. However, the audit found **10 critical issues**, **18 warnings**, and **10 informational items**. The most significant problems are stale API references from the pre-refactor era (old `agent-kit` package names, removed functions like `configureAgentKit`), broken code examples with wrong variable names, and missing READMEs for 6 major packages.
 
 ---
 
@@ -135,6 +135,14 @@ import { paymentsFromEnv } from '@lucid-agents/payments';
 ### W-16: Root README missing `@lucid-agents/scheduler` from package list
 **File:** `README.md` (lines 119-131)
 **Description:** The "Packages" section lists 12 packages but omits `@lucid-agents/scheduler`, even though the scheduler package exists and is documented in the architecture docs.
+
+### W-17: Root AGENTS.md has stale `agent-kit` package names in later sections
+**File:** `AGENTS.md` (lines 855-877, 963-964, 977)
+**Description:** While the first half of AGENTS.md is current and accurate, the "How Packages Interact" section (lines 853-877) still uses old package names (`@lucid-agents/agent-kit`, `@lucid-agents/agent-kit-identity`, `create-agent-kit`). The "Modifying the CLI" section (line 963) references `packages/create-agent-kit/src/index.ts` which should be `packages/cli/src/index.ts`. The troubleshooting section (line 977) references `@lucid-agents/agent-kit/types` which should be `@lucid-agents/types/core`.
+
+### W-18: Core package.json imports `@lucid-agents/agent-auth` with wrong npm scope
+**File:** `packages/core/package.json` (lines 52-53), `packages/core/README.md` (line 357)
+**Description:** The core package depends on `@lucid-dreams/agent-auth` and `@lucid-dreams/client` (note: `@lucid-dreams` scope, not `@lucid-agents`). However, the core README documents importing from `@lucid-agents/agent-auth` (line 357), which is the wrong npm scope. The correct import should be `@lucid-dreams/agent-auth`.
 
 ---
 
