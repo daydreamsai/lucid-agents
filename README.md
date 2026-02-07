@@ -128,6 +128,7 @@ The core runtime is completely protocol-agnostic. Protocols like HTTP are provid
 - **`@lucid-agents/hono`** - Hono HTTP server adapter
 - **`@lucid-agents/express`** - Express HTTP server adapter
 - **`@lucid-agents/tanstack`** - TanStack Start adapter (UI and headless variants)
+- **`@lucid-agents/scheduler`** - Pull-style scheduler for hiring and invoking agents on a schedule
 - **`@lucid-agents/cli`** - CLI scaffolding tool for creating new agent projects
 
 ### Key Concepts
@@ -152,7 +153,7 @@ The core runtime is completely protocol-agnostic. Protocols like HTTP are provid
 - **Multi-Turn Conversations**: Group related tasks with `contextId` for conversational agents
 - **Agent Composition**: Agents can act as both clients and servers, enabling complex supply chains
 
-**Manifests**: Auto-generated AgentCard (`.well-known/agent-card.json`) that describes your agent's capabilities, pricing, and identity for discovery tools and A2A protocols. Built using immutable composition pattern.
+**Manifests**: Auto-generated AgentCard served at both `/.well-known/agent.json` (A2A Protocol convention) and `/.well-known/agent-card.json` (legacy/alternate path). Both return the same manifest describing your agent's capabilities, pricing, and identity. Built using immutable composition pattern.
 
 **Payment Networks**: Accept payments on:
 
