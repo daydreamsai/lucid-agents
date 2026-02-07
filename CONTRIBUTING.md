@@ -16,7 +16,7 @@ Thank you for your interest in contributing to Lucid Agents! This document provi
 
 ### Prerequisites
 
-- **Bun** >= 20.9.0 (install from [bun.sh](https://bun.sh))
+- **Bun** >= 1.0 (install from [bun.sh](https://bun.sh))
 - **Git** for version control
 - A code editor (VS Code recommended)
 
@@ -25,7 +25,7 @@ Thank you for your interest in contributing to Lucid Agents! This document provi
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/lucid-dreams-ai/lucid-agents.git
+git clone https://github.com/daydreamsai/lucid-agents.git
 cd lucid-agents
 ```
 
@@ -44,12 +44,26 @@ The repository is organized as a monorepo with multiple packages:
 ```
 lucid-agents/
 ├── packages/
-│   ├── agent-kit/              # Core agent runtime
-│   ├── agent-kit-identity/     # ERC-8004 identity toolkit
-│   └── create-agent-kit/       # CLI scaffolding tool
-├── scripts/                    # Build and release scripts
+│   ├── core/                   # Core agent runtime
+│   ├── http/                   # HTTP extension
+│   ├── payments/               # x402 payment utilities
+│   ├── wallet/                 # Wallet SDK
+│   ├── identity/               # ERC-8004 identity toolkit
+│   ├── a2a/                    # A2A Protocol client
+│   ├── ap2/                    # AP2 extension
+│   ├── analytics/              # Payment analytics
+│   ├── hono/                   # Hono adapter
+│   ├── express/                # Express adapter
+│   ├── tanstack/               # TanStack adapter
+│   ├── cli/                    # CLI scaffolding tool
+│   ├── scheduler/              # Agent scheduler
+│   ├── types/                  # Shared type definitions
+│   ├── api-sdk/                # API SDK (auto-generated)
+│   └── examples/               # Example agents
+├── docs/                       # Architecture and guide docs
+├── lucid-docs/                 # Documentation site (Fumadocs)
 ├── package.json                # Root package configuration
-└── readme.md                   # Main documentation
+└── README.md                   # Main documentation
 ```
 
 Each package has its own:
@@ -71,7 +85,7 @@ bun run build:packages
 Build a specific package:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun run build
 ```
 
@@ -80,7 +94,7 @@ bun run build
 Most packages support watch mode for development:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun run dev
 ```
 
@@ -89,12 +103,12 @@ bun run dev
 Packages include example files demonstrating usage:
 
 ```bash
-# Run an example from agent-kit
-cd packages/agent-kit
+# Run an example from core
+cd packages/core
 bun run examples/full-agent.ts
 
-# Run an example from agent-kit-identity
-cd packages/agent-kit-identity
+# Run an example from identity
+cd packages/identity
 bun run examples/quick-start.ts
 ```
 
@@ -158,7 +172,7 @@ When working on a specific package:
 
 1. **Navigate to the package directory**
    ```bash
-   cd packages/agent-kit
+   cd packages/core
    ```
 
 2. **Make your changes** in `src/`
@@ -186,7 +200,7 @@ bun test
 Run tests for a specific package:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun test
 ```
 
@@ -208,17 +222,17 @@ Tests are located in `__tests__/` directories within each package.
 
 ```typescript
 import { describe, test, expect } from "bun:test";
-import { createAgentApp } from "../src/app";
+import { createAgent } from "../src/runtime";
 
-describe("createAgentApp", () => {
-  test("creates app with metadata", () => {
-    const { app, config } = createAgentApp({
+describe("createAgent", () => {
+  test("creates agent runtime with metadata", async () => {
+    const agent = await createAgent({
       name: "test-agent",
       version: "1.0.0",
-    });
+    }).build();
 
-    expect(app).toBeDefined();
-    expect(config).toBeDefined();
+    expect(agent).toBeDefined();
+    expect(agent.agent.name).toBe("test-agent");
   });
 });
 ```
