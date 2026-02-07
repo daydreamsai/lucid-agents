@@ -100,7 +100,7 @@ const agent = await createAgent({
   .use(http())
   .build();
 
-const { app, addEntrypoint } = createAgentApp(runtime);
+const { app, addEntrypoint } = await createAgentApp(agent);
 
 addEntrypoint({
   key: 'echo',
@@ -133,7 +133,7 @@ const agent = await createAgent({
   .use(http())
   .build();
 
-const { app, addEntrypoint } = createAgentApp(runtime);
+const { app, addEntrypoint } = await createAgentApp(agent);
 
 addEntrypoint({
   key: 'echo',
@@ -166,7 +166,7 @@ const agent = await createAgent({
   .use(http())
   .build();
 
-const { runtime, handlers } = createTanStackRuntime(appRuntime);
+const { runtime, handlers } = await createTanStackRuntime(agent);
 
 runtime.entrypoints.add({
   key: 'echo',
@@ -180,8 +180,7 @@ runtime.entrypoints.add({
   },
 });
 
-const { agent } = runtime;
-export { agent, handlers, runtime };
+export { runtime, handlers };
 ```
 
 ## Supported Networks
@@ -208,20 +207,28 @@ Lucid-agents supports payment receiving on multiple blockchain networks:
 ### Example with Solana
 
 ```ts
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'solana-agent',
-    version: '1.0.0',
-    description: 'Agent accepting Solana USDC payments',
-  },
-  {
-    payments: {
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { createAgentApp } from '@lucid-agents/hono';
+import { z } from 'zod';
+
+const agent = await createAgent({
+  name: 'solana-agent',
+  version: '1.0.0',
+  description: 'Agent accepting Solana USDC payments',
+})
+  .use(http())
+  .use(payments({
+    config: {
       payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
       network: 'solana-devnet',
       facilitatorUrl: 'https://facilitator.daydreams.systems',
     },
-  }
-);
+  }))
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent);
 
 addEntrypoint({
   key: 'translate',
@@ -245,7 +252,7 @@ For Solana payments, USDC addresses are:
 
 ### Entrypoints
 
-`EntrypointDef` describes a unit of work. Each entrypoint becomes two HTTP endpoints:
+`EntrypointDef` describes a unit of work. When using the HTTP extension (`@lucid-agents/http`) with an adapter, each entrypoint becomes two HTTP endpoints:
 
 - `POST /entrypoints/:key/invoke` — always available; returns JSON `{ run_id, status, output?, usage?, model? }`.
 - `POST /entrypoints/:key/stream` — only registered when `streaming` and `stream` are provided; streams `run-start`, `delta`, `text`, `asset`, `control`, `error`, and `run-end` events over SSE.
@@ -288,37 +295,23 @@ Every agent app exposes the following for free:
 `core` keeps configuration centralized so every helper resolves the same values.
 
 - Defaults live in `src/config.ts` (currently empty placeholders).
-- Environment variables flow in via the extension helpers (`paymentsFromEnv()` and `walletsFromEnv()`).
-- `configureAgentKit(overrides)` merges values at runtime; use it inside tests or before calling `createAgentApp`.
-- `getAgentKitConfig()` returns the resolved values; `resetAgentKitConfigForTesting()` clears overrides.
-
-The helper `paymentsFromEnv()` returns the currently resolved `PaymentsConfig`, honouring inline config and environment values. `walletsFromEnv()` follows the same pattern.
+- Environment variables flow in via extension helpers: `paymentsFromEnv()` (from `@lucid-agents/payments`) and `walletsFromEnv()` (from `@lucid-agents/wallet`).
+- Configuration is passed via the builder pattern using `.use(payments({...}))` and `.use(wallets({...}))` extensions.
 
 ```ts
-import {
-  configureAgentKit,
-  getAgentKitConfig,
-  paymentsFromEnv,
-} from '@lucid-agents/core';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-configureAgentKit({
-  payments: {
-    facilitatorUrl: 'https://facilitator.daydreams.systems',
-    payTo: '0x...',
-    network: 'ethereum',
-  },
-  wallets: {
-    agent: {
-      type: 'local',
-      privateKey: '0xabc...',
-    },
-  },
-});
-
-const config = getAgentKitConfig();
-console.log(config.payments?.facilitatorUrl); // resolved facilitator
-console.log(config.wallets?.agent?.type); // 'local'
-console.log(paymentsFromEnv()); // reuse inside handlers
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(wallets({ config: walletsFromEnv() }))
+  .build();
 ```
 
 ## Payments & Monetization
@@ -351,10 +344,10 @@ See [`@lucid-agents/payments` documentation](../payments/README.md) for complete
 `resolvePrice(entrypoint, payments, kind)` (from `@lucid-agents/payments`) returns the price or `null`.
 
 For authenticated wallet access, pair your agent with
-`@lucid-agents/agent-auth` and reuse the generated SDK surface:
+`@lucid-dreams/agent-auth` and reuse the generated SDK surface:
 
 ```ts
-import { AgentRuntime } from '@lucid-agents/agent-auth';
+import { AgentRuntime } from '@lucid-dreams/agent-auth';
 import { createRuntimePaymentContext } from '@lucid-agents/payments';
 
 const { runtime } = await AgentRuntime.load({
@@ -430,11 +423,14 @@ const identity = await createAgentIdentity({
   trustModels: ['feedback', 'inference-validation'],
 });
 
-// Use in your agent app
-const { app } = createAgentApp(
-  { name: 'my-agent', version: '1.0.0' },
-  { trust: getTrustConfig(identity) }
-);
+// Use in your agent via the identity extension
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(identity({ config: identityFromEnv() }))
+  .build();
 
 console.log(`Agent ID: ${identity.record?.agentId}`);
 console.log(`Status: ${identity.status}`);
@@ -446,7 +442,7 @@ The package also exports lower-level helpers for advanced use cases:
 - `signAgentDomainProof({ domain, address, chainId, signer })` — manually sign domain ownership proofs.
 - `buildTrustConfigFromIdentity(record, { signature, chainId, namespace, registryAddress, trustOverrides })` — convert registry records into `TrustConfig`.
 
-See [`@lucid-agents/identity` documentation](../@lucid-agents/identity/README.md) for complete examples and API reference.
+See [`@lucid-agents/identity` documentation](../identity/README.md) for complete examples and API reference.
 
 ## Agent-to-Agent (A2A) Client
 
