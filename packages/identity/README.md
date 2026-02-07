@@ -103,27 +103,31 @@ const registration = generateAgentRegistration(identity, {
 
 ```typescript
 import { createAgentIdentity, getTrustConfig } from '@lucid-agents/identity';
-import { createAgentApp } from '@lucid-agents/core';
+import { identity } from '@lucid-agents/identity';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { createAgentApp } from '@lucid-agents/hono';
 
 // 1. Create identity with all three registry clients
-const identity = await createAgentIdentity({
+const agentIdentity = await createAgentIdentity({
   domain: 'my-agent.example.com',
   autoRegister: true,
 });
 
-// 2. Create agent with trust metadata
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'my-agent',
-    version: '1.0.0',
-  },
-  {
-    trust: getTrustConfig(identity), // Include ERC-8004 identity
-  }
-);
+// 2. Build agent runtime with identity extension
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(identity({ config: { domain: 'my-agent.example.com', autoRegister: true } }))
+  .build();
 
-// 3. Use registry clients for reputation and validation
-if (identity.clients) {
+// 3. Create the app from the runtime
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// 4. Use registry clients for reputation and validation
+if (agentIdentity.clients) {
   // Check reputation before hiring another agent
   const agentToHire = 42n;
   const reputation = await identity.clients.reputation.getSummary(agentToHire);
@@ -417,8 +421,11 @@ Extract just the trust config from an identity result.
 const identity = await createAgentIdentity({ autoRegister: true });
 const trustConfig = getTrustConfig(identity);
 
-// Use in createAgentApp
-createAgentApp({ name: 'my-agent' }, { trust: trustConfig });
+// Pass to identity extension in the builder pattern
+const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
+  .use(http())
+  .use(identity({ config: { domain: 'my-agent.example.com' } }))
+  .build();
 ```
 
 ### `generateAgentRegistration(identity, options?)`
@@ -489,5 +496,5 @@ MIT
 ## Links
 
 - [ERC-8004 Specification](https://eips.ethereum.org/EIPS/eip-8004)
-- [ERC-8004 Reference Implementation](https://github.com/lucid-dreams-ai/erc-8004-contracts)
-- [Agent Kit Documentation](https://github.com/lucid-dreams-ai/lucid-fullstack/tree/main/packages/core)
+- [ERC-8004 Reference Implementation](https://github.com/daydreamsai/erc-8004-contracts)
+- [Agent Kit Documentation](https://github.com/daydreamsai/lucid-fullstack/tree/main/packages/core)
