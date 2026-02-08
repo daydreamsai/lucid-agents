@@ -38,7 +38,19 @@ describe('paymentsFromEnv', () => {
     resetEnv();
   });
 
-  it('reads facilitator auth token from FACILITOR_AUTH', () => {
+  it('reads facilitator auth token from FACILITATOR_AUTH', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.NETWORK = 'eip155:84532';
+    process.env.FACILITATOR_AUTH = 'token-from-correct-env';
+
+    const config = paymentsFromEnv();
+
+    expect(config.facilitatorAuth).toBe('token-from-correct-env');
+  });
+
+  it('reads facilitator auth token from legacy FACILITOR_AUTH env', () => {
     process.env.PAYMENTS_RECEIVABLE_ADDRESS =
       '0xabc0000000000000000000000000000000000000';
     process.env.FACILITATOR_URL = 'https://facilitator.test';

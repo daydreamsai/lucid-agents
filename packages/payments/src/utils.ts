@@ -14,8 +14,8 @@ export function paymentsFromEnv(
     facilitatorUrl: configOverrides?.facilitatorUrl ?? (process.env.FACILITATOR_URL as any),
     facilitatorAuth:
       configOverrides?.facilitatorAuth ??
-      process.env.FACILITOR_AUTH ??
       process.env.FACILITATOR_AUTH ??
+      process.env.FACILITOR_AUTH ?? // Legacy typo preserved for backward compatibility
       process.env.PAYMENTS_FACILITATOR_AUTH ??
       process.env.DREAMS_AUTH_TOKEN,
     network: configOverrides?.network ?? (process.env.NETWORK as any),
