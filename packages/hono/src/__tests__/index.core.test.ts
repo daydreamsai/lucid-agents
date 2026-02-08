@@ -204,6 +204,39 @@ describe('withPayments helper', () => {
     expect(didRegister).toBe(true);
     expect(capturedFacilitator).toBeTruthy();
   });
+
+  it('injects facilitator bearer auth header from payments config', async () => {
+    const calls: Array<[string, any]> = [];
+    let capturedFacilitator: any = null;
+    const app = { use: (...args: any[]) => calls.push([...args] as any) };
+    const middlewareFactory = (
+      routes: Record<string, any>,
+      facilitatorClient: any
+    ) => {
+      capturedFacilitator = facilitatorClient;
+      return { routes, facilitator: facilitatorClient };
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: {
+        ...payments,
+        facilitatorAuth: 'facilitator-secret',
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(true);
+    expect(capturedFacilitator).toBeTruthy();
+
+    const authHeaders = await capturedFacilitator.createAuthHeaders('verify');
+    expect(authHeaders.headers.Authorization).toBe(
+      'Bearer facilitator-secret'
+    );
+  });
 });
 
 describe('manifest building', () => {

@@ -35,6 +35,7 @@ The agent receives payments via x402:
 const appOptions = {
   payments: {
     facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL,
+    facilitatorAuth: process.env.PAYMENTS_FACILITATOR_AUTH,
     payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
     network: process.env.PAYMENTS_NETWORK,
   },
@@ -85,4 +86,3 @@ handler: async ctx => {
 - Add more data endpoints (indicators, order book, etc.)
 - Implement streaming for real-time data
 - Add data caching for performance
-

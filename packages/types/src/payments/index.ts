@@ -141,6 +141,8 @@ export type PaymentStorageConfig = {
 export type PaymentsConfig = {
   payTo: `0x${string}` | SolanaAddress;
   facilitatorUrl: Resource;
+  /** Optional bearer token used to authenticate facilitator requests. */
+  facilitatorAuth?: string;
   network: Network;
   /** Optional policy groups for payment controls and limits */
   policyGroups?: PaymentPolicyGroup[];

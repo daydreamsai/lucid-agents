@@ -48,4 +48,41 @@ describe('withPayments middleware registration', () => {
     expect(capturedSchemes?.[0]?.network).toBe('eip155:*');
     expect(capturedSchemes?.[0]?.server?.scheme).toBe('exact');
   });
+
+  it('injects facilitator bearer auth header from payments config', async () => {
+    let capturedFacilitatorClient: any = null;
+    const app = {
+      use: (..._args: any[]) => {},
+    };
+
+    const middlewareFactory = (
+      _routes: Record<string, unknown>,
+      facilitatorClient: unknown
+    ) => {
+      capturedFacilitatorClient = facilitatorClient;
+      return (_req: unknown, _res: unknown, next: () => void) => next();
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: {
+        ...payments,
+        facilitatorAuth: 'facilitator-secret',
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(true);
+    expect(capturedFacilitatorClient).toBeTruthy();
+
+    const authHeaders = await capturedFacilitatorClient.createAuthHeaders(
+      'verify'
+    );
+    expect(authHeaders.headers.Authorization).toBe(
+      'Bearer facilitator-secret'
+    );
+  });
 });

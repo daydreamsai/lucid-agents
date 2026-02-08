@@ -26,6 +26,11 @@
       "default": "https://facilitator.daydreams.systems",
       "format": "uri"
     },
+    "PAYMENTS_FACILITATOR_AUTH": {
+      "type": "string",
+      "description": "Optional bearer token for facilitator requests. If empty, runtime falls back to DREAMS_AUTH_TOKEN when available.",
+      "default": ""
+    },
     "PAYMENTS_NETWORK": {
       "type": "string",
       "description": "Payment network (EVM or Solana)",

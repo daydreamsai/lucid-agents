@@ -42,6 +42,7 @@ This template accepts the following configuration arguments (see `template.schem
 - `AGENT_VERSION` - Semantic version
 - `AGENT_DOMAIN` - Domain that hosts your agent (e.g., "agent.example.com")
 - `PAYMENTS_FACILITATOR_URL` - x402 facilitator endpoint
+- `PAYMENTS_FACILITATOR_AUTH` - Optional facilitator bearer token (defaults to `DREAMS_AUTH_TOKEN` at runtime)
 - `PAYMENTS_NETWORK` - Network identifier
 - `PAYMENTS_RECEIVABLE_ADDRESS` - Address for receiving payments
 - `RPC_URL` - Blockchain RPC endpoint (e.g., "https://sepolia.base.org")
@@ -390,6 +391,7 @@ const { app, addEntrypoint } = createAgentApp(
   {
     payments: {
       facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL,
+      facilitatorAuth: process.env.PAYMENTS_FACILITATOR_AUTH,
       payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
       network: process.env.PAYMENTS_NETWORK,
     },
@@ -426,6 +428,7 @@ IDENTITY_AUTO_REGISTER=true
 
 # Payment configuration
 PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
+PAYMENTS_FACILITATOR_AUTH=
 PAYMENTS_NETWORK=ethereum
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 ```

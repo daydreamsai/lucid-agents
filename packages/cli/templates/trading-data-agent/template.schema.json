@@ -17,6 +17,11 @@
       "format": "uri",
       "description": "x402 facilitator URL"
     },
+    "PAYMENTS_FACILITATOR_AUTH": {
+      "type": "string",
+      "description": "Optional bearer token for facilitator requests. If empty, runtime falls back to DREAMS_AUTH_TOKEN when available.",
+      "default": ""
+    },
     "PAYMENTS_NETWORK": {
       "type": "string",
       "enum": ["ethereum", "base", "base-sepolia", "solana", "solana-devnet"],
@@ -30,4 +35,3 @@
   },
   "required": ["AGENT_DESCRIPTION", "AGENT_VERSION"]
 }
-
