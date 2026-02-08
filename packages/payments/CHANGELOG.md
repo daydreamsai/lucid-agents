@@ -1,5 +1,23 @@
 # @lucid-agents/payments
 
+## 2.4.2
+
+### Patch Changes
+
+- c1c53f9: Add facilitator bearer token support for x402 flows and scaffold it in generated agent env files.
+  - Add `facilitatorAuth?: string` to `PaymentsConfig`.
+  - Extend `paymentsFromEnv()` to read facilitator auth from:
+    - `FACILITOR_AUTH`
+    - `FACILITATOR_AUTH`
+    - `PAYMENTS_FACILITATOR_AUTH`
+    - fallback: `DREAMS_AUTH_TOKEN`
+  - Normalize facilitator auth to `Authorization: Bearer ...` and apply it to facilitator `verify`, `settle`, and `supported` requests.
+  - Wire facilitator auth handling into Hono, Express, TanStack, and Next paywall paths.
+  - Add `PAYMENTS_FACILITATOR_AUTH` to payment-enabled CLI templates so generated `.env` files include the key by default.
+
+- Updated dependencies [c1c53f9]
+  - @lucid-agents/types@1.6.1
+
 ## 2.4.1
 
 ## 2.4.0

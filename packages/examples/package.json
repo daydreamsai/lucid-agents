@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/examples",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Example implementations for lucid-agents framework",
   "type": "module",
   "private": true,
