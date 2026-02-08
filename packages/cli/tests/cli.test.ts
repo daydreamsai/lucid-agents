@@ -210,6 +210,7 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain(
       'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems'
     );
+    expect(envFile).toContain('PAYMENTS_FACILITATOR_AUTH=');
     expect(envFile).toContain(
       'PAYMENTS_RECEIVABLE_ADDRESS=0xabc0000000000000000000000000000000000000'
     );
@@ -419,6 +420,7 @@ describe('create-agent-kit CLI', () => {
     expect(env).toContain(
       'PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems'
     );
+    expect(env).toContain('PAYMENTS_FACILITATOR_AUTH=');
     expect(env).toContain('DEVELOPER_WALLET_PRIVATE_KEY=');
   });
 

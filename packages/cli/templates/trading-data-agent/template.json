@@ -27,6 +27,12 @@
         "defaultValue": "https://facilitator.daydreams.systems"
       },
       {
+        "key": "PAYMENTS_FACILITATOR_AUTH",
+        "type": "input",
+        "message": "Facilitator auth token (optional, defaults to DREAMS_AUTH_TOKEN)",
+        "defaultValue": ""
+      },
+      {
         "key": "PAYMENTS_NETWORK",
         "type": "select",
         "message": "Payment network",
@@ -48,4 +54,3 @@
     ]
   }
 }
-

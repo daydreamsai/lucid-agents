@@ -12,6 +12,7 @@ import {
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
+  createFacilitatorAuthHeaders,
   resolvePrice,
   validatePaymentsConfig,
   evaluateSender,
@@ -43,6 +44,25 @@ export type WithPaymentsParams = {
   runtime?: AgentRuntime;
 };
 
+function addFacilitatorAuth(
+  facilitator: FacilitatorConfig,
+  token?: string
+): FacilitatorConfig {
+  if (facilitator.createAuthHeaders) {
+    return facilitator;
+  }
+
+  const authHeaders = createFacilitatorAuthHeaders(token);
+  if (!authHeaders) {
+    return facilitator;
+  }
+
+  return {
+    ...facilitator,
+    createAuthHeaders: async () => authHeaders,
+  };
+}
+
 export function withPayments({
   app,
   path,
@@ -69,9 +89,13 @@ export function withPayments({
   const postMimeType =
     kind === 'stream' ? 'text/event-stream' : 'application/json';
 
-  const resolvedFacilitator: FacilitatorConfig =
+  const baseFacilitator: FacilitatorConfig =
     facilitator ??
     ({ url: payments.facilitatorUrl } satisfies FacilitatorConfig);
+  const resolvedFacilitator = addFacilitatorAuth(
+    baseFacilitator,
+    payments.facilitatorAuth
+  );
 
   const postRoute: RouteConfig = {
     accepts: {

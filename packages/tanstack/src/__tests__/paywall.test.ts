@@ -147,6 +147,36 @@ describe("createTanStackPaywall", () => {
     }
   });
 
+  it("injects facilitator bearer auth header from payments config", async () => {
+    const runtime = createRuntime({
+      ...payments,
+      facilitatorAuth: "facilitator-secret",
+    });
+    let capturedFacilitator: any = null;
+
+    const middlewareFactory = ((
+      _routes,
+      facilitator,
+      _paywall
+    ) => {
+      capturedFacilitator = facilitator;
+      return (() => Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+    }) satisfies typeof paymentMiddleware;
+
+    createTanStackPaywall({
+      runtime,
+      middlewareFactory,
+    });
+
+    expect(capturedFacilitator).toBeTruthy();
+    const authHeaders = await capturedFacilitator.createAuthHeaders();
+    expect(authHeaders.verify.Authorization).toBe("Bearer facilitator-secret");
+    expect(authHeaders.settle.Authorization).toBe("Bearer facilitator-secret");
+    expect(authHeaders.supported.Authorization).toBe(
+      "Bearer facilitator-secret"
+    );
+  });
+
   it.skip("returns PAYMENT-REQUIRED header with x402Version=2 when payment is missing", async () => {
     const routes: RoutesConfig = {
       "POST /pay": {

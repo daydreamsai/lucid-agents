@@ -12,12 +12,50 @@ export function paymentsFromEnv(
   const baseConfig: PaymentsConfig = {
     payTo: configOverrides?.payTo ?? (process.env.PAYMENTS_RECEIVABLE_ADDRESS as any),
     facilitatorUrl: configOverrides?.facilitatorUrl ?? (process.env.FACILITATOR_URL as any),
+    facilitatorAuth:
+      configOverrides?.facilitatorAuth ??
+      process.env.FACILITOR_AUTH ??
+      process.env.FACILITATOR_AUTH ??
+      process.env.PAYMENTS_FACILITATOR_AUTH ??
+      process.env.DREAMS_AUTH_TOKEN,
     network: configOverrides?.network ?? (process.env.NETWORK as any),
   };
 
   return {
     ...baseConfig,
     ...configOverrides,
+  };
+}
+
+function normalizeBearerToken(token?: string | null): string | undefined {
+  if (!token) return undefined;
+
+  const trimmed = token.trim();
+  if (!trimmed) return undefined;
+
+  if (/^bearer\s+/i.test(trimmed)) {
+    return `Bearer ${trimmed.replace(/^bearer\s+/i, '')}`;
+  }
+
+  return `Bearer ${trimmed}`;
+}
+
+export function createFacilitatorAuthHeaders(
+  token?: string | null
+): {
+  verify: Record<string, string>;
+  settle: Record<string, string>;
+  supported: Record<string, string>;
+} | undefined {
+  const authorization = normalizeBearerToken(token);
+  if (!authorization) {
+    return undefined;
+  }
+
+  return {
+    verify: { Authorization: authorization },
+    settle: { Authorization: authorization },
+    supported: { Authorization: authorization },
   };
 }
 

@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { resolvePrice, validatePaymentsConfig } from '@lucid-agents/payments';
+import {
+  createFacilitatorAuthHeaders,
+  resolvePrice,
+  validatePaymentsConfig,
+} from '@lucid-agents/payments';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import type {
@@ -33,6 +37,25 @@ type BuildRoutesParams = {
   basePath: string;
   kind: EntrypointPaymentKind;
 };
+
+function addFacilitatorAuth(
+  facilitator: FacilitatorConfig,
+  token?: string
+): FacilitatorConfig {
+  if (facilitator.createAuthHeaders) {
+    return facilitator;
+  }
+
+  const authHeaders = createFacilitatorAuthHeaders(token);
+  if (!authHeaders) {
+    return facilitator;
+  }
+
+  return {
+    ...facilitator,
+    createAuthHeaders: async () => authHeaders,
+  };
+}
 
 function normalizeBasePath(path?: string) {
   if (!path) return DEFAULT_BASE_PATH;
@@ -149,9 +172,13 @@ export function createNextPaywall({
     return { matcher: [] };
   }
 
-  const resolvedFacilitator: FacilitatorConfig =
+  const baseFacilitator: FacilitatorConfig =
     facilitator ??
     ({ url: activePayments.facilitatorUrl } satisfies FacilitatorConfig);
+  const resolvedFacilitator = addFacilitatorAuth(
+    baseFacilitator,
+    activePayments.facilitatorAuth
+  );
 
   const payTo = activePayments.payTo as Parameters<typeof paymentMiddleware>[0];
 

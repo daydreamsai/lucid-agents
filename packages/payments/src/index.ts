@@ -17,6 +17,7 @@ export {
 } from './runtime';
 export {
   paymentsFromEnv,
+  createFacilitatorAuthHeaders,
   encodePaymentRequiredHeader,
   decodePaymentRequiredHeader,
   type PaymentRequiredHeaderDetails,

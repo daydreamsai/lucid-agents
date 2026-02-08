@@ -24,6 +24,7 @@ bun run dev
 ### Environment Variables
 
 - `PAYMENTS_FACILITATOR_URL` - x402 facilitator endpoint
+- `PAYMENTS_FACILITATOR_AUTH` - Optional facilitator bearer token (defaults to `DREAMS_AUTH_TOKEN` at runtime)
 - `PAYMENTS_NETWORK` - Payment network (base-sepolia, base, solana-devnet, solana)
 - `PAYMENTS_RECEIVABLE_ADDRESS` - Address that receives payments
 
@@ -42,4 +43,3 @@ curl -X POST http://localhost:3000/entrypoints/getPrice/invoke \
 This agent is designed to work with the `trading-recommendation-agent` template, which buys data from this agent and generates trading signals.
 
 See `AGENTS.md` for detailed implementation guide.
-
