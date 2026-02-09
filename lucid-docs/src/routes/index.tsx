@@ -169,6 +169,152 @@ function Home() {
           </div>
         </section>
 
+        {/* Skills + Autonomous Agents */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 border-b border-fd-border">
+          <div className="p-8 border-b lg:border-b-0 lg:border-r border-fd-border">
+            <p className="text-xs text-fd-muted-foreground uppercase tracking-widest mb-3">
+              Skills
+            </p>
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">
+              Copy the Skill in One Command
+            </h2>
+            <p className="text-fd-muted-foreground mb-6">
+              Install the `lucid-agent-creator` skill directly into your local `.claude/skills` folder.
+            </p>
+            <div className="bg-fd-card border border-fd-border mb-6">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-fd-border">
+                <span className="text-xs text-fd-muted-foreground font-mono">skills install</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(skillsInstallScript)}
+                  className="text-[10px] px-2 py-0.5 border border-fd-border hover:bg-fd-accent transition-colors font-medium"
+                  title="Copy command"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre className="p-4 overflow-x-auto text-sm">
+                <code className="text-fd-foreground font-mono">{skillsInstallScript}</code>
+              </pre>
+            </div>
+            <Link
+              to="/docs/$"
+              params={{ _splat: 'skills' }}
+              className="inline-flex px-4 py-2 border border-fd-border text-sm font-medium hover:bg-fd-accent transition-colors"
+            >
+              Skills Documentation
+            </Link>
+          </div>
+
+          <div className="p-8">
+            <p className="text-xs text-fd-muted-foreground uppercase tracking-widest mb-3">
+              Autonomous Agents
+            </p>
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">
+              Agents That Build Applications
+            </h2>
+            <p className="text-fd-muted-foreground mb-6">
+              Use AI + skills to generate, configure, and ship new Lucid-powered applications end-to-end.
+            </p>
+            <ul className="text-sm text-fd-muted-foreground space-y-2 mb-6">
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-blue-500" />
+                Generate handlers and schemas from natural language prompts
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-blue-500" />
+                Create and host production agents via `create_lucid_agent`
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-blue-500" />
+                Iterate by updating prompts instead of hand-writing boilerplate
+              </li>
+            </ul>
+            <div className="flex gap-0">
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'autonomous-agents' }}
+                className="px-4 py-2 border border-fd-border text-sm font-medium hover:bg-fd-accent transition-colors"
+              >
+                Autonomous Agents
+              </Link>
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'autonomous-agents/building-applications' }}
+                className="px-4 py-2 border border-fd-border border-l-0 text-sm font-medium hover:bg-fd-accent transition-colors"
+              >
+                Build Applications
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* AI Router */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 border-b border-fd-border">
+          <div className="p-8 border-b lg:border-b-0 lg:border-r border-fd-border">
+            <p className="text-xs text-fd-muted-foreground uppercase tracking-widest mb-3">
+              AI Router
+            </p>
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">
+              OpenAI-Compatible x402 Routing
+            </h2>
+            <p className="text-fd-muted-foreground mb-6">
+              Route inference through x402 with permit sessions, async settlement, and streaming responses.
+            </p>
+            <ul className="text-sm text-fd-muted-foreground space-y-2 mb-6">
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-cyan-500" />
+                ERC-2612 permits in `PAYMENT-SIGNATURE`
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-cyan-500" />
+                Session tracking via `X-Upto-Session`
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1 h-1 bg-cyan-500" />
+                OpenCode plugin auto-signs and injects headers
+              </li>
+            </ul>
+            <div className="flex gap-0 flex-wrap">
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'ai-router' }}
+                className="px-4 py-2 border border-fd-border text-sm font-medium hover:bg-fd-accent transition-colors"
+              >
+                Overview
+              </Link>
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'ai-router/opencode' }}
+                className="px-4 py-2 border border-fd-border border-l-0 text-sm font-medium hover:bg-fd-accent transition-colors"
+              >
+                OpenCode
+              </Link>
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'ai-router/openclaw' }}
+                className="px-4 py-2 border border-fd-border border-l-0 text-sm font-medium hover:bg-fd-accent transition-colors"
+              >
+                OpenClaw
+              </Link>
+            </div>
+          </div>
+          <div className="bg-fd-card">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-fd-border">
+              <span className="text-xs text-fd-muted-foreground font-mono">opencode.json</span>
+              <button
+                onClick={() => navigator.clipboard.writeText(opencodeRouterConfig)}
+                className="text-[10px] px-2 py-0.5 border border-fd-border hover:bg-fd-accent transition-colors font-medium"
+                title="Copy config"
+              >
+                Copy
+              </button>
+            </div>
+            <pre className="p-4 overflow-x-auto text-sm">
+              <code className="text-fd-foreground font-mono">{opencodeRouterConfig}</code>
+            </pre>
+          </div>
+        </section>
+
         {/* Features Grid */}
         <section className="border-b border-fd-border">
           <div className="p-8 border-b border-fd-border flex items-center justify-between">
@@ -350,6 +496,22 @@ agent.entrypoint({
     return { sentiment: 'positive', score: 0.92 }
   }
 })`;
+
+const skillsInstallScript = `mkdir -p .claude/skills/lucid-agent-creator && \\
+curl -fsSL https://raw.githubusercontent.com/daydreamsai/skills-market/main/plugins/lucid-agent-creator/skills/SKILL.md \\
+  -o .claude/skills/lucid-agent-creator/SKILL.md`;
+
+const opencodeRouterConfig = `{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@lucid-agents/opencode-x402-plugin"],
+  "provider": {
+    "x402": {
+      "npm": "@ai-sdk/anthropic",
+      "name": "x402 Router",
+      "options": { "baseURL": "https://ai.xgate.run/v1" }
+    }
+  }
+}`;
 
 function StatCell({
   value,

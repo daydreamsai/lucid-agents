@@ -1,0 +1,41 @@
+---
+title: Skills
+description: Install and use skill files to teach your coding agent how to build Lucid applications.
+icon: Puzzle
+---
+
+Skills are reusable instruction bundles (`SKILL.md`) that guide your AI client through specific workflows.
+
+For Lucid, the `lucid-agent-creator` skill helps agents generate handlers and call `create_lucid_agent` correctly.
+
+## Install with curl
+
+```bash
+mkdir -p .claude/skills/lucid-agent-creator && \
+curl -fsSL https://raw.githubusercontent.com/daydreamsai/skills-market/main/plugins/lucid-agent-creator/skills/SKILL.md \
+  -o .claude/skills/lucid-agent-creator/SKILL.md
+```
+
+## Optional companion guide
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/daydreamsai/skills-market/main/plugins/lucid-agent-creator/GUIDE.md \
+  -o .claude/skills/lucid-agent-creator/GUIDE.md
+```
+
+## Next step
+
+After adding the files, restart your AI client session and prompt it to create or update a Lucid app.
+
+<Cards>
+  <Card
+    title="Autonomous agents"
+    description="See how to use skills to build complete applications"
+    href="/docs/autonomous-agents"
+  />
+  <Card
+    title="Creating agents with agents"
+    description="End-to-end flow with xgate MCP and create_lucid_agent"
+    href="/docs/getting-started/creating-agents-with-agents"
+  />
+</Cards>

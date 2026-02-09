@@ -1,0 +1,66 @@
+---
+title: OpenCode
+description: Integrate OpenCode with x402 Router using the published opencode x402 plugin.
+icon: Plug
+---
+
+The published `@lucid-agents/opencode-x402-plugin` signs x402 permits and injects the payment header automatically.
+
+## Integration summary
+
+- npm published package
+- Auto permit signing
+- OpenAI-compatible router endpoint
+
+## 1. Install plugin
+
+```bash
+npm install -g @lucid-agents/opencode-x402-plugin
+```
+
+## 2. Configure OpenCode
+
+Use `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@lucid-agents/opencode-x402-plugin"],
+  "provider": {
+    "x402": {
+      "npm": "@ai-sdk/anthropic",
+      "name": "x402 Router",
+      "options": {
+        "baseURL": "https://ai.xgate.run/v1"
+      },
+      "models": {
+        "anthropic:claude-opus-4-5": { "name": "Claude Opus 4.5" }
+      }
+    }
+  }
+}
+```
+
+## 3. Connect wallet in OpenCode
+
+1. Run OpenCode and execute `/connect`.
+2. Select `x402`.
+3. Choose "Connect Wallet (Private Key)" and enter your private key.
+
+## Request flow
+
+`OpenCode -> Plugin -> x402 Router -> Provider`  
+Plugin signs permit and injects `PAYMENT-SIGNATURE`; router verifies and streams provider response.
+
+## Controls
+
+- `X402_ROUTER_URL` sets router endpoint.
+- `X402_PERMIT_CAP` sets session cap in USDC.
+
+## Security
+
+Use a dedicated wallet, fund minimally, and start with conservative caps.
+
+## Data handling
+
+The router does not store prompts or responses. Requests are passed through to the selected provider, which may retain data under its own policy. Router logs and metrics are operational only and exclude payload content.
