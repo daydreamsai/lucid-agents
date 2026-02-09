@@ -1,0 +1,59 @@
+---
+title: Overview
+description: x402 Router overview with permit sessions, streaming responses, and asynchronous settlement.
+icon: Network
+---
+
+The x402 Router is an OpenAI-compatible proxy that accepts x402 permits, forwards requests to your selected provider, and tracks costs asynchronously.
+
+## Core capabilities
+
+- ERC-2612 permit auth
+- Session tracking (`upto` sessions)
+- Streaming responses
+- Asynchronous settlement
+
+## Flow
+
+1. Client signs an ERC-2612 permit with spend cap and expiry.
+2. Request includes `PAYMENT-SIGNATURE` with permit payload.
+3. Router verifies permit and opens or joins an `upto` session.
+4. Router forwards request to provider and streams back response.
+5. Cost tracking runs asynchronously and facilitator settles on cap or idle timeout.
+
+## Why `upto` permits
+
+`upto` permits combine spend cap + signature so multiple requests can accumulate under one session without blocking streaming responses.
+
+## Headers
+
+- `PAYMENT-SIGNATURE` is required for x402 permits.
+- `X-Upto-Session` tracks the active session id.
+
+## Settlement
+
+The router tracks cost locally and delegates settlement to the facilitator. Sessions close automatically when cap is reached.
+
+## Data handling
+
+The router does not store prompts or responses. Requests are passed through to your selected provider, and that provider may keep data according to its own retention policy. Router logs and metrics are operational only and exclude user payloads.
+
+## Docs
+
+- [OpenCode integration guide](/docs/ai-router/opencode)
+- [Plugin README](https://github.com/daydreamsai/router/tree/master/packages/opencode-x402-auth)
+
+## Integrations
+
+<Cards>
+  <Card
+    title="OpenCode integration"
+    description="Use the published plugin to auto-sign permits and inject payment headers"
+    href="./opencode"
+  />
+  <Card
+    title="OpenClaw integration"
+    description="Configure OpenClaw with x402 Router and permit session controls"
+    href="./openclaw"
+  />
+</Cards>

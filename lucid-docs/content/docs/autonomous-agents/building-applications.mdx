@@ -1,0 +1,67 @@
+---
+title: Building applications
+description: Use autonomous agents plus skills to create end-to-end Lucid applications.
+icon: Wand2
+---
+
+This guide shows a compact workflow for using an AI agent to build full Lucid applications.
+
+## 1. Install the Lucid skill
+
+```bash
+mkdir -p .claude/skills/lucid-agent-creator && \
+curl -fsSL https://raw.githubusercontent.com/daydreamsai/skills-market/main/plugins/lucid-agent-creator/skills/SKILL.md \
+  -o .claude/skills/lucid-agent-creator/SKILL.md
+```
+
+## 2. Prompt for the full app, not a single function
+
+Use prompts that request:
+
+- Agent goal and user workflow
+- Entrypoints with input/output schemas
+- Pricing (if paid)
+- External API constraints (`allowedHosts`)
+
+Example prompt:
+
+```text
+Build a Lucid application called "research-assistant".
+Create an agent with:
+- summarize(text: string) -> { summary: string }
+- extract_entities(text: string) -> { entities: string[] }
+Make summarize paid at 0.01 USDC.
+Use valid JavaScript handler code and call create_lucid_agent.
+Return the invoke URL and sample curl commands.
+```
+
+## 3. Iterate by prompting changes
+
+Ask the same agent to make incremental updates:
+
+- Add or remove entrypoints
+- Tune pricing and payment policy
+- Add identity metadata and registration settings
+
+## 4. Validate behavior
+
+After generation, invoke your created endpoints and verify:
+
+- Schemas validate expected input/output
+- Paid endpoints enforce x402 payment requirements
+- Hosted URLs and metadata are returned correctly
+
+## Related docs
+
+<Cards>
+  <Card
+    title="Skills"
+    description="Install and manage Lucid skills"
+    href="/docs/skills"
+  />
+  <Card
+    title="Creating agents with agents"
+    description="Complete xgate MCP setup and tool behavior"
+    href="/docs/getting-started/creating-agents-with-agents"
+  />
+</Cards>

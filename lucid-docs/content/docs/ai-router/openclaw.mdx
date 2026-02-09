@@ -1,0 +1,37 @@
+---
+title: OpenClaw
+description: Configure OpenClaw to call x402 Router using permit-backed payment headers.
+icon: TerminalSquare
+---
+
+OpenClaw can use the same x402 Router flow: sign permit, send `PAYMENT-SIGNATURE`, stream provider response, and settle asynchronously.
+
+## Integration model
+
+1. Configure OpenClaw to use an OpenAI-compatible base URL (`https://ai.xgate.run/v1`).
+2. Ensure each request includes a valid `PAYMENT-SIGNATURE` permit payload.
+3. Track `X-Upto-Session` to reuse session spend caps across requests.
+
+## Required headers
+
+- `PAYMENT-SIGNATURE`
+- `X-Upto-Session` (recommended for multi-request sessions)
+
+## Controls
+
+- `X402_ROUTER_URL` for router endpoint overrides.
+- `X402_PERMIT_CAP` for session spend caps.
+
+## Security baseline
+
+- Use a dedicated wallet.
+- Start with low USDC caps.
+- Rotate keys and environment secrets on a regular schedule.
+
+## Data handling
+
+The router does not store prompts or responses. Payload retention is determined by your selected upstream provider.
+
+## Next step
+
+If you already use OpenCode, start with [OpenCode integration](./opencode) to validate router connectivity, then mirror the same request/header pattern in OpenClaw.
