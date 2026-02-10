@@ -43,7 +43,7 @@ They also need a consistent way to generate OASF metadata instead of manually ho
 
 - As an agent developer, I can enable OASF and have the SDK generate and serve the record automatically.
 - As an agent developer, I can set Twitter, website, and email once and have them appear in ERC-8004 `services[]`.
-- As an operator, I get a hard startup failure if OASF config is malformed.
+- Operators receive a hard startup failure when the OASF config is malformed.
 
 ## Functional Requirements
 
@@ -176,4 +176,3 @@ Error output must be deterministic and actionable.
 - Backward compatible for existing agents that do not enable OASF.
 - New OASF behavior is opt-in by selection flag.
 - Existing registration consumers continue to parse legacy-compatible fields.
-

@@ -19,6 +19,11 @@ import type {
   AgentHttpHandlers,
   StreamResult,
 } from '@lucid-agents/types/http';
+import {
+  DEFAULT_OASF_RECORD_PATH,
+  DEFAULT_OASF_VERSION,
+  OASF_STRICT_MODE_ERROR,
+} from '@lucid-agents/types/identity';
 
 import { ZodValidationError } from '@lucid-agents/types/core';
 import { invoke, invokeHandler } from './invoke';
@@ -51,9 +56,6 @@ const resolveFaviconSvg = (icon?: string): string => {
 
   return defaultFaviconSvg;
 };
-
-const DEFAULT_OASF_VERSION = '0.8.0';
-const DEFAULT_OASF_PATH = '/.well-known/oasf-record.json';
 
 type OASFConfig = {
   endpoint?: string;
@@ -150,8 +152,12 @@ function resolveOASFConfig(
   }
 
   if (typeof rawOASF === 'string') {
+    throw new Error(`[agent-kit-http] ${OASF_STRICT_MODE_ERROR}`);
+  }
+
+  if (rawOASF === undefined) {
     throw new Error(
-      '[agent-kit-http] Invalid registration.oasf. OASF strict mode requires structured JSON-array fields (authors/skills/domains/modules/locators).'
+      '[agent-kit-http] OASF selected but no registration.oasf config provided.'
     );
   }
 
@@ -167,9 +173,18 @@ function resolveOASFConfig(
       normalizeString(rawOASF?.version) ??
       normalizeString(registration?.oasfVersion) ??
       DEFAULT_OASF_VERSION,
-    authors: parseRequiredStringArray(rawOASF?.authors, 'registration.oasf.authors'),
-    skills: parseRequiredStringArray(rawOASF?.skills, 'registration.oasf.skills'),
-    domains: parseRequiredStringArray(rawOASF?.domains, 'registration.oasf.domains'),
+    authors: parseRequiredStringArray(
+      rawOASF?.authors,
+      'registration.oasf.authors'
+    ),
+    skills: parseRequiredStringArray(
+      rawOASF?.skills,
+      'registration.oasf.skills'
+    ),
+    domains: parseRequiredStringArray(
+      rawOASF?.domains,
+      'registration.oasf.domains'
+    ),
     modules: parseRequiredStringArray(
       rawOASF?.modules,
       'registration.oasf.modules',
@@ -294,7 +309,8 @@ export function http(
           }
 
           const origin = normalizeOrigin(req);
-          const endpoint = oasfConfig.endpoint ?? `${origin}${DEFAULT_OASF_PATH}`;
+          const endpoint =
+            oasfConfig.endpoint ?? `${origin}${DEFAULT_OASF_RECORD_PATH}`;
           const entrypoints = runtime.entrypoints.snapshot();
 
           return jsonResponse({
@@ -311,9 +327,7 @@ export function http(
             domains: oasfConfig.domains,
             modules: oasfConfig.modules,
             locators:
-              oasfConfig.locators.length > 0
-                ? oasfConfig.locators
-                : [endpoint],
+              oasfConfig.locators.length > 0 ? oasfConfig.locators : [endpoint],
             entrypoints: entrypoints.map(entry => ({
               key: entry.key,
               description: entry.description,

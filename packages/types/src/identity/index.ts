@@ -7,6 +7,11 @@ export type TrustModel =
   | 'tee-attestation'
   | string;
 
+export const DEFAULT_OASF_VERSION = '0.8.0';
+export const DEFAULT_OASF_RECORD_PATH = '/.well-known/oasf-record.json';
+export const OASF_STRICT_MODE_ERROR =
+  'Invalid registration.oasf. OASF strict mode requires structured JSON-array fields (authors/skills/domains/modules/locators).';
+
 /**
  * Entry for agent registration in ERC-8004 identity registry.
  */

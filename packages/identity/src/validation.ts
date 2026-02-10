@@ -1,4 +1,7 @@
-import type { OASFStructuredConfig } from '@lucid-agents/types/identity';
+import {
+  OASF_STRICT_MODE_ERROR,
+  type OASFStructuredConfig,
+} from '@lucid-agents/types/identity';
 
 import type { CreateAgentIdentityOptions } from './init';
 
@@ -137,6 +140,12 @@ function validateOASFStructuredConfig(
   config: OASFStructuredConfig,
   context: string
 ): void {
+  const requiredNonEmptyArrays = new Set([
+    'authors',
+    'skills',
+    'domains',
+    'modules',
+  ]);
   const requiredStringArrays: Array<[keyof OASFStructuredConfig, string]> = [
     ['authors', 'IDENTITY_OASF_AUTHORS_JSON'],
     ['skills', 'IDENTITY_OASF_SKILLS_JSON'],
@@ -152,6 +161,14 @@ function validateOASFStructuredConfig(
         `[agent-kit-identity] Missing ${context}.${String(
           field
         )}. Expected a string[] (JSON array via ${envKey}).`
+      );
+    }
+
+    if (requiredNonEmptyArrays.has(String(field)) && value.length < 1) {
+      throw new Error(
+        `[agent-kit-identity] Invalid ${context}.${String(
+          field
+        )}. Expected at least one item when OASF is enabled.`
       );
     }
 
@@ -244,31 +261,35 @@ export function validateIdentityConfig(
   }
 
   if (oasfEnabled) {
-    const envOASF = includeOASFFromEnv
-      ? parseOASFStructuredConfigFromEnv(envVars)
-      : undefined;
+    try {
+      if (typeof registration?.oasf === 'string') {
+        throw new Error(`[agent-kit-identity] ${OASF_STRICT_MODE_ERROR}`);
+      }
 
-    const inlineOASF =
-      typeof registration?.oasf === 'object' && registration.oasf
-        ? registration.oasf
+      const envOASF = includeOASFFromEnv
+        ? parseOASFStructuredConfigFromEnv(envVars)
         : undefined;
 
-    const merged: OASFStructuredConfig = {
-      endpoint: normalizeString(inlineOASF?.endpoint) ?? envOASF?.endpoint,
-      version: normalizeString(inlineOASF?.version) ?? envOASF?.version,
-      authors: inlineOASF?.authors ?? envOASF?.authors,
-      skills: inlineOASF?.skills ?? envOASF?.skills,
-      domains: inlineOASF?.domains ?? envOASF?.domains,
-      modules: inlineOASF?.modules ?? envOASF?.modules,
-      locators: inlineOASF?.locators ?? envOASF?.locators,
-    };
+      const inlineOASF =
+        typeof registration?.oasf === 'object' && registration.oasf
+          ? registration.oasf
+          : undefined;
 
-    // Support legacy string endpoint input while still enforcing structured arrays.
-    if (typeof registration?.oasf === 'string') {
-      merged.endpoint = normalizeString(registration.oasf) ?? merged.endpoint;
+      const merged: OASFStructuredConfig = {
+        endpoint: normalizeString(inlineOASF?.endpoint) ?? envOASF?.endpoint,
+        version: normalizeString(inlineOASF?.version) ?? envOASF?.version,
+        authors: inlineOASF?.authors ?? envOASF?.authors,
+        skills: inlineOASF?.skills ?? envOASF?.skills,
+        domains: inlineOASF?.domains ?? envOASF?.domains,
+        modules: inlineOASF?.modules ?? envOASF?.modules,
+        locators: inlineOASF?.locators ?? envOASF?.locators,
+      };
+
+      validateOASFStructuredConfig(merged, 'registration.oasf');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`OASF config error: ${message}`);
     }
-
-    validateOASFStructuredConfig(merged, 'registration.oasf');
   }
 
   if (errors.length > 0) {

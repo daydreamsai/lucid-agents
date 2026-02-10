@@ -11,6 +11,11 @@ import type {
   OASFStructuredConfig,
   TrustConfig,
 } from '@lucid-agents/types/identity';
+import {
+  DEFAULT_OASF_RECORD_PATH,
+  DEFAULT_OASF_VERSION,
+  OASF_STRICT_MODE_ERROR,
+} from '@lucid-agents/types/identity';
 import type {
   AgentWalletHandle,
   DeveloperWalletHandle,
@@ -39,8 +44,6 @@ export type { BootstrapIdentityResult };
 const REGISTRATION_TYPE_V1 =
   'https://eips.ethereum.org/EIPS/eip-8004#registration-v1' as const;
 const DEFAULT_A2A_VERSION = '0.3.0';
-const DEFAULT_OASF_VERSION = '0.8.0';
-const DEFAULT_OASF_RECORD_PATH = '/.well-known/oasf-record.json';
 
 export type RegistrationServiceName =
   | 'A2A'
@@ -671,8 +674,8 @@ function buildRegistrationServices(
     serviceMap.set('email', createService('email', emailEndpoint));
   }
 
-  const rawOasfEndpoint =
-    typeof options?.oasf === 'string' ? options.oasf : options?.oasf?.endpoint;
+  const strictOasfInput = assertStrictOASFInput(options?.oasf);
+  const rawOasfEndpoint = strictOasfInput?.endpoint;
   const oasfEndpoint =
     sanitizeString(rawOasfEndpoint) ??
     (origin ? `${origin}${DEFAULT_OASF_RECORD_PATH}` : undefined);
@@ -685,17 +688,29 @@ function buildRegistrationServices(
       false
     )
   ) {
-    const oasfInput =
-      typeof options?.oasf === 'object' ? options.oasf : undefined;
+    if (!strictOasfInput) {
+      throw new Error(
+        '[agent-kit-identity] OASF selected but no registration.oasf config provided.'
+      );
+    }
+
     const oasfService = createService('OASF', oasfEndpoint, {
       version:
-        oasfInput?.version ?? options?.oasfVersion ?? DEFAULT_OASF_VERSION,
+        strictOasfInput?.version ??
+        options?.oasfVersion ??
+        DEFAULT_OASF_VERSION,
     });
-    if (Array.isArray(oasfInput?.skills) && oasfInput.skills.length > 0) {
-      oasfService.skills = oasfInput.skills;
+    if (
+      Array.isArray(strictOasfInput?.skills) &&
+      strictOasfInput.skills.length > 0
+    ) {
+      oasfService.skills = strictOasfInput.skills;
     }
-    if (Array.isArray(oasfInput?.domains) && oasfInput.domains.length > 0) {
-      oasfService.domains = oasfInput.domains;
+    if (
+      Array.isArray(strictOasfInput?.domains) &&
+      strictOasfInput.domains.length > 0
+    ) {
+      oasfService.domains = strictOasfInput.domains;
     }
     serviceMap.set('oasf', oasfService);
   }
@@ -733,31 +748,35 @@ function normalizeStringArray(values: string[] | undefined): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+function assertStrictOASFInput(
+  oasf: AgentRegistrationOptions['oasf']
+): OASFServiceInput | undefined {
+  if (oasf === undefined) {
+    return undefined;
+  }
+
+  if (typeof oasf === 'string') {
+    throw new Error(`[agent-kit-identity] ${OASF_STRICT_MODE_ERROR}`);
+  }
+
+  return oasf;
+}
+
 function resolveOASFInput(
   options?: AgentRegistrationOptions
 ): OASFStructuredConfig {
-  if (typeof options?.oasf === 'string') {
-    return {
-      endpoint: sanitizeString(options.oasf),
-      version: sanitizeString(options.oasfVersion),
-      authors: [],
-      skills: [],
-      domains: [],
-      modules: [],
-      locators: [],
-    };
-  }
+  const oasfInput = assertStrictOASFInput(options?.oasf);
 
   return {
-    endpoint: sanitizeString(options?.oasf?.endpoint),
+    endpoint: sanitizeString(oasfInput?.endpoint),
     version:
-      sanitizeString(options?.oasf?.version) ??
+      sanitizeString(oasfInput?.version) ??
       sanitizeString(options?.oasfVersion),
-    authors: normalizeStringArray(options?.oasf?.authors),
-    skills: normalizeStringArray(options?.oasf?.skills),
-    domains: normalizeStringArray(options?.oasf?.domains),
-    modules: normalizeStringArray(options?.oasf?.modules),
-    locators: normalizeStringArray(options?.oasf?.locators),
+    authors: normalizeStringArray(oasfInput?.authors),
+    skills: normalizeStringArray(oasfInput?.skills),
+    domains: normalizeStringArray(oasfInput?.domains),
+    modules: normalizeStringArray(oasfInput?.modules),
+    locators: normalizeStringArray(oasfInput?.locators),
   };
 }
 
@@ -772,6 +791,12 @@ export function generateOASFRecord(
 
   if (!includeOASF) {
     return undefined;
+  }
+
+  if (hasSelectedService(options?.selectedServices, 'OASF') && !options?.oasf) {
+    throw new Error(
+      '[agent-kit-identity] OASF selected but no registration.oasf config provided.'
+    );
   }
 
   const origin = resolveDomainOrigin(identity.domain);

@@ -70,29 +70,26 @@
     "IDENTITY_OASF_AUTHORS_JSON": {
       "type": "string",
       "description": "JSON array string for OASF authors",
-      "default": "[]",
+      "default": "[\"ops@agent.example.com\"]",
       "examples": ["[\"ops@agent.example.com\"]", "[]"]
     },
     "IDENTITY_OASF_SKILLS_JSON": {
       "type": "string",
       "description": "JSON array string for OASF skills",
-      "default": "[]",
+      "default": "[\"reasoning\"]",
       "examples": ["[\"reasoning\",\"planning\"]", "[]"]
     },
     "IDENTITY_OASF_DOMAINS_JSON": {
       "type": "string",
       "description": "JSON array string for OASF domains",
-      "default": "[]",
+      "default": "[\"assistant\"]",
       "examples": ["[\"finance\",\"support\"]", "[]"]
     },
     "IDENTITY_OASF_MODULES_JSON": {
       "type": "string",
       "description": "JSON array string for OASF module URIs",
-      "default": "[]",
-      "examples": [
-        "[\"https://agent.example.com/modules/core\"]",
-        "[]"
-      ]
+      "default": "[\"https://agent.example.com/modules/core\"]",
+      "examples": ["[\"https://agent.example.com/modules/core\"]", "[]"]
     },
     "IDENTITY_OASF_LOCATORS_JSON": {
       "type": "string",
@@ -162,7 +159,11 @@
       "description": "Blockchain RPC endpoint URL for on-chain operations",
       "default": "https://eth.llamarpc.com",
       "format": "uri",
-      "examples": ["https://eth.llamarpc.com", "https://mainnet.base.org", "https://sepolia.base.org"]
+      "examples": [
+        "https://eth.llamarpc.com",
+        "https://mainnet.base.org",
+        "https://sepolia.base.org"
+      ]
     },
     "CHAIN_ID": {
       "type": "string",

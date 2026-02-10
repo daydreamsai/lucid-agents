@@ -31,11 +31,10 @@ export function identity(options?: { config?: IdentityConfig }): Extension<{
       trust?: TrustConfig;
       identity?: { registration?: CreateAgentIdentityOptions['registration'] };
     } {
+      const registration = config?.registration;
       return {
         trust: trustConfig,
-        identity: {
-          registration: config?.registration,
-        },
+        identity: registration ? { registration } : undefined,
       };
     },
     async onBuild(runtime: AgentRuntime): Promise<void> {
