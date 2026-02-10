@@ -6,6 +6,9 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
 import type {
   AgentRegistration,
+  AgentService,
+  OASFRecord,
+  OASFStructuredConfig,
   TrustConfig,
 } from '@lucid-agents/types/identity';
 import type {
@@ -32,6 +35,21 @@ import { type ValidationRegistryClient } from './registries/validation';
 import { resolveAutoRegister, validateIdentityConfig } from './validation';
 
 export type { BootstrapIdentityResult };
+
+const REGISTRATION_TYPE_V1 =
+  'https://eips.ethereum.org/EIPS/eip-8004#registration-v1' as const;
+const DEFAULT_A2A_VERSION = '0.3.0';
+const DEFAULT_OASF_VERSION = '0.8.0';
+const DEFAULT_OASF_RECORD_PATH = '/.well-known/oasf-record.json';
+
+export type RegistrationServiceName =
+  | 'A2A'
+  | 'web'
+  | 'OASF'
+  | 'twitter'
+  | 'email';
+
+export type OASFServiceInput = OASFStructuredConfig;
 
 /**
  * Resolves chainId from parameter, env object, or process.env.
@@ -64,17 +82,20 @@ function resolveRequiredChainId(
  * Options for creating agent identity with automatic registration.
  */
 export type AgentRegistrationOptions = {
+  type?: AgentRegistration['type'];
   name?: string;
   description?: string;
   image?: string;
   url?: string;
-  services?: Array<{
-    id?: string;
-    type?: string;
-    serviceEndpoint: string;
-    description?: string;
-    [key: string]: unknown;
-  }>;
+  services?: AgentService[];
+  selectedServices?: RegistrationServiceName[];
+  a2aEndpoint?: string;
+  a2aVersion?: string;
+  website?: string;
+  twitter?: string;
+  email?: string;
+  oasf?: string | OASFServiceInput;
+  oasfVersion?: string;
   x402Support?: boolean;
   active?: boolean;
   registrations?: TrustConfig['registrations'];
@@ -204,6 +225,16 @@ export type AgentIdentity = BootstrapIdentityResult & {
    * Available when registry address and clients are configured.
    */
   clients?: RegistryClients;
+
+  /**
+   * Optional generated registration document from provided registration options.
+   */
+  registration?: AgentRegistration;
+
+  /**
+   * Optional generated OASF record when OASF is enabled in registration.
+   */
+  oasfRecord?: OASFRecord;
 };
 
 /**
@@ -278,6 +309,7 @@ export async function createAgentIdentity(
     rpcUrl,
     trustModels = ['feedback', 'inference-validation'],
     trustOverrides,
+    registration: registrationOptions,
     agentURI,
     env,
     logger,
@@ -437,6 +469,18 @@ export async function createAgentIdentity(
     clients,
   };
 
+  if (registrationOptions) {
+    identity.registration = generateAgentRegistration(
+      identity,
+      registrationOptions
+    );
+    identity.oasfRecord = generateOASFRecord(
+      identity,
+      registrationOptions,
+      runtime
+    );
+  }
+
   return identity;
 }
 
@@ -489,6 +533,282 @@ export function getTrustConfig(result: AgentIdentity): TrustConfig | undefined {
   return result.trust;
 }
 
+function sanitizeString(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function resolveDomainOrigin(domain: string | undefined): string | undefined {
+  const normalized = sanitizeString(domain);
+  if (!normalized) return undefined;
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return normalized.replace(/\/+$/, '');
+  }
+  return `https://${normalized}`.replace(/\/+$/, '');
+}
+
+function normalizeTwitterEndpoint(
+  twitter: string | undefined
+): string | undefined {
+  const normalized = sanitizeString(twitter);
+  if (!normalized) return undefined;
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    return normalized;
+  }
+  const handle = normalized.replace(/^@+/, '');
+  return handle ? `https://x.com/${handle}` : undefined;
+}
+
+function normalizeServiceInput(
+  service: AgentService
+): AgentService | undefined {
+  const name = sanitizeString(
+    service.name ?? service.type ?? service.id ?? undefined
+  );
+  const endpoint = sanitizeString(
+    service.endpoint ?? service.serviceEndpoint ?? undefined
+  );
+
+  if (!name || !endpoint) {
+    return undefined;
+  }
+
+  const normalized: AgentService = {
+    ...service,
+    name,
+    endpoint,
+  };
+
+  delete (normalized as { id?: string }).id;
+  delete (normalized as { type?: string }).type;
+  delete (normalized as { serviceEndpoint?: string }).serviceEndpoint;
+
+  return normalized;
+}
+
+function createService(
+  name: string,
+  endpoint: string,
+  extras?: Partial<AgentService>
+): AgentService {
+  return {
+    name,
+    endpoint,
+    ...(extras ?? {}),
+  };
+}
+
+function shouldIncludeService(
+  selected: Set<string> | undefined,
+  name: RegistrationServiceName,
+  hasExplicitValue: boolean,
+  includeByDefault: boolean
+): boolean {
+  if (selected) {
+    return selected.has(name.toLowerCase());
+  }
+
+  if (hasExplicitValue) {
+    return true;
+  }
+
+  return includeByDefault;
+}
+
+function buildRegistrationServices(
+  identity: AgentIdentity,
+  options?: AgentRegistrationOptions
+): AgentService[] | undefined {
+  const serviceMap = new Map<string, AgentService>();
+  const selected =
+    options?.selectedServices && options.selectedServices.length > 0
+      ? new Set(options.selectedServices.map(name => name.toLowerCase()))
+      : undefined;
+  const origin = resolveDomainOrigin(identity.domain);
+
+  const a2aEndpoint =
+    sanitizeString(options?.a2aEndpoint) ??
+    (origin ? `${origin}/.well-known/agent-card.json` : undefined);
+  if (
+    a2aEndpoint &&
+    shouldIncludeService(selected, 'A2A', Boolean(options?.a2aEndpoint), true)
+  ) {
+    serviceMap.set(
+      'a2a',
+      createService('A2A', a2aEndpoint, {
+        version: options?.a2aVersion ?? DEFAULT_A2A_VERSION,
+      })
+    );
+  }
+
+  const websiteEndpoint =
+    sanitizeString(options?.website) ?? (origin ? `${origin}/` : undefined);
+  if (
+    websiteEndpoint &&
+    shouldIncludeService(selected, 'web', Boolean(options?.website), true)
+  ) {
+    serviceMap.set('web', createService('web', websiteEndpoint));
+  }
+
+  const twitterEndpoint = normalizeTwitterEndpoint(options?.twitter);
+  if (
+    twitterEndpoint &&
+    shouldIncludeService(
+      selected,
+      'twitter',
+      Boolean(sanitizeString(options?.twitter)),
+      false
+    )
+  ) {
+    serviceMap.set('twitter', createService('twitter', twitterEndpoint));
+  }
+
+  const emailEndpoint = sanitizeString(options?.email);
+  if (
+    emailEndpoint &&
+    shouldIncludeService(selected, 'email', Boolean(options?.email), false)
+  ) {
+    serviceMap.set('email', createService('email', emailEndpoint));
+  }
+
+  const rawOasfEndpoint =
+    typeof options?.oasf === 'string' ? options.oasf : options?.oasf?.endpoint;
+  const oasfEndpoint =
+    sanitizeString(rawOasfEndpoint) ??
+    (origin ? `${origin}${DEFAULT_OASF_RECORD_PATH}` : undefined);
+  if (
+    oasfEndpoint &&
+    shouldIncludeService(
+      selected,
+      'OASF',
+      Boolean(sanitizeString(rawOasfEndpoint)),
+      false
+    )
+  ) {
+    const oasfInput =
+      typeof options?.oasf === 'object' ? options.oasf : undefined;
+    const oasfService = createService('OASF', oasfEndpoint, {
+      version:
+        oasfInput?.version ?? options?.oasfVersion ?? DEFAULT_OASF_VERSION,
+    });
+    if (Array.isArray(oasfInput?.skills) && oasfInput.skills.length > 0) {
+      oasfService.skills = oasfInput.skills;
+    }
+    if (Array.isArray(oasfInput?.domains) && oasfInput.domains.length > 0) {
+      oasfService.domains = oasfInput.domains;
+    }
+    serviceMap.set('oasf', oasfService);
+  }
+
+  for (const service of options?.services ?? []) {
+    const normalized = normalizeServiceInput(service);
+    if (!normalized) continue;
+    serviceMap.set(normalized.name.toLowerCase(), normalized);
+  }
+
+  const services = Array.from(serviceMap.values());
+  return services.length > 0 ? services : undefined;
+}
+
+function hasSelectedService(
+  selectedServices: RegistrationServiceName[] | undefined,
+  serviceName: RegistrationServiceName
+): boolean {
+  if (!Array.isArray(selectedServices)) {
+    return false;
+  }
+
+  return selectedServices.some(
+    service => service.toLowerCase() === serviceName.toLowerCase()
+  );
+}
+
+function normalizeStringArray(values: string[] | undefined): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .map(value => value?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
+function resolveOASFInput(
+  options?: AgentRegistrationOptions
+): OASFStructuredConfig {
+  if (typeof options?.oasf === 'string') {
+    return {
+      endpoint: sanitizeString(options.oasf),
+      version: sanitizeString(options.oasfVersion),
+      authors: [],
+      skills: [],
+      domains: [],
+      modules: [],
+      locators: [],
+    };
+  }
+
+  return {
+    endpoint: sanitizeString(options?.oasf?.endpoint),
+    version:
+      sanitizeString(options?.oasf?.version) ??
+      sanitizeString(options?.oasfVersion),
+    authors: normalizeStringArray(options?.oasf?.authors),
+    skills: normalizeStringArray(options?.oasf?.skills),
+    domains: normalizeStringArray(options?.oasf?.domains),
+    modules: normalizeStringArray(options?.oasf?.modules),
+    locators: normalizeStringArray(options?.oasf?.locators),
+  };
+}
+
+export function generateOASFRecord(
+  identity: AgentIdentity,
+  options: AgentRegistrationOptions | undefined,
+  runtime?: AgentRuntime
+): OASFRecord | undefined {
+  const includeOASF =
+    hasSelectedService(options?.selectedServices, 'OASF') ||
+    Boolean(options?.oasf);
+
+  if (!includeOASF) {
+    return undefined;
+  }
+
+  const origin = resolveDomainOrigin(identity.domain);
+  const oasfInput = resolveOASFInput(options);
+  const endpoint =
+    oasfInput.endpoint ??
+    (origin
+      ? `${origin}${DEFAULT_OASF_RECORD_PATH}`
+      : DEFAULT_OASF_RECORD_PATH);
+  const version = oasfInput.version ?? DEFAULT_OASF_VERSION;
+  const entrypoints = runtime?.entrypoints.snapshot() ?? [];
+  const derivedSkills = entrypoints.map(entry => entry.key);
+
+  return {
+    type: 'https://docs.agntcy.org/oasf/oasf-server/',
+    name: options?.name ?? 'Agent',
+    description: options?.description ?? 'An AI agent',
+    version,
+    endpoint,
+    authors: oasfInput.authors ?? [],
+    skills:
+      oasfInput.skills && oasfInput.skills.length > 0
+        ? oasfInput.skills
+        : derivedSkills,
+    domains: oasfInput.domains ?? [],
+    modules: oasfInput.modules ?? [],
+    locators: oasfInput.locators ?? [],
+    entrypoints: entrypoints.map(entry => ({
+      key: entry.key,
+      description: entry.description,
+      streaming: Boolean(entry.stream ?? entry.streaming),
+      input: entry.input,
+      output: entry.output,
+    })),
+  };
+}
+
 /**
  * Generate agent registration JSON for hosting at /.well-known/agent-registration.json
  *
@@ -515,7 +835,7 @@ export function generateAgentRegistration(
   options?: AgentRegistrationOptions
 ) {
   const registration: AgentRegistration = {
-    type: 'agent',
+    type: options?.type ?? REGISTRATION_TYPE_V1,
     name: options?.name || 'Agent',
     description: options?.description || 'An AI agent',
     domain: identity.domain,
@@ -529,8 +849,9 @@ export function generateAgentRegistration(
     registration.url = options.url;
   }
 
-  if (options?.services && options.services.length > 0) {
-    registration.services = options.services;
+  const services = buildRegistrationServices(identity, options);
+  if (services) {
+    registration.services = services;
   }
 
   if (options?.x402Support !== undefined) {

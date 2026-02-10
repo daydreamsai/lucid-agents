@@ -1,6 +1,7 @@
 import type { TrustConfig } from '@lucid-agents/types/identity';
 
-import { parseBoolean } from './validation';
+import type { AgentRegistrationOptions, RegistrationServiceName } from './init';
+import { parseBoolean, parseOASFStructuredConfigFromEnv } from './validation';
 
 export type IdentityConfig = {
   trust?: TrustConfig;
@@ -8,7 +9,32 @@ export type IdentityConfig = {
   autoRegister?: boolean;
   rpcUrl?: string;
   chainId?: number;
+  registration?: AgentRegistrationOptions;
 };
+
+function parseSelectedServices(
+  env: Record<string, string | undefined>
+): RegistrationServiceName[] | undefined {
+  const selected: RegistrationServiceName[] = [];
+
+  if (parseBoolean(env.IDENTITY_INCLUDE_A2A)) {
+    selected.push('A2A');
+  }
+  if (parseBoolean(env.IDENTITY_INCLUDE_WEB)) {
+    selected.push('web');
+  }
+  if (parseBoolean(env.IDENTITY_INCLUDE_OASF)) {
+    selected.push('OASF');
+  }
+  if (parseBoolean(env.IDENTITY_INCLUDE_TWITTER)) {
+    selected.push('twitter');
+  }
+  if (parseBoolean(env.IDENTITY_INCLUDE_EMAIL)) {
+    selected.push('email');
+  }
+
+  return selected.length > 0 ? selected : undefined;
+}
 
 /**
  * Creates IdentityConfig from environment variables.
@@ -46,11 +72,38 @@ export function identityFromEnv(
     }
   }
 
+  const selectedServices = parseSelectedServices(env);
+  const oasf = parseOASFStructuredConfigFromEnv(env);
+
+  const envRegistration: AgentRegistrationOptions = {
+    a2aEndpoint: env.IDENTITY_A2A_ENDPOINT,
+    a2aVersion: env.IDENTITY_A2A_VERSION,
+    website: env.IDENTITY_WEBSITE,
+    twitter: env.IDENTITY_TWITTER,
+    email: env.IDENTITY_EMAIL,
+    oasf,
+    selectedServices,
+  };
+  const hasEnvRegistrationConfig = Boolean(
+    envRegistration.a2aEndpoint ||
+    envRegistration.a2aVersion ||
+    envRegistration.website ||
+    envRegistration.twitter ||
+    envRegistration.email ||
+    envRegistration.oasf ||
+    envRegistration.selectedServices
+  );
+
   return {
     trust: configOverrides?.trust,
     domain,
     autoRegister,
     rpcUrl,
     chainId,
+    registration: configOverrides?.registration
+      ? configOverrides.registration
+      : hasEnvRegistrationConfig
+        ? envRegistration
+        : undefined,
   };
 }

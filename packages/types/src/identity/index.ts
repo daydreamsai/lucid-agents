@@ -26,18 +26,51 @@ export type RegistrationEntry = {
 };
 
 export type AgentService = {
-  id?: string;
-  type?: string;
-  serviceEndpoint: string;
+  /**
+   * Optional service version.
+   */
+  version?: string;
+  /**
+   * Optional OASF skill declarations.
+   */
+  skills?: unknown[];
+  /**
+   * Optional OASF domains declarations.
+   */
+  domains?: unknown[];
+  /**
+   * Legacy compatibility aliases.
+   */
   description?: string;
   [key: string]: unknown;
-};
+} & (
+  | {
+      /**
+       * Canonical service fields.
+       */
+      name: string;
+      endpoint: string;
+      id?: string;
+      type?: string;
+      serviceEndpoint?: string;
+    }
+  | {
+      /**
+       * Legacy service fields (supported for compatibility).
+       */
+      id?: string;
+      type?: string;
+      serviceEndpoint: string;
+      name?: string;
+      endpoint?: string;
+    }
+);
 
 /**
  * ERC-8004 agent registration file structure.
  */
 export type AgentRegistration = {
-  type: 'agent';
+  type: 'agent' | 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
   name: string;
   description?: string;
   image?: string;
@@ -50,6 +83,47 @@ export type AgentRegistration = {
   registrations?: RegistrationEntry[];
   supportedTrust?: TrustModel[];
   [key: string]: unknown;
+};
+
+/**
+ * Structured OASF configuration for registration and record generation.
+ */
+export type OASFStructuredConfig = {
+  endpoint?: string;
+  version?: string;
+  authors?: string[];
+  skills?: string[];
+  domains?: string[];
+  modules?: string[];
+  locators?: string[];
+};
+
+/**
+ * Auto-generated OASF skill metadata derived from runtime entrypoints.
+ */
+export type OASFSkillRecord = {
+  key: string;
+  description?: string;
+  streaming?: boolean;
+  input?: unknown;
+  output?: unknown;
+};
+
+/**
+ * OASF record exposed by the SDK.
+ */
+export type OASFRecord = {
+  type: string;
+  name: string;
+  description?: string;
+  version: string;
+  endpoint: string;
+  authors: string[];
+  skills: string[];
+  domains: string[];
+  modules: string[];
+  locators: string[];
+  entrypoints: OASFSkillRecord[];
 };
 
 /**

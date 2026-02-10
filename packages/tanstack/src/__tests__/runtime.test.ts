@@ -24,6 +24,7 @@ describe("createTanStackRuntime", () => {
 
     expect(typeof tanstackRuntime.entrypoints.add).toBe("function");
     expect(typeof handlers.invoke).toBe("function");
+    expect(typeof handlers.oasf).toBe("function");
 
     const healthResponse = await handlers.health({
       request: new Request("https://agent.test/health"),

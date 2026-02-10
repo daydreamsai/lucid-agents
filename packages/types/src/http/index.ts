@@ -180,6 +180,11 @@ export type AgentHttpHandlers = {
   manifest: (req: Request) => Promise<Response>;
 
   /**
+   * OASF record endpoint handler.
+   */
+  oasf: (req: Request) => Promise<Response>;
+
+  /**
    * Landing page handler (optional, depends on extension options).
    */
   landing?: (req: Request) => Promise<Response>;

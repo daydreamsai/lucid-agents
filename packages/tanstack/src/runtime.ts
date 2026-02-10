@@ -13,6 +13,7 @@ export type TanStackHandlers = {
   health: TanStackRequestHandler;
   entrypoints: TanStackRequestHandler;
   manifest: TanStackRequestHandler;
+  oasf: TanStackRequestHandler;
   favicon: TanStackRequestHandler;
   landing?: TanStackRequestHandler;
   invoke: TanStackRouteHandler<{ key: string }>;
@@ -55,6 +56,21 @@ export function createTanStackHandlers(
     health: adaptRequestHandler(handlers.health),
     entrypoints: adaptRequestHandler(handlers.entrypoints),
     manifest: adaptRequestHandler(handlers.manifest),
+    oasf: handlers.oasf
+      ? adaptRequestHandler(handlers.oasf)
+      : async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: 'not_found',
+                message: 'OASF record is not enabled',
+              },
+            }),
+            {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            }
+          ),
     favicon: adaptRequestHandler(handlers.favicon),
     landing: handlers.landing
       ? adaptRequestHandler(handlers.landing)

@@ -77,6 +77,19 @@ export async function createAgentApp(
   app.get('/.well-known/agent-card.json', c =>
     runtime.handlers.manifest(c.req.raw)
   );
+  app.get('/.well-known/oasf-record.json', c =>
+    runtime.handlers.oasf
+      ? runtime.handlers.oasf(c.req.raw)
+      : c.json(
+          {
+            error: {
+              code: 'not_found',
+              message: 'OASF record is not enabled',
+            },
+          },
+          404
+        )
+  );
 
   app.get('/favicon.svg', c => runtime.handlers.favicon(c.req.raw));
 

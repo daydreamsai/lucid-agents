@@ -31,6 +31,120 @@
         "defaultValue": "agent.example.com"
       },
       {
+        "key": "IDENTITY_INCLUDE_A2A",
+        "type": "confirm",
+        "message": "Include A2A service in registration?",
+        "defaultValue": true
+      },
+      {
+        "key": "IDENTITY_A2A_ENDPOINT",
+        "type": "input",
+        "message": "A2A endpoint",
+        "defaultValue": "https://{{AGENT_DOMAIN}}/.well-known/agent-card.json",
+        "when": { "key": "IDENTITY_INCLUDE_A2A", "equals": true }
+      },
+      {
+        "key": "IDENTITY_A2A_VERSION",
+        "type": "input",
+        "message": "A2A version",
+        "defaultValue": "0.3.0",
+        "when": { "key": "IDENTITY_INCLUDE_A2A", "equals": true }
+      },
+      {
+        "key": "IDENTITY_INCLUDE_WEB",
+        "type": "confirm",
+        "message": "Include website service in registration?",
+        "defaultValue": true
+      },
+      {
+        "key": "IDENTITY_WEBSITE",
+        "type": "input",
+        "message": "Website endpoint",
+        "defaultValue": "https://{{AGENT_DOMAIN}}/",
+        "when": { "key": "IDENTITY_INCLUDE_WEB", "equals": true }
+      },
+      {
+        "key": "IDENTITY_INCLUDE_OASF",
+        "type": "confirm",
+        "message": "Include OASF service in registration?",
+        "defaultValue": false
+      },
+      {
+        "key": "IDENTITY_OASF_ENDPOINT",
+        "type": "input",
+        "message": "OASF endpoint",
+        "defaultValue": "https://{{AGENT_DOMAIN}}/.well-known/oasf-record.json",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_VERSION",
+        "type": "input",
+        "message": "OASF version",
+        "defaultValue": "0.8.0",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_AUTHORS_JSON",
+        "type": "input",
+        "message": "OASF authors (JSON array)",
+        "defaultValue": "[]",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_SKILLS_JSON",
+        "type": "input",
+        "message": "OASF skills (JSON array)",
+        "defaultValue": "[]",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_DOMAINS_JSON",
+        "type": "input",
+        "message": "OASF domains (JSON array)",
+        "defaultValue": "[]",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_MODULES_JSON",
+        "type": "input",
+        "message": "OASF modules (JSON array of URIs)",
+        "defaultValue": "[]",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_OASF_LOCATORS_JSON",
+        "type": "input",
+        "message": "OASF locators (JSON array of URIs)",
+        "defaultValue": "[\"https://{{AGENT_DOMAIN}}/.well-known/oasf-record.json\"]",
+        "when": { "key": "IDENTITY_INCLUDE_OASF", "equals": true }
+      },
+      {
+        "key": "IDENTITY_INCLUDE_TWITTER",
+        "type": "confirm",
+        "message": "Include Twitter service in registration?",
+        "defaultValue": false
+      },
+      {
+        "key": "IDENTITY_TWITTER",
+        "type": "input",
+        "message": "Twitter handle or URL",
+        "defaultValue": "",
+        "when": { "key": "IDENTITY_INCLUDE_TWITTER", "equals": true }
+      },
+      {
+        "key": "IDENTITY_INCLUDE_EMAIL",
+        "type": "confirm",
+        "message": "Include email service in registration?",
+        "defaultValue": false
+      },
+      {
+        "key": "IDENTITY_EMAIL",
+        "type": "input",
+        "message": "Support email",
+        "defaultValue": "",
+        "when": { "key": "IDENTITY_INCLUDE_EMAIL", "equals": true }
+      },
+      {
         "key": "PAYMENTS_FACILITATOR_URL",
         "type": "input",
         "message": "Facilitator URL",

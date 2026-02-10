@@ -2,13 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 import type { PaymentStorage } from '../payment-storage';
 
-// Use test database connection string from env
-// Only use default in local dev (when not in CI)
-const TEST_DB_URL =
-  process.env.TEST_POSTGRES_URL ||
-  (process.env.CI
-    ? undefined
-    : 'postgresql://postgres:test_password@localhost:5435/lucid_agents_test?schema=public');
+// Postgres integration tests are opt-in. Set TEST_POSTGRES_URL to enable.
+const TEST_DB_URL = process.env.TEST_POSTGRES_URL;
 
 // Skip tests if no database URL is provided
 const describeWithDb = TEST_DB_URL ? describe : describe.skip;
