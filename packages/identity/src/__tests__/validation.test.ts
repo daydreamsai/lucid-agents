@@ -93,6 +93,22 @@ describe('validateIdentityConfig', () => {
     ).not.toThrow();
   });
 
+  it('passes strict OASF validation with empty JSON arrays', () => {
+    expect(() =>
+      validateIdentityConfig(makeOptions({}), {
+        AGENT_DOMAIN: 'env-agent.example.com',
+        RPC_URL: 'https://rpc.example.com',
+        CHAIN_ID: '84532',
+        IDENTITY_INCLUDE_OASF: 'true',
+        IDENTITY_OASF_AUTHORS_JSON: '[]',
+        IDENTITY_OASF_SKILLS_JSON: '[]',
+        IDENTITY_OASF_DOMAINS_JSON: '[]',
+        IDENTITY_OASF_MODULES_JSON: '[]',
+        IDENTITY_OASF_LOCATORS_JSON: '[]',
+      })
+    ).not.toThrow();
+  });
+
   it('throws when OASF is enabled but JSON arrays are missing', () => {
     expect(() =>
       validateIdentityConfig(makeOptions({}), {
@@ -137,5 +153,18 @@ describe('validateIdentityConfig', () => {
           '["https://env-agent.example.com/.well-known/oasf-record.json"]',
       })
     ).toThrow(/IDENTITY_OASF_MODULES_JSON/);
+  });
+
+  it('throws on conflicting OASF endpoint when include flag is false', () => {
+    expect(() =>
+      validateIdentityConfig(makeOptions({}), {
+        AGENT_DOMAIN: 'env-agent.example.com',
+        RPC_URL: 'https://rpc.example.com',
+        CHAIN_ID: '84532',
+        IDENTITY_INCLUDE_OASF: 'false',
+        IDENTITY_OASF_ENDPOINT:
+          'https://env-agent.example.com/.well-known/oasf-record.json',
+      })
+    ).toThrow(/OASF config requires IDENTITY_INCLUDE_OASF=true/);
   });
 });

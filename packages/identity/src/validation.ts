@@ -26,6 +26,10 @@ const OASF_JSON_ARRAY_KEYS = [
 ] as const;
 
 type OASFJsonArrayKey = (typeof OASF_JSON_ARRAY_KEYS)[number];
+const OASF_OPTIONAL_SCALAR_KEYS = [
+  'IDENTITY_OASF_ENDPOINT',
+  'IDENTITY_OASF_VERSION',
+] as const;
 
 const OASF_JSON_EXAMPLES: Record<OASFJsonArrayKey, string> = {
   IDENTITY_OASF_AUTHORS_JSON: '["ops@agent.example.com"]',
@@ -133,19 +137,18 @@ function isOASFServiceSelected(selectedServices: unknown): boolean {
 }
 
 function hasAnyOASFEnvValues(env: Record<string, string | undefined>): boolean {
-  return OASF_JSON_ARRAY_KEYS.some(key => env[key] !== undefined);
+  const hasValue = (value: string | undefined): boolean =>
+    value !== undefined && value.trim().length > 0;
+  return (
+    OASF_JSON_ARRAY_KEYS.some(key => hasValue(env[key])) ||
+    OASF_OPTIONAL_SCALAR_KEYS.some(key => hasValue(env[key]))
+  );
 }
 
 function validateOASFStructuredConfig(
   config: OASFStructuredConfig,
   context: string
 ): void {
-  const requiredNonEmptyArrays = new Set([
-    'authors',
-    'skills',
-    'domains',
-    'modules',
-  ]);
   const requiredStringArrays: Array<[keyof OASFStructuredConfig, string]> = [
     ['authors', 'IDENTITY_OASF_AUTHORS_JSON'],
     ['skills', 'IDENTITY_OASF_SKILLS_JSON'],
@@ -161,14 +164,6 @@ function validateOASFStructuredConfig(
         `[agent-kit-identity] Missing ${context}.${String(
           field
         )}. Expected a string[] (JSON array via ${envKey}).`
-      );
-    }
-
-    if (requiredNonEmptyArrays.has(String(field)) && value.length < 1) {
-      throw new Error(
-        `[agent-kit-identity] Invalid ${context}.${String(
-          field
-        )}. Expected at least one item when OASF is enabled.`
       );
     }
 

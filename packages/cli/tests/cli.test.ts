@@ -718,6 +718,31 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain('IDENTITY_EMAIL=ops@agent.example.com');
   });
 
+  it('omits gated OASF fields when OASF is disabled', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    await runCli(
+      ['identity-default-agent', '--template=identity', '--non-interactive'],
+      {
+        cwd,
+        logger,
+      }
+    );
+
+    const projectDir = join(cwd, 'identity-default-agent');
+    const envFile = await readFile(join(projectDir, '.env'), 'utf8');
+
+    expect(envFile).toContain('IDENTITY_INCLUDE_OASF=false');
+    expect(envFile).not.toContain('IDENTITY_OASF_ENDPOINT=');
+    expect(envFile).not.toContain('IDENTITY_OASF_VERSION=');
+    expect(envFile).not.toContain('IDENTITY_OASF_AUTHORS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_SKILLS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_DOMAINS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_MODULES_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_LOCATORS_JSON=');
+  });
+
   it('AGENTS.md and template.schema.json are copied to generated project', async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();

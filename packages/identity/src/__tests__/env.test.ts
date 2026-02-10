@@ -56,4 +56,13 @@ describe('identityFromEnv', () => {
 
     expect(() => identityFromEnv()).toThrow(/Conflicting OASF configuration/);
   });
+
+  it('throws on conflicting OASF endpoint/version when include flag is false', () => {
+    process.env.IDENTITY_INCLUDE_OASF = 'false';
+    process.env.IDENTITY_OASF_ENDPOINT =
+      'https://agent.example.com/.well-known/oasf-record.json';
+    process.env.IDENTITY_OASF_VERSION = '0.8.0';
+
+    expect(() => identityFromEnv()).toThrow(/Conflicting OASF configuration/);
+  });
 });
