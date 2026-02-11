@@ -221,6 +221,84 @@ describe('create-agent-kit CLI', () => {
     expect(readme).toContain('quote-agent');
   });
 
+  it('supports stripe destination mode in wizard flow', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+    const inputResponses = new Map<string, string>([
+      ['How would you describe your agent?', 'Stripe-native agent'],
+      ['What version should the agent start at?', '1.2.3'],
+      ['Facilitator URL', 'https://facilitator.daydreams.systems'],
+      ['Facilitator auth token (optional, defaults to DREAMS_AUTH_TOKEN)', ''],
+      [
+        'Stripe secret key (required for Stripe destination mode)',
+        'sk_test_123',
+      ],
+      [
+        'Developer wallet private key (optional, for contract interactions)',
+        '',
+      ],
+      ['OpenAI API key (leave empty to add later)', ''],
+      ['WalletConnect project ID (leave empty to add later)', ''],
+    ]);
+
+    const prompt: PromptApi = {
+      select: async ({ message, choices }) => {
+        if (message.toLowerCase().includes('payment destination mode')) {
+          const stripe = choices.find(c => c.value === 'stripe');
+          if (stripe) return stripe.value;
+        }
+        if (message.toLowerCase().includes('payment network')) {
+          const ethereum = choices.find(c => c.value === 'ethereum');
+          if (ethereum) return ethereum.value;
+        }
+        return choices[0]?.value ?? '';
+      },
+      confirm: async ({ defaultValue }) => defaultValue ?? false,
+      input: async ({ message, defaultValue = '' }) =>
+        inputResponses.get(message) ?? defaultValue,
+    };
+
+    await runCli(['stripe-agent', '--template=blank'], {
+      cwd,
+      logger,
+      prompt,
+    });
+
+    const envFile = await readFile(join(cwd, 'stripe-agent', '.env'), 'utf8');
+    expect(envFile).toContain('PAYMENTS_DESTINATION=stripe');
+    expect(envFile).toContain('STRIPE_SECRET_KEY=sk_test_123');
+    expect(envFile).toContain('PAYMENTS_NETWORK=base');
+    expect(envFile).not.toContain('PAYMENTS_RECEIVABLE_ADDRESS=');
+  });
+
+  it('forces PAYMENTS_NETWORK=base when stripe destination is passed via CLI args', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'stripe-cli-agent',
+        '--template=blank',
+        '--wizard=no',
+        '--PAYMENTS_DESTINATION=stripe',
+        '--STRIPE_SECRET_KEY=sk_test_123',
+      ],
+      {
+        cwd,
+        logger,
+        templateRoot,
+      }
+    );
+
+    const envFile = await readFile(
+      join(cwd, 'stripe-cli-agent', '.env'),
+      'utf8'
+    );
+    expect(envFile).toContain('PAYMENTS_DESTINATION=stripe');
+    expect(envFile).toContain('PAYMENTS_NETWORK=base');
+  });
+
   it('honors the --adapter flag to select a runtime framework', async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(['blank']);

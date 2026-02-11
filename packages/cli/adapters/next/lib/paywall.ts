@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   createFacilitatorAuthHeaders,
   resolvePrice,
+  resolvePayTo,
   validatePaymentsConfig,
 } from '@lucid-agents/payments';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
@@ -180,7 +181,9 @@ export function createNextPaywall({
     activePayments.facilitatorAuth
   );
 
-  const payTo = activePayments.payTo as Parameters<typeof paymentMiddleware>[0];
+  const payTo = resolvePayTo(activePayments) as Parameters<
+    typeof paymentMiddleware
+  >[0];
 
   const middleware = paymentMiddleware(
     payTo,

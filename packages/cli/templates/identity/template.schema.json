@@ -144,15 +144,27 @@
         "solana-devnet"
       ]
     },
+    "PAYMENTS_DESTINATION": {
+      "type": "string",
+      "description": "Payment destination mode",
+      "default": "static",
+      "enum": ["static", "stripe"]
+    },
     "PAYMENTS_RECEIVABLE_ADDRESS": {
       "type": "string",
-      "description": "Payment address - Ethereum (0x...) or Solana (Base58) format depending on network. Separate from PRIVATE_KEY which is used for EVM identity registration. Can be shared across multiple agents.",
+      "description": "Payment address for static destination mode - Ethereum (0x...) or Solana (Base58) format depending on network. Separate from PRIVATE_KEY which is used for EVM identity registration. Can be shared across multiple agents.",
       "default": "",
       "examples": [
         "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
         "9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz",
         ""
       ]
+    },
+    "STRIPE_SECRET_KEY": {
+      "type": "string",
+      "description": "Stripe secret key used for dynamic destination mode (Base mainnet only)",
+      "default": "",
+      "examples": ["sk_live_...", "sk_test_...", ""]
     },
     "RPC_URL": {
       "type": "string",

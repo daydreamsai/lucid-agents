@@ -58,7 +58,8 @@ export type Manifest = {
  */
 export type PaymentMethod = {
   method: 'x402';
-  payee: `0x${string}` | SolanaAddress;
+  /** Static destination address when known at manifest generation time. */
+  payee?: `0x${string}` | SolanaAddress;
   network: Network;
   endpoint?: Resource;
   priceModel?: { default?: string };

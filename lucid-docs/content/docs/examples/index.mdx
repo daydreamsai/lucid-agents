@@ -52,6 +52,11 @@ bun run packages/examples/src/core/full-agent.ts
     href="/docs/examples/payment-policies"
   />
   <Card
+    title="Stripe Destination Mode"
+    description="Dynamic payTo resolution using Stripe PaymentIntents on Base"
+    href="/docs/examples/stripe-destination-mode"
+  />
+  <Card
     title="Scheduler"
     description="Automated agent hiring and interval-based execution"
     href="/docs/examples/scheduler"
@@ -69,6 +74,10 @@ PAYMENTS_RECEIVABLE_ADDRESS=0x...
 NETWORK=ethereum
 AGENT_WALLET_PRIVATE_KEY=0x...
 
+# Stripe destination mode (alternative to PAYMENTS_RECEIVABLE_ADDRESS)
+PAYMENTS_DESTINATION=stripe
+STRIPE_SECRET_KEY=sk_test_...
+
 # For identity examples
 RPC_URL=https://eth.llamarpc.com
 CHAIN_ID=1
@@ -77,11 +86,12 @@ AGENT_DOMAIN=my-agent.example.com
 
 ## What you'll learn
 
-| Example | Key concepts |
-|---------|--------------|
-| **Full Agent** | Complete agent with all extensions, streaming entrypoints |
-| **Identity Quick Start** | Simplest path to on-chain registration |
-| **A2A Integration** | Agent discovery, task operations, multi-turn conversations |
-| **Thirdweb Wallets** | Enterprise wallet management with thirdweb Engine |
-| **Payment Policies** | Spending limits, allowlists, blocklists |
-| **Scheduler** | Automated agent invocation with payments |
+| Example                  | Key concepts                                               |
+| ------------------------ | ---------------------------------------------------------- |
+| **Full Agent**           | Complete agent with all extensions, streaming entrypoints  |
+| **Identity Quick Start** | Simplest path to on-chain registration                     |
+| **A2A Integration**      | Agent discovery, task operations, multi-turn conversations |
+| **Thirdweb Wallets**     | Enterprise wallet management with thirdweb Engine          |
+| **Payment Policies**     | Spending limits, allowlists, blocklists                    |
+| **Stripe Destination**   | Dynamic payTo resolution with Stripe PaymentIntents        |
+| **Scheduler**            | Automated agent invocation with payments                   |

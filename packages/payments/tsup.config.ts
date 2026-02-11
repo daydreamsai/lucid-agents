@@ -10,7 +10,7 @@ export default definePackageConfig({
     'x402-fetch',
     'x402',
     'viem',
+    'stripe',
     'zod',
   ],
 });
-

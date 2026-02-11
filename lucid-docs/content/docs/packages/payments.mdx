@@ -1,5 +1,5 @@
 ---
-title: "@lucid-agents/payments"
+title: '@lucid-agents/payments'
 description: x402 payment protocol for monetizing agent capabilities.
 icon: CreditCard
 ---
@@ -33,15 +33,22 @@ const agent = await createAgent({
 ### Environment variables
 
 ```bash
-# Wallet address to receive payments
-PAYMENTS_RECEIVABLE_ADDRESS=0x...  # EVM address or Solana address
+# Required in all payment modes
+FACILITATOR_URL=https://facilitator.x402.org
+NETWORK=base
 
-# Network for payments
-NETWORK=ethereum      # ethereum, base, base-sepolia, solana, solana-devnet
+# Static destination mode (default)
+PAYMENTS_RECEIVABLE_ADDRESS=0x... # EVM or Solana address
 
-# Default price for entrypoints (in cents)
-DEFAULT_PRICE=100  # $1.00
+# Stripe destination mode (dynamic payTo)
+PAYMENTS_DESTINATION=stripe
+STRIPE_SECRET_KEY=sk_live_...
 ```
+
+Supported aliases:
+
+- `PAYMENTS_FACILITATOR_URL` can be used instead of `FACILITATOR_URL`
+- `PAYMENTS_NETWORK` can be used instead of `NETWORK`
 
 ### paymentsFromEnv()
 
@@ -51,17 +58,71 @@ Loads configuration from environment variables:
 import { paymentsFromEnv } from '@lucid-agents/payments';
 
 const config = paymentsFromEnv();
-// Returns PaymentsConfig from PAYMENTS_* env vars
+// Returns PaymentsConfig from env + optional overrides
 ```
 
 ### PaymentsConfig
 
 ```typescript
 type PaymentsConfig = {
-  receivableAddress?: `0x${string}` | SolanaAddress;
-  network?: Network;
-  defaultPrice?: string;  // e.g., "$0.01" or "1000" (in smallest unit)
-};
+  facilitatorUrl: string;
+  facilitatorAuth?: string;
+  network: Network;
+  policyGroups?: PaymentPolicyGroup[];
+  storage?: PaymentStorageConfig;
+} & (
+  | {
+      // Static destination mode
+      payTo: `0x${string}` | SolanaAddress;
+      stripe?: never;
+    }
+  | {
+      // Stripe destination mode
+      stripe: {
+        secretKey: string;
+        apiBaseUrl?: string;
+        apiVersion?: string;
+      };
+      payTo?: never;
+    }
+);
+```
+
+### Stripe destination mode (dynamic payTo)
+
+Use Stripe destination mode when you want `payTo` to be resolved per request.
+
+How it works:
+
+1. Runtime first tries to read destination `to` from the incoming payment header.
+2. If no destination is present, it creates a Stripe PaymentIntent and uses Stripe’s Base deposit address.
+3. The Agent Card advertises this as dynamic payee resolution (`extensions.x402.payeeMode = "dynamic"`).
+
+Important behavior:
+
+- Stripe mode is enabled when `payments.stripe` is configured or `PAYMENTS_DESTINATION=stripe`.
+- `STRIPE_SECRET_KEY` is required in Stripe mode.
+- Missing Stripe secret fails fast in `paymentsFromEnv()` with:
+  `Missing Stripe secret: set STRIPE_SECRET_KEY or override`
+- Stripe destination mode currently supports only Base mainnet (`base` / `eip155:8453`).
+
+```bash
+# Stripe destination mode setup
+FACILITATOR_URL=https://facilitator.x402.org
+NETWORK=base
+PAYMENTS_DESTINATION=stripe
+STRIPE_SECRET_KEY=sk_live_...
+```
+
+```typescript
+import { paymentsFromEnv } from '@lucid-agents/payments';
+
+const config = paymentsFromEnv({
+  // Optional explicit overrides:
+  network: 'base',
+  // Optional Stripe overrides:
+  // stripe: { secretKey: process.env.STRIPE_SECRET_KEY!, apiVersion: '2024-06-20' },
+});
 ```
 
 ## API reference
@@ -73,7 +134,7 @@ Creates the payments extension.
 ```typescript
 function payments(options: {
   config: PaymentsConfig;
-}): Extension<PaymentsExtensionContext>
+}): Extension<PaymentsExtensionContext>;
 ```
 
 ### Pricing entrypoints
@@ -87,7 +148,7 @@ addEntrypoint({
   input: z.object({ text: z.string() }),
   output: z.object({ analysis: z.string() }),
   price: {
-    invoke: '$0.01',  // Price per invocation
+    invoke: '$0.01', // Price per invocation
   },
   async handler({ input }) {
     return { output: { analysis: 'detailed analysis...' } };
@@ -102,7 +163,7 @@ addEntrypoint({
   key: 'chat',
   streaming: true,
   price: {
-    stream: '$0.005',  // Price per stream request
+    stream: '$0.005', // Price per stream request
   },
   async stream(ctx, emit) {
     // ...
@@ -115,12 +176,14 @@ addEntrypoint({
 Prices can be specified as:
 
 ```typescript
-// Dollar string
-price: { invoke: '$0.01' }
+// Flat price
+price: '0.01'
 
-// Smallest unit (cents for USD)
-price: { invoke: '1000' }  // $0.01 in basis points
+// Per-mode price
+price: { invoke: '0.01', stream: '0.005' }
 ```
+
+In Stripe destination mode, string values used for dynamic amount resolution are interpreted as USD decimals.
 
 ### PaymentsRuntime
 
@@ -152,6 +215,7 @@ type PaymentsRuntime = {
 - `solana-devnet` - Solana devnet
 
 The network is auto-detected from the address format:
+
 - `0x...` - EVM address
 - Base58 string - Solana address
 
@@ -203,11 +267,14 @@ const account = accountFromPrivateKey(process.env.PRIVATE_KEY as `0x${string}`);
 const x402Fetch = createX402Fetch({ account });
 
 // Automatically handles 402 responses and payments
-const response = await x402Fetch('https://agent.example.com/entrypoints/chat/invoke', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ input: { message: 'Hello' } }),
-});
+const response = await x402Fetch(
+  'https://agent.example.com/entrypoints/chat/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { message: 'Hello' } }),
+  }
+);
 ```
 
 ### Using raw @x402 packages
@@ -224,18 +291,21 @@ const signer = toClientEvmSigner(account);
 
 // Create x402 client and register networks
 const client = new x402Client()
-  .register('eip155:8453', new ExactEvmScheme(signer))      // Base mainnet
-  .register('eip155:84532', new ExactEvmScheme(signer))     // Base Sepolia
-  .register('eip155:1', new ExactEvmScheme(signer))         // Ethereum mainnet
+  .register('eip155:8453', new ExactEvmScheme(signer)) // Base mainnet
+  .register('eip155:84532', new ExactEvmScheme(signer)) // Base Sepolia
+  .register('eip155:1', new ExactEvmScheme(signer)) // Ethereum mainnet
   .register('eip155:11155111', new ExactEvmScheme(signer)); // Ethereum Sepolia
 
 const x402Fetch = wrapFetchWithPayment(fetch, client);
 
-const response = await x402Fetch('https://agent.example.com/entrypoints/chat/invoke', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ input: { message: 'Hello' } }),
-});
+const response = await x402Fetch(
+  'https://agent.example.com/entrypoints/chat/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { message: 'Hello' } }),
+  }
+);
 ```
 
 ### Using with API SDK
@@ -258,10 +328,13 @@ const client = createClient(
 );
 
 // Invoke paid endpoint with full type safety
-const { data, error } = await client.POST('/agents/{agentId}/entrypoints/{key}/invoke', {
-  params: { path: { agentId: 'agent-123', key: 'premium' } },
-  body: { input: { query: 'Analyze this data' } },
-});
+const { data, error } = await client.POST(
+  '/agents/{agentId}/entrypoints/{key}/invoke',
+  {
+    params: { path: { agentId: 'agent-123', key: 'premium' } },
+    body: { input: { query: 'Analyze this data' } },
+  }
+);
 ```
 
 See [Calling Paid Endpoints](/docs/examples/calling-paid-endpoints) for a complete example with error handling.
@@ -291,6 +364,28 @@ Payment information is included in the Agent Card:
 }
 ```
 
+In Stripe destination mode, the card omits static `payee` and marks dynamic payee resolution:
+
+```json
+{
+  "payments": [
+    {
+      "method": "x402",
+      "network": "base",
+      "endpoint": "https://facilitator.x402.org",
+      "extensions": {
+        "x402": {
+          "facilitatorUrl": "https://facilitator.x402.org",
+          "payeeMode": "dynamic"
+        }
+      }
+    }
+  ]
+}
+```
+
+See [Stripe Destination Mode Example](/docs/examples/stripe-destination-mode) for a full setup and invocation flow.
+
 ## Exports
 
 ```typescript
@@ -301,11 +396,17 @@ export { payments } from '@lucid-agents/payments';
 export { paymentsFromEnv } from '@lucid-agents/payments';
 
 // Utilities
-export { resolvePrice, evaluatePaymentRequirement } from '@lucid-agents/payments';
+export {
+  resolvePrice,
+  evaluatePaymentRequirement,
+} from '@lucid-agents/payments';
 
 // x402 client utilities
 export { createX402Fetch, x402LLM } from '@lucid-agents/payments';
-export { createSpendingTracker, createRateLimiter } from '@lucid-agents/payments';
+export {
+  createPaymentTracker,
+  createRateLimiter,
+} from '@lucid-agents/payments';
 
 // Types
 export type {

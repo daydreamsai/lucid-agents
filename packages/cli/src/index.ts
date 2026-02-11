@@ -134,6 +134,10 @@ const LUCID_BANNER = [
 
 const DEFAULT_PROJECT_NAME = 'agent-app';
 const PROJECT_NAME_PROMPT = 'Project directory name:';
+const PAYMENTS_DESTINATION_KEY = 'PAYMENTS_DESTINATION';
+const PAYMENTS_NETWORK_KEY = 'PAYMENTS_NETWORK';
+const STRIPE_DESTINATION = 'stripe';
+const BASE_NETWORK = 'base';
 
 const defaultLogger: RunLogger = {
   log: message => console.log(message),
@@ -355,6 +359,10 @@ function printHelp(logger: RunLogger) {
   logger.log('    --non-interactive \\');
   logger.log('    --AGENT_DESCRIPTION="My agent" \\');
   logger.log('    --PAYMENTS_RECEIVABLE_ADDRESS="0x..."');
+  logger.log('    # or Stripe mode');
+  logger.log(
+    '    --PAYMENTS_DESTINATION="stripe" --STRIPE_SECRET_KEY="sk_..."'
+  );
 }
 
 function printBanner(logger: RunLogger) {
@@ -700,7 +708,20 @@ async function collectWizardAnswers(params: {
     }
   }
 
+  applyWizardConstraints(answers);
+
   return answers;
+}
+
+function applyWizardConstraints(answers: WizardAnswers): void {
+  const destination = answers.get(PAYMENTS_DESTINATION_KEY);
+  const normalizedDestination =
+    typeof destination === 'string' ? destination.trim().toLowerCase() : '';
+
+  if (normalizedDestination === STRIPE_DESTINATION) {
+    // Stripe destination mode is currently limited to Base mainnet.
+    answers.set(PAYMENTS_NETWORK_KEY, BASE_NETWORK);
+  }
 }
 
 function shouldAskWizardPrompt(

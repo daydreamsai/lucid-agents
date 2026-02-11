@@ -177,6 +177,33 @@ describe("createTanStackPaywall", () => {
     );
   });
 
+  it("wires dynamic payTo callback in stripe mode", () => {
+    const runtime = createRuntime({
+      facilitatorUrl: "https://facilitator.test",
+      network: "eip155:8453",
+      stripe: { secretKey: "sk_test_123" },
+    });
+    const capturedRoutes: RoutesConfig[] = [];
+
+    const middlewareFactory = ((
+      routes,
+      _facilitator,
+      _paywall
+    ) => {
+      capturedRoutes.push(routes as RoutesConfig);
+      return (() => Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+    }) satisfies typeof paymentMiddleware;
+
+    createTanStackPaywall({
+      runtime,
+      middlewareFactory,
+    });
+
+    const invokeRoutes = capturedRoutes[0];
+    const invokeConfig = invokeRoutes["POST /api/agent/entrypoints/echo/invoke"] as any;
+    expect(typeof invokeConfig?.accepts?.payTo).toBe("function");
+  });
+
   it.skip("returns PAYMENT-REQUIRED header with x402Version=2 when payment is missing", async () => {
     const routes: RoutesConfig = {
       "POST /pay": {

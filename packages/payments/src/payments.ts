@@ -21,6 +21,7 @@ import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
 import { createPostgresPaymentStorage } from './postgres-payment-storage';
 import type { PaymentStorage } from './payment-storage';
 import { encodePaymentRequiredHeader } from './utils';
+import { resolvePayTo } from './payto-resolver';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -150,10 +151,11 @@ export const resolvePaymentRequirement = (
   if (!price) {
     return { required: false };
   }
+  const payTo = resolvePayTo(payments);
 
   return {
     required: true,
-    payTo: payments.payTo,
+    payTo: typeof payTo === 'string' ? payTo : undefined,
     price,
     network,
     facilitatorUrl: payments.facilitatorUrl,
@@ -182,7 +184,7 @@ export const paymentRequiredResponse = (
         code: 'payment_required',
         price: requirement.price,
         network: requirement.network,
-        payTo: requirement.payTo,
+        ...(requirement.payTo ? { payTo: requirement.payTo } : {}),
       },
     }),
     {

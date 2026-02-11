@@ -237,6 +237,35 @@ describe('withPayments helper', () => {
       'Bearer facilitator-secret'
     );
   });
+
+  it('wires dynamic payTo callback in stripe mode', () => {
+    let capturedRoutes: Record<string, any> | null = null;
+    const app = { use: (..._args: any[]) => {} };
+    const middlewareFactory = (
+      routes: Record<string, any>,
+      facilitatorClient: any
+    ) => {
+      capturedRoutes = routes;
+      return { routes, facilitator: facilitatorClient };
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: {
+        facilitatorUrl: 'https://facilitator.daydreams.systems',
+        network: 'eip155:8453',
+        stripe: { secretKey: 'sk_test_123' },
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(true);
+    const postRoute = capturedRoutes?.['POST /entrypoints/test/invoke'] ?? null;
+    expect(typeof postRoute?.accepts?.payTo).toBe('function');
+  });
 });
 
 describe('manifest building', () => {

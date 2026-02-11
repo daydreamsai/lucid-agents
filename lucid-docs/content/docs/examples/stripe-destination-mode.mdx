@@ -1,0 +1,110 @@
+---
+title: Stripe Destination Mode
+description: Configure dynamic payTo resolution with Stripe in @lucid-agents/payments.
+icon: CreditCard
+---
+
+This example shows how to run an agent in Stripe destination mode, where the payment destination (`payTo`) is resolved dynamically per request.
+
+## When to use this
+
+Use Stripe destination mode when:
+
+- you do not want to hardcode a single receivable wallet in `PAYMENTS_RECEIVABLE_ADDRESS`
+- you want payee resolution to come from request context and Stripe PaymentIntents
+
+## Prerequisites
+
+- Stripe destination mode currently supports Base mainnet only (`base` / `eip155:8453`)
+- A valid Stripe secret key (`sk_live_...` or `sk_test_...`)
+
+## Environment
+
+```bash
+FACILITATOR_URL=https://facilitator.x402.org
+NETWORK=base
+PAYMENTS_DESTINATION=stripe
+STRIPE_SECRET_KEY=sk_test_...
+```
+
+`PAYMENTS_RECEIVABLE_ADDRESS` is not required in this mode.
+
+## Agent setup
+
+```typescript title="src/agent.ts"
+import { z } from 'zod';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { createAgentApp } from '@lucid-agents/hono';
+
+const runtime = await createAgent({
+  name: 'stripe-destination-agent',
+  version: '1.0.0',
+  description: 'Agent using Stripe dynamic payTo resolution',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(runtime);
+
+addEntrypoint({
+  key: 'premium-report',
+  description: 'Returns a premium report',
+  input: z.object({ topic: z.string() }),
+  output: z.object({ report: z.string() }),
+  price: { invoke: '0.25' },
+  async handler({ input }) {
+    return {
+      output: {
+        report: `Premium report for: ${input.topic}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+export default app;
+```
+
+## What happens at runtime
+
+1. Client calls the paid entrypoint without payment.
+2. Agent responds with `402 Payment Required`.
+3. In Stripe mode, payee is resolved dynamically:
+   - If the payment header already contains `payload.authorization.to`, that address is used.
+   - Otherwise, the resolver creates a Stripe PaymentIntent and uses Stripe’s Base deposit address.
+4. Client retries with payment proof and gets the paid response.
+
+## Calling it from a client
+
+```typescript title="scripts/call-paid-endpoint.ts"
+import { createX402Fetch, accountFromPrivateKey } from '@lucid-agents/payments';
+
+const privateKey = process.env.PRIVATE_KEY as `0x${string}`;
+if (!privateKey) throw new Error('PRIVATE_KEY is required');
+
+const x402Fetch = createX402Fetch({
+  account: accountFromPrivateKey(privateKey),
+});
+
+const response = await x402Fetch(
+  'https://your-agent-host/entrypoints/premium-report/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: { topic: 'Stripe destination mode' },
+    }),
+  }
+);
+
+console.log(await response.json());
+```
+
+## Failure mode to expect
+
+If `PAYMENTS_DESTINATION=stripe` is set but no Stripe secret is available, startup fails early with:
+
+`Missing Stripe secret: set STRIPE_SECRET_KEY or override`
