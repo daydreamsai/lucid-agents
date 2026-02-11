@@ -208,7 +208,7 @@ const { hire, job } = await scheduler.createHire({
 |-------|-------------|
 | `agentCardUrl` | URL to fetch the agent card |
 | `entrypointKey` | Which entrypoint to invoke |
-| `schedule` | When to run (interval, cron, etc.) |
+| `schedule` | When to run (`interval` or `once`) |
 | `jobInput` | Input to pass to the entrypoint |
 
 #### Worker polling
@@ -498,7 +498,7 @@ bun run packages/examples/src/scheduler/double-hire.ts
 | **Recurring data sync** | Fetch external data on a schedule |
 | **Health checks** | Monitor agent availability |
 | **Batch processing** | Process queued items periodically |
-| **Cron jobs** | Run tasks at specific times |
+| **One-off tasks** | Run a task once at a specific time |
 | **Rate-limited APIs** | Spread calls over time |
 
 The scheduler handles:

@@ -852,26 +852,26 @@ type Parsed = z.infer<typeof schema>;
 
 ## How Packages Interact
 
-### agent-kit → agent-kit-identity
+### core → identity
 
 ```typescript
-// agent-kit imports identity types
-import type { TrustConfig } from '@lucid-agents/agent-kit-identity';
+// core imports identity types
+import type { TrustConfig } from '@lucid-agents/identity';
 
-// agent-kit accepts trust config
-createAgentApp(meta, {
-  trust: trustConfig, // From agent-kit-identity
-});
+// identity is added via the builder pattern
+const agent = await createAgent(meta)
+  .use(identity({ config: identityFromEnv() }))
+  .build();
 ```
 
-### create-agent-kit → agent-kit + agent-kit-identity
+### cli → core + identity
 
 Templates reference both packages:
 
 ```typescript
 // In generated agent.ts
-import { createAgentApp } from '@lucid-agents/agent-kit';
-import { createAgentIdentity } from '@lucid-agents/agent-kit-identity';
+import { createAgent } from '@lucid-agents/core';
+import { createAgentIdentity } from '@lucid-agents/identity';
 ```
 
 The CLI doesn't directly import these; it scaffolds code that uses them.
@@ -942,7 +942,7 @@ When developing changes to packages and testing them in external projects (e.g.,
 
 ### Adding a New Feature to agent-kit
 
-1. Create implementation in `packages/agent-kit/src/feature.ts`
+1. Create implementation in `packages/core/src/feature.ts`
 2. Add types to `types.ts` or inline
 3. Export from `index.ts`
 4. Add tests in `__tests__/feature.test.ts`
@@ -960,8 +960,8 @@ When developing changes to packages and testing them in external projects (e.g.,
 
 ### Modifying the CLI
 
-1. Edit `packages/create-agent-kit/src/index.ts`
-2. Build: `cd packages/create-agent-kit && bun run build`
+1. Edit `packages/cli/src/index.ts`
+2. Build: `cd packages/cli && bun run build`
 3. Test locally: `bunx ./dist/index.js test-agent`
 4. Update help text and README
 5. Create changeset
@@ -974,7 +974,7 @@ Ensure:
 
 1. All packages are built: `bun run build:packages`
 2. Dependencies are installed: `bun install`
-3. Using correct import paths (e.g., `@lucid-agents/agent-kit/types`)
+3. Using correct import paths (e.g., `@lucid-agents/types/core`)
 
 ### TypeScript errors in templates
 
