@@ -3,92 +3,103 @@ import { createStripePayToAddress } from '../stripe-payto';
 
 const STATIC_ADDRESS = '0xabc0000000000000000000000000000000000000';
 
-function stripeSuccessResponse() {
-  return new Response(
-    JSON.stringify({
-      id: 'pi_123',
-      next_action: {
-        crypto_collect_deposit_details: {
-          deposit_addresses: {
-            base: {
-              address: STATIC_ADDRESS,
+type StripeMockCapture = {
+  requestPath?: string;
+  requestHeaders?: Headers;
+  requestBody?: string;
+};
+
+function startStripeMockServer(capture: StripeMockCapture) {
+  const server = Bun.serve({
+    port: 0,
+    fetch: async request => {
+      capture.requestPath = new URL(request.url).pathname;
+      capture.requestHeaders = new Headers(request.headers);
+      capture.requestBody = await request.text();
+
+      return new Response(
+        JSON.stringify({
+          id: 'pi_123',
+          next_action: {
+            crypto_collect_deposit_details: {
+              deposit_addresses: {
+                base: {
+                  address: STATIC_ADDRESS,
+                },
+              },
             },
           },
-        },
-      },
-    }),
-    {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }
-  );
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+    },
+  });
+
+  return {
+    apiBaseUrl: `http://127.0.0.1:${server.port}`,
+    stop: () => server.stop(true),
+  };
 }
 
 describe('createStripePayToAddress amount parsing', () => {
-  const originalFetch = globalThis.fetch;
+  let stopServer: (() => void) | undefined;
 
   beforeEach(() => {
-    globalThis.fetch = originalFetch;
+    stopServer = undefined;
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    stopServer?.();
+    stopServer = undefined;
   });
 
   it('interprets digit-only string values as USD decimals', async () => {
-    let requestBody = '';
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit
-    ) => {
-      requestBody = typeof init?.body === 'string' ? init.body : '';
-      return stripeSuccessResponse();
-    }) as typeof globalThis.fetch;
+    const capture: StripeMockCapture = {};
+    const server = startStripeMockServer(capture);
+    stopServer = server.stop;
 
     await createStripePayToAddress(
-      { secretKey: 'sk_test_123' },
+      { secretKey: 'sk_test_123', apiBaseUrl: server.apiBaseUrl },
       { price: '1000' }
     );
 
-    const params = new URLSearchParams(requestBody);
+    expect(capture.requestPath).toBe('/v1/payment_intents');
+    expect(capture.requestHeaders?.get('authorization')).toBe(
+      'Bearer sk_test_123'
+    );
+
+    const params = new URLSearchParams(capture.requestBody);
     expect(params.get('amount')).toBe('100000');
   });
 
   it('supports USD strings with currency symbols and commas', async () => {
-    let requestBody = '';
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit
-    ) => {
-      requestBody = typeof init?.body === 'string' ? init.body : '';
-      return stripeSuccessResponse();
-    }) as typeof globalThis.fetch;
+    const capture: StripeMockCapture = {};
+    const server = startStripeMockServer(capture);
+    stopServer = server.stop;
 
     await createStripePayToAddress(
-      { secretKey: 'sk_test_123' },
+      { secretKey: 'sk_test_123', apiBaseUrl: server.apiBaseUrl },
       { price: ' $1,234.56 ' }
     );
 
-    const params = new URLSearchParams(requestBody);
+    const params = new URLSearchParams(capture.requestBody);
     expect(params.get('amount')).toBe('123456');
   });
 
   it('treats numeric values as precomputed base units', async () => {
-    let requestBody = '';
-    globalThis.fetch = (async (
-      _input: RequestInfo | URL,
-      init?: RequestInit
-    ) => {
-      requestBody = typeof init?.body === 'string' ? init.body : '';
-      return stripeSuccessResponse();
-    }) as typeof globalThis.fetch;
+    const capture: StripeMockCapture = {};
+    const server = startStripeMockServer(capture);
+    stopServer = server.stop;
 
     await createStripePayToAddress(
-      { secretKey: 'sk_test_123' },
+      { secretKey: 'sk_test_123', apiBaseUrl: server.apiBaseUrl },
       { price: 1_000_000 }
     );
 
-    const params = new URLSearchParams(requestBody);
+    const params = new URLSearchParams(capture.requestBody);
     expect(params.get('amount')).toBe('100');
   });
 });

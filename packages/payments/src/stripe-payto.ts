@@ -1,6 +1,6 @@
 import type { StripePaymentsConfig } from '@lucid-agents/types/payments';
+import Stripe from 'stripe';
 
-const DEFAULT_STRIPE_API_BASE_URL = 'https://api.stripe.com';
 const DEFAULT_USDC_BASE_UNITS = 10_000; // $0.01 in 6-decimal USDC
 const USDC_BASE_UNITS_PER_CENT = 10_000;
 
@@ -19,6 +19,12 @@ type StripePaymentIntentResponse = {
   error?: {
     message?: string;
   };
+};
+
+type StripeApiBaseOverride = {
+  host: string;
+  port?: number;
+  protocol: 'http' | 'https';
 };
 
 /**
@@ -59,10 +65,11 @@ function toCentsFromBaseUnits(amountBaseUnits: number): number {
   return Math.max(1, Math.round(amountBaseUnits / USDC_BASE_UNITS_PER_CENT));
 }
 
-function readBaseDepositAddress(payload: StripePaymentIntentResponse): string {
+function readBaseDepositAddress(payload: unknown): string {
+  const normalized = payload as StripePaymentIntentResponse;
   const address =
-    payload.next_action?.crypto_collect_deposit_details?.deposit_addresses?.base
-      ?.address;
+    normalized.next_action?.crypto_collect_deposit_details?.deposit_addresses
+      ?.base?.address;
 
   if (!address || typeof address !== 'string') {
     throw new Error(
@@ -71,6 +78,62 @@ function readBaseDepositAddress(payload: StripePaymentIntentResponse): string {
   }
 
   return address;
+}
+
+function parseStripeApiBaseUrl(apiBaseUrl: string): StripeApiBaseOverride {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(apiBaseUrl);
+  } catch {
+    throw new Error(`Invalid Stripe apiBaseUrl: ${apiBaseUrl}`);
+  }
+
+  if (
+    parsedUrl.pathname !== '/' ||
+    parsedUrl.search.length > 0 ||
+    parsedUrl.hash.length > 0
+  ) {
+    throw new Error(
+      'Stripe apiBaseUrl must include only protocol, host, and optional port'
+    );
+  }
+
+  if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+    throw new Error(
+      `Unsupported Stripe apiBaseUrl protocol: ${parsedUrl.protocol}`
+    );
+  }
+
+  const port = parsedUrl.port ? Number.parseInt(parsedUrl.port, 10) : undefined;
+  if (typeof port === 'number' && Number.isNaN(port)) {
+    throw new Error(`Invalid Stripe apiBaseUrl port: ${parsedUrl.port}`);
+  }
+
+  return {
+    host: parsedUrl.hostname,
+    port,
+    protocol: parsedUrl.protocol === 'https:' ? 'https' : 'http',
+  };
+}
+
+function createStripeClient(
+  stripeConfig: StripePaymentsConfig,
+  secretKey: string
+): Stripe {
+  const config: Stripe.StripeConfig = {};
+  if (stripeConfig.apiVersion) {
+    config.apiVersion =
+      stripeConfig.apiVersion as unknown as Stripe.StripeConfig['apiVersion'];
+  }
+
+  if (stripeConfig.apiBaseUrl) {
+    const override = parseStripeApiBaseUrl(stripeConfig.apiBaseUrl);
+    config.host = override.host;
+    config.port = override.port;
+    config.protocol = override.protocol;
+  }
+
+  return new Stripe(secretKey, config);
 }
 
 export async function createStripePayToAddress(
@@ -86,47 +149,31 @@ export async function createStripePayToAddress(
 
   const amountBaseUnits = resolveAmountBaseUnits(context);
   const amountInCents = toCentsFromBaseUnits(amountBaseUnits);
-  const stripeUrl = `${(stripe.apiBaseUrl ?? DEFAULT_STRIPE_API_BASE_URL).replace(/\/+$/u, '')}/v1/payment_intents`;
+  const stripeClient = createStripeClient(stripe, secretKey);
 
-  const body = new URLSearchParams();
-  body.set('amount', String(amountInCents));
-  body.set('currency', 'usd');
-  body.append('payment_method_types[]', 'crypto');
-  body.set('payment_method_data[type]', 'crypto');
-  body.set('payment_method_options[crypto][mode]', 'custom');
-  body.set('confirm', 'true');
-
-  const headers = new Headers({
-    Authorization: `Bearer ${secretKey}`,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  });
-  if (stripe.apiVersion) {
-    headers.set('Stripe-Version', stripe.apiVersion);
-  }
-
-  const response = await fetch(stripeUrl, {
-    method: 'POST',
-    headers,
-    body: body.toString(),
-  });
-
-  let payload: StripePaymentIntentResponse | undefined;
   try {
-    payload = (await response.json()) as StripePaymentIntentResponse;
-  } catch {
-    payload = undefined;
-  }
+    const paymentIntent = await stripeClient.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'usd',
+      payment_method_types: ['crypto'],
+      payment_method_data: { type: 'crypto' },
+      confirm: true,
+      // This beta option is required for destination-mode crypto intents.
+      payment_method_options: {
+        crypto: { mode: 'custom' },
+      } as unknown as Stripe.PaymentIntentCreateParams.PaymentMethodOptions,
+    });
 
-  if (!response.ok) {
-    const errorMessage =
-      payload?.error?.message ??
-      `Stripe request failed with status ${response.status}`;
-    throw new Error(errorMessage);
-  }
+    return readBaseDepositAddress(paymentIntent);
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeError && error.message) {
+      throw new Error(error.message);
+    }
 
-  if (!payload) {
-    throw new Error('Stripe returned an empty response payload');
-  }
+    if (error instanceof Error) {
+      throw error;
+    }
 
-  return readBaseDepositAddress(payload);
+    throw new Error('Stripe request failed with an unknown error');
+  }
 }

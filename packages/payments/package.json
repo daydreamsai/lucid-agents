@@ -39,6 +39,7 @@
     "@x402/core": "catalog:",
     "@x402/fetch": "catalog:",
     "@x402/evm": "catalog:",
+    "stripe": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

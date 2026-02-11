@@ -1,20 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { resolvePayTo } from '../payto-resolver';
 
 const STATIC_ADDRESS = '0xabc0000000000000000000000000000000000000';
 
 describe('resolvePayTo', () => {
-  const originalFetch = globalThis.fetch;
-
-  beforeEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
   it('returns static payTo when static mode is configured', () => {
     const config: PaymentsConfig = {
       payTo: STATIC_ADDRESS,
@@ -91,8 +81,11 @@ describe('resolvePayTo', () => {
   });
 
   it('creates stripe payment intent when payment header is missing', async () => {
-    const fetchMock = mock(
-      async (_input: RequestInfo | URL, _init?: RequestInit) => {
+    let requestCount = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: async () => {
+        requestCount += 1;
         return new Response(
           JSON.stringify({
             id: 'pi_123',
@@ -111,22 +104,31 @@ describe('resolvePayTo', () => {
             headers: { 'content-type': 'application/json' },
           }
         );
-      }
-    );
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+      },
+    });
 
     const config: PaymentsConfig = {
-      stripe: { secretKey: 'sk_test_123' },
+      stripe: {
+        secretKey: 'sk_test_123',
+        apiBaseUrl: `http://127.0.0.1:${server.port}`,
+      },
       facilitatorUrl: 'https://facilitator.test',
       network: 'eip155:8453',
     };
 
     const payTo = resolvePayTo(config);
     expect(typeof payTo).toBe('function');
-    if (typeof payTo !== 'function') return;
+    if (typeof payTo !== 'function') {
+      server.stop(true);
+      return;
+    }
 
-    const resolved = await payTo({});
-    expect(resolved).toBe(STATIC_ADDRESS);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    try {
+      const resolved = await payTo({});
+      expect(resolved).toBe(STATIC_ADDRESS);
+      expect(requestCount).toBe(1);
+    } finally {
+      server.stop(true);
+    }
   });
 });
