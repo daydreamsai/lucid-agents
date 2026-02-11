@@ -114,6 +114,24 @@ describe('createAgentCardWithPayments', () => {
     expect((payment?.extensions as { x402?: { facilitatorUrl?: string } })?.x402?.facilitatorUrl).toBe(paymentsConfig.facilitatorUrl);
   });
 
+  it('omits static payee in stripe mode and marks dynamic payee resolution', () => {
+    const stripeConfig: PaymentsConfig = {
+      stripe: { secretKey: 'sk_test_123' },
+      facilitatorUrl: 'https://facilitator.daydreams.systems',
+      network: 'eip155:8453',
+    };
+
+    const enhanced = createAgentCardWithPayments(baseCard, stripeConfig, entrypoints);
+    const payment = enhanced.payments?.[0];
+
+    expect(payment?.method).toBe('x402');
+    expect(payment?.payee).toBeUndefined();
+    expect(payment?.network).toBe(stripeConfig.network);
+    expect((payment?.extensions as { x402?: { payeeMode?: string } })?.x402?.payeeMode).toBe(
+      'dynamic'
+    );
+  });
+
   it('handles entrypoints with only invoke price', () => {
     const entrypointsInvokeOnly: EntrypointDef[] = [
       {
@@ -143,4 +161,3 @@ describe('createAgentCardWithPayments', () => {
     expect(enhanced.entrypoints['invoke-only'].pricing?.stream).toBeUndefined();
   });
 });
-

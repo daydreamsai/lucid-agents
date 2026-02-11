@@ -28,9 +28,20 @@
       "default": "ethereum",
       "description": "Payment network"
     },
+    "PAYMENTS_DESTINATION": {
+      "type": "string",
+      "enum": ["static", "stripe"],
+      "default": "static",
+      "description": "Payment destination mode"
+    },
     "PAYMENTS_RECEIVABLE_ADDRESS": {
       "type": "string",
-      "description": "Address that receives payments"
+      "description": "Address that receives payments in static destination mode"
+    },
+    "STRIPE_SECRET_KEY": {
+      "type": "string",
+      "description": "Stripe secret key used for dynamic destination mode (Base mainnet only)",
+      "default": ""
     }
   },
   "required": ["AGENT_DESCRIPTION", "AGENT_VERSION"]

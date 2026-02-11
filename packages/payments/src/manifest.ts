@@ -43,13 +43,17 @@ export function createAgentCardWithPayments(
   }
 
   // Add payments array
+  const isDynamicPayee = !('payTo' in paymentsConfig);
   const paymentMethod: PaymentMethod = {
     method: 'x402',
-    payee: paymentsConfig.payTo,
+    ...('payTo' in paymentsConfig ? { payee: paymentsConfig.payTo } : {}),
     network: paymentsConfig.network,
     endpoint: paymentsConfig.facilitatorUrl,
     extensions: {
-      x402: { facilitatorUrl: paymentsConfig.facilitatorUrl },
+      x402: {
+        facilitatorUrl: paymentsConfig.facilitatorUrl,
+        ...(isDynamicPayee ? { payeeMode: 'dynamic' as const } : {}),
+      },
     },
   };
 
@@ -59,4 +63,3 @@ export function createAgentCardWithPayments(
     payments: [paymentMethod],
   };
 }
-

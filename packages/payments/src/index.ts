@@ -26,6 +26,11 @@ export {
   parsePriceAmount,
 } from './utils';
 export {
+  resolvePayTo,
+  type DynamicPayToContext,
+  type DynamicPayToResolver,
+} from './payto-resolver';
+export {
   createX402Fetch,
   accountFromPrivateKey,
   createX402LLM,

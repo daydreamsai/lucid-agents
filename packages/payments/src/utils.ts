@@ -1,4 +1,7 @@
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type {
+  PaymentsConfig,
+  StripePaymentsConfig,
+} from '@lucid-agents/types/payments';
 
 /**
  * Creates PaymentsConfig from environment variables and optional overrides.
@@ -9,22 +12,52 @@ import type { PaymentsConfig } from '@lucid-agents/types/payments';
 export function paymentsFromEnv(
   configOverrides?: Partial<PaymentsConfig>
 ): PaymentsConfig {
-  const baseConfig: PaymentsConfig = {
-    payTo: configOverrides?.payTo ?? (process.env.PAYMENTS_RECEIVABLE_ADDRESS as any),
-    facilitatorUrl: configOverrides?.facilitatorUrl ?? (process.env.FACILITATOR_URL as any),
-    facilitatorAuth:
-      configOverrides?.facilitatorAuth ??
-      process.env.FACILITOR_AUTH ??
-      process.env.FACILITATOR_AUTH ??
-      process.env.PAYMENTS_FACILITATOR_AUTH ??
-      process.env.DREAMS_AUTH_TOKEN,
-    network: configOverrides?.network ?? (process.env.NETWORK as any),
+  const facilitatorUrl =
+    configOverrides?.facilitatorUrl ??
+    (process.env.FACILITATOR_URL ??
+      process.env.PAYMENTS_FACILITATOR_URL) ??
+    undefined;
+  const network =
+    configOverrides?.network ??
+    (process.env.NETWORK ?? process.env.PAYMENTS_NETWORK) ??
+    undefined;
+  const facilitatorAuth =
+    configOverrides?.facilitatorAuth ??
+    process.env.FACILITOR_AUTH ??
+    process.env.FACILITATOR_AUTH ??
+    process.env.PAYMENTS_FACILITATOR_AUTH ??
+    process.env.DREAMS_AUTH_TOKEN;
+
+  const baseConfig = {
+    facilitatorUrl: facilitatorUrl as PaymentsConfig['facilitatorUrl'],
+    facilitatorAuth,
+    network: network as PaymentsConfig['network'],
+    policyGroups: configOverrides?.policyGroups,
+    storage: configOverrides?.storage,
   };
+
+  const stripeConfig = (configOverrides as { stripe?: StripePaymentsConfig })
+    ?.stripe;
+  const stripeSecretKey = stripeConfig?.secretKey ?? process.env.STRIPE_SECRET_KEY;
+  const destinationMode = process.env.PAYMENTS_DESTINATION?.trim().toLowerCase();
+  const useStripeMode = Boolean(stripeConfig) || destinationMode === 'stripe';
+
+  if (useStripeMode) {
+    return {
+      ...baseConfig,
+      stripe: {
+        ...stripeConfig,
+        secretKey: stripeSecretKey ?? '',
+      },
+    };
+  }
 
   return {
     ...baseConfig,
-    ...configOverrides,
-  };
+    payTo:
+      (configOverrides as { payTo?: PaymentsConfig extends { payTo: infer T } ? T : never })
+        ?.payTo ?? ((process.env.PAYMENTS_RECEIVABLE_ADDRESS as any) ?? undefined),
+  } as PaymentsConfig;
 }
 
 function normalizeBearerToken(token?: string | null): string | undefined {

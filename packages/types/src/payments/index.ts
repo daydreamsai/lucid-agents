@@ -135,11 +135,38 @@ export type PaymentStorageConfig = {
 };
 
 /**
+ * Stripe destination configuration for dynamic payTo resolution.
+ */
+export type StripePaymentsConfig = {
+  /** Stripe secret key used to create PaymentIntents */
+  secretKey: string;
+  /** Optional API base URL for Stripe (primarily for tests) */
+  apiBaseUrl?: string;
+  /** Optional Stripe API version */
+  apiVersion?: string;
+};
+
+/**
+ * Static destination configuration where payTo is known upfront.
+ */
+export type StaticPaymentsDestination = {
+  payTo: `0x${string}` | SolanaAddress;
+  stripe?: never;
+};
+
+/**
+ * Stripe destination configuration where payTo is resolved per request.
+ */
+export type StripePaymentsDestination = {
+  stripe: StripePaymentsConfig;
+  payTo?: never;
+};
+
+/**
  * Payment configuration for x402 protocol.
- * Supports both EVM (0x...) and Solana (base58) addresses.
+ * Supports static wallet destination and Stripe-backed dynamic destination.
  */
 export type PaymentsConfig = {
-  payTo: `0x${string}` | SolanaAddress;
   facilitatorUrl: Resource;
   /** Optional bearer token used to authenticate facilitator requests. */
   facilitatorAuth?: string;
@@ -148,7 +175,7 @@ export type PaymentsConfig = {
   policyGroups?: PaymentPolicyGroup[];
   /** Optional storage configuration (defaults to SQLite) */
   storage?: PaymentStorageConfig;
-};
+} & (StaticPaymentsDestination | StripePaymentsDestination);
 
 /**
  * Price for an entrypoint - either a flat string or separate invoke/stream prices.
@@ -162,7 +189,7 @@ export type PaymentRequirement =
   | { required: false }
   | {
       required: true;
-      payTo: string;
+      payTo?: string;
       price: string;
       network: Network;
       facilitatorUrl?: string;

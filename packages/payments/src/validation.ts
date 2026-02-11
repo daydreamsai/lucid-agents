@@ -23,10 +23,32 @@ const SupportedSVMNetworks: Network[] = [
   'solana:devnet',
 ];
 
+const SupportedNamedNetworks = [
+  'ethereum',
+  'sepolia',
+  'base',
+  'base-sepolia',
+  'solana',
+  'solana-devnet',
+] as const;
+
 const SUPPORTED_NETWORKS: Network[] = [
   ...SupportedEVMNetworks,
   ...SupportedSVMNetworks,
+  ...(SupportedNamedNetworks as unknown as Network[]),
 ];
+
+const BASE_NETWORKS = new Set(['base', 'eip155:8453']);
+
+function isStripeMode(
+  payments: PaymentsConfig
+): payments is PaymentsConfig & { stripe: NonNullable<PaymentsConfig['stripe']> } {
+  return 'stripe' in payments && typeof payments.stripe === 'object';
+}
+
+function normalizeNetwork(network: string): string {
+  return network.trim().toLowerCase();
+}
 
 /**
  * Validates payment configuration and throws descriptive errors if invalid.
@@ -40,7 +62,7 @@ export function validatePaymentsConfig(
   network: string | undefined,
   entrypointKey: string
 ): void {
-  if (!payments.payTo) {
+  if (!isStripeMode(payments) && !payments.payTo) {
     console.error(
       `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
       'PAYMENTS_RECEIVABLE_ADDRESS is not set.',
@@ -74,6 +96,27 @@ export function validatePaymentsConfig(
       `Payment configuration error: NETWORK is not set. ` +
         `This is required for payment processing.`
     );
+  }
+
+  if (isStripeMode(payments)) {
+    const secretKey = payments.stripe.secretKey?.trim();
+    if (!secretKey) {
+      console.error(
+        `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
+        'STRIPE_SECRET_KEY is not set.',
+        'Please set STRIPE_SECRET_KEY or configure payments.stripe.secretKey.'
+      );
+      throw new Error(
+        'Payment configuration error: STRIPE_SECRET_KEY is not set. This is required for Stripe destination mode.'
+      );
+    }
+
+    const normalizedNetwork = normalizeNetwork(network);
+    if (!BASE_NETWORKS.has(normalizedNetwork)) {
+      throw new Error(
+        `Stripe destination mode currently supports only Base mainnet (base / eip155:8453). Received: ${network}.`
+      );
+    }
   }
 
   if (!SUPPORTED_NETWORKS.includes(network as Network)) {

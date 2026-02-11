@@ -46,10 +46,34 @@
         "defaultValue": "ethereum"
       },
       {
+        "key": "PAYMENTS_DESTINATION",
+        "type": "select",
+        "message": "Payment destination mode",
+        "choices": [
+          { "value": "static", "title": "Static wallet address" },
+          { "value": "stripe", "title": "Stripe dynamic destination (Base only)" }
+        ],
+        "defaultValue": "static"
+      },
+      {
         "key": "PAYMENTS_RECEIVABLE_ADDRESS",
         "type": "input",
         "message": "Receivable address (address that receives payments)",
-        "defaultValue": ""
+        "defaultValue": "",
+        "when": {
+          "key": "PAYMENTS_DESTINATION",
+          "equals": "static"
+        }
+      },
+      {
+        "key": "STRIPE_SECRET_KEY",
+        "type": "input",
+        "message": "Stripe secret key (required for Stripe destination mode)",
+        "defaultValue": "",
+        "when": {
+          "key": "PAYMENTS_DESTINATION",
+          "equals": "stripe"
+        }
       },
       {
         "key": "DEVELOPER_WALLET_PRIVATE_KEY",

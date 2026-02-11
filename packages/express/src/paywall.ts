@@ -14,6 +14,7 @@ import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
   createFacilitatorAuthHeaders,
   resolvePrice,
+  resolvePayTo,
   validatePaymentsConfig,
   evaluateSender,
   findMostSpecificIncomingLimit,
@@ -81,7 +82,7 @@ export function withPayments({
   validatePaymentsConfig(payments, network, entrypoint.key);
 
   if (!price) return false;
-  if (!payments.payTo) return false;
+  const payTo = resolvePayTo(payments);
 
   const description =
     entrypoint.description ??
@@ -100,7 +101,7 @@ export function withPayments({
   const postRoute: RouteConfig = {
     accepts: {
       scheme: DEFAULT_SCHEME,
-      payTo: payments.payTo,
+      payTo: payTo as any,
       price,
       network,
     },
@@ -111,7 +112,7 @@ export function withPayments({
   const getRoute: RouteConfig = {
     accepts: {
       scheme: DEFAULT_SCHEME,
-      payTo: payments.payTo,
+      payTo: payTo as any,
       price,
       network,
     },

@@ -1,20 +1,12 @@
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { payments, extractSenderDomain } from '@lucid-agents/payments';
-import { createAgentApp } from '../app';
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
-import { z } from 'zod';
-import type { Express, Request, Response } from 'express';
-import type {
-  PaymentsConfig,
-  PaymentPolicyGroup,
-} from '@lucid-agents/types/payments';
+import { extractSenderDomain } from '@lucid-agents/payments';
+import { describe, expect, it, beforeEach } from 'bun:test';
+import type { Response } from 'express';
+import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
 import type { PaymentTracker } from '@lucid-agents/payments';
 import { createPaymentTracker } from '@lucid-agents/payments';
 
 describe('Express Paywall - Incoming Payment Recording', () => {
-  let app: Express;
   let paymentTracker: PaymentTracker;
   const testPayments: PaymentsConfig = {
     payTo: '0xabc1230000000000000000000000000000000000',
@@ -42,45 +34,12 @@ describe('Express Paywall - Incoming Payment Recording', () => {
     ],
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     const storage = createInMemoryPaymentStorage();
     paymentTracker = createPaymentTracker(storage);
-
-    const agent = await createAgent({
-      name: 'express-paywall-test',
-      version: '1.0.0',
-      description: 'Test agent for paywall',
-    })
-      .use(http())
-      .use(payments({ config: testPayments }))
-      .build();
-
-    const { app: agentApp, addEntrypoint } = await createAgentApp(agent);
-
-    addEntrypoint({
-      key: 'test-endpoint',
-      description: 'Test endpoint',
-      input: z.object({ text: z.string() }),
-      output: z.object({ result: z.string() }),
-      price: '1000',
-      async handler({ input }) {
-        return {
-          output: { result: input.text },
-        };
-      },
-    });
-
-    app = agentApp;
   });
 
   it('records incoming payment when PAYMENT-RESPONSE header is present', async () => {
-    const mockReq = {
-      path: '/entrypoints/test-endpoint/invoke',
-      url: '/entrypoints/test-endpoint/invoke',
-      originalUrl: '/entrypoints/test-endpoint/invoke',
-      headers: {},
-    } as unknown as Request;
-
     let recordedGroups: string[] = [];
     let recordedScopes: string[] = [];
     let recordedAmounts: bigint[] = [];
