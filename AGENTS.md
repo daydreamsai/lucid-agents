@@ -368,9 +368,9 @@ type PaymentsRuntime = {
 │       │   └── adapters.ts      # Adapter definitions
 │       └── templates/           # Project templates
 │           ├── blank/           # Minimal agent
-│           ├── axllm/           # LLM-powered agent
-│           ├── axllm-flow/      # Multi-step workflows
-│           └── identity/        # Identity-enabled agent
+│           ├── identity/        # Identity-enabled agent
+│           ├── trading-data-agent/      # Trading data merchant
+│           └── trading-recommendation-agent/  # Trading shopper
 │
 ├── scripts/
 │   ├── build-packages.ts   # Build script

@@ -33,10 +33,7 @@ export {
 export {
   createX402Fetch,
   accountFromPrivateKey,
-  createX402LLM,
-  x402LLM,
   type CreateX402FetchOptions,
-  type CreateX402LLMOptions,
   type WrappedFetch,
   type X402Account,
 } from './x402';

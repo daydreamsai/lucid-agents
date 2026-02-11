@@ -32,7 +32,6 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ax-llm/ax": "catalog:",
     "@lucid-agents/types": "workspace:*",
     "pg": "^8.13.1",
     "viem": "catalog:",
