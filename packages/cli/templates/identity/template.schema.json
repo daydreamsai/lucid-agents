@@ -26,6 +26,100 @@
       "default": "agent.example.com",
       "examples": ["agent.example.com", "ai.mydomain.com"]
     },
+    "IDENTITY_INCLUDE_A2A": {
+      "type": "boolean",
+      "description": "Include A2A service in registration services[]",
+      "default": true
+    },
+    "IDENTITY_A2A_ENDPOINT": {
+      "type": "string",
+      "description": "A2A service endpoint",
+      "default": "https://agent.example.com/.well-known/agent-card.json"
+    },
+    "IDENTITY_A2A_VERSION": {
+      "type": "string",
+      "description": "A2A protocol version",
+      "default": "0.3.0"
+    },
+    "IDENTITY_INCLUDE_WEB": {
+      "type": "boolean",
+      "description": "Include web service in registration services[]",
+      "default": true
+    },
+    "IDENTITY_WEBSITE": {
+      "type": "string",
+      "description": "Website service endpoint",
+      "default": "https://agent.example.com/",
+      "format": "uri"
+    },
+    "IDENTITY_INCLUDE_OASF": {
+      "type": "boolean",
+      "description": "Include OASF service in registration services[]",
+      "default": false
+    },
+    "IDENTITY_OASF_ENDPOINT": {
+      "type": "string",
+      "description": "OASF service endpoint",
+      "default": "https://agent.example.com/.well-known/oasf-record.json"
+    },
+    "IDENTITY_OASF_VERSION": {
+      "type": "string",
+      "description": "OASF schema/version",
+      "default": "0.8.0"
+    },
+    "IDENTITY_OASF_AUTHORS_JSON": {
+      "type": "string",
+      "description": "JSON array string for OASF authors",
+      "default": "[\"ops@agent.example.com\"]",
+      "examples": ["[\"ops@agent.example.com\"]", "[]"]
+    },
+    "IDENTITY_OASF_SKILLS_JSON": {
+      "type": "string",
+      "description": "JSON array string for OASF skills",
+      "default": "[\"reasoning\"]",
+      "examples": ["[\"reasoning\",\"planning\"]", "[]"]
+    },
+    "IDENTITY_OASF_DOMAINS_JSON": {
+      "type": "string",
+      "description": "JSON array string for OASF domains",
+      "default": "[\"assistant\"]",
+      "examples": ["[\"finance\",\"support\"]", "[]"]
+    },
+    "IDENTITY_OASF_MODULES_JSON": {
+      "type": "string",
+      "description": "JSON array string for OASF module URIs",
+      "default": "[\"https://agent.example.com/modules/core\"]",
+      "examples": ["[\"https://agent.example.com/modules/core\"]", "[]"]
+    },
+    "IDENTITY_OASF_LOCATORS_JSON": {
+      "type": "string",
+      "description": "JSON array string for OASF locator URIs",
+      "default": "[\"https://agent.example.com/.well-known/oasf-record.json\"]",
+      "examples": [
+        "[\"https://agent.example.com/.well-known/oasf-record.json\"]",
+        "[]"
+      ]
+    },
+    "IDENTITY_INCLUDE_TWITTER": {
+      "type": "boolean",
+      "description": "Include Twitter service in registration services[]",
+      "default": false
+    },
+    "IDENTITY_TWITTER": {
+      "type": "string",
+      "description": "Twitter handle or URL for service endpoint",
+      "default": ""
+    },
+    "IDENTITY_INCLUDE_EMAIL": {
+      "type": "boolean",
+      "description": "Include email service in registration services[]",
+      "default": false
+    },
+    "IDENTITY_EMAIL": {
+      "type": "string",
+      "description": "Support email for service endpoint",
+      "default": ""
+    },
     "PAYMENTS_FACILITATOR_URL": {
       "type": "string",
       "description": "x402 facilitator endpoint URL for payment processing",
@@ -77,7 +171,11 @@
       "description": "Blockchain RPC endpoint URL for on-chain operations",
       "default": "https://eth.llamarpc.com",
       "format": "uri",
-      "examples": ["https://eth.llamarpc.com", "https://mainnet.base.org", "https://sepolia.base.org"]
+      "examples": [
+        "https://eth.llamarpc.com",
+        "https://mainnet.base.org",
+        "https://sepolia.base.org"
+      ]
     },
     "CHAIN_ID": {
       "type": "string",

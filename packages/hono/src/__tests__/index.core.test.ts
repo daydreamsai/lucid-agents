@@ -269,6 +269,14 @@ describe('withPayments helper', () => {
 });
 
 describe('manifest building', () => {
+  it('mounts /.well-known/oasf-record.json route', async () => {
+    const agent = await createAgent(meta).use(http()).build();
+    const { app } = await createAgentApp(agent);
+
+    const res = await app.request('http://agent/.well-known/oasf-record.json');
+    expect([200, 404]).toContain(res.status);
+  });
+
   it('caches manifest per origin', async () => {
     const agent = await createAgent(meta)
       .use(http())

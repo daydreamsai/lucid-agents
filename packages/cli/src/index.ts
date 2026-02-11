@@ -1250,14 +1250,17 @@ async function setupEnvironment(params: {
   const lines = [`AGENT_NAME=${agentName}`];
 
   for (const prompt of template.wizard?.prompts || []) {
-    if (!shouldAskWizardPrompt(prompt, wizardAnswers)) {
-      if (!wizardAnswers.has(prompt.key)) {
-        continue;
-      }
+    // Only write prompts that were active in the wizard flow.
+    // This prevents gated defaults from being emitted when their gate is false.
+    const shouldEmit =
+      wizardAnswers.has(prompt.key) ||
+      shouldAskWizardPrompt(prompt, wizardAnswers);
+    if (!shouldEmit) {
+      continue;
     }
 
-    // Check wizard answers first (includes CLI args in non-interactive mode)
-    // Fall back to default value if not present
+    // Check wizard answers first (includes CLI args in non-interactive mode),
+    // then fall back to default value.
     const answer = wizardAnswers.get(prompt.key);
     const value = answer !== undefined ? answer : prompt.defaultValue;
     // Convert to string, handling boolean false correctly

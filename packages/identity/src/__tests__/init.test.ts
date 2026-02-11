@@ -587,6 +587,38 @@ describe('createAgentIdentity', () => {
       'https://custom.example.com/feedback.json'
     );
   });
+
+  it('attaches generated registration when registration options are provided', async () => {
+    const result = await createAgentIdentity({
+      runtime: createMockRuntime('0x000000000000000000000000000000000000000e'),
+      domain: 'registration.example.com',
+      registryAddress: REGISTRY_ADDRESS,
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      autoRegister: true,
+      registration: {
+        name: 'Registration Agent',
+        website: 'https://registration.example.com',
+        twitter: '@lucidagents',
+        email: 'ops@registration.example.com',
+        selectedServices: ['web', 'twitter', 'email'],
+      },
+      env: {},
+    });
+
+    expect(result.registration).toBeDefined();
+    expect(result.registration?.name).toBe('Registration Agent');
+    expect(result.registration?.services?.find(s => s.name === 'web')).toEqual({
+      name: 'web',
+      endpoint: 'https://registration.example.com',
+    });
+    expect(
+      result.registration?.services?.find(s => s.name === 'twitter')?.endpoint
+    ).toBe('https://x.com/lucidagents');
+    expect(
+      result.registration?.services?.find(s => s.name === 'email')?.endpoint
+    ).toBe('ops@registration.example.com');
+  });
 });
 
 describe('registerAgent', () => {

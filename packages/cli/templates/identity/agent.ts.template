@@ -4,9 +4,92 @@ import { http } from "@lucid-agents/http";
 import { wallets } from "@lucid-agents/wallet";
 import { walletsFromEnv } from "@lucid-agents/wallet";
 import { identity, identityFromEnv } from "@lucid-agents/identity";
-import { createAgentIdentity, getTrustConfig, generateAgentMetadata } from "@lucid-agents/identity";
+import {
+  createAgentIdentity,
+  getTrustConfig,
+  generateAgentRegistration,
+  type AgentRegistrationOptions,
+} from "@lucid-agents/identity";
 
 {{TEMPLATE_PRE_SETUP}}
+const selectedServices = [
+  process.env.IDENTITY_INCLUDE_A2A === "true" ? "A2A" : undefined,
+  process.env.IDENTITY_INCLUDE_WEB === "true" ? "web" : undefined,
+  process.env.IDENTITY_INCLUDE_OASF === "true" ? "OASF" : undefined,
+  process.env.IDENTITY_INCLUDE_TWITTER === "true" ? "twitter" : undefined,
+  process.env.IDENTITY_INCLUDE_EMAIL === "true" ? "email" : undefined,
+].filter(Boolean) as NonNullable<AgentRegistrationOptions["selectedServices"]>;
+
+const parseRequiredJsonArray = (key: string, requireUri = false): string[] => {
+  const raw = process.env[key];
+  if (raw === undefined) {
+    throw new Error(
+      `[identity-template] Missing ${key}. Expected JSON array string (example: [])`
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `[identity-template] Invalid ${key}. Expected JSON array string (example: [])`
+    );
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `[identity-template] Invalid ${key}. Expected JSON array string (example: [])`
+    );
+  }
+
+  return parsed.map((value, index) => {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new Error(
+        `[identity-template] Invalid ${key}[${index}]. Expected non-empty string.`
+      );
+    }
+
+    const normalized = value.trim();
+    if (requireUri) {
+      try {
+        new URL(normalized);
+      } catch {
+        throw new Error(
+          `[identity-template] Invalid ${key}[${index}]. Expected valid URI string.`
+        );
+      }
+    }
+
+    return normalized;
+  });
+};
+
+const includeOASF = selectedServices.includes("OASF");
+const oasfConfig = includeOASF
+  ? {
+      endpoint: process.env.IDENTITY_OASF_ENDPOINT,
+      version: process.env.IDENTITY_OASF_VERSION,
+      authors: parseRequiredJsonArray("IDENTITY_OASF_AUTHORS_JSON"),
+      skills: parseRequiredJsonArray("IDENTITY_OASF_SKILLS_JSON"),
+      domains: parseRequiredJsonArray("IDENTITY_OASF_DOMAINS_JSON"),
+      modules: parseRequiredJsonArray("IDENTITY_OASF_MODULES_JSON", true),
+      locators: parseRequiredJsonArray("IDENTITY_OASF_LOCATORS_JSON", true),
+    }
+  : undefined;
+
+const registrationOptions: AgentRegistrationOptions = {
+  name: process.env.AGENT_NAME,
+  description: process.env.AGENT_DESCRIPTION,
+  website: process.env.IDENTITY_WEBSITE,
+  twitter: process.env.IDENTITY_TWITTER,
+  email: process.env.IDENTITY_EMAIL,
+  a2aEndpoint: process.env.IDENTITY_A2A_ENDPOINT,
+  a2aVersion: process.env.IDENTITY_A2A_VERSION,
+  oasf: oasfConfig,
+  selectedServices: selectedServices.length > 0 ? selectedServices : undefined,
+};
+
 const agent = await createAgent({
   name: process.env.AGENT_NAME ?? "my-agent",
   version: process.env.AGENT_VERSION ?? "0.1.0",
@@ -17,7 +100,8 @@ const agent = await createAgent({
   .use(identity({
     config: {
       ...identityFromEnv(),
-      autoRegister: process.env.REGISTER_IDENTITY === "true",
+      autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
+      registration: registrationOptions,
     }
   }))
   .build();
@@ -29,37 +113,33 @@ const agent = await createAgent({
 const identityResult = await createAgentIdentity({
   runtime: agent,
   domain: process.env.AGENT_DOMAIN,
-  autoRegister: process.env.REGISTER_IDENTITY === "true",
+  autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
   rpcUrl: process.env.RPC_URL,
   chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID) : undefined,
+  registration: registrationOptions,
 });
 
 if (identityResult.didRegister) {
   console.log("Registered agent on-chain!");
   console.log("Transaction:", identityResult.transactionHash);
 
-  // IMPORTANT: After registration, you MUST host the ERC-8004 metadata at the tokenURI
-  // The tokenURI points to: https://{domain}/.well-known/agent-metadata.json
-  // This metadata is what gets stored on-chain and allows others to verify your agent's identity
-  const metadata = generateAgentMetadata(identityResult, {
-    name: process.env.AGENT_NAME,
-    description: process.env.AGENT_DESCRIPTION,
-  });
+  // IMPORTANT: After registration, you MUST host the ERC-8004 registration file at agentURI
+  const registration = generateAgentRegistration(identityResult, registrationOptions);
 
-  console.log("\n⚠️  IMPORTANT: Host this metadata at:");
-  console.log(`   https://${identityResult.domain}/.well-known/agent-metadata.json\n`);
-  console.log(JSON.stringify(metadata, null, 2));
-  console.log("\nWhy? The ERC-8004 registry stores this URL as the tokenURI.");
-  console.log("Anyone querying the registry will fetch this metadata to verify your agent's identity.");
+  console.log("\nIMPORTANT: Host this registration file at:");
+  console.log(`   https://${identityResult.domain}/.well-known/agent-registration.json\n`);
+  console.log(JSON.stringify(registration, null, 2));
+  console.log("\nWhy? The ERC-8004 registry stores this URL as the agentURI.");
+  console.log("Anyone querying the registry will fetch this file to verify your agent's identity.");
   console.log("Without hosting this file, your agent's on-chain identity cannot be verified.\n");
 } else if (identityResult.trust) {
   console.log("Found existing registration");
   console.log("Agent ID:", identityResult.record?.agentId);
 
-  // Even if already registered, verify metadata is hosted
-  if (identityResult.record?.tokenURI) {
-    console.log("Token URI:", identityResult.record.tokenURI);
-    console.log("Ensure metadata is hosted at the tokenURI location.");
+  // Even if already registered, verify registration file is hosted
+  if (identityResult.record?.agentURI) {
+    console.log("Agent URI:", identityResult.record.agentURI);
+    console.log("Ensure registration file is hosted at the agentURI location.");
   }
 }
 
@@ -149,4 +229,3 @@ if (identityResult.clients?.validation && identityResult.record?.agentId) {
 export const identityClient = identityResult.clients?.identity;
 export const reputationClient = identityResult.clients?.reputation;
 export const validationClient = identityResult.clients?.validation;
-

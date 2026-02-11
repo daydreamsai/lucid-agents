@@ -12,11 +12,13 @@ export type IdentityConfig = {
   autoRegister?: boolean;
   rpcUrl?: string;
   chainId?: number;
+  registration?: CreateAgentIdentityOptions['registration'];
 };
 
-export function identity(options?: {
-  config?: IdentityConfig;
-}): Extension<{ trust?: TrustConfig }> {
+export function identity(options?: { config?: IdentityConfig }): Extension<{
+  trust?: TrustConfig;
+  identity?: { registration?: CreateAgentIdentityOptions['registration'] };
+}> {
   const config = options?.config;
   let trustConfig: TrustConfig | undefined = config?.trust;
   let identityResult:
@@ -25,8 +27,15 @@ export function identity(options?: {
 
   return {
     name: 'identity',
-    build(): { trust?: TrustConfig } {
-      return { trust: trustConfig };
+    build(): {
+      trust?: TrustConfig;
+      identity?: { registration?: CreateAgentIdentityOptions['registration'] };
+    } {
+      const registration = config?.registration;
+      return {
+        trust: trustConfig,
+        identity: registration ? { registration } : undefined,
+      };
     },
     async onBuild(runtime: AgentRuntime): Promise<void> {
       // If trust config is already provided, no need to create identity
@@ -42,6 +51,7 @@ export function identity(options?: {
           autoRegister: config.autoRegister,
           rpcUrl: config.rpcUrl,
           chainId: config.chainId,
+          registration: config.registration,
         };
 
         identityResult = await createAgentIdentity(identityOptions);
