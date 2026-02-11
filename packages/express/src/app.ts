@@ -91,6 +91,25 @@ export async function createAgentApp(
     '/.well-known/agent-card.json',
     createRouteHandler(runtime.handlers.manifest)
   );
+  app.get(
+    '/.well-known/oasf-record.json',
+    createRouteHandler(
+      runtime.handlers.oasf ??
+        (async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: 'not_found',
+                message: 'OASF record is not enabled',
+              },
+            }),
+            {
+              status: 404,
+              headers: { 'content-type': 'application/json' },
+            }
+          ))
+    )
+  );
   app.get('/favicon.svg', createRouteHandler(runtime.handlers.favicon));
 
   if (runtime.handlers.landing) {

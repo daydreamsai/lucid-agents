@@ -19,6 +19,11 @@ import type {
   AgentHttpHandlers,
   StreamResult,
 } from '@lucid-agents/types/http';
+import {
+  DEFAULT_OASF_RECORD_PATH,
+  DEFAULT_OASF_VERSION,
+  OASF_STRICT_MODE_ERROR,
+} from '@lucid-agents/types/identity';
 
 import { ZodValidationError } from '@lucid-agents/types/core';
 import { invoke, invokeHandler } from './invoke';
@@ -51,6 +56,147 @@ const resolveFaviconSvg = (icon?: string): string => {
 
   return defaultFaviconSvg;
 };
+
+type OASFConfig = {
+  endpoint?: string;
+  version: string;
+  authors: string[];
+  skills: string[];
+  domains: string[];
+  modules: string[];
+  locators: string[];
+};
+
+type IdentityRegistrationConfig = {
+  selectedServices?: string[];
+  oasf?:
+    | string
+    | {
+        endpoint?: string;
+        version?: string;
+        authors?: string[];
+        skills?: string[];
+        domains?: string[];
+        modules?: string[];
+        locators?: string[];
+      };
+  oasfVersion?: string;
+};
+
+type IdentityRuntimeSlice = {
+  identity?: {
+    registration?: IdentityRegistrationConfig;
+  };
+};
+
+function normalizeString(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function assertUri(value: string, key: string): void {
+  try {
+    new URL(value);
+  } catch {
+    throw new Error(
+      `[agent-kit-http] Invalid ${key}. Expected a valid URI string.`
+    );
+  }
+}
+
+function parseRequiredStringArray(
+  value: string[] | undefined,
+  key: string,
+  requireUri = false
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `[agent-kit-http] Missing ${key}. OASF strict mode requires JSON-array values.`
+    );
+  }
+
+  return value.map((entry, index) => {
+    if (typeof entry !== 'string' || !entry.trim()) {
+      throw new Error(
+        `[agent-kit-http] Invalid ${key}[${index}]. Expected a non-empty string.`
+      );
+    }
+
+    const normalized = entry.trim();
+    if (requireUri) {
+      assertUri(normalized, `${key}[${index}]`);
+    }
+
+    return normalized;
+  });
+}
+
+function isOASFSelected(selectedServices: string[] | undefined): boolean {
+  if (!Array.isArray(selectedServices)) {
+    return false;
+  }
+  return selectedServices.some(
+    service => typeof service === 'string' && service.toLowerCase() === 'oasf'
+  );
+}
+
+function resolveOASFConfig(
+  registration: IdentityRegistrationConfig | undefined
+): { enabled: false } | ({ enabled: true } & OASFConfig) {
+  const selected = isOASFSelected(registration?.selectedServices);
+  const rawOASF = registration?.oasf;
+  const enabled = selected || rawOASF !== undefined;
+
+  if (!enabled) {
+    return { enabled: false };
+  }
+
+  if (typeof rawOASF === 'string') {
+    throw new Error(`[agent-kit-http] ${OASF_STRICT_MODE_ERROR}`);
+  }
+
+  if (rawOASF === undefined) {
+    throw new Error(
+      '[agent-kit-http] OASF selected but no registration.oasf config provided.'
+    );
+  }
+
+  const endpoint = normalizeString(rawOASF?.endpoint);
+  if (endpoint) {
+    assertUri(endpoint, 'registration.oasf.endpoint');
+  }
+
+  return {
+    enabled: true,
+    endpoint,
+    version:
+      normalizeString(rawOASF?.version) ??
+      normalizeString(registration?.oasfVersion) ??
+      DEFAULT_OASF_VERSION,
+    authors: parseRequiredStringArray(
+      rawOASF?.authors,
+      'registration.oasf.authors'
+    ),
+    skills: parseRequiredStringArray(
+      rawOASF?.skills,
+      'registration.oasf.skills'
+    ),
+    domains: parseRequiredStringArray(
+      rawOASF?.domains,
+      'registration.oasf.domains'
+    ),
+    modules: parseRequiredStringArray(
+      rawOASF?.modules,
+      'registration.oasf.modules',
+      true
+    ),
+    locators: parseRequiredStringArray(
+      rawOASF?.locators,
+      'registration.oasf.locators',
+      true
+    ),
+  };
+}
 
 export function http(
   options?: HttpExtensionOptions
@@ -133,6 +279,10 @@ export function http(
       ].join('\n');
 
       const activePayments = runtime.payments?.config;
+      const identityRegistration = (
+        runtime as AgentRuntime & IdentityRuntimeSlice
+      ).identity?.registration;
+      const oasfConfig = resolveOASFConfig(identityRegistration);
 
       const actualHandlers: AgentHttpHandlers = {
         health: async () => {
@@ -144,6 +294,48 @@ export function http(
         manifest: async req => {
           const origin = normalizeOrigin(req);
           return jsonResponse(runtime.manifest.build(origin));
+        },
+        oasf: async req => {
+          if (!oasfConfig.enabled) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'not_found',
+                  message: 'OASF record is not enabled',
+                },
+              },
+              { status: 404 }
+            );
+          }
+
+          const origin = normalizeOrigin(req);
+          const endpoint =
+            oasfConfig.endpoint ?? `${origin}${DEFAULT_OASF_RECORD_PATH}`;
+          const entrypoints = runtime.entrypoints.snapshot();
+
+          return jsonResponse({
+            type: 'https://docs.agntcy.org/oasf/oasf-server/',
+            name: meta.name,
+            description: meta.description,
+            version: oasfConfig.version,
+            endpoint,
+            authors: oasfConfig.authors,
+            skills:
+              oasfConfig.skills.length > 0
+                ? oasfConfig.skills
+                : entrypoints.map(entry => entry.key),
+            domains: oasfConfig.domains,
+            modules: oasfConfig.modules,
+            locators:
+              oasfConfig.locators.length > 0 ? oasfConfig.locators : [endpoint],
+            entrypoints: entrypoints.map(entry => ({
+              key: entry.key,
+              description: entry.description,
+              streaming: Boolean(entry.stream ?? entry.streaming),
+              input: entry.input,
+              output: entry.output,
+            })),
+          });
         },
         landing: landingEnabled
           ? async req => {

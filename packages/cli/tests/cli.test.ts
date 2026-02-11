@@ -662,6 +662,22 @@ describe('create-agent-kit CLI', () => {
         '--RPC_URL=https://sepolia.base.org',
         '--CHAIN_ID=84532',
         '--IDENTITY_AUTO_REGISTER=false',
+        '--IDENTITY_INCLUDE_A2A=true',
+        '--IDENTITY_A2A_ENDPOINT=https://agent.example.com/.well-known/agent-card.json',
+        '--IDENTITY_INCLUDE_WEB=true',
+        '--IDENTITY_WEBSITE=https://agent.example.com/',
+        '--IDENTITY_INCLUDE_OASF=true',
+        '--IDENTITY_OASF_ENDPOINT=ipfs://bafy-example',
+        '--IDENTITY_OASF_VERSION=0.8',
+        '--IDENTITY_OASF_AUTHORS_JSON=[\"ops@agent.example.com\"]',
+        '--IDENTITY_OASF_SKILLS_JSON=[\"reasoning\"]',
+        '--IDENTITY_OASF_DOMAINS_JSON=[\"finance\"]',
+        '--IDENTITY_OASF_MODULES_JSON=[\"https://agent.example.com/modules/core\"]',
+        '--IDENTITY_OASF_LOCATORS_JSON=[\"https://agent.example.com/.well-known/oasf-record.json\"]',
+        '--IDENTITY_INCLUDE_TWITTER=true',
+        '--IDENTITY_TWITTER=@lucidagents',
+        '--IDENTITY_INCLUDE_EMAIL=true',
+        '--IDENTITY_EMAIL=ops@agent.example.com',
       ],
       {
         cwd,
@@ -676,6 +692,55 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain('RPC_URL=https://sepolia.base.org');
     expect(envFile).toContain('CHAIN_ID=84532');
     expect(envFile).toContain('IDENTITY_AUTO_REGISTER=false');
+    expect(envFile).toContain('IDENTITY_INCLUDE_A2A=true');
+    expect(envFile).toContain(
+      'IDENTITY_A2A_ENDPOINT=https://agent.example.com/.well-known/agent-card.json'
+    );
+    expect(envFile).toContain('IDENTITY_INCLUDE_WEB=true');
+    expect(envFile).toContain('IDENTITY_WEBSITE=https://agent.example.com/');
+    expect(envFile).toContain('IDENTITY_INCLUDE_OASF=true');
+    expect(envFile).toContain('IDENTITY_OASF_ENDPOINT=ipfs://bafy-example');
+    expect(envFile).toContain('IDENTITY_OASF_VERSION=0.8');
+    expect(envFile).toContain(
+      'IDENTITY_OASF_AUTHORS_JSON=["ops@agent.example.com"]'
+    );
+    expect(envFile).toContain('IDENTITY_OASF_SKILLS_JSON=["reasoning"]');
+    expect(envFile).toContain('IDENTITY_OASF_DOMAINS_JSON=["finance"]');
+    expect(envFile).toContain(
+      'IDENTITY_OASF_MODULES_JSON=["https://agent.example.com/modules/core"]'
+    );
+    expect(envFile).toContain(
+      'IDENTITY_OASF_LOCATORS_JSON=["https://agent.example.com/.well-known/oasf-record.json"]'
+    );
+    expect(envFile).toContain('IDENTITY_INCLUDE_TWITTER=true');
+    expect(envFile).toContain('IDENTITY_TWITTER=@lucidagents');
+    expect(envFile).toContain('IDENTITY_INCLUDE_EMAIL=true');
+    expect(envFile).toContain('IDENTITY_EMAIL=ops@agent.example.com');
+  });
+
+  it('omits gated OASF fields when OASF is disabled', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    await runCli(
+      ['identity-default-agent', '--template=identity', '--non-interactive'],
+      {
+        cwd,
+        logger,
+      }
+    );
+
+    const projectDir = join(cwd, 'identity-default-agent');
+    const envFile = await readFile(join(projectDir, '.env'), 'utf8');
+
+    expect(envFile).toContain('IDENTITY_INCLUDE_OASF=false');
+    expect(envFile).not.toContain('IDENTITY_OASF_ENDPOINT=');
+    expect(envFile).not.toContain('IDENTITY_OASF_VERSION=');
+    expect(envFile).not.toContain('IDENTITY_OASF_AUTHORS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_SKILLS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_DOMAINS_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_MODULES_JSON=');
+    expect(envFile).not.toContain('IDENTITY_OASF_LOCATORS_JSON=');
   });
 
   it('AGENTS.md and template.schema.json are copied to generated project', async () => {

@@ -1,14 +1,11 @@
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { payments, extractSenderDomain } from '@lucid-agents/payments';
+import { extractSenderDomain } from '@lucid-agents/payments';
 import { createAgentApp } from '../app';
 import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
 import { z } from 'zod';
 import type { Express, Request, Response } from 'express';
-import type {
-  PaymentsConfig,
-  PaymentPolicyGroup,
-} from '@lucid-agents/types/payments';
+import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { createInMemoryPaymentStorage } from '@lucid-agents/payments';
 import type { PaymentTracker } from '@lucid-agents/payments';
 import { createPaymentTracker } from '@lucid-agents/payments';
@@ -52,7 +49,6 @@ describe('Express Paywall - Incoming Payment Recording', () => {
       description: 'Test agent for paywall',
     })
       .use(http())
-      .use(payments({ config: testPayments }))
       .build();
 
     const { app: agentApp, addEntrypoint } = await createAgentApp(agent);
