@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@lucid-agents/root",
@@ -101,7 +102,7 @@
     },
     "packages/api-sdk": {
       "name": "@lucid-agents/api-sdk",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "dependencies": {
         "@hey-api/client-fetch": "^0.10.0",
       },
@@ -117,9 +118,22 @@
         "@tanstack/react-query",
       ],
     },
+    "packages/awal": {
+      "name": "@lucid-agents/awal",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+        "commander": "^14.0.1",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -134,7 +148,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -169,7 +183,7 @@
     },
     "packages/examples": {
       "name": "@lucid-agents/examples",
-      "version": "0.3.4",
+      "version": "0.3.5",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
@@ -200,7 +214,7 @@
     },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -220,7 +234,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.9.4",
+      "version": "0.9.5",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -257,7 +271,7 @@
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -272,7 +286,7 @@
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "2.4.2",
+      "version": "2.4.3",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -307,7 +321,7 @@
     },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -689,6 +703,8 @@
     "@lucid-agents/ap2": ["@lucid-agents/ap2@workspace:packages/ap2"],
 
     "@lucid-agents/api-sdk": ["@lucid-agents/api-sdk@workspace:packages/api-sdk"],
+
+    "@lucid-agents/awal": ["@lucid-agents/awal@workspace:packages/awal"],
 
     "@lucid-agents/cli": ["@lucid-agents/cli@workspace:packages/cli"],
 

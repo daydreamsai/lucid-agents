@@ -92,6 +92,7 @@ async function buildPackages() {
     '@lucid-agents/cli', // No runtime dependencies; generates code referencing adapters
 
     // Layer 1: Extensions (only depend on @lucid-agents/types)
+    '@lucid-agents/awal',
     '@lucid-agents/wallet',
     '@lucid-agents/payments',
     '@lucid-agents/analytics',

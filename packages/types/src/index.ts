@@ -3,6 +3,7 @@ export type { BuildContext } from './core';
 export type { Extension } from './core';
 export * from './a2a';
 export * from './analytics';
+export * from './awal';
 export * from './ap2';
 export * from './http';
 export * from './identity';
