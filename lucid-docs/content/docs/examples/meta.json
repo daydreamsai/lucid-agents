@@ -7,6 +7,7 @@
     "a2a",
     "---Payments---",
     "calling-paid-endpoints",
+    "stripe-destination-mode",
     "payment-policies",
     "scheduler",
     "---Trust---",

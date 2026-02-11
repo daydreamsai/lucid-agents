@@ -39,10 +39,14 @@ function extractPayToFromPaymentHeader(
   return typeof to === 'string' && to.length > 0 ? to : undefined;
 }
 
-function isStripeMode(
-  payments: PaymentsConfig
-): payments is PaymentsConfig & { stripe: NonNullable<PaymentsConfig['stripe']> } {
-  return 'stripe' in payments && typeof payments.stripe === 'object';
+function isStripeMode(payments: PaymentsConfig): payments is PaymentsConfig & {
+  stripe: NonNullable<PaymentsConfig['stripe']>;
+} {
+  return (
+    'stripe' in payments &&
+    typeof payments.stripe === 'object' &&
+    payments.stripe !== null
+  );
 }
 
 export function resolvePayTo(
@@ -69,4 +73,3 @@ export function resolvePayTo(
     }
   };
 }
-

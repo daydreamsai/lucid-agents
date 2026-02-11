@@ -14,12 +14,13 @@ export function paymentsFromEnv(
 ): PaymentsConfig {
   const facilitatorUrl =
     configOverrides?.facilitatorUrl ??
-    (process.env.FACILITATOR_URL ??
-      process.env.PAYMENTS_FACILITATOR_URL) ??
+    process.env.FACILITATOR_URL ??
+    process.env.PAYMENTS_FACILITATOR_URL ??
     undefined;
   const network =
     configOverrides?.network ??
-    (process.env.NETWORK ?? process.env.PAYMENTS_NETWORK) ??
+    process.env.NETWORK ??
+    process.env.PAYMENTS_NETWORK ??
     undefined;
   const facilitatorAuth =
     configOverrides?.facilitatorAuth ??
@@ -38,16 +39,25 @@ export function paymentsFromEnv(
 
   const stripeConfig = (configOverrides as { stripe?: StripePaymentsConfig })
     ?.stripe;
-  const stripeSecretKey = stripeConfig?.secretKey ?? process.env.STRIPE_SECRET_KEY;
-  const destinationMode = process.env.PAYMENTS_DESTINATION?.trim().toLowerCase();
+  const stripeSecretKey =
+    stripeConfig?.secretKey ?? process.env.STRIPE_SECRET_KEY;
+  const destinationMode =
+    process.env.PAYMENTS_DESTINATION?.trim().toLowerCase();
   const useStripeMode = Boolean(stripeConfig) || destinationMode === 'stripe';
 
   if (useStripeMode) {
+    const resolvedStripeSecretKey = stripeSecretKey?.trim();
+    if (!resolvedStripeSecretKey) {
+      throw new Error(
+        'Missing Stripe secret: set STRIPE_SECRET_KEY or override'
+      );
+    }
+
     return {
       ...baseConfig,
       stripe: {
         ...stripeConfig,
-        secretKey: stripeSecretKey ?? '',
+        secretKey: resolvedStripeSecretKey,
       },
     };
   }
@@ -55,8 +65,13 @@ export function paymentsFromEnv(
   return {
     ...baseConfig,
     payTo:
-      (configOverrides as { payTo?: PaymentsConfig extends { payTo: infer T } ? T : never })
-        ?.payTo ?? ((process.env.PAYMENTS_RECEIVABLE_ADDRESS as any) ?? undefined),
+      (
+        configOverrides as {
+          payTo?: PaymentsConfig extends { payTo: infer T } ? T : never;
+        }
+      )?.payTo ??
+      (process.env.PAYMENTS_RECEIVABLE_ADDRESS as any) ??
+      undefined,
   } as PaymentsConfig;
 }
 
@@ -73,13 +88,13 @@ function normalizeBearerToken(token?: string | null): string | undefined {
   return `Bearer ${trimmed}`;
 }
 
-export function createFacilitatorAuthHeaders(
-  token?: string | null
-): {
-  verify: Record<string, string>;
-  settle: Record<string, string>;
-  supported: Record<string, string>;
-} | undefined {
+export function createFacilitatorAuthHeaders(token?: string | null):
+  | {
+      verify: Record<string, string>;
+      settle: Record<string, string>;
+      supported: Record<string, string>;
+    }
+  | undefined {
   const authorization = normalizeBearerToken(token);
   if (!authorization) {
     return undefined;
@@ -100,7 +115,9 @@ export type PaymentRequiredHeaderDetails = {
   x402Version?: number;
 };
 
-function parseHeaderJson(raw: string): PaymentRequiredHeaderDetails | undefined {
+function parseHeaderJson(
+  raw: string
+): PaymentRequiredHeaderDetails | undefined {
   try {
     return JSON.parse(raw) as PaymentRequiredHeaderDetails;
   } catch {

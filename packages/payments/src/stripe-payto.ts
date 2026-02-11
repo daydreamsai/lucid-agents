@@ -21,6 +21,14 @@ type StripePaymentIntentResponse = {
   };
 };
 
+/**
+ * Parses payment amounts to USDC base units (6 decimals).
+ *
+ * Convention:
+ * - `string` values are interpreted as USD decimals (e.g. "1.23" => 1_230_000).
+ * - `number` values are treated as already-normalized base units for backwards
+ *   compatibility with internal callers that may pass precomputed amounts.
+ */
 function parseBaseUnits(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
     return Math.floor(value);
@@ -30,14 +38,11 @@ function parseBaseUnits(value: unknown): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
 
-  if (/^\d+$/.test(trimmed)) {
-    const asInt = Number.parseInt(trimmed, 10);
-    return Number.isFinite(asInt) && asInt > 0 ? asInt : undefined;
-  }
+  const normalized = trimmed.replace(/[$,\s]/g, '');
+  if (!normalized || normalized === '.') return undefined;
+  if (!/^\d*\.?\d+$/u.test(normalized)) return undefined;
 
-  const numeric = trimmed.replace(/[^0-9.]/g, '');
-  if (!numeric || numeric === '.') return undefined;
-  const asUsd = Number.parseFloat(numeric);
+  const asUsd = Number.parseFloat(normalized);
   if (!Number.isFinite(asUsd) || asUsd <= 0) return undefined;
   return Math.floor(asUsd * 1_000_000);
 }
@@ -56,8 +61,8 @@ function toCentsFromBaseUnits(amountBaseUnits: number): number {
 
 function readBaseDepositAddress(payload: StripePaymentIntentResponse): string {
   const address =
-    payload.next_action?.crypto_collect_deposit_details?.deposit_addresses
-      ?.base?.address;
+    payload.next_action?.crypto_collect_deposit_details?.deposit_addresses?.base
+      ?.address;
 
   if (!address || typeof address !== 'string') {
     throw new Error(
@@ -74,7 +79,9 @@ export async function createStripePayToAddress(
 ): Promise<string> {
   const secretKey = stripe.secretKey?.trim();
   if (!secretKey) {
-    throw new Error('STRIPE_SECRET_KEY is required for Stripe payTo resolution');
+    throw new Error(
+      'STRIPE_SECRET_KEY is required for Stripe payTo resolution'
+    );
   }
 
   const amountBaseUnits = resolveAmountBaseUnits(context);
@@ -123,4 +130,3 @@ export async function createStripePayToAddress(
 
   return readBaseDepositAddress(payload);
 }
-

@@ -37,6 +37,18 @@ describe('resolvePayTo', () => {
     expect(typeof resolved).toBe('function');
   });
 
+  it('does not treat null stripe as stripe mode', () => {
+    const config = {
+      payTo: STATIC_ADDRESS,
+      stripe: null,
+      facilitatorUrl: 'https://facilitator.test',
+      network: 'eip155:84532',
+    } as unknown as PaymentsConfig;
+
+    const resolved = resolvePayTo(config);
+    expect(resolved).toBe(STATIC_ADDRESS);
+  });
+
   it('uses payment header destination when available', async () => {
     const config: PaymentsConfig = {
       stripe: { secretKey: 'sk_test_123' },

@@ -95,6 +95,16 @@ describe('paymentsFromEnv', () => {
     expect('payTo' in config).toBe(false);
   });
 
+  it('throws when stripe mode is requested without stripe secret', () => {
+    process.env.PAYMENTS_DESTINATION = 'stripe';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.NETWORK = 'eip155:8453';
+
+    expect(() => paymentsFromEnv()).toThrow(
+      'Missing Stripe secret: set STRIPE_SECRET_KEY or override'
+    );
+  });
+
   it('keeps static mode when only STRIPE_SECRET_KEY is set', () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_123';
     process.env.PAYMENTS_RECEIVABLE_ADDRESS =
