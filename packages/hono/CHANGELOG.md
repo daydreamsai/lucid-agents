@@ -1,5 +1,12 @@
 # @lucid-agents/hono
 
+## 0.9.5
+
+### Patch Changes
+
+- @lucid-agents/core@2.4.3
+- @lucid-agents/payments@2.4.3
+
 ## 0.9.4
 
 ### Patch Changes
