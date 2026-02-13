@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@lucid-agents/root",
@@ -116,6 +117,19 @@
       "optionalPeers": [
         "@tanstack/react-query",
       ],
+    },
+    "packages/awal": {
+      "name": "@lucid-agents/awal",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+        "commander": "^14.0.1",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
@@ -689,6 +703,8 @@
     "@lucid-agents/ap2": ["@lucid-agents/ap2@workspace:packages/ap2"],
 
     "@lucid-agents/api-sdk": ["@lucid-agents/api-sdk@workspace:packages/api-sdk"],
+
+    "@lucid-agents/awal": ["@lucid-agents/awal@workspace:packages/awal"],
 
     "@lucid-agents/cli": ["@lucid-agents/cli@workspace:packages/cli"],
 

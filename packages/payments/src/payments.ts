@@ -6,6 +6,7 @@ import type {
 } from '@lucid-agents/types/core';
 import type { EntrypointPrice } from '@lucid-agents/types/payments';
 import type {
+  OutgoingPaymentRuntimeConfig,
   PaymentsConfig,
   PaymentRequirement,
   RuntimePaymentRequirement,
@@ -234,7 +235,8 @@ export function createPaymentsRuntime(
   customStorageFactory?: (
     storageConfig?: PaymentStorageConfig,
     agentId?: string
-  ) => PaymentStorage
+  ) => PaymentStorage,
+  runtimeConfig?: OutgoingPaymentRuntimeConfig
 ): PaymentsRuntime | undefined {
   const config: PaymentsConfig | undefined =
     paymentsOption === false ? undefined : paymentsOption;
@@ -316,6 +318,8 @@ export function createPaymentsRuntime(
       const paymentContext = await createRuntimePaymentContext({
         runtime,
         network,
+        outgoingBackend: runtimeConfig?.outgoingBackend,
+        fallbackToSigner: runtimeConfig?.fallbackToSigner,
       });
       return paymentContext.fetchWithPayment as
         | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)

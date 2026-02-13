@@ -41,6 +41,11 @@
       "import": "./dist/analytics/index.js",
       "default": "./dist/analytics/index.js"
     },
+    "./awal": {
+      "types": "./dist/awal/index.d.ts",
+      "import": "./dist/awal/index.js",
+      "default": "./dist/awal/index.js"
+    },
     "./payments": {
       "types": "./dist/payments/index.d.ts",
       "import": "./dist/payments/index.js",

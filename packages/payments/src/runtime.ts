@@ -1,4 +1,5 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
+import type { OutgoingPaymentBackend } from '@lucid-agents/types/payments';
 import type { WalletConnector } from '@lucid-agents/types/wallets';
 import { privateKeyToAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
@@ -63,6 +64,14 @@ export type RuntimePaymentOptions = {
    * Logger used for non-fatal warnings.
    */
   logger?: RuntimePaymentLogger;
+  /**
+   * Optional backend selection for outgoing paid calls.
+   */
+  outgoingBackend?: OutgoingPaymentBackend;
+  /**
+   * If true, fallback to wallet-signer when awal backend is unavailable.
+   */
+  fallbackToSigner?: boolean;
 };
 
 export type RuntimePaymentContext = {
@@ -193,6 +202,49 @@ function resolveMaxPaymentBaseUnits(
     return scaled > 0 ? BigInt(scaled) : undefined;
   }
   return undefined;
+}
+
+type OutgoingBackendType = 'wallet-signer' | 'awal';
+
+function resolveOutgoingBackend(
+  options: RuntimePaymentOptions
+): OutgoingBackendType {
+  if (options.outgoingBackend?.type) {
+    return options.outgoingBackend.type;
+  }
+
+  if (options.runtime?.awal) {
+    return 'awal';
+  }
+
+  return 'wallet-signer';
+}
+
+function resolvePolicyWrappedFetch(
+  baseFetch: FetchLike,
+  runtime: AgentRuntime
+): FetchLike {
+  const policyGroups = runtime.payments?.policyGroups;
+  const paymentTracker = runtime.payments?.paymentTracker as
+    | PaymentTracker
+    | undefined;
+  const rateLimiter = runtime.payments?.rateLimiter as RateLimiter | undefined;
+
+  if (
+    policyGroups &&
+    policyGroups.length > 0 &&
+    paymentTracker &&
+    rateLimiter
+  ) {
+    return wrapBaseFetchWithPolicy(
+      baseFetch,
+      policyGroups,
+      paymentTracker,
+      rateLimiter
+    );
+  }
+
+  return baseFetch;
 }
 
 const normalizeAddressOrNull = (
@@ -402,6 +454,61 @@ export async function createRuntimePaymentContext(
 
   const runtime = options.runtime;
 
+  const outgoingBackend = resolveOutgoingBackend(options);
+  if (outgoingBackend === 'awal') {
+    if (!runtime.awal) {
+      if (!options.fallbackToSigner) {
+        logWarning(
+          options.logger,
+          '[agent-kit-payments] Outgoing backend set to awal but runtime.awal is not configured'
+        );
+        return {
+          fetchWithPayment: null,
+          signer: null,
+          walletAddress: null,
+          chainId: options.chainId ?? inferChainId(options.network) ?? null,
+        };
+      }
+
+      logWarning(
+        options.logger,
+        '[agent-kit-payments] runtime.awal unavailable; falling back to wallet-signer backend'
+      );
+    } else {
+      const fetchWithPolicy = resolvePolicyWrappedFetch(baseFetch, runtime);
+      const fetchWithAwal = attachPreconnect(async (input, init) => {
+        const request = new Request(input, init);
+        const unpaidResponse = await fetchWithPolicy(request.clone());
+
+        if (
+          unpaidResponse.status !== 402 ||
+          !unpaidResponse.headers.get('PAYMENT-REQUIRED')
+        ) {
+          return unpaidResponse;
+        }
+
+        const method = request.method.toUpperCase();
+        const body =
+          method === 'GET' || method === 'HEAD'
+            ? undefined
+            : await request.clone().arrayBuffer();
+
+        return runtime.awal.payX402Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body,
+        });
+      }, baseFetch);
+
+      return {
+        fetchWithPayment: fetchWithAwal,
+        signer: null,
+        walletAddress: null,
+        chainId: options.chainId ?? inferChainId(options.network) ?? null,
+      };
+    }
+  }
+
   if (!runtime.wallets?.agent) {
     logWarning(
       options.logger,
@@ -504,29 +611,7 @@ export async function createRuntimePaymentContext(
   }
 
   try {
-    // Wrap base fetch with policy checking if policies are configured
-    let fetchWithPolicy = baseFetch;
-    const policyGroups = runtime.payments?.policyGroups;
-    const paymentTracker = runtime.payments?.paymentTracker as
-      | PaymentTracker
-      | undefined;
-    const rateLimiter = runtime.payments?.rateLimiter as
-      | RateLimiter
-      | undefined;
-
-    if (
-      policyGroups &&
-      policyGroups.length > 0 &&
-      paymentTracker &&
-      rateLimiter
-    ) {
-      fetchWithPolicy = wrapBaseFetchWithPolicy(
-        baseFetch,
-        policyGroups,
-        paymentTracker,
-        rateLimiter
-      );
-    }
+    const fetchWithPolicy = resolvePolicyWrappedFetch(baseFetch, runtime);
 
     // Create x402 client and register the network
     const client = new x402Client();

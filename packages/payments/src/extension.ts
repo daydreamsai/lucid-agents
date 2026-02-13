@@ -6,6 +6,7 @@ import type {
 } from '@lucid-agents/types/core';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
 import type {
+  OutgoingPaymentBackend,
   PaymentsConfig,
   PaymentsRuntime,
 } from '@lucid-agents/types/payments';
@@ -26,6 +27,8 @@ export function payments(options?: {
   policies?: string;
   agentId?: string;
   storageFactory?: PaymentStorageFactory;
+  outgoingBackend?: OutgoingPaymentBackend;
+  fallbackToSigner?: boolean;
 }): Extension<{ payments?: PaymentsRuntime }> {
   let paymentsRuntime: PaymentsRuntime | undefined;
 
@@ -52,7 +55,11 @@ export function payments(options?: {
       paymentsRuntime = createPaymentsRuntime(
         config,
         options?.agentId,
-        options?.storageFactory
+        options?.storageFactory,
+        {
+          outgoingBackend: options?.outgoingBackend,
+          fallbackToSigner: options?.fallbackToSigner,
+        }
       );
       return { payments: paymentsRuntime };
     },

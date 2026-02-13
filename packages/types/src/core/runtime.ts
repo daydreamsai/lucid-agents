@@ -1,6 +1,7 @@
 import type { ManifestRuntime } from '../a2a';
 import type { AgentHttpHandlers } from '../http';
 import type { PaymentsRuntime } from '../payments';
+import type { AwalRuntime } from '../awal';
 import type { WalletsRuntime } from '../wallets';
 import type { A2ARuntime } from '../a2a';
 import type { AP2Runtime } from '../ap2';
@@ -22,6 +23,7 @@ export type AgentRuntime = {
    */
   agent: AgentCore;
   wallets?: WalletsRuntime;
+  awal?: AwalRuntime;
   payments?: PaymentsRuntime;
   analytics?: AnalyticsRuntime;
   a2a?: A2ARuntime;

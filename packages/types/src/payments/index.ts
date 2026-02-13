@@ -178,6 +178,21 @@ export type PaymentsConfig = {
 } & (StaticPaymentsDestination | StripePaymentsDestination);
 
 /**
+ * Backend used to execute outgoing paid requests.
+ */
+export type OutgoingPaymentBackend =
+  | { type: 'wallet-signer' }
+  | { type: 'awal' };
+
+/**
+ * Outgoing payment runtime behavior controls.
+ */
+export type OutgoingPaymentRuntimeConfig = {
+  outgoingBackend?: OutgoingPaymentBackend;
+  fallbackToSigner?: boolean;
+};
+
+/**
  * Price for an entrypoint - either a flat string or separate invoke/stream prices.
  */
 export type EntrypointPrice = string | { invoke?: string; stream?: string };
