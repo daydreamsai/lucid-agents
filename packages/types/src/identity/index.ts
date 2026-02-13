@@ -32,6 +32,14 @@ export type RegistrationEntry = {
 
 export type AgentService = {
   /**
+   * Service name (e.g., "A2A", "OASF", "web").
+   */
+  name: string;
+  /**
+   * Service endpoint URL.
+   */
+  endpoint: string;
+  /**
    * Optional service version.
    */
   version?: string;
@@ -44,38 +52,17 @@ export type AgentService = {
    */
   domains?: unknown[];
   /**
-   * Legacy compatibility aliases.
+   * Optional description.
    */
   description?: string;
   [key: string]: unknown;
-} & (
-  | {
-      /**
-       * Canonical service fields.
-       */
-      name: string;
-      endpoint: string;
-      id?: string;
-      type?: string;
-      serviceEndpoint?: string;
-    }
-  | {
-      /**
-       * Legacy service fields (supported for compatibility).
-       */
-      id?: string;
-      type?: string;
-      serviceEndpoint: string;
-      name?: string;
-      endpoint?: string;
-    }
-);
+};
 
 /**
  * ERC-8004 agent registration file structure.
  */
 export type AgentRegistration = {
-  type: 'agent' | 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
+  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
   name: string;
   description?: string;
   image?: string;

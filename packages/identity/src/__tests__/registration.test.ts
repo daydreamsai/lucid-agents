@@ -32,9 +32,8 @@ describe('generateAgentRegistration', () => {
       image: 'https://agent.example.com/og.png',
       services: [
         {
-          id: 'A2A',
-          serviceEndpoint:
-            'https://agent.example.com/.well-known/agent-card.json',
+          name: 'A2A',
+          endpoint: 'https://agent.example.com/.well-known/agent-card.json',
         },
       ],
       x402Support: true,
