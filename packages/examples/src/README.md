@@ -212,3 +212,25 @@ Test 3 - Wallet blocking (test-blocked-wallet):
 - `test-endpoint` BLOCKED - wallet address 0x1234... in blockedRecipients
 
 Policy configuration is in `packages/examples/src/payments/payment-policies.json`. Prices are kept low to work with $10/day testnet USDC faucet limits.
+
+## ClawdTalk Voice Integration
+
+Connect your Daydreams agent to ClawdTalk for voice calls. Your agent gets a real phone number and can interact with customers by voice.
+
+**What ClawdTalk provides:**
+
+- Real phone number for your agent
+- Voice calls (inbound + outbound) and SMS
+- Speech-to-text and text-to-speech
+- WebSocket connection (no server needed)
+
+Run the example:
+
+```bash
+cd packages/examples/src/clawdtalk-voice
+CLAWDTALK_API_KEY=cc_live_xxx bun run index.ts
+```
+
+The example includes a commerce agent with entrypoints for browsing products, placing orders, and checking order status. The `voice-context` entrypoint returns instructions for ClawdTalk on how to format responses for phone calls.
+
+See `packages/examples/src/clawdtalk-voice/README.md` for full setup instructions.
