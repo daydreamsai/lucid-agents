@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "fd60f8131fc9",
+  "session_id": "f1a73ca3-8465-45b0-a8f3-7e924af08f5c",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-14T00:55:08.101573Z",
+  "branch": "chore/tests",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "TEST_IMPROVEMENTS.md",
+    "packages/core/src/__tests__/validation.test.ts",
+    "packages/http/src/__tests__/sse.test.ts",
+    "packages/payments/src/__tests__/crypto.test.ts",
+    "packages/payments/src/__tests__/pricing.test.ts",
+    "packages/payments/src/__tests__/rate-limiter.test.ts",
+    "packages/wallet/src/__tests__/runtime.test.ts"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 8323,
+    "cache_creation_tokens": 151409,
+    "cache_read_tokens": 1091689,
+    "output_tokens": 21377,
+    "api_call_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-14T00:55:07.873136Z",
+    "agent_lines": 673,
+    "human_added": 0,
+    "human_modified": 103,
+    "human_removed": 100,
+    "total_committed": 776,
+    "agent_percentage": 86.72680412371135
+  },
+  "transcript_path": ".claude/projects/-Users-admin-Git-Downloads-Daydreams-lucid-agents/f1a73ca3-8465-45b0-a8f3-7e924af08f5c.jsonl"
+}

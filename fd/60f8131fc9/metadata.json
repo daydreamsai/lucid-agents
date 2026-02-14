@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "fd60f8131fc9",
+  "strategy": "manual-commit",
+  "branch": "chore/tests",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "TEST_IMPROVEMENTS.md",
+    "packages/core/src/__tests__/validation.test.ts",
+    "packages/http/src/__tests__/sse.test.ts",
+    "packages/payments/src/__tests__/crypto.test.ts",
+    "packages/payments/src/__tests__/pricing.test.ts",
+    "packages/payments/src/__tests__/rate-limiter.test.ts",
+    "packages/wallet/src/__tests__/runtime.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/fd/60f8131fc9/0/metadata.json",
+      "transcript": "/fd/60f8131fc9/0/full.jsonl",
+      "context": "/fd/60f8131fc9/0/context.md",
+      "content_hash": "/fd/60f8131fc9/0/content_hash.txt",
+      "prompt": "/fd/60f8131fc9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 8323,
+    "cache_creation_tokens": 151409,
+    "cache_read_tokens": 1091689,
+    "output_tokens": 21377,
+    "api_call_count": 17
+  }
+}
