@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.4",
+  "checkpoint_id": "fd60f8131fc9",
+  "session_id": "09331995-5e01-4bd0-9f4b-e175b8b3b983",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-14T00:56:20.4311Z",
+  "branch": "chore/tests",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".husky/commit-msg",
+    ".husky/post-commit",
+    ".husky/pre-push",
+    ".husky/prepare-commit-msg",
+    "README.md"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "f2f4841f-482e-4ffb-9f26-db361b158169",
+  "token_usage": {
+    "input_tokens": 1330,
+    "cache_creation_tokens": 73149,
+    "cache_read_tokens": 2070659,
+    "output_tokens": 4272,
+    "api_call_count": 43
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-14T00:56:20.055159Z",
+    "agent_lines": 0,
+    "human_added": 26,
+    "human_modified": 16,
+    "human_removed": 0,
+    "total_committed": 42,
+    "agent_percentage": 0
+  },
+  "transcript_path": ".claude/projects/-Users-admin-Git-Downloads-Daydreams-lucid-agents/09331995-5e01-4bd0-9f4b-e175b8b3b983.jsonl"
+}

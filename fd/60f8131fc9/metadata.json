@@ -3,8 +3,13 @@
   "checkpoint_id": "fd60f8131fc9",
   "strategy": "manual-commit",
   "branch": "chore/tests",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
+    ".husky/commit-msg",
+    ".husky/post-commit",
+    ".husky/pre-push",
+    ".husky/prepare-commit-msg",
+    "README.md",
     "TEST_IMPROVEMENTS.md",
     "packages/core/src/__tests__/validation.test.ts",
     "packages/http/src/__tests__/sse.test.ts",
@@ -20,13 +25,20 @@
       "context": "/fd/60f8131fc9/0/context.md",
       "content_hash": "/fd/60f8131fc9/0/content_hash.txt",
       "prompt": "/fd/60f8131fc9/0/prompt.txt"
+    },
+    {
+      "metadata": "/fd/60f8131fc9/1/metadata.json",
+      "transcript": "/fd/60f8131fc9/1/full.jsonl",
+      "context": "/fd/60f8131fc9/1/context.md",
+      "content_hash": "/fd/60f8131fc9/1/content_hash.txt",
+      "prompt": "/fd/60f8131fc9/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 8323,
-    "cache_creation_tokens": 151409,
-    "cache_read_tokens": 1091689,
-    "output_tokens": 21377,
-    "api_call_count": 17
+    "input_tokens": 9653,
+    "cache_creation_tokens": 224558,
+    "cache_read_tokens": 3162348,
+    "output_tokens": 25649,
+    "api_call_count": 60
   }
 }
