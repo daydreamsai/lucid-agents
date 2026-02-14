@@ -3,7 +3,7 @@
 <div align="center">
   <h1>Lucid Agents</h1>
   <p><strong>The Protocol-Agnostic Multi-Runtime Framework for Building and Monetizing AI Agents</strong></p>
-  <p>Build, deploy, and monetize autonomous AI agents with typed entrypoints, onchain identity, and built-in payment infrastructure</p>
+  <p>Build, deploy, and monetize autonomous AI agents with typed entrypoints, onchain identity, and built-in payment infrastructure.</p>
 </div>
 
 <div align="center">
