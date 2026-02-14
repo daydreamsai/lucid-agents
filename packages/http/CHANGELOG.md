@@ -1,5 +1,12 @@
 # @lucid-agents/http
 
+## 1.10.2
+
+### Patch Changes
+
+- Updated dependencies [9ad5dc8]
+  - @lucid-agents/types@1.7.0
+
 ## 1.10.1
 
 ### Patch Changes
