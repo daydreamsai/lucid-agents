@@ -331,7 +331,7 @@ function printHelp(logger: RunLogger) {
   logger.log('');
   logger.log('Options:');
   logger.log(
-    '  -t, --template <id>   Select template (blank, axllm, axllm-flow, identity, trading-data-agent, trading-recommendation-agent)'
+    '  -t, --template <id>   Select template (blank, identity, trading-data-agent, trading-recommendation-agent)'
   );
   logger.log(
     '  -a, --adapter <id>    Select runtime adapter (hono, express, tanstack-ui, tanstack-headless, next)'

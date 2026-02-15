@@ -45,7 +45,6 @@ Subpath exports (shared across adapters):
 
 - `@lucid-agents/core` — main exports including types (EntrypointDef, AgentMeta, etc.)
 - `@lucid-agents/core/utils` — focused helpers
-- `@lucid-agents/core/axllm` — AxLLM client integration
 
 ## Core Concepts
 
@@ -504,13 +503,11 @@ const result = await fetchAndInvoke(
 
 See `examples/full-agent.ts` for a complete agent example, or use the `trading-data-agent` and `trading-recommendation-agent` CLI templates for A2A composition examples.
 
-## x402 + AxFlow utilities
+## x402 utilities
 
-For downstream components that need to call LLMs with paid fetches, the utils folder exposes:
+For downstream components that need to make requests with x402 payments:
 
 - `createX402Fetch({ account, fetchImpl })` and `accountFromPrivateKey(privateKey)` — wrap a fetch implementation with x402 payments.
-- `createX402LLM(options)` — compose a paid fetch with `@ax-llm/ax`.
-- `createAxLLMClient({ provider, model, apiKey, temperature, x402, logger })` — ergonomic wrapper that reads env defaults (`OPENAI_API_KEY`, `AX_*`, `AXLLM_*`) and falls back to gpt-5/OpenAI. It returns `{ ax, isConfigured }`.
 
 ## Miscellaneous utilities
 

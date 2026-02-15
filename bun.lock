@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@lucid-agents/root",
@@ -136,8 +137,6 @@
       "name": "@lucid-agents/core",
       "version": "2.4.3",
       "dependencies": {
-        "@ax-llm/ax": "^14.0.37",
-        "@ax-llm/ax-tools": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/types": "workspace:*",
@@ -274,7 +273,6 @@
       "name": "@lucid-agents/payments",
       "version": "2.4.3",
       "dependencies": {
-        "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
         "@x402/core": "catalog:",
         "@x402/evm": "catalog:",
@@ -373,8 +371,6 @@
     "@adraffy/ens-normalize": ["@adraffy/ens-normalize@1.11.1", "", {}, "sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ=="],
 
     "@ax-llm/ax": ["@ax-llm/ax@14.0.44", "", { "dependencies": { "@opentelemetry/api": "^1.9.0", "dayjs": "^1.11.13" } }, "sha512-bW/2aq0FyenC7VWZz9EXXU83gTSH4cD/rYZjx/FGzEcoQcZUcJczCI7iaXjh3X6aBCrSFomRf4LUa1egA+KFxA=="],
-
-    "@ax-llm/ax-tools": ["@ax-llm/ax-tools@14.0.44", "", { "dependencies": { "@ax-llm/ax": "14.0.44" } }, "sha512-+aZe7I1V9j+OIJfZLAvZxuwscCpmLFw3v6N3paF5ukb5klL7i87LC9iJJ6vfjiuZC15z15Q78UEDIdiVASLFnw=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.26.2", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.25.9", "js-tokens": "^4.0.0", "picocolors": "^1.0.0" } }, "sha512-RJlIHRueQgwWitWgF8OdFYGZX328Ax5BCemNGlqHfplnRT9ESi8JkFlvaVYbS+UubVY6dpv87Fs2u5M29iNFVQ=="],
 

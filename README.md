@@ -60,10 +60,9 @@ bunx @lucid-agents/cli my-agent
 # Or use inline configuration for faster setup
 bunx @lucid-agents/cli my-agent \
   --adapter=hono \
-  --template=axllm \
+  --template=identity \
   --AGENT_NAME="My AI Agent" \
   --AGENT_DESCRIPTION="AI-powered assistant" \
-  --OPENAI_API_KEY=your_api_key_here \
   --PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddress \
   --NETWORK=ethereum \
   --DEFAULT_PRICE=1000
@@ -72,7 +71,7 @@ bunx @lucid-agents/cli my-agent \
 The CLI will:
 
 - **Adapter selection**: `hono` (HTTP server), `tanstack-ui` (full dashboard), `tanstack-headless` (API only), `express` (Node.js server), or `next` (Next.js App Router)
-- **Template selection**: `blank` (minimal), `axllm` (LLM-powered), `axllm-flow` (workflows), `identity` (onchain identity), `trading-data-agent` (merchant), or `trading-recommendation-agent` (shopper)
+- **Template selection**: `blank` (minimal), `identity` (onchain identity), `trading-data-agent` (merchant), or `trading-recommendation-agent` (shopper)
 - **Configuration**: Set agent metadata, LLM keys, and optional payment details
 - **Install dependencies**: Automatically run `bun install`
 
@@ -465,7 +464,7 @@ bunx @lucid-agents/cli
 # With options
 bunx @lucid-agents/cli my-agent \
   --adapter=tanstack-ui \
-  --template=axllm \
+  --template=identity \
   --non-interactive
 ```
 
@@ -487,15 +486,8 @@ import { payments } from '@lucid-agents/payments';
 import { paymentsFromEnv } from '@lucid-agents/payments';
 import { identity, identityFromEnv } from '@lucid-agents/identity';
 import { createAgentApp } from '@lucid-agents/hono';
-import { AI } from '@ax-llm/ax';
 
-// 1. Initialize LLM
-const ai = new AI({
-  provider: 'openai',
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// 2. Build app with all extensions (identity extension handles ERC-8004 registration automatically)
+// Build app with all extensions (identity extension handles ERC-8004 registration automatically)
 const agent = await createAgent({
   name: 'ai-assistant',
   version: '1.0.0',
