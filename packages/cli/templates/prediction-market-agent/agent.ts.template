@@ -43,6 +43,10 @@ const RACE_BET_DISC = Buffer.from([195, 181, 151, 159, 105, 100, 234, 244]);
 const CREATE_PROFILE_DISC = Buffer.from([139, 244, 127, 145, 95, 172, 140, 154]);
 const CREATE_LAB_MARKET_DISC = Buffer.from([35, 159, 50, 67, 31, 134, 199, 157]);
 const CREATE_RACE_MARKET_DISC = Buffer.from([94, 237, 40, 47, 63, 233, 25, 67]);
+const CANCEL_MARKET_DISC = Buffer.from([205, 121, 84, 210, 222, 71, 150, 11]);
+const CANCEL_RACE_DISC = Buffer.from([223, 214, 232, 232, 43, 15, 165, 234]);
+const CLAIM_REFUND_DISC = Buffer.from([8, 82, 5, 144, 194, 114, 255, 20]);
+const CLAIM_RACE_REFUND_DISC = Buffer.from([174, 101, 101, 227, 171, 69, 173, 243]);
 
 const STATUS_NAMES: Record<number, string> = {
   0: 'active', 1: 'closed', 2: 'resolved', 3: 'cancelled',
@@ -285,6 +289,20 @@ function raceToMarket(raw: ReturnType<typeof parseRaceMarket>, pk: string): Mark
 }
 
 // -- Parimutuel Rules v6.3 — Market Creation Guardrails --------------------
+//
+// THE GOLDEN RULE: Bettors must NEVER have access to ANY information that
+// could inform the outcome while betting is still open.
+//
+// Two market types with DISTINCT timing rules:
+//
+//   Type A (Event-Based): Sports, awards, announcements, crypto snapshots
+//     → Betting closes 8h+ BEFORE the event (12-24h recommended)
+//     → Best for: CS2/LoL matches, UFC fights, Super Bowl, elections
+//
+//   Type B (Measurement-Period): Charts, weekly metrics, accumulated data
+//     → Betting closes BEFORE measurement period starts
+//     → Best for: Netflix Top 10, Billboard, weekly DeFi metrics
+//     → Prefer SHORT periods (2-7 days) — users hate capital lockup
 
 const BLOCKED_SUBJECTIVE = [
   'ai agent', 'an agent', 'autonomously', 'become popular', 'go viral',
@@ -298,37 +316,106 @@ const BLOCKED_MANIPULATION = [
 const IMPLIED_SOURCES = [
   /\b(btc|eth|sol|bitcoin|ethereum|solana|coingecko|coinmarketcap|binance|coinbase|tradingview)\b/i,
   /\b(ufc|nba|nfl|mlb|nhl|champions league|world cup|super bowl|espn|uefa|fifa|atp|wta)\b/i,
+  /\b(cs2|csgo|counter.strike|league of legends|lol|dota|valorant|overwatch)\b/i,
   /\b(tokyo|london|new york|los angeles|paris|snow|rain|temperature|nws|jma|weather)\b/i,
   /\b(election|president|congress|parliament|vote|ap news|reuters|sec|nasdaq|nyse)\b/i,
+  /\b(netflix|billboard|spotify|grammy|oscar|golden globe|emmy)\b/i,
   /source:/i, /official/i,
 ];
 
-function validateParimutuelRules(question: string): { valid: boolean; errors: string[]; warnings: string[] } {
+interface ParimutuelValidation {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+function validateParimutuelRules(params: {
+  question: string;
+  closingTimeMs: number;
+  marketType: 'event' | 'measurement';
+  eventTime?: string;         // ISO 8601 — when outcome is decided (Type A)
+  measurementStart?: string;  // ISO 8601 — when data collection begins (Type B)
+  measurementEnd?: string;    // ISO 8601 — when data collection ends (Type B)
+}): ParimutuelValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const q = question.toLowerCase();
+  const q = params.question.toLowerCase();
+  const closeMs = params.closingTimeMs;
 
-  // Check subjective/unverifiable outcomes
+  // ---- Content validation ----
+
   const subjective = BLOCKED_SUBJECTIVE.filter(p => q.includes(p));
   if (subjective.length > 0)
-    errors.push(`BLOCKED: Unverifiable/subjective terms detected: "${subjective.join('", "')}". Markets must have outcomes verifiable by third party using public records.`);
+    errors.push(`BLOCKED: Unverifiable/subjective terms: "${subjective.join('", "')}". Outcomes must be objectively verifiable by third party.`);
 
-  // Check manipulation risk
   const manipulation = BLOCKED_MANIPULATION.filter(p => q.includes(p));
   if (manipulation.length > 0)
-    errors.push(`BLOCKED: Manipulation risk — terms: "${manipulation.join('", "')}". Creators cannot make markets about outcomes they can directly influence.`);
+    errors.push(`BLOCKED: Manipulation risk — terms: "${manipulation.join('", "')}". Creators cannot make markets about outcomes they can influence.`);
 
-  // Check for implied/explicit data source
-  const hasSource = IMPLIED_SOURCES.some(r => r.test(question));
+  const hasSource = IMPLIED_SOURCES.some(r => r.test(params.question));
   if (!hasSource)
-    errors.push('BLOCKED: No verifiable data source. Include a source like "(Source: CoinGecko)" or reference a known category (sports league, crypto asset, weather location). Approved: CoinGecko, ESPN, NWS, Reuters, SEC, etc.');
+    errors.push('BLOCKED: No verifiable data source. Reference a known entity (BTC, NBA, CS2, Netflix, etc.) or add "(Source: CoinGecko)". See approved sources list.');
 
-  // Check clear criteria
-  const hasCriteria = /\$[\d,]+/.test(question) || /\d+%/.test(question) ||
-    /above|below|over|under|at least|more than|less than/i.test(question) ||
-    /will .+ (win|lose|defeat|advance|qualify|score|achieve|snow|rain|happen|launch|release|announce)/i.test(question);
+  const hasCriteria = /\$[\d,]+/.test(params.question) || /\d+%/.test(params.question) ||
+    /above|below|over|under|at least|more than|less than/i.test(params.question) ||
+    /will .+ (win|lose|defeat|advance|qualify|score|beat|knock|eliminate)/i.test(params.question) ||
+    /who will/i.test(params.question) || /which .+ will/i.test(params.question);
   if (!hasCriteria)
-    warnings.push('Recommended: Include clear numeric threshold or binary outcome (e.g. "above $X", "will Team A win").');
+    warnings.push('Tip: Include clear criteria — "above $X", "will Team A win", "who will win". Ambiguous questions cause resolution disputes.');
+
+  // ---- Timing validation (THE CORE RULES) ----
+
+  if (params.marketType === 'event') {
+    // TYPE A: Betting must close 24h+ BEFORE event
+    if (!params.eventTime) {
+      errors.push('BLOCKED: Event-based markets MUST specify eventTime — the moment the outcome is decided (e.g. game kickoff, announcement time, snapshot time).');
+    } else {
+      const eventMs = new Date(params.eventTime).getTime();
+      if (isNaN(eventMs)) {
+        errors.push('BLOCKED: Invalid eventTime — must be valid ISO 8601.');
+      } else {
+        const bufferHours = (eventMs - closeMs) / (1000 * 60 * 60);
+        if (bufferHours < 8) {
+          errors.push(`BLOCKED: Betting closes only ${bufferHours.toFixed(1)}h before event. MINIMUM is 8h. Late bets create information advantage.`);
+        } else if (bufferHours < 12) {
+          warnings.push(`Buffer is ${bufferHours.toFixed(1)}h before event. Minimum met, but 12-24h recommended for operational safety.`);
+        }
+        if (closeMs >= eventMs) {
+          errors.push('BLOCKED: Betting closes AFTER the event! Bettors would already know the outcome.');
+        }
+      }
+    }
+  } else {
+    // TYPE B: Betting must close BEFORE measurement period starts
+    if (!params.measurementStart) {
+      errors.push('BLOCKED: Measurement-period markets MUST specify measurementStart — when data collection begins (e.g. Monday for weekly chart, month start for monthly metric).');
+    } else {
+      const startMs = new Date(params.measurementStart).getTime();
+      if (isNaN(startMs)) {
+        errors.push('BLOCKED: Invalid measurementStart — must be valid ISO 8601.');
+      } else {
+        if (closeMs >= startMs) {
+          const overlapHours = (closeMs - startMs) / (1000 * 60 * 60);
+          errors.push(`BLOCKED: Betting closes ${overlapHours.toFixed(1)}h AFTER measurement starts! Bettors can observe data accumulating and bet with foreknowledge. Betting MUST close BEFORE measurement period starts.`);
+        }
+        if (startMs <= Date.now()) {
+          errors.push('BLOCKED: Measurement period has already started. Cannot create a market for an ongoing measurement period — data is already accumulating.');
+        }
+      }
+      // Check measurement period length — prefer SHORT (2-7 days)
+      if (params.measurementEnd) {
+        const endMs = new Date(params.measurementEnd).getTime();
+        if (!isNaN(endMs) && !isNaN(new Date(params.measurementStart).getTime())) {
+          const periodDays = (endMs - new Date(params.measurementStart).getTime()) / (1000 * 60 * 60 * 24);
+          if (periodDays > 14) {
+            errors.push(`BLOCKED: Measurement period is ${Math.round(periodDays)} days. Max is 14 days. Users don't want funds locked that long. Convert to a snapshot (Type A) market or shorten the period to 2-7 days.`);
+          } else if (periodDays > 7) {
+            warnings.push(`${Math.round(periodDays)}-day measurement period. 2-7 days is ideal — shorter lockups = more betting volume.`);
+          }
+        }
+      }
+    }
+  }
 
   return { valid: errors.length === 0, errors, warnings };
 }
@@ -585,6 +672,73 @@ class BaoziClient {
     this.invalidateCache();
     return { signature: sig, marketAddress: rmPda.toString(), marketId: Number(config.marketCount) };
   }
+
+  async cancelMarket(params: { marketPubkey: string; reason: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status === 'cancelled') throw new Error('Market is already cancelled');
+    if (market.status === 'resolved') throw new Error('Market is already resolved — cannot cancel');
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const w = new BorshWriter();
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      w.raw(CANCEL_MARKET_DISC);
+      w.string(params.reason);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: w.toBuffer() });
+    } else {
+      w.raw(CANCEL_RACE_DISC);
+      w.string(params.reason);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: w.toBuffer() });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async claimRefund(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'cancelled') throw new Error(`Market status is "${market.status}" — refunds are only available for cancelled markets`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_REFUND_DISC });
+    } else {
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_RACE_REFUND_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
 }
 
 {{TEMPLATE_PRE_SETUP}}
@@ -621,6 +775,8 @@ const agent = await createAgent({
  *   createCreatorProfile  — Create on-chain creator profile (required for Labs)
  *   createLabMarket       — Create a Yes/No Lab market
  *   createLabRaceMarket   — Create a multi-outcome Lab race market
+ *   cancelLabMarket       — Cancel a Lab market you created (full refund to bettors)
+ *   claimRefund           — Claim refund from a cancelled market
  */
 
 const solPubkey = z.string().refine(s => { try { new PublicKey(s); return true; } catch { return false; } }, 'Invalid Solana public key');
@@ -843,10 +999,22 @@ addEntrypoint({
 
 addEntrypoint({
   key: 'createLabMarket',
-  description: 'Create a boolean (Yes/No) Lab prediction market. Requires a CreatorProfile (call createCreatorProfile first). Lab markets use HostOracle resolution and charge 3% platform fee.',
+  description: `Create a boolean (Yes/No) Lab prediction market. Requires CreatorProfile. Enforces Parimutuel Rules v6.3.
+
+MARKET TYPES (you MUST specify one):
+- "event" (Type A): Sports, fights, awards, crypto snapshots, elections
+  → Provide eventTime (when outcome is decided). Betting closes 8h+ before (12-24h recommended).
+  → BEST FOR: CS2/LoL matches, UFC fights, Super Bowl, price snapshots
+- "measurement" (Type B): Charts, weekly metrics, accumulated data
+  → Provide measurementStart + measurementEnd. Betting closes before start.
+  → Max 14 days. BEST FOR: Netflix Top 10, Billboard, weekly DeFi metrics`,
   input: z.object({
-    question: z.string().min(10).max(200).describe('The prediction question (e.g. "Will BTC hit $200k by March 2026?")'),
-    closingTime: z.string().describe('ISO 8601 closing time (e.g. "2026-03-01T00:00:00Z")'),
+    question: z.string().min(10).max(200).describe('Clear prediction question with verifiable outcome'),
+    closingTime: z.string().describe('ISO 8601 — when betting closes'),
+    marketType: z.enum(['event', 'measurement']).describe('Type A (event) or Type B (measurement-period)'),
+    eventTime: z.string().optional().describe('Type A only: ISO 8601 — when outcome is decided (game start, announcement, snapshot). Must be 8h+ after closingTime.'),
+    measurementStart: z.string().optional().describe('Type B only: ISO 8601 — when data collection begins. Must be after closingTime.'),
+    measurementEnd: z.string().optional().describe('Type B only: ISO 8601 — when data collection ends. Max 14 days from start.'),
   }),
   output: z.object({
     signature: z.string(),
@@ -857,13 +1025,21 @@ addEntrypoint({
   }),
   price: process.env.DEFAULT_PRICE || undefined,
   handler: async (ctx) => {
-    // Parimutuel v6.3 guardrails — validate before on-chain submission
-    const validation = validateParimutuelRules(ctx.input.question);
+    const closeMs = new Date(ctx.input.closingTime).getTime();
+    if (isNaN(closeMs) || closeMs <= Date.now()) throw new Error('closingTime must be a valid future ISO 8601 date');
+
+    const validation = validateParimutuelRules({
+      question: ctx.input.question,
+      closingTimeMs: closeMs,
+      marketType: ctx.input.marketType,
+      eventTime: ctx.input.eventTime,
+      measurementStart: ctx.input.measurementStart,
+      measurementEnd: ctx.input.measurementEnd,
+    });
     if (!validation.valid) throw new Error(`Market creation blocked by Parimutuel Rules v6.3:\n${validation.errors.join('\n')}`);
     if (validation.warnings.length > 0) console.warn(`Parimutuel warnings: ${validation.warnings.join('; ')}`);
 
-    const closingTimestamp = Math.floor(new Date(ctx.input.closingTime).getTime() / 1000);
-    if (closingTimestamp <= Math.floor(Date.now() / 1000)) throw new Error('Closing time must be in the future');
+    const closingTimestamp = Math.floor(closeMs / 1000);
     const result = await baozi.createLabMarket({ question: ctx.input.question, closingTime: closingTimestamp });
     return {
       output: {
@@ -878,11 +1054,21 @@ addEntrypoint({
 
 addEntrypoint({
   key: 'createLabRaceMarket',
-  description: 'Create a multi-outcome Lab race market (2-10 outcomes). Requires a CreatorProfile. Lab markets use HostOracle resolution and charge 3% platform fee.',
+  description: `Create a multi-outcome Lab race market (2-10 outcomes). Requires CreatorProfile. Enforces Parimutuel Rules v6.3.
+
+MARKET TYPES (you MUST specify one):
+- "event" (Type A): Who wins? Which team advances? Best for esports, sports, elections.
+  → Provide eventTime. Betting closes 8h+ before (12-24h recommended).
+- "measurement" (Type B): Which gets most X during period?
+  → Provide measurementStart + measurementEnd. Max 14 days.`,
   input: z.object({
-    question: z.string().min(10).max(200).describe('The prediction question'),
-    closingTime: z.string().describe('ISO 8601 closing time'),
-    outcomes: z.array(z.string().max(32)).min(2).max(10).describe('Outcome labels (e.g. ["Trump", "DeSantis", "Newsom"])'),
+    question: z.string().min(10).max(200).describe('Clear prediction question'),
+    closingTime: z.string().describe('ISO 8601 — when betting closes'),
+    outcomes: z.array(z.string().max(32)).min(2).max(10).describe('Outcome labels (e.g. ["NaVi", "FaZe", "G2", "Vitality"])'),
+    marketType: z.enum(['event', 'measurement']).describe('Type A (event) or Type B (measurement-period)'),
+    eventTime: z.string().optional().describe('Type A: when outcome is decided'),
+    measurementStart: z.string().optional().describe('Type B: when data collection begins'),
+    measurementEnd: z.string().optional().describe('Type B: when data collection ends (max 14 days)'),
   }),
   output: z.object({
     signature: z.string(),
@@ -893,19 +1079,83 @@ addEntrypoint({
   }),
   price: process.env.DEFAULT_PRICE || undefined,
   handler: async (ctx) => {
-    // Parimutuel v6.3 guardrails — validate before on-chain submission
-    const validation = validateParimutuelRules(ctx.input.question);
+    const closeMs = new Date(ctx.input.closingTime).getTime();
+    if (isNaN(closeMs) || closeMs <= Date.now()) throw new Error('closingTime must be a valid future ISO 8601 date');
+
+    const validation = validateParimutuelRules({
+      question: ctx.input.question,
+      closingTimeMs: closeMs,
+      marketType: ctx.input.marketType,
+      eventTime: ctx.input.eventTime,
+      measurementStart: ctx.input.measurementStart,
+      measurementEnd: ctx.input.measurementEnd,
+    });
     if (!validation.valid) throw new Error(`Market creation blocked by Parimutuel Rules v6.3:\n${validation.errors.join('\n')}`);
     if (validation.warnings.length > 0) console.warn(`Parimutuel warnings: ${validation.warnings.join('; ')}`);
 
-    const closingTimestamp = Math.floor(new Date(ctx.input.closingTime).getTime() / 1000);
-    if (closingTimestamp <= Math.floor(Date.now() / 1000)) throw new Error('Closing time must be in the future');
+    const closingTimestamp = Math.floor(closeMs / 1000);
     const result = await baozi.createLabRaceMarket({ question: ctx.input.question, closingTime: closingTimestamp, outcomes: ctx.input.outcomes });
     return {
       output: {
         ...result,
         explorerUrl: `https://solscan.io/tx/${result.signature}`,
         marketUrl: `https://baozi.bet/market/${result.marketAddress}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'cancelLabMarket',
+  description: `Cancel a Lab market you created. All bettors receive a full 100% refund (no fees deducted).
+
+CONSTRAINTS (enforced on-chain):
+- Creator can cancel if NO bets have been placed yet, OR if pool < 0.5 SOL
+- Admin/guardian can cancel any market at any time (emergency)
+- Cannot cancel resolved or already-cancelled markets
+- After cancellation, each bettor calls claimRefund to withdraw their SOL`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key to cancel'),
+    reason: z.string().min(1).max(200).describe('Reason for cancellation (stored on-chain)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.cancelMarket({ marketPubkey: ctx.input.marketId, reason: ctx.input.reason });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimRefund',
+  description: `Claim a full 100% refund from a cancelled market. No fees are deducted — you get your entire bet back.
+
+Works for both boolean and race markets. Race market refunds return ALL bets across all outcomes.
+Requires the market to be in "cancelled" status. Each wallet can only claim once.`,
+  input: z.object({
+    marketId: solPubkey.describe('Cancelled market public key'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimRefund({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
       },
       usage: { total_tokens: 0 },
     };

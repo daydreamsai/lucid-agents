@@ -1,6 +1,6 @@
 # Prediction Market Agent - AI Implementation Guide
 
-This template creates an agent that reads, trades, and creates on-chain Solana prediction markets via the Baozi protocol.
+This template creates an agent that reads, trades, creates, and manages on-chain Solana prediction markets via the Baozi protocol.
 
 ## Architecture
 
@@ -132,7 +132,49 @@ Args: `question` (string), `outcome_labels` (vec\<string\>), `closing_time` (i64
 
 **Important:** Note the different account ordering between boolean and race market creation. The `creator_profile` account appears at position 5 for boolean but position 3 for race markets.
 
-### 8. Instruction Discriminators
+### 8. Market Cancellation & Refunds
+
+Creators can cancel their own Lab markets, and all bettors receive a **full 100% refund** (no fees deducted).
+
+**Cancel constraints (enforced on-chain):**
+- Creator can cancel if `has_bets == false` (no bets yet) OR pool < 0.5 SOL
+- Admin/guardian can cancel any market at any time (emergency)
+- Cannot cancel resolved or already-cancelled markets
+- Creator does NOT get the 0.01 SOL creation fee back (paid to treasury)
+
+**Refund flow:**
+1. Creator calls `cancelLabMarket` with a reason
+2. Market status changes to `cancelled`
+3. Each bettor calls `claimRefund` to withdraw their full bet amount
+4. Race market refunds return ALL bets across all outcomes (total_bet)
+
+**Account structure for `cancel_market` (IDL-verified, 3 accounts):**
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (writable)
+3. `authority` — Signer (creator or admin)
+
+Args: `reason` (string)
+
+**Account structure for `cancel_race` (IDL-verified, 3 accounts):**
+1. `config` — GlobalConfig PDA (read-only)
+2. `race_market` — RaceMarket account (writable)
+3. `authority` — Signer (creator or admin)
+
+Args: `reason` (string)
+
+**Account structure for `claim_refund_sol` (IDL-verified, 4 accounts):**
+1. `market` — Market account (writable)
+2. `position` — UserPosition PDA (writable)
+3. `user` — Signer (writable)
+4. `system_program`
+
+**Account structure for `claim_race_refund` (IDL-verified, 4 accounts):**
+1. `race_market` — RaceMarket account (writable)
+2. `position` — RacePosition PDA (writable)
+3. `user` — Signer (writable)
+4. `system_program`
+
+### 9. Instruction Discriminators
 
 All instruction discriminators are hardcoded from the IDL (not computed at runtime):
 
@@ -143,6 +185,10 @@ All instruction discriminators are hardcoded from the IDL (not computed at runti
 | `create_creator_profile` | `[139, 244, 127, 145, 95, 172, 140, 154]` |
 | `create_lab_market_sol` | `[35, 159, 50, 67, 31, 134, 199, 157]` |
 | `create_race_market_sol` | `[94, 237, 40, 47, 63, 233, 25, 67]` |
+| `cancel_market` | `[205, 121, 84, 210, 222, 71, 150, 11]` |
+| `cancel_race` | `[223, 214, 232, 232, 43, 15, 165, 234]` |
+| `claim_refund_sol` | `[8, 82, 5, 144, 194, 114, 255, 20]` |
+| `claim_race_refund` | `[174, 101, 101, 227, 171, 69, 173, 243]` |
 
 ## Customization
 
@@ -207,23 +253,58 @@ Platform Fee (e.g. 3% for Lab)
 | `createCreatorProfile` | Write | Create on-chain creator profile |
 | `createLabMarket` | Write | Create boolean Lab market |
 | `createLabRaceMarket` | Write | Create multi-outcome Lab race market |
+| `cancelLabMarket` | Write | Cancel a Lab market (full refund to bettors) |
+| `claimRefund` | Write | Claim refund from cancelled market |
 
 ## Parimutuel Rules v6.3 — Market Creation Guardrails
 
 All Lab markets MUST comply with these rules. The agent validates every market creation against these rules **before** submitting the on-chain transaction. Markets that violate mandatory rules are **BLOCKED**.
 
-### Rule A: Event-Based Markets
-Markets about specific events (sports, elections, announcements):
-- Betting MUST close **at least 12 hours BEFORE** the event
-- Recommended buffer: 18-24 hours
-- Prevents late-breaking information advantage
+### THE GOLDEN RULE
 
-### Rule B: Measurement-Period Markets
-Markets about measured values (prices, temperatures, metrics):
+> Bettors must NEVER have access to ANY information that could inform the outcome while betting is still open.
+
+### Type A: Event-Based Markets
+
+Markets about specific events — the outcome is decided at a single moment in time.
+
+**Examples:** CS2 Major finals, LoL Worlds match, UFC title fight, Super Bowl winner, crypto price at specific timestamp, election result, award ceremony winner.
+
+**Timing rules:**
+- Betting MUST close **at least 8 hours BEFORE** the event
+- Recommended buffer: 12-24 hours
+- Prevents late-breaking information advantage (lineup leaks, injury news, insider info)
+
+**Best categories:**
+| Category | Why It Works | Example |
+|----------|-------------|---------|
+| Esports (CS2, LoL, Valorant) | Clear start times, binary outcomes, huge community | "Will NaVi win CS2 Major Copenhagen?" |
+| Combat Sports (UFC, Boxing) | Single-event outcomes, high engagement | "Will Topuria defend UFC FW title at UFC 315?" |
+| Sports Finals | High stakes, massive audience | "Will Real Madrid win Champions League 2026?" |
+| Crypto Snapshots | Precise timestamps, on-chain verifiable | "Will BTC be above $150k at 00:00 UTC Mar 1? (Source: CoinGecko)" |
+| Elections/Awards | Single announcement moment | "Will Film X win Best Picture at Oscars 2026?" |
+
+### Type B: Measurement-Period Markets
+
+Markets about accumulated data over a defined time window.
+
+**Examples:** Netflix Top 10 for a week, Billboard chart position, total DeFi TVL over a period, weekly weather records.
+
+**Timing rules:**
 - Betting MUST close **BEFORE** the measurement period starts
-- Prevents betting with foreknowledge of outcomes
+- Measurement period: max 14 days (users hate locking up capital)
+- Ideal period: 2-7 days (short lockup = more volume)
+
+**Best categories:**
+| Category | Why It Works | Example |
+|----------|-------------|---------|
+| Streaming Charts | Weekly data, public rankings | "Will Show X be Netflix #1 for week of Mar 3?" |
+| Music Charts | Billboard/Spotify, clear measurement windows | "Will Artist Y debut top 5 on Billboard Hot 100?" |
+| DeFi Metrics | On-chain data, precise measurement | "Will Solana DeFi TVL exceed $15B by end of week?" |
+| Weather Records | NWS/JMA data, defined periods | "Hottest day in Tokyo this week above 15C?" |
 
 ### Rule C: Objective Verifiability
+
 Outcomes MUST be objectively verifiable by a third party using public records.
 
 **Blocked terms** (market will be rejected):
@@ -232,6 +313,7 @@ Outcomes MUST be objectively verifiable by a third party using public records.
 - `"become popular"`, `"go viral"`, `"be successful"`, `"perform well"`, `"be the best"`, `"breakthrough"`, `"revolutionary"`
 
 ### Rule D: Manipulation Prevention
+
 Creators CANNOT make markets about outcomes they can directly influence.
 
 **Blocked terms:**
@@ -239,28 +321,36 @@ Creators CANNOT make markets about outcomes they can directly influence.
 - `"purchase proxies"`, `"buy proxies"`, `"x402 payment"`, `"using credits"`
 
 ### Rule E: Approved Data Sources (Required)
+
 Markets MUST reference or imply a verifiable data source:
 
 | Category | Approved Sources |
 |----------|-----------------|
 | Crypto | CoinGecko, CoinMarketCap, Binance, Coinbase, TradingView |
+| Esports | HLTV (CS2), Liquipedia, Riot Games (LoL), FACEIT, ESL |
 | Sports | ESPN, UFC, UEFA, FIFA, NBA, NFL, MLB, NHL, ATP, WTA |
 | Weather | NWS, JMA, Met Office, Weather.gov, AccuWeather |
 | Politics | AP News, Reuters, Official Government |
 | Finance | SEC, NASDAQ, NYSE, Yahoo Finance, Bloomberg |
+| Streaming | Netflix Top 10, Spotify Charts, Billboard |
 
-Markets can reference sources explicitly `"(Source: CoinGecko)"` or implicitly by mentioning recognized entities (BTC, NBA, Tokyo, etc.).
+Markets can reference sources explicitly `"(Source: CoinGecko)"` or implicitly by mentioning recognized entities (BTC, NBA, CS2, NaVi, Netflix, etc.).
 
 ### Examples
 
-| Question | Status | Why |
-|----------|--------|-----|
-| "Will BTC be above $120k at 00:00 UTC Mar 1? (Source: CoinGecko)" | Allowed | Clear threshold, approved source, verifiable |
-| "Will Real Madrid win Champions League 2026?" | Allowed | Implied ESPN/UEFA source, binary outcome |
-| "Will it snow in Tokyo on Feb 14?" | Allowed | Implied JMA source, binary outcome |
-| "Will an AI agent autonomously purchase proxies?" | **BLOCKED** | Unverifiable, subjective, manipulation risk |
-| "Will crypto go up?" | **BLOCKED** | No threshold, no source |
-| "Will I become successful?" | **BLOCKED** | Self-referential, subjective |
+| Question | Type | Status | Why |
+|----------|------|--------|-----|
+| "Will NaVi beat FaZe in CS2 Major Grand Final? (Kickoff: Mar 15 14:00 UTC)" | A | Allowed | Clear event, HLTV source, binary outcome |
+| "Who wins IEM Katowice 2026? [NaVi/FaZe/G2/Vitality]" | A (Race) | Allowed | Clear event, multi-outcome race market |
+| "Will T1 win LoL Worlds 2026?" | A | Allowed | Implied Riot Games/Liquipedia source |
+| "Will BTC be above $150k at 00:00 UTC Mar 1? (Source: CoinGecko)" | A | Allowed | Clear snapshot time, approved source |
+| "Will Netflix 'Squid Game S3' be #1 for week of Feb 24?" | B | Allowed | 7-day measurement, Netflix Top 10 source |
+| "Hottest day in Tokyo this week above 15C? (Feb 17-23)" | B | Allowed | 7-day measurement, JMA source |
+| "Will SOL DeFi TVL pass $20B this week?" | B | Allowed | Short period, on-chain verifiable |
+| "Will an AI agent autonomously purchase proxies?" | — | **BLOCKED** | Unverifiable, subjective, manipulation risk |
+| "Will crypto go up?" | — | **BLOCKED** | No threshold, no timeframe, no source |
+| "Will I become successful?" | — | **BLOCKED** | Self-referential, subjective |
+| "Will BTC hit $200k by 2027?" | — | **BLOCKED** | >14 day lockup, no snapshot time |
 
 ## Resolution & Oracle Proofs
 
@@ -286,11 +376,50 @@ AI agents can submit resolution proofs to Grandma Mei (the protocol oracle). The
 
 This creates a transparent resolution pipeline where AI agents act as data gatherers and the oracle acts as the trusted resolver. All proofs are publicly visible at [baozi.bet/agents/proof](https://baozi.bet/agents/proof).
 
+## Beyond Prediction Markets — The Outcome Protocol
+
+Baozi isn't just prediction markets — it's an on-chain outcome protocol: pools + proofs + private rooms. The building blocks (boolean markets, race markets, private tables, oracle proofs, creator profiles) combine into patterns that go way beyond "will X happen":
+
+### Agent Rooms (Private Tables)
+Whitelisted bots + humans making markets for their niche. An AI research collective could run a private table where only verified agents can bet on research outcomes — "Which LLM scores highest on SWE-bench this month?"
+
+### Task Markets
+Post a job, fund the pot, someone bonds in, delivers receipts, oracle verifies, payout triggers. A race market becomes a competitive bounty: "Which agent delivers the cleanest dataset for Solana DEX trades this week?"
+
+### Signal Games
+Communities run weekly "who called it right?" ladders. A Discord bot creates Lab markets every Monday — top callers climb the leaderboard. Reputation backed by real SOL, not just internet points.
+
+### Ops & SLA Markets
+Internal team accountability: "Will we ship v5 by Friday?" "Uptime stays >99.9% this week?" Proof from deployment logs or monitoring dashboards. Short 7-day measurement periods, real skin in the game.
+
+### Oracle-as-a-Service
+Submit a market with a question → Grandma Mei brings proof from approved sources → settles on-chain. Any agent can tap into this — you don't need your own oracle infrastructure.
+
+### Field Verification
+"Is this restaurant actually open?" "What's the shelf price of X at location Y?" Private + bonded markets where someone stakes SOL that they'll provide verified photo proof. Works with any local verification task.
+
+## Future Entrypoints (Not Yet Implemented)
+
+These IDL instructions exist on-chain and could be added to the agent:
+
+| Instruction | What It Does | Priority |
+|-------------|-------------|----------|
+| `claim_winnings_sol` | Claim SOL winnings from resolved boolean market | HIGH |
+| `claim_race_winnings_sol` | Claim SOL winnings from resolved race market | HIGH |
+| `finalize_resolution` | Finalize resolution after dispute window (permissionless) | MEDIUM |
+| `finalize_race_resolution` | Finalize race resolution after dispute window | MEDIUM |
+| `flag_dispute` | Challenge a proposed resolution | MEDIUM |
+| `register_affiliate` | Register as affiliate for 1% referral commission | LOW |
+| `close_market` / `close_race_market` | Close expired market (permissionless) | LOW |
+| `extend_market` / `extend_race_market` | Extend closing time (creator only) | LOW |
+
 ## Troubleshooting
 
 - **Empty market list:** Check `SOLANA_RPC_URL` is reachable. Public RPCs rate-limit heavily — use a dedicated provider (Helius, QuickNode, etc.)
 - **placeBet fails:** Ensure `SOLANA_PRIVATE_KEY` is set and the wallet has sufficient SOL (bet amount + ~0.01 SOL for fees)
 - **"Market is closed":** The market has passed its closing time. Bets are rejected client-side before sending the transaction.
 - **createLabMarket fails:** Ensure you've called `createCreatorProfile` first. Each wallet needs a profile before creating markets.
+- **cancelLabMarket fails:** Creator can only cancel if no bets placed yet, or pool < 0.5 SOL. Admin can cancel anytime.
+- **claimRefund fails:** Market must be in `cancelled` status. Check market status first with `getMarketOdds`.
 - **"Invalid SOLANA_PRIVATE_KEY":** Must be a base58-encoded 64-byte secret key (not a mnemonic or hex)
 - **Stale data:** Market list is cached for 30 seconds. Call `getMarketOdds` for real-time single-market data
