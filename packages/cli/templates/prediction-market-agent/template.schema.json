@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Prediction Market Agent Template Arguments",
+  "type": "object",
+  "properties": {
+    "AGENT_DESCRIPTION": {
+      "type": "string",
+      "description": "Description of the prediction market agent"
+    },
+    "AGENT_VERSION": {
+      "type": "string",
+      "description": "Version number for the agent",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "SOLANA_RPC_URL": {
+      "type": "string",
+      "format": "uri",
+      "description": "Solana RPC endpoint URL",
+      "default": "https://api.mainnet-beta.solana.com"
+    },
+    "ENABLE_TRADING": {
+      "type": "boolean",
+      "description": "Enable betting/trading functionality (requires wallet key)",
+      "default": false
+    },
+    "SOLANA_PRIVATE_KEY": {
+      "type": "string",
+      "description": "Base58-encoded Solana wallet private key for trading"
+    },
+    "ENABLE_PAYMENTS": {
+      "type": "boolean",
+      "description": "Enable x402 payments for entrypoints",
+      "default": false
+    },
+    "DEFAULT_PRICE": {
+      "type": "string",
+      "description": "Default price per entrypoint call in base units",
+      "default": "1000"
+    }
+  },
+  "required": ["AGENT_DESCRIPTION", "AGENT_VERSION"]
+}

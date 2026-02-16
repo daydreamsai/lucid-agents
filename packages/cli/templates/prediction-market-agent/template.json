@@ -1,0 +1,66 @@
+{
+  "id": "prediction-market-agent",
+  "name": "Prediction Market Agent",
+  "description": "Agent that reads and trades on-chain Solana prediction markets (Baozi)",
+  "adapters": ["hono", "express"],
+  "package": {
+    "dependencies": {
+      "@solana/web3.js": "^1.98.0",
+      "bs58": "^6.0.0"
+    }
+  },
+  "wizard": {
+    "prompts": [
+      {
+        "key": "AGENT_DESCRIPTION",
+        "type": "input",
+        "message": "How would you describe your prediction market agent?",
+        "defaultValue": "Prediction market data and trading agent"
+      },
+      {
+        "key": "AGENT_VERSION",
+        "type": "input",
+        "message": "What version should the agent start at?",
+        "defaultValue": "0.1.0"
+      },
+      {
+        "key": "SOLANA_RPC_URL",
+        "type": "input",
+        "message": "Solana RPC URL?",
+        "defaultValue": "https://api.mainnet-beta.solana.com"
+      },
+      {
+        "key": "ENABLE_TRADING",
+        "type": "confirm",
+        "message": "Enable betting/trading? (requires wallet private key)",
+        "defaultValue": false
+      },
+      {
+        "key": "SOLANA_PRIVATE_KEY",
+        "type": "input",
+        "message": "Solana wallet private key (base58)?",
+        "defaultValue": "",
+        "when": {
+          "key": "ENABLE_TRADING",
+          "equals": true
+        }
+      },
+      {
+        "key": "ENABLE_PAYMENTS",
+        "type": "confirm",
+        "message": "Enable x402 payments for entrypoints?",
+        "defaultValue": false
+      },
+      {
+        "key": "DEFAULT_PRICE",
+        "type": "input",
+        "message": "Default price per call (in base units)?",
+        "defaultValue": "1000",
+        "when": {
+          "key": "ENABLE_PAYMENTS",
+          "equals": true
+        }
+      }
+    ]
+  }
+}
