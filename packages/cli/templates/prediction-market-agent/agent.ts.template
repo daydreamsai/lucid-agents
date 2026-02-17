@@ -692,6 +692,8 @@ class BaoziClient {
     if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
     if (market.status === 'cancelled') throw new Error('Market is already cancelled');
     if (market.status === 'resolved') throw new Error('Market is already resolved — cannot cancel');
+    if (market.status === 'resolved_pending') throw new Error('Market has a pending resolution (6h dispute window active) — cannot cancel after oracle has proposed outcome');
+    if (market.status === 'disputed') throw new Error('Market is under dispute — cannot cancel while dispute is active');
 
     const mPk = new PublicKey(params.marketPubkey);
     const w = new BorshWriter();
