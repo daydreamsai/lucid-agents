@@ -568,7 +568,7 @@ class BaoziClient {
 
   async fetchMarkets(filter?: { status?: string; query?: string; limit?: number; layer?: string }): Promise<Market[]> {
     const cached = this.cache.get();
-    if (cached && !filter?.query) return applyFilters(cached, filter);
+    if (cached) return applyFilters(cached, filter);
 
     const [ba, ra] = await Promise.all([
       this.conn.getProgramAccounts(PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: MARKET_DISC_B58 } }] }),
@@ -1046,6 +1046,12 @@ class BaoziClient {
       throw new Error(`Market is already ${market.status} — cannot close`);
     if (market.status === 'closed')
       throw new Error('Market is already closed');
+    if (market.status === 'resolved_pending')
+      throw new Error('Market has a pending resolution — cannot close after oracle has proposed outcome');
+    if (market.status === 'disputed')
+      throw new Error('Market is under dispute — cannot close while dispute is active');
+    if (market.status === 'paused')
+      throw new Error('Market is paused — cannot close a paused market');
 
     const mPk = new PublicKey(params.marketPubkey);
     let ix: TransactionInstruction;
