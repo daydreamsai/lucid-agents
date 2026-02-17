@@ -47,6 +47,10 @@ const CANCEL_MARKET_DISC = Buffer.from([205, 121, 84, 210, 222, 71, 150, 11]);
 const CANCEL_RACE_DISC = Buffer.from([223, 214, 232, 232, 43, 15, 165, 234]);
 const CLAIM_REFUND_DISC = Buffer.from([8, 82, 5, 144, 194, 114, 255, 20]);
 const CLAIM_RACE_REFUND_DISC = Buffer.from([174, 101, 101, 227, 171, 69, 173, 243]);
+const CLAIM_WINNINGS_DISC = Buffer.from([64, 158, 207, 116, 128, 129, 169, 76]);
+const CLAIM_RACE_WINNINGS_DISC = Buffer.from([46, 120, 202, 194, 126, 72, 22, 52]);
+const FINALIZE_RESOLUTION_DISC = Buffer.from([191, 74, 94, 214, 45, 150, 152, 125]);
+const FINALIZE_RACE_RESOLUTION_DISC = Buffer.from([19, 232, 81, 138, 191, 218, 54, 200]);
 
 const STATUS_NAMES: Record<number, string> = {
   0: 'active', 1: 'closed', 2: 'resolved', 3: 'cancelled',
@@ -245,6 +249,12 @@ function marketPda(id: bigint) {
 function raceMarketPda(id: bigint) {
   const b = Buffer.alloc(8); b.writeBigUInt64LE(id);
   return PublicKey.findProgramAddressSync([Buffer.from('race'), b], PROGRAM_ID)[0];
+}
+function revenueConfigPda() {
+  return PublicKey.findProgramAddressSync([Buffer.from('revenue_config')], PROGRAM_ID)[0];
+}
+function disputeMetaPda(marketPubkey: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('dispute_meta'), marketPubkey.toBuffer()], PROGRAM_ID)[0];
 }
 
 // -- Helpers ----------------------------------------------------------------
@@ -739,6 +749,82 @@ class BaoziClient {
     this.invalidateCache();
     return sig;
   }
+
+  async claimWinnings(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'resolved') throw new Error(`Market status is "${market.status}" — winnings can only be claimed from resolved markets`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      // claim_winnings_sol: 10 accounts (4 optional — pass PROGRAM_ID for None)
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // affiliate: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // creator_profile: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_WINNINGS_DISC });
+    } else {
+      // claim_race_winnings_sol: 11 accounts (5 optional — pass PROGRAM_ID for None)
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // affiliate: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // race_referral: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // creator_profile: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_RACE_WINNINGS_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async finalizeResolution(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const dMeta = disputeMetaPda(mPk);
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: dMeta, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: FINALIZE_RESOLUTION_DISC });
+    } else {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: dMeta, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: FINALIZE_RACE_RESOLUTION_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
 }
 
 {{TEMPLATE_PRE_SETUP}}
@@ -777,6 +863,8 @@ const agent = await createAgent({
  *   createLabRaceMarket   — Create a multi-outcome Lab race market
  *   cancelLabMarket       — Cancel a Lab market you created (full refund to bettors)
  *   claimRefund           — Claim refund from a cancelled market
+ *   claimWinnings         — Claim SOL winnings from a resolved market
+ *   finalizeResolution    — Finalize resolution after dispute window (permissionless)
  */
 
 const solPubkey = z.string().refine(s => { try { new PublicKey(s); return true; } catch { return false; } }, 'Invalid Solana public key');
@@ -1152,6 +1240,61 @@ Requires the market to be in "cancelled" status. Each wallet can only claim once
   price: process.env.DEFAULT_PRICE || undefined,
   handler: async (ctx) => {
     const sig = await baozi.claimRefund({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimWinnings',
+  description: `Claim SOL winnings from a resolved prediction market. Works for both boolean and race markets.
+
+The market must be in "resolved" status. Your payout is calculated from the pari-mutuel pool:
+  payout = (your_bet / winning_pool) * total_pool — platform_fee
+
+Each wallet can only claim once per market. Race market claims pay out based on total_bet on the winning outcome.`,
+  input: z.object({
+    marketId: solPubkey.describe('Resolved market public key'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimWinnings({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'finalizeResolution',
+  description: `Finalize a market resolution after the 6-hour dispute window has passed. This is permissionless — anyone can call it.
+
+After an oracle proposes a resolution, there's a 6-hour window where anyone can raise a dispute. Once that window closes, this instruction finalizes the outcome and moves the market to "resolved" status, enabling winners to claim.
+
+Works for both boolean and race markets.`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key with pending resolution'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.finalizeResolution({ marketPubkey: ctx.input.marketId });
     return {
       output: {
         signature: sig,

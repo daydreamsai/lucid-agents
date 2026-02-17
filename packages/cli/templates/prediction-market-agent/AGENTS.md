@@ -70,6 +70,8 @@ All Program Derived Addresses used by this agent:
 | RacePosition | `["race_position", market_id_u64_le, user_pubkey]` | Race bet positions |
 | SolTreasury | `["sol_treasury"]` | Protocol treasury (receives creation fees) |
 | CreatorProfile | `["creator_profile", owner_pubkey]` | Creator reputation + fee settings |
+| RevenueConfig | `["revenue_config"]` | Protocol revenue routing settings |
+| DisputeMeta | `["dispute_meta", market_pubkey]` | Dispute window state for resolution |
 
 **Note:** Both boolean and race markets share a single `market_count` counter in GlobalConfig. The PDA namespace is different (`"market"` vs `"race"`), so they don't collide.
 
@@ -174,7 +176,54 @@ Args: `reason` (string)
 3. `user` — Signer (writable)
 4. `system_program`
 
-### 9. Instruction Discriminators
+### 9. Claiming Winnings
+
+After a market is resolved, winners claim their payout from the pool.
+
+**Payout formula:** `(your_bet / winning_pool) * total_pool - platform_fee`
+
+**Account structure for `claim_winnings_sol` (IDL-verified, 10 accounts — 4 optional):**
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (writable)
+3. `position` — UserPosition PDA (writable)
+4. `sol_treasury` — SolTreasury PDA (writable)
+5. `affiliate` — Optional affiliate account, pass PROGRAM_ID if None (writable)
+6. `creator_profile` — Optional CreatorProfile, pass PROGRAM_ID if None (writable)
+7. `revenue_config` — Optional RevenueConfig PDA, pass PROGRAM_ID if None (writable)
+8. `staking_vault` — Optional staking vault, pass PROGRAM_ID if None (writable)
+9. `user` — Signer (writable)
+10. `system_program`
+
+**Account structure for `claim_race_winnings_sol` (IDL-verified, 11 accounts — 5 optional):**
+1. `config` — GlobalConfig PDA (read-only)
+2. `race_market` — RaceMarket account (writable)
+3. `position` — RacePosition PDA (writable)
+4. `sol_treasury` — SolTreasury PDA (writable)
+5. `affiliate` — Optional affiliate account, pass PROGRAM_ID if None (writable)
+6. `race_referral` — Optional race referral PDA, pass PROGRAM_ID if None (read-only)
+7. `creator_profile` — Optional CreatorProfile, pass PROGRAM_ID if None (writable)
+8. `revenue_config` — Optional RevenueConfig PDA, pass PROGRAM_ID if None (writable)
+9. `staking_vault` — Optional staking vault, pass PROGRAM_ID if None (writable)
+10. `user` — Signer (writable)
+11. `system_program`
+
+**Note:** Optional accounts use the Anchor convention — pass `PROGRAM_ID` as a placeholder when the account is not needed. This is how the agent template handles it.
+
+### 10. Finalizing Resolution
+
+After the oracle proposes a resolution, there's a 6-hour dispute window. Once the window closes, anyone can finalize the resolution (permissionless). This moves the market from `resolved_pending` to `resolved`, enabling claims.
+
+**Account structure for `finalize_resolution` (IDL-verified, 3 accounts):**
+1. `market` — Market account (writable)
+2. `dispute_meta` — DisputeMeta PDA `["dispute_meta", market_pubkey]` (writable)
+3. `finalizer` — Signer (any wallet)
+
+**Account structure for `finalize_race_resolution` (IDL-verified, 3 accounts):**
+1. `race_market` — RaceMarket account (writable)
+2. `dispute_meta` — DisputeMeta PDA `["dispute_meta", race_market_pubkey]` (writable)
+3. `finalizer` — Signer (any wallet)
+
+### 11. Instruction Discriminators
 
 All instruction discriminators are hardcoded from the IDL (not computed at runtime):
 
@@ -189,6 +238,10 @@ All instruction discriminators are hardcoded from the IDL (not computed at runti
 | `cancel_race` | `[223, 214, 232, 232, 43, 15, 165, 234]` |
 | `claim_refund_sol` | `[8, 82, 5, 144, 194, 114, 255, 20]` |
 | `claim_race_refund` | `[174, 101, 101, 227, 171, 69, 173, 243]` |
+| `claim_winnings_sol` | `[64, 158, 207, 116, 128, 129, 169, 76]` |
+| `claim_race_winnings_sol` | `[46, 120, 202, 194, 126, 72, 22, 52]` |
+| `finalize_resolution` | `[191, 74, 94, 214, 45, 150, 152, 125]` |
+| `finalize_race_resolution` | `[19, 232, 81, 138, 191, 218, 54, 200]` |
 
 ## Customization
 
@@ -255,6 +308,8 @@ Platform Fee (e.g. 3% for Lab)
 | `createLabRaceMarket` | Write | Create multi-outcome Lab race market |
 | `cancelLabMarket` | Write | Cancel a Lab market (full refund to bettors) |
 | `claimRefund` | Write | Claim refund from cancelled market |
+| `claimWinnings` | Write | Claim SOL winnings from resolved market |
+| `finalizeResolution` | Write | Finalize resolution after 6h dispute window (permissionless) |
 
 ## Parimutuel Rules v6.3 — Market Creation Guardrails
 
@@ -404,14 +459,12 @@ These IDL instructions exist on-chain and could be added to the agent:
 
 | Instruction | What It Does | Priority |
 |-------------|-------------|----------|
-| `claim_winnings_sol` | Claim SOL winnings from resolved boolean market | HIGH |
-| `claim_race_winnings_sol` | Claim SOL winnings from resolved race market | HIGH |
-| `finalize_resolution` | Finalize resolution after dispute window (permissionless) | MEDIUM |
-| `finalize_race_resolution` | Finalize race resolution after dispute window | MEDIUM |
-| `flag_dispute` | Challenge a proposed resolution | MEDIUM |
+| `flag_dispute` | Challenge a proposed resolution during 6h window | MEDIUM |
 | `register_affiliate` | Register as affiliate for 1% referral commission | LOW |
-| `close_market` / `close_race_market` | Close expired market (permissionless) | LOW |
-| `extend_market` / `extend_race_market` | Extend closing time (creator only) | LOW |
+| `close_market` / `close_race_market` | Close expired market (permissionless cleanup) | LOW |
+| `vote_council` / `vote_council_race` | Council member votes on disputed outcome | LOW |
+
+**Note:** `extend_market` / `extend_race_market` are **admin-only** instructions (IDL signer is `admin`). Lab market creators cannot extend their own markets — this is by design to prevent manipulation.
 
 ## Troubleshooting
 

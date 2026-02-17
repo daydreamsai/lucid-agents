@@ -59,6 +59,12 @@ This agent can **read and bet on all layers**, but can only **create and manage*
 - **`claimRefund`** — Claim your refund from a cancelled market
   - Parameters: `marketId`
 
+- **`claimWinnings`** — Claim SOL winnings from a resolved market (boolean or race)
+  - Parameters: `marketId`
+
+- **`finalizeResolution`** — Finalize resolution after 6h dispute window (permissionless, anyone can call)
+  - Parameters: `marketId`
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -110,6 +116,16 @@ curl -X POST http://localhost:3000/entrypoints/claimRefund/invoke \
   -H "Content-Type: application/json" \
   -d '{"input": {"marketId": "CANCELLED_MARKET_PUBKEY"}}'
 
+# Claim winnings from resolved market
+curl -X POST http://localhost:3000/entrypoints/claimWinnings/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"marketId": "RESOLVED_MARKET_PUBKEY"}}'
+
+# Finalize resolution after dispute window
+curl -X POST http://localhost:3000/entrypoints/finalizeResolution/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"marketId": "PENDING_RESOLUTION_MARKET_PUBKEY"}}'
+
 # View portfolio
 curl -X POST http://localhost:3000/entrypoints/getPortfolio/invoke \
   -H "Content-Type: application/json" \
@@ -125,13 +141,14 @@ The agent reads prediction market data directly from the Solana blockchain using
 
 **Pricing model:** Pari-mutuel (pool-based). Odds are derived from pool ratios: the implied probability of an outcome equals the proportion of funds bet on the *other* side(s).
 
-**Market lifecycle:**
+**Full market lifecycle (all steps supported by this agent):**
 1. Create a CreatorProfile (one-time, costs ~0.01 SOL rent)
 2. Create a Lab market with a question, closing time, and timing proof (Type A or B)
 3. The market goes live immediately — anyone can bet on it
-4. Creator can cancel before resolution if needed (full refund to all bettors)
-5. After closing, the oracle resolves the outcome
-6. Winners claim their winnings (minus 3% platform fee)
+4. Creator can cancel before resolution if needed (full 100% refund to all bettors)
+5. After closing, the oracle proposes resolution (6h dispute window)
+6. Anyone calls `finalizeResolution` after dispute window closes
+7. Winners call `claimWinnings` to collect payout (minus 3% platform fee)
 
 **Parimutuel Rules v6.3:** Every market creation is validated against strict timing and content rules before the on-chain transaction is sent. This prevents unfair markets (late betting, unverifiable outcomes, manipulation).
 
