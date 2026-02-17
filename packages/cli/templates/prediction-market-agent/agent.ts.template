@@ -134,6 +134,7 @@ interface Market {
   url: string;
   rawMarketId: string;
   creator: string;
+  rawCreatorProfile: string | null;
 }
 
 interface Position {
@@ -175,11 +176,11 @@ function parseMarket(data: Buffer | Uint8Array) {
   r.optBytes(32); // invite_hash
   const creatorFeeBps = r.u16();
   r.u64(); // total_creator_fees
-  r.optPubkey(); // creator_profile
+  const creatorProfile = r.optPubkey(); // creator_profile PDA (if Lab/Private)
   const platformFeeBpsAtCreation = r.u16();
-  r.u16(); r.i64(); // affiliate_fee_bps, betting_freeze_seconds
+  const affiliateFeeBps = r.u16(); r.i64(); // affiliate_fee_bps, betting_freeze_seconds
   const hasBets = r.bool();
-  return { marketId, question, closingTime, resolutionTime, yesPool, noPool, status, winningOutcome, layer, creator, creatorFeeBps, platformFeeBpsAtCreation, hasBets, lastBetTime };
+  return { marketId, question, closingTime, resolutionTime, yesPool, noPool, status, winningOutcome, layer, creator, creatorFeeBps, creatorProfile, affiliateFeeBps, platformFeeBpsAtCreation, hasBets, lastBetTime };
 }
 
 function parseRaceMarket(data: Buffer | Uint8Array) {
@@ -206,14 +207,18 @@ function parseRaceMarket(data: Buffer | Uint8Array) {
   const creator = r.pubkey();
   r.optPubkey(); r.skip(160); r.u8(); r.skip(10); r.u8(); // oracle, council
   const creatorFeeBps = r.u16();
-  r.optPubkey(); // creator_profile
+  const creatorProfile = r.optPubkey(); // creator_profile PDA (if Lab/Private)
   const platformFeeBpsAtCreation = r.u16();
-  return { marketId, question, closingTime, resolutionTime, outcomeCount, outcomeLabels: outcomeLabels.slice(0, outcomeCount), outcomePools: outcomePools.slice(0, outcomeCount), totalPool, status, winningOutcome, layer, creator, creatorFeeBps, platformFeeBpsAtCreation, lastBetTime };
+  return { marketId, question, closingTime, resolutionTime, outcomeCount, outcomeLabels: outcomeLabels.slice(0, outcomeCount), outcomePools: outcomePools.slice(0, outcomeCount), totalPool, status, winningOutcome, layer, creator, creatorFeeBps, creatorProfile, platformFeeBpsAtCreation, lastBetTime };
 }
 
 function parseUserPosition(data: Buffer | Uint8Array) {
   const r = new BorshReader(data); r.skip(8);
-  return { user: r.pubkey(), marketId: r.u64(), yesAmount: r.u64(), noAmount: r.u64(), claimed: r.bool() };
+  const user = r.pubkey(); const marketId = r.u64();
+  const yesAmount = r.u64(); const noAmount = r.u64();
+  const claimed = r.bool(); r.u8(); // bump
+  const referredBy = r.optPubkey(); // Option<Pubkey> — affiliate owner who referred this user
+  return { user, marketId, yesAmount, noAmount, claimed, referredBy };
 }
 
 function parseRacePosition(data: Buffer | Uint8Array) {
@@ -345,7 +350,7 @@ function boolToMarket(raw: ReturnType<typeof parseMarket>, pk: string): Market {
     totalPoolSol: s, status: STATUS_NAMES[raw.status] ?? 'unknown',
     layer: layerName(raw.layer), closingTime: new Date(Number(raw.closingTime) * 1000).toISOString(),
     url: `https://baozi.bet/market/${pk}`, rawMarketId: raw.marketId.toString(),
-    creator: raw.creator,
+    creator: raw.creator, rawCreatorProfile: raw.creatorProfile,
   };
 }
 
@@ -362,7 +367,7 @@ function raceToMarket(raw: ReturnType<typeof parseRaceMarket>, pk: string): Mark
     status: STATUS_NAMES[raw.status] ?? 'unknown', layer: layerName(raw.layer),
     closingTime: new Date(Number(raw.closingTime) * 1000).toISOString(),
     url: `https://baozi.bet/market/${pk}`, rawMarketId: raw.marketId.toString(),
-    creator: raw.creator,
+    creator: raw.creator, rawCreatorProfile: raw.creatorProfile,
   };
 }
 
@@ -835,34 +840,56 @@ class BaoziClient {
 
     const mPk = new PublicKey(params.marketPubkey);
     const rawId = BigInt(market.rawMarketId);
+
+    // Resolve optional accounts from on-chain state.
+    // The program REQUIRES affiliate PDA when position.referred_by is set (error 6251),
+    // and creator_profile PDA when market has creator fees (error 6262).
+    const creatorProfileKey = market.rawCreatorProfile ? new PublicKey(market.rawCreatorProfile) : PROGRAM_ID;
     let ix: TransactionInstruction;
 
     if (market.type === 'boolean') {
-      // claim_winnings_sol: 10 accounts (4 optional — pass PROGRAM_ID for None)
       const pos = positionPda(rawId, this.wallet.publicKey);
+      // Fetch position to check if referred_by is set
+      const posInfo = await this.conn.getAccountInfo(pos);
+      let affKey: PublicKey = PROGRAM_ID;
+      if (posInfo) {
+        const posData = parseUserPosition(posInfo.data);
+        if (posData.referredBy) affKey = affiliatePda(new PublicKey(posData.referredBy));
+      }
       ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
         { pubkey: configPda(), isSigner: false, isWritable: false },
         { pubkey: mPk, isSigner: false, isWritable: true },
         { pubkey: pos, isSigner: false, isWritable: true },
         { pubkey: treasuryPda(), isSigner: false, isWritable: true },
-        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // affiliate: None
-        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // creator_profile: None
+        { pubkey: affKey, isSigner: false, isWritable: affKey !== PROGRAM_ID },
+        { pubkey: creatorProfileKey, isSigner: false, isWritable: creatorProfileKey !== PROGRAM_ID },
         { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
         { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ], data: CLAIM_WINNINGS_DISC });
     } else {
-      // claim_race_winnings_sol: 11 accounts (5 optional — pass PROGRAM_ID for None)
       const pos = racePosPda(rawId, this.wallet.publicKey);
+      // Check if RaceReferral PDA exists for this user+market
+      const raceRefPda = raceReferralPda(mPk, this.wallet.publicKey);
+      const raceRefInfo = await this.conn.getAccountInfo(raceRefPda);
+      let affKey: PublicKey = PROGRAM_ID;
+      let raceRefKey: PublicKey = PROGRAM_ID;
+      if (raceRefInfo && raceRefInfo.data.length > 0) {
+        raceRefKey = raceRefPda;
+        // Parse race_referral to get referred_by field: skip disc(8) + race_market(32) + user(32) = offset 72
+        const rr = new BorshReader(raceRefInfo.data); rr.skip(8 + 32 + 32);
+        const referredBy = rr.pubkey();
+        affKey = affiliatePda(new PublicKey(referredBy));
+      }
       ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
         { pubkey: configPda(), isSigner: false, isWritable: false },
         { pubkey: mPk, isSigner: false, isWritable: true },
         { pubkey: pos, isSigner: false, isWritable: true },
         { pubkey: treasuryPda(), isSigner: false, isWritable: true },
-        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // affiliate: None
-        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // race_referral: None
-        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // creator_profile: None
+        { pubkey: affKey, isSigner: false, isWritable: affKey !== PROGRAM_ID },
+        { pubkey: raceRefKey, isSigner: false, isWritable: false },
+        { pubkey: creatorProfileKey, isSigner: false, isWritable: creatorProfileKey !== PROGRAM_ID },
         { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
         { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
         { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
@@ -1668,7 +1695,7 @@ HOW IT WORKS:
 
 Commission comes from the platform fee split — bettors pay the same amount regardless.`,
   input: z.object({
-    code: z.string().min(1).max(32).describe('Unique referral code (e.g. your agent name)'),
+    code: z.string().min(1).max(16).describe('Unique referral code (e.g. your agent name, max 16 chars)'),
   }),
   output: z.object({
     signature: z.string(),

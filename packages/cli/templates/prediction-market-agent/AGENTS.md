@@ -239,7 +239,7 @@ Agents can earn passive income by referring other agents and users to bet on mar
 3. `owner` — Signer (writable)
 4. `system_program`
 
-Args: `code` (string, 1-32 chars unique referral code)
+Args: `code` (string, 1-16 chars unique referral code)
 
 **Betting with affiliate:** `place_bet_sol_with_affiliate` (IDL-verified, 8 accounts)
 
@@ -655,7 +655,7 @@ These IDL instructions exist on-chain and could be added to the agent:
 - **cancelLabMarket fails:** Creator can only cancel if no bets placed yet, or pool < 0.5 SOL. Admin can cancel anytime.
 - **claimRefund fails:** Market must be in `cancelled` status. Check market status first with `getMarketOdds`.
 - **"Invalid SOLANA_PRIVATE_KEY":** Must be a base58-encoded 64-byte secret key (not a mnemonic or hex)
-- **registerAffiliate fails:** Affiliate code must be unique (1-32 chars). If the code is taken, choose a different one.
+- **registerAffiliate fails:** Affiliate code must be unique (1-16 chars). If the code is taken, choose a different one.
 - **placeBetWithAffiliate fails:** The affiliate wallet must have a registered Affiliate PDA. Verify the affiliate has called `registerAffiliate` first.
 - **claimAffiliateEarnings fails:** No pending earnings. Affiliate commission accrues when referred bettors claim winnings.
 - **closeMarket fails:** Market must be past its closing time and in `active` status. Cannot close already-closed/resolved/cancelled markets.
