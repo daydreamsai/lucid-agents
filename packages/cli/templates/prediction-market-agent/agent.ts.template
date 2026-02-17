@@ -265,7 +265,7 @@ function boolToMarket(raw: ReturnType<typeof parseMarket>, pk: string): Market {
   const total = raw.yesPool + raw.noPool;
   const s = Number(total) / LAMPORTS_PER_SOL;
   let yp = 0.5, np = 0.5;
-  if (total > 0n) { yp = Number(raw.noPool) / Number(total); np = Number(raw.yesPool) / Number(total); }
+  if (total > 0n) { yp = Number(raw.yesPool) / Number(total); np = Number(raw.noPool) / Number(total); }
   return {
     id: pk, question: raw.question, type: 'boolean',
     outcomes: [
@@ -283,13 +283,9 @@ function raceToMarket(raw: ReturnType<typeof parseRaceMarket>, pk: string): Mark
   const outcomes: MarketOutcome[] = [];
   for (let i = 0; i < raw.outcomeCount; i++) {
     const pool = raw.outcomePools[i];
-    const other = raw.totalPool - pool;
-    const divisor = raw.outcomeCount > 1 ? raw.outcomeCount - 1 : 1;
-    const price = raw.totalPool > 0n ? Number(other) / (Number(raw.totalPool) * divisor) : 1 / raw.outcomeCount;
-    outcomes.push({ label: raw.outcomeLabels[i] || `Outcome ${i + 1}`, probability: Math.min(Math.max(price, 0), 1), poolSol: Number(pool) / LAMPORTS_PER_SOL });
+    const prob = raw.totalPool > 0n ? Number(pool) / Number(raw.totalPool) : 1 / raw.outcomeCount;
+    outcomes.push({ label: raw.outcomeLabels[i] || `Outcome ${i + 1}`, probability: prob, poolSol: Number(pool) / LAMPORTS_PER_SOL });
   }
-  const sum = outcomes.reduce((a, o) => a + o.probability, 0);
-  if (sum > 0) for (const o of outcomes) o.probability /= sum;
   return {
     id: pk, question: raw.question, type: 'race', outcomes, totalPoolSol: s,
     status: STATUS_NAMES[raw.status] ?? 'unknown', layer: layerName(raw.layer),
@@ -317,7 +313,10 @@ function raceToMarket(raw: ReturnType<typeof parseRaceMarket>, pk: string): Mark
 const BLOCKED_SUBJECTIVE = [
   'ai agent', 'an agent', 'autonomously', 'become popular', 'go viral',
   'be successful', 'perform well', 'be the best', 'breakthrough',
-  'revolutionary', 'will i ', 'will we ', 'will my ', 'will our ',
+  'revolutionary',
+];
+const BLOCKED_SUBJECTIVE_PATTERNS = [
+  /\bwill i\b/i, /\bwill we\b/i, /\bwill my\b/i, /\bwill our\b/i,
 ];
 const BLOCKED_MANIPULATION = [
   'will someone', 'will anyone', 'will a person', 'will a user',
@@ -355,8 +354,9 @@ function validateParimutuelRules(params: {
   // ---- Content validation ----
 
   const subjective = BLOCKED_SUBJECTIVE.filter(p => q.includes(p));
-  if (subjective.length > 0)
-    errors.push(`BLOCKED: Unverifiable/subjective terms: "${subjective.join('", "')}". Outcomes must be objectively verifiable by third party.`);
+  const subjectivePatterns = BLOCKED_SUBJECTIVE_PATTERNS.filter(p => p.test(params.question));
+  if (subjective.length > 0 || subjectivePatterns.length > 0)
+    errors.push(`BLOCKED: Unverifiable/subjective terms detected. Outcomes must be objectively verifiable by third party.`);
 
   const manipulation = BLOCKED_MANIPULATION.filter(p => q.includes(p));
   if (manipulation.length > 0)
@@ -384,14 +384,15 @@ function validateParimutuelRules(params: {
       if (isNaN(eventMs)) {
         errors.push('BLOCKED: Invalid eventTime — must be valid ISO 8601.');
       } else {
-        const bufferHours = (eventMs - closeMs) / (1000 * 60 * 60);
-        if (bufferHours < 8) {
-          errors.push(`BLOCKED: Betting closes only ${bufferHours.toFixed(1)}h before event. MINIMUM is 8h. Late bets create information advantage.`);
-        } else if (bufferHours < 12) {
-          warnings.push(`Buffer is ${bufferHours.toFixed(1)}h before event. Minimum met, but 12-24h recommended for operational safety.`);
-        }
         if (closeMs >= eventMs) {
           errors.push('BLOCKED: Betting closes AFTER the event! Bettors would already know the outcome.');
+        } else {
+          const bufferHours = (eventMs - closeMs) / (1000 * 60 * 60);
+          if (bufferHours < 8) {
+            errors.push(`BLOCKED: Betting closes only ${bufferHours.toFixed(1)}h before event. MINIMUM is 8h. Late bets create information advantage.`);
+          } else if (bufferHours < 12) {
+            warnings.push(`Buffer is ${bufferHours.toFixed(1)}h before event. Minimum met, but 12-24h recommended for operational safety.`);
+          }
         }
       }
     }
@@ -628,6 +629,8 @@ class BaoziClient {
 
   async createLabMarket(params: { question: string; closingTime: number }): Promise<{ signature: string; marketAddress: string; marketId: number }> {
     if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    // Note: marketCount is read then used for PDA derivation. If another market is created
+    // between read and send, the tx will fail with account mismatch — retry in that case.
     const config = await this.fetchGlobalConfig();
     const mPda = marketPda(config.marketCount);
     const w = new BorshWriter();
@@ -802,6 +805,8 @@ class BaoziClient {
     if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
     const market = await this.fetchMarket(params.marketPubkey);
     if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'resolved_pending')
+      throw new Error(`Market status is "${market.status}" — finalizeResolution requires "resolved_pending" (after oracle proposal + 6h dispute window)`);
 
     const mPk = new PublicKey(params.marketPubkey);
     const dMeta = disputeMetaPda(mPk);
@@ -1064,7 +1069,7 @@ addEntrypoint({
   description: 'Create an on-chain creator profile (required before creating Lab or Private markets). Each wallet can have one profile.',
   input: z.object({
     displayName: z.string().min(1).max(32).describe('Display name shown on your markets'),
-    defaultFeeBps: z.number().min(0).max(500).optional().default(50).describe('Default creator fee in basis points (50 = 0.5%)'),
+    defaultFeeBps: z.number().min(0).max(200).optional().default(50).describe('Default creator fee in basis points (50 = 0.5%). Max 200 (2%) — must satisfy solvency rule: creator_fee + affiliate_fee <= platform_fee'),
   }),
   output: z.object({
     signature: z.string(),

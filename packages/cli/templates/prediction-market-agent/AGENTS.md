@@ -46,7 +46,7 @@ Account data is parsed using a cursor-based `BorshReader` that walks through the
 
 Unlike order-book markets, pari-mutuel markets determine payouts from pool ratios:
 
-- **Boolean market:** P(Yes) = noPool / totalPool, P(No) = yesPool / totalPool
+- **Boolean market:** P(Yes) = yesPool / totalPool, P(No) = noPool / totalPool
 - **Race market:** Probabilities normalized across all outcome pools
 - **Payout if correct:** totalPool / winningOutcomePool (minus fees)
 
@@ -285,7 +285,7 @@ All fees apply to gross winnings (stake + profit) at claim time:
 | Private | 2% | 0.01 SOL | Up to 0.5% |
 
 **Fee split per claim:**
-```
+```text
 Platform Fee (e.g. 3% for Lab)
 ├── Affiliate Share (1.0%)  → SolTreasury
 ├── Creator Share (0.5%)    → SolTreasury
