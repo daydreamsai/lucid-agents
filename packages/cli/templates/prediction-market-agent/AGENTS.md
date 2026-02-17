@@ -72,6 +72,11 @@ All Program Derived Addresses used by this agent:
 | CreatorProfile | `["creator_profile", owner_pubkey]` | Creator reputation + fee settings |
 | RevenueConfig | `["revenue_config"]` | Protocol revenue routing settings |
 | DisputeMeta | `["dispute_meta", market_pubkey]` | Dispute window state for resolution |
+| Affiliate | `["affiliate", owner_pubkey]` | Affiliate account for referral tracking |
+| ReferredUser | `["referred", user_pubkey]` | Tracks which affiliate referred a boolean bettor |
+| RaceReferral | `["race_referral", race_market_pubkey, user_pubkey]` | Tracks affiliate referral for race bet |
+| CreatorReputation | `["creator_rep", creator_pubkey]` | On-chain reputation score for creators |
+| ReputationVote | `["rep_vote", voter_pubkey, creator_pubkey, market_id_u64_le]` | One vote per bettor per resolved market |
 
 **Note:** Both boolean and race markets share a single `market_count` counter in GlobalConfig. The PDA namespace is different (`"market"` vs `"race"`), so they don't collide.
 
@@ -223,7 +228,161 @@ After the oracle proposes a resolution, there's a 6-hour dispute window. Once th
 2. `dispute_meta` — DisputeMeta PDA `["dispute_meta", race_market_pubkey]` (writable)
 3. `finalizer` — Signer (any wallet)
 
-### 11. Instruction Discriminators
+### 11. Affiliate System
+
+Agents can earn passive income by referring other agents and users to bet on markets. The affiliate gets 1% of the platform fee on every bet placed through their referral.
+
+**Registration:** `register_affiliate` (IDL-verified, 4 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `affiliate` — Affiliate PDA `["affiliate", owner]` (writable, init)
+3. `owner` — Signer (writable)
+4. `system_program`
+
+Args: `code` (string, 1-32 chars unique referral code)
+
+**Betting with affiliate:** `place_bet_sol_with_affiliate` (IDL-verified, 8 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (writable)
+3. `position` — UserPosition PDA (writable, init_if_needed)
+4. `affiliate` — Affiliate PDA of referrer (writable)
+5. `referred_user` — ReferredUser PDA `["referred", bettor]` (writable, init_if_needed)
+6. `whitelist` — Optional, pass PROGRAM_ID if not needed (read-only)
+7. `user` — Signer (writable)
+8. `system_program`
+
+**Race betting with affiliate:** `bet_on_race_outcome_sol_with_affiliate` (IDL-verified, 8 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `race_market` — RaceMarket account (writable)
+3. `position` — RacePosition PDA (writable, init_if_needed)
+4. `affiliate` — Affiliate PDA of referrer (writable)
+5. `race_referral` — RaceReferral PDA `["race_referral", race_market, bettor]` (writable, init_if_needed)
+6. `whitelist` — Optional, pass PROGRAM_ID if not needed (read-only)
+7. `user` — Signer (writable)
+8. `system_program`
+
+**Claiming earnings:** `claim_affiliate_sol` (IDL-verified, 5 accounts)
+
+1. `config` — GlobalConfig PDA (**writable** — note: unlike most instructions)
+2. `affiliate` — Affiliate PDA (writable)
+3. `sol_treasury` — SolTreasury PDA (writable)
+4. `owner` — Signer (writable)
+5. `system_program`
+
+**Important:** `claim_affiliate_sol` requires `config` to be writable, unlike most other instructions where config is read-only.
+
+**Agent-to-agent referral flow:**
+
+```text
+Agent A (affiliate)          Agent B (bettor)
+    |                            |
+    +-- registerAffiliate -->    |
+    |   (code: "agent-a")       |
+    |                            |
+    |   Shares wallet address   |
+    |   ----------------------> |
+    |                            +-- placeBetWithAffiliate
+    |                            |   (affiliateWallet: Agent A)
+    |                            |
+    |   ... Agent B wins ...    |
+    |                            +-- claimWinnings
+    |   1% commission accrues   |   (3% platform fee)
+    |   <---------------------  |
+    |                            |
+    +-- claimAffiliateEarnings  |
+    |   (collects 1% SOL)      |
+```
+
+### 12. Creator Management
+
+**Update profile:** `update_creator_profile` (IDL-verified, 2 accounts)
+
+1. `creator_profile` — CreatorProfile PDA (writable)
+2. `owner` — Signer (read-only, not writable)
+
+Args: `display_name` (string), `default_fee_bps` (u16)
+
+**Claim creator fees:** `claim_creator_sol` (IDL-verified, 5 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `creator_profile` — CreatorProfile PDA (writable)
+3. `sol_treasury` — SolTreasury PDA (writable)
+4. `owner` — Signer (writable)
+5. `system_program`
+
+### 13. Market Lifecycle (Close + Resolution)
+
+After a market's closing time passes, anyone can call `closeMarket` to take a pool snapshot. This is permissionless — any wallet can close an expired market.
+
+**Close boolean market:** `close_market` (IDL-verified, 3 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (writable)
+3. `closer` — Signer (read-only)
+
+No args (discriminator only).
+
+**Close race market:** `close_race_market` (IDL-verified, 3 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `race_market` — RaceMarket account (writable)
+3. `closer` — Signer (read-only)
+
+No args (discriminator only).
+
+**Propose resolution (boolean, HostOracle):** `propose_resolution_host` (IDL-verified, 5 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (writable)
+3. `dispute_meta` — DisputeMeta PDA (writable, init)
+4. `host` — Signer (writable)
+5. `system_program`
+
+Args: `winning_outcome` (bool — true=Yes, false=No)
+
+**Propose resolution (race, HostOracle):** `propose_race_resolution` (IDL-verified, 5 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `race_market` — RaceMarket account (writable)
+3. `dispute_meta` — DisputeMeta PDA (writable, init)
+4. `host` — Signer (writable)
+5. `system_program`
+
+Args: `winning_outcome` (u8 — outcome index)
+
+**Full lifecycle for Lab markets created by this agent:**
+
+1. `createCreatorProfile` — one-time setup
+2. `createLabMarket` / `createLabRaceMarket` — create the market
+3. Market goes live — anyone can `placeBet` or `placeBetWithAffiliate`
+4. Creator can `cancelLabMarket` before resolution (full 100% refund)
+5. After closing time: `closeMarket` (permissionless)
+6. Creator calls `proposeResolutionHost` / `proposeRaceResolution` (6h dispute window)
+7. Anyone calls `finalizeResolution` after dispute window
+8. Winners: `claimWinnings` | Creator: `claimCreatorFees` | Affiliates: `claimAffiliateEarnings`
+9. Bettors: `voteCreatorReputation` on the creator
+
+### 14. Creator Reputation Voting
+
+After a market resolves, bettors who had a position can vote +1/-1 on the creator's reputation. This is Sybil-resistant — you must have placed a bet in the market to vote.
+
+**Vote:** `vote_creator_reputation` (IDL-verified, 7 accounts)
+
+1. `config` — GlobalConfig PDA (read-only)
+2. `market` — Market account (read-only)
+3. `position` — UserPosition PDA (read-only — proves bet)
+4. `creator_reputation` — CreatorReputation PDA `["creator_rep", creator]` (writable)
+5. `reputation_vote` — ReputationVote PDA `["rep_vote", voter, creator, market_id]` (writable, init)
+6. `voter` — Signer (writable)
+7. `system_program`
+
+Args: `vote` (i8 — must be +1 or -1)
+
+**Constraints:** Market must be `resolved`. Voter must have a position (bet) in that market. One vote per voter per market per creator.
+
+### 15. Instruction Discriminators
 
 All instruction discriminators are hardcoded from the IDL (not computed at runtime):
 
@@ -231,17 +390,28 @@ All instruction discriminators are hardcoded from the IDL (not computed at runti
 |-------------|--------------|
 | `place_bet_sol` | `[137, 137, 247, 253, 233, 243, 48, 170]` |
 | `bet_on_race_outcome_sol` | `[195, 181, 151, 159, 105, 100, 234, 244]` |
+| `place_bet_sol_with_affiliate` | `[197, 186, 187, 145, 252, 239, 101, 96]` |
+| `bet_on_race_outcome_sol_with_affiliate` | `[26, 224, 14, 181, 67, 52, 24, 0]` |
+| `register_affiliate` | `[87, 121, 99, 184, 126, 63, 103, 217]` |
+| `claim_affiliate_sol` | `[125, 18, 164, 112, 216, 207, 197, 201]` |
 | `create_creator_profile` | `[139, 244, 127, 145, 95, 172, 140, 154]` |
+| `update_creator_profile` | `[8, 240, 162, 55, 110, 46, 177, 108]` |
+| `claim_creator_sol` | `[21, 25, 164, 47, 81, 156, 199, 103]` |
 | `create_lab_market_sol` | `[35, 159, 50, 67, 31, 134, 199, 157]` |
 | `create_race_market_sol` | `[94, 237, 40, 47, 63, 233, 25, 67]` |
 | `cancel_market` | `[205, 121, 84, 210, 222, 71, 150, 11]` |
 | `cancel_race` | `[223, 214, 232, 232, 43, 15, 165, 234]` |
+| `close_market` | `[88, 154, 248, 186, 48, 14, 123, 244]` |
+| `close_race_market` | `[39, 189, 166, 118, 134, 37, 102, 41]` |
+| `propose_resolution_host` | `[116, 231, 75, 185, 127, 129, 46, 124]` |
+| `propose_race_resolution` | `[14, 204, 17, 188, 243, 49, 107, 255]` |
 | `claim_refund_sol` | `[8, 82, 5, 144, 194, 114, 255, 20]` |
 | `claim_race_refund` | `[174, 101, 101, 227, 171, 69, 173, 243]` |
 | `claim_winnings_sol` | `[64, 158, 207, 116, 128, 129, 169, 76]` |
 | `claim_race_winnings_sol` | `[46, 120, 202, 194, 126, 72, 22, 52]` |
 | `finalize_resolution` | `[191, 74, 94, 214, 45, 150, 152, 125]` |
 | `finalize_race_resolution` | `[19, 232, 81, 138, 191, 218, 54, 200]` |
+| `vote_creator_reputation` | `[70, 64, 70, 238, 141, 95, 102, 221]` |
 
 ## Customization
 
@@ -301,15 +471,25 @@ Platform Fee (e.g. 3% for Lab)
 | `getMarkets` | Read | List markets with filters (status, layer, query) and odds |
 | `getMarketOdds` | Read | Single market probabilities |
 | `getPortfolio` | Read | Wallet positions |
-| `placeBet` | Write | Execute on-chain bet transaction |
 | `analyzeMarket` | Read | Statistical market summary |
-| `createCreatorProfile` | Write | Create on-chain creator profile |
+| `getCreatorProfile` | Read | View creator profile, stats, earnings, and reputation |
+| `placeBet` | Write | Execute on-chain bet transaction |
+| `placeBetWithAffiliate` | Write | Bet with affiliate referral tracking (1% commission) |
+| `registerAffiliate` | Write | Register as affiliate with unique referral code |
+| `claimAffiliateEarnings` | Write | Claim accumulated affiliate SOL earnings |
+| `createCreatorProfile` | Write | Create on-chain creator profile (required for Labs) |
 | `createLabMarket` | Write | Create boolean Lab market |
 | `createLabRaceMarket` | Write | Create multi-outcome Lab race market |
-| `cancelLabMarket` | Write | Cancel a Lab market (full refund to bettors) |
+| `updateCreatorProfile` | Write | Update display name and default creator fee |
+| `claimCreatorFees` | Write | Claim pending creator fee earnings |
+| `cancelLabMarket` | Write | Cancel a Lab market (full 100% refund to bettors) |
+| `closeMarket` | Write | Close market after closing time (permissionless) |
+| `proposeResolutionHost` | Write | Creator resolves own boolean Lab market (6h dispute) |
+| `proposeRaceResolution` | Write | Creator resolves own race Lab market (6h dispute) |
 | `claimRefund` | Write | Claim refund from cancelled market |
 | `claimWinnings` | Write | Claim SOL winnings from resolved market |
 | `finalizeResolution` | Write | Finalize resolution after 6h dispute window (permissionless) |
+| `voteCreatorReputation` | Write | Vote +1/-1 on creator reputation (requires bet position) |
 
 ## Parimutuel Rules v6.3 — Market Creation Guardrails
 
@@ -460,8 +640,8 @@ These IDL instructions exist on-chain and could be added to the agent:
 | Instruction | What It Does | Priority |
 |-------------|-------------|----------|
 | `flag_dispute` | Challenge a proposed resolution during 6h window | MEDIUM |
-| `register_affiliate` | Register as affiliate for 1% referral commission | LOW |
-| `close_market` / `close_race_market` | Close expired market (permissionless cleanup) | LOW |
+| `create_private_table_sol` | Create invite-only private market | LOW |
+| `add_to_whitelist` | Add wallet to private market whitelist | LOW |
 | `vote_council` / `vote_council_race` | Council member votes on disputed outcome | LOW |
 
 **Note:** `extend_market` / `extend_race_market` are **admin-only** instructions (IDL signer is `admin`). Lab market creators cannot extend their own markets — this is by design to prevent manipulation.
@@ -475,4 +655,10 @@ These IDL instructions exist on-chain and could be added to the agent:
 - **cancelLabMarket fails:** Creator can only cancel if no bets placed yet, or pool < 0.5 SOL. Admin can cancel anytime.
 - **claimRefund fails:** Market must be in `cancelled` status. Check market status first with `getMarketOdds`.
 - **"Invalid SOLANA_PRIVATE_KEY":** Must be a base58-encoded 64-byte secret key (not a mnemonic or hex)
+- **registerAffiliate fails:** Affiliate code must be unique (1-32 chars). If the code is taken, choose a different one.
+- **placeBetWithAffiliate fails:** The affiliate wallet must have a registered Affiliate PDA. Verify the affiliate has called `registerAffiliate` first.
+- **claimAffiliateEarnings fails:** No pending earnings. Affiliate commission accrues when referred bettors claim winnings.
+- **closeMarket fails:** Market must be past its closing time and in `active` status. Cannot close already-closed/resolved/cancelled markets.
+- **proposeResolutionHost fails:** Market must be in `closed` status. Ensure `closeMarket` was called first. Only the creator (or oracle) can propose.
+- **voteCreatorReputation fails:** Market must be `resolved` and you must have a bet position in that market. One vote per market per voter.
 - **Stale data:** Market list is cached for 30 seconds. Call `getMarketOdds` for real-time single-market data
