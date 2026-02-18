@@ -16,7 +16,49 @@ import type {
   WalletClientLike,
 } from '../registries/identity';
 import { hexToTronBase58 } from './address';
-import type { TronWebLike } from './types';
+import { isTronChainSupported } from './config';
+import type { TronContractLike, TronWebLike } from './types';
+
+type ContractCache = Map<string, TronContractLike>;
+
+/**
+ * Resolve a contract method from the cache, rehydrating if the method is
+ * missing (e.g. because the cached contract was created with a different ABI).
+ */
+async function resolveMethod(
+  contractCache: ContractCache,
+  tronWeb: TronWebLike,
+  address: Hex,
+  abi: readonly unknown[],
+  functionName: string
+): Promise<{
+  method: TronContractLike['methods'][string];
+  tronAddr: string;
+}> {
+  const tronAddr = await hexToTronBase58(address);
+
+  let contract = contractCache.get(tronAddr);
+  if (!contract) {
+    contract = await tronWeb.contract(abi, tronAddr);
+    contractCache.set(tronAddr, contract);
+  }
+
+  let method = contract.methods[functionName];
+  if (!method) {
+    // ABI mismatch — rehydrate the contract with the new ABI
+    contract = await tronWeb.contract(abi, tronAddr);
+    contractCache.set(tronAddr, contract);
+    method = contract.methods[functionName];
+  }
+
+  if (!method) {
+    throw new Error(
+      `Method '${functionName}' not found on TRON contract ${tronAddr}`
+    );
+  }
+
+  return { method, tronAddr };
+}
 
 /**
  * Create a PublicClientLike adapter backed by TronWeb.
@@ -34,11 +76,7 @@ import type { TronWebLike } from './types';
  * ```
  */
 export function createTronPublicClient(tronWeb: TronWebLike): PublicClientLike {
-  // Cache contract instances by address to avoid re-instantiating
-  const contractCache = new Map<
-    string,
-    Awaited<ReturnType<TronWebLike['contract']>>
-  >();
+  const contractCache: ContractCache = new Map();
 
   return {
     async readContract(args: {
@@ -47,28 +85,13 @@ export function createTronPublicClient(tronWeb: TronWebLike): PublicClientLike {
       functionName: string;
       args?: readonly unknown[];
     }): Promise<unknown> {
-      const tronAddr = await hexToTronBase58(args.address);
-      const cacheKey = tronAddr;
-
-      let contract = contractCache.get(cacheKey);
-      if (!contract) {
-        contract = await tronWeb.contract(args.abi, tronAddr);
-        contractCache.set(cacheKey, contract);
-      }
-
-      let method = contract.methods[args.functionName];
-      if (!method) {
-        // ABI mismatch — rehydrate the contract with the new ABI
-        contract = await tronWeb.contract(args.abi, tronAddr);
-        contractCache.set(cacheKey, contract);
-        method = contract.methods[args.functionName];
-      }
-
-      if (!method) {
-        throw new Error(
-          `Method '${args.functionName}' not found on TRON contract ${tronAddr}`
-        );
-      }
+      const { method } = await resolveMethod(
+        contractCache,
+        tronWeb,
+        args.address,
+        args.abi,
+        args.functionName
+      );
 
       return await method(...(args.args ?? [])).call();
     },
@@ -102,11 +125,7 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
     ? (`0x${rawHex.slice(2).toLowerCase()}` as Hex)
     : (`0x${rawHex.toLowerCase()}` as Hex);
 
-  // Cache contract instances by address
-  const contractCache = new Map<
-    string,
-    Awaited<ReturnType<TronWebLike['contract']>>
-  >();
+  const contractCache: ContractCache = new Map();
 
   return {
     account: { address: evmAddress },
@@ -117,28 +136,13 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
       functionName: string;
       args?: readonly unknown[];
     }): Promise<Hex> {
-      const tronAddr = await hexToTronBase58(args.address);
-      const cacheKey = tronAddr;
-
-      let contract = contractCache.get(cacheKey);
-      if (!contract) {
-        contract = await tronWeb.contract(args.abi, tronAddr);
-        contractCache.set(cacheKey, contract);
-      }
-
-      let method = contract.methods[args.functionName];
-      if (!method) {
-        // ABI mismatch — rehydrate the contract with the new ABI
-        contract = await tronWeb.contract(args.abi, tronAddr);
-        contractCache.set(cacheKey, contract);
-        method = contract.methods[args.functionName];
-      }
-
-      if (!method) {
-        throw new Error(
-          `Method '${args.functionName}' not found on TRON contract ${tronAddr}`
-        );
-      }
+      const { method } = await resolveMethod(
+        contractCache,
+        tronWeb,
+        args.address,
+        args.abi,
+        args.functionName
+      );
 
       const txId = await method(...(args.args ?? [])).send();
 
@@ -154,6 +158,10 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
  *
  * This factory can be passed to `bootstrapIdentity({ makeClients })` or
  * `createAgentIdentity()` to use TRON instead of viem/EVM.
+ *
+ * The provided TronWeb instance must be configured for the same network as the
+ * `chainId` passed to `bootstrapIdentity`. The factory validates that the
+ * supplied `chainId` is a supported TRON chain and throws if it is not.
  *
  * @example
  * ```ts
@@ -175,8 +183,16 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
 export function makeTronClientFactory(
   tronWeb: TronWebLike
 ): BootstrapIdentityClientFactory {
-  return () => ({
-    publicClient: createTronPublicClient(tronWeb),
-    walletClient: createTronWalletClient(tronWeb),
-  });
+  return ({ chainId }) => {
+    if (!isTronChainSupported(chainId)) {
+      throw new Error(
+        `makeTronClientFactory: chainId ${chainId} is not a supported TRON chain. ` +
+          `Configure the TronWeb instance to match the intended chain.`
+      );
+    }
+    return {
+      publicClient: createTronPublicClient(tronWeb),
+      walletClient: createTronWalletClient(tronWeb),
+    };
+  };
 }

@@ -91,6 +91,57 @@ describe('createTronPublicClient', () => {
     expect(mockTronWeb.calls[0].args).toEqual([1n]);
   });
 
+  it('rehydrates contract when method is missing from cached instance', async () => {
+    let contractCreations = 0;
+    let serveOwnerOf = false; // first contract won't have ownerOf
+
+    const mockTronWeb: TronWebLike = {
+      defaultAddress: {
+        base58: 'TFKNqk9bjwWp5uRiiGimqfLhVQB8jSxYi7',
+        hex: '413aa92963de476e4c7f10e070d4cc99ed93602da2',
+      },
+      async contract() {
+        contractCreations++;
+        const shouldHaveMethod = serveOwnerOf;
+        serveOwnerOf = true; // second contract creation will have the method
+        return {
+          methods: new Proxy(
+            {},
+            {
+              get(_t, name: string) {
+                if (!shouldHaveMethod && name === 'ownerOf') {
+                  return undefined; // method absent on first contract
+                }
+                return () => ({
+                  async call() {
+                    return 'result';
+                  },
+                  async send() {
+                    return 'txid';
+                  },
+                });
+              },
+            }
+          ) as TronContractLike['methods'],
+        };
+      },
+    };
+
+    const publicClient = createTronPublicClient(mockTronWeb);
+    const addrs = getTronRegistryAddresses(TRON_CHAINS.SHASTA);
+
+    const result = await publicClient.readContract({
+      address: addrs.IDENTITY_REGISTRY,
+      abi: [],
+      functionName: 'ownerOf',
+      args: [1n],
+    });
+
+    expect(result).toBe('result');
+    // First contract creation (cache miss) + second creation (rehydration after ABI mismatch)
+    expect(contractCreations).toBe(2);
+  });
+
   it('caches contract instances by address', async () => {
     let contractCreations = 0;
     const mockTronWeb: TronWebLike = {
@@ -263,6 +314,19 @@ describe('makeTronClientFactory', () => {
     expect(clients).not.toBeNull();
     expect(clients!.publicClient).toBeDefined();
     expect(clients!.walletClient).toBeDefined();
+  });
+
+  it('throws for unsupported chainId', () => {
+    const mockTronWeb = createMockTronWeb();
+    const factory = makeTronClientFactory(mockTronWeb);
+
+    expect(() =>
+      factory({
+        chainId: 1, // Ethereum — not a TRON chain
+        rpcUrl: 'https://mainnet.infura.io',
+        env: {},
+      })
+    ).toThrow('makeTronClientFactory: chainId 1 is not a supported TRON chain');
   });
 });
 

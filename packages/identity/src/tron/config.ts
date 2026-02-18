@@ -52,6 +52,7 @@ type RegistryAddresses = {
   REPUTATION_REGISTRY: Hex;
   VALIDATION_REGISTRY: Hex;
 };
+export type { RegistryAddresses };
 
 const TRON_CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
   // TRON Mainnet — M2M TRC-8004 deployment (Feb 2026)

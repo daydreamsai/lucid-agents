@@ -107,8 +107,8 @@ function base58Decode(str: string): Uint8Array {
 }
 
 /**
- * SHA-256 hash (synchronous via SubtleCrypto or fallback).
- * Uses globalThis.crypto which is available in Node.js 18+ and browsers.
+ * SHA-256 hash via Web Crypto (SubtleCrypto).
+ * Requires Node.js 18+ or a modern browser environment.
  */
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
   try {
