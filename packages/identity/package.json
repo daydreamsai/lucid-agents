@@ -17,6 +17,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./tron": {
+      "types": "./dist/tron/index.d.ts",
+      "import": "./dist/tron/index.js",
+      "default": "./dist/tron/index.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
@@ -40,6 +45,14 @@
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "viem": "catalog:"
+  },
+  "peerDependencies": {
+    "tronweb": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "tronweb": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsup": "^8.5.0",

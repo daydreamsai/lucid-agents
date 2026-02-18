@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@lucid-agents/root",
@@ -62,7 +63,7 @@
     },
     "packages/a2a": {
       "name": "@lucid-agents/a2a",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "zod": "catalog:",
@@ -77,7 +78,7 @@
     },
     "packages/analytics": {
       "name": "@lucid-agents/analytics",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "viem": "catalog:",
@@ -90,7 +91,7 @@
     },
     "packages/ap2": {
       "name": "@lucid-agents/ap2",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
       },
@@ -101,7 +102,7 @@
     },
     "packages/api-sdk": {
       "name": "@lucid-agents/api-sdk",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "dependencies": {
         "@hey-api/client-fetch": "^0.10.0",
       },
@@ -119,7 +120,7 @@
     },
     "packages/cli": {
       "name": "@lucid-agents/cli",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "bin": {
         "create-agent-kit": "dist/index.js",
       },
@@ -134,7 +135,7 @@
     },
     "packages/core": {
       "name": "@lucid-agents/core",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@ax-llm/ax-tools": "^14.0.37",
@@ -169,7 +170,7 @@
     },
     "packages/examples": {
       "name": "@lucid-agents/examples",
-      "version": "0.3.5",
+      "version": "0.3.6",
       "dependencies": {
         "@ax-llm/ax": "^14.0.37",
         "@lucid-agents/a2a": "workspace:*",
@@ -200,7 +201,7 @@
     },
     "packages/express": {
       "name": "@lucid-agents/express",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -220,7 +221,7 @@
     },
     "packages/hono": {
       "name": "@lucid-agents/hono",
-      "version": "0.9.5",
+      "version": "0.9.6",
       "dependencies": {
         "@lucid-agents/ap2": "workspace:*",
         "@lucid-agents/core": "workspace:*",
@@ -241,7 +242,7 @@
     },
     "packages/http": {
       "name": "@lucid-agents/http",
-      "version": "1.10.1",
+      "version": "1.10.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "hono": "catalog:",
@@ -257,7 +258,7 @@
     },
     "packages/identity": {
       "name": "@lucid-agents/identity",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
@@ -269,10 +270,16 @@
         "tsup": "^8.5.0",
         "typescript": "^5.9.2",
       },
+      "peerDependencies": {
+        "tronweb": ">=5.0.0",
+      },
+      "optionalPeers": [
+        "tronweb",
+      ],
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "dependencies": {
         "@ax-llm/ax": "catalog:",
         "@lucid-agents/types": "workspace:*",
@@ -296,7 +303,7 @@
     },
     "packages/scheduler": {
       "name": "@lucid-agents/scheduler",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
       },
@@ -307,7 +314,7 @@
     },
     "packages/tanstack": {
       "name": "@lucid-agents/tanstack",
-      "version": "0.7.3",
+      "version": "0.7.4",
       "dependencies": {
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
@@ -325,7 +332,7 @@
     },
     "packages/types": {
       "name": "@lucid-agents/types",
-      "version": "1.6.1",
+      "version": "1.7.0",
       "devDependencies": {
         "tsup": "catalog:",
         "typescript": "catalog:",
@@ -339,7 +346,7 @@
     },
     "packages/wallet": {
       "name": "@lucid-agents/wallet",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "dependencies": {
         "@lucid-agents/types": "workspace:*",
         "viem": "catalog:",
