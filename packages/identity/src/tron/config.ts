@@ -28,7 +28,8 @@ export const TRON_CHAINS = {
   SHASTA: 2494104990,
 } as const;
 
-export type TronChainId = (typeof TRON_CHAINS)[keyof typeof TRON_CHAINS];
+type TronChainId = (typeof TRON_CHAINS)[keyof typeof TRON_CHAINS];
+export type { TronChainId };
 
 /**
  * Registry addresses by TRON chain ID.
@@ -100,6 +101,10 @@ export function getTronRegistryAddress(
       return addresses.REPUTATION_REGISTRY;
     case 'validation':
       return addresses.VALIDATION_REGISTRY;
+    default:
+      throw new Error(
+        `Unknown registry '${registry}' for TRON chain ${chainId}`
+      );
   }
 }
 

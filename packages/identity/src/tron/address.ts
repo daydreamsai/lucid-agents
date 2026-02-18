@@ -111,11 +111,16 @@ function base58Decode(str: string): Uint8Array {
  * Uses globalThis.crypto which is available in Node.js 18+ and browsers.
  */
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
-  // Create a new ArrayBuffer copy to satisfy strict TypeScript BufferSource typing
-  const buffer = new ArrayBuffer(data.length);
-  new Uint8Array(buffer).set(data);
-  const hash = await globalThis.crypto.subtle.digest('SHA-256', buffer);
-  return new Uint8Array(hash);
+  try {
+    // Create a new ArrayBuffer copy to satisfy strict TypeScript BufferSource typing
+    const buffer = new ArrayBuffer(data.length);
+    new Uint8Array(buffer).set(data);
+    const hash = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+    return new Uint8Array(hash);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`SHA-256 digest failed: ${message}`);
+  }
 }
 
 /**

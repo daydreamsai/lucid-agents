@@ -56,7 +56,14 @@ export function createTronPublicClient(tronWeb: TronWebLike): PublicClientLike {
         contractCache.set(cacheKey, contract);
       }
 
-      const method = contract.methods[args.functionName];
+      let method = contract.methods[args.functionName];
+      if (!method) {
+        // ABI mismatch — rehydrate the contract with the new ABI
+        contract = await tronWeb.contract(args.abi, tronAddr);
+        contractCache.set(cacheKey, contract);
+        method = contract.methods[args.functionName];
+      }
+
       if (!method) {
         throw new Error(
           `Method '${args.functionName}' not found on TRON contract ${tronAddr}`
@@ -119,7 +126,14 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
         contractCache.set(cacheKey, contract);
       }
 
-      const method = contract.methods[args.functionName];
+      let method = contract.methods[args.functionName];
+      if (!method) {
+        // ABI mismatch — rehydrate the contract with the new ABI
+        contract = await tronWeb.contract(args.abi, tronAddr);
+        contractCache.set(cacheKey, contract);
+        method = contract.methods[args.functionName];
+      }
+
       if (!method) {
         throw new Error(
           `Method '${args.functionName}' not found on TRON contract ${tronAddr}`

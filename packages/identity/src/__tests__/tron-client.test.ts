@@ -80,8 +80,8 @@ describe('createTronPublicClient', () => {
 
     const result = await publicClient.readContract({
       address: addrs.IDENTITY_REGISTRY,
-      abi: [] as any,
-      functionName: 'ownerOf' as any,
+      abi: [],
+      functionName: 'ownerOf',
       args: [1n],
     });
 
@@ -125,14 +125,14 @@ describe('createTronPublicClient', () => {
 
     await publicClient.readContract({
       address: addrs.IDENTITY_REGISTRY,
-      abi: [] as any,
-      functionName: 'ownerOf' as any,
+      abi: [],
+      functionName: 'ownerOf',
       args: [1n],
     });
     await publicClient.readContract({
       address: addrs.IDENTITY_REGISTRY,
-      abi: [] as any,
-      functionName: 'tokenURI' as any,
+      abi: [],
+      functionName: 'tokenURI',
       args: [1n],
     });
 
@@ -167,8 +167,8 @@ describe('createTronWalletClient', () => {
 
     const txHash = await walletClient.writeContract({
       address: addrs.IDENTITY_REGISTRY,
-      abi: [] as any,
-      functionName: 'register' as any,
+      abi: [],
+      functionName: 'register',
       args: ['https://example.com/agent.json'],
     });
 
