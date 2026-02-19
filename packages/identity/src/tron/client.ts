@@ -31,10 +31,7 @@ async function resolveMethod(
   address: Hex,
   abi: readonly unknown[],
   functionName: string
-): Promise<{
-  method: TronContractLike['methods'][string];
-  tronAddr: string;
-}> {
+): Promise<TronContractLike['methods'][string]> {
   const tronAddr = await hexToTronBase58(address);
 
   let contract = contractCache.get(tronAddr);
@@ -57,7 +54,7 @@ async function resolveMethod(
     );
   }
 
-  return { method, tronAddr };
+  return method;
 }
 
 /**
@@ -85,7 +82,7 @@ export function createTronPublicClient(tronWeb: TronWebLike): PublicClientLike {
       functionName: string;
       args?: readonly unknown[];
     }): Promise<unknown> {
-      const { method } = await resolveMethod(
+      const method = await resolveMethod(
         contractCache,
         tronWeb,
         args.address,
@@ -127,9 +124,13 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
         'Provide a private key to the TronWeb constructor.'
     );
   }
-  const evmAddress = rawHex.startsWith('41')
-    ? (`0x${rawHex.slice(2).toLowerCase()}` as Hex)
-    : (`0x${rawHex.toLowerCase()}` as Hex);
+  // Strip any leading 0x before checking the 41 TRON prefix
+  const cleanHex = rawHex.startsWith('0x') || rawHex.startsWith('0X')
+    ? rawHex.slice(2)
+    : rawHex;
+  const evmAddress = cleanHex.startsWith('41')
+    ? (`0x${cleanHex.slice(2).toLowerCase()}` as Hex)
+    : (`0x${cleanHex.toLowerCase()}` as Hex);
 
   const contractCache: ContractCache = new Map();
 
@@ -142,7 +143,7 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
       functionName: string;
       args?: readonly unknown[];
     }): Promise<Hex> {
-      const { method } = await resolveMethod(
+      const method = await resolveMethod(
         contractCache,
         tronWeb,
         args.address,

@@ -74,8 +74,7 @@ const TRON_CHAIN_ADDRESSES = {
  * Throws an error if the chain is not supported.
  */
 export function getTronRegistryAddresses(chainId: number): RegistryAddresses {
-  const addresses = TRON_CHAIN_ADDRESSES[chainId];
-  if (!addresses) {
+  if (!isTronChainSupported(chainId)) {
     const supportedChains = Object.entries(TRON_CHAINS)
       .map(([name, id]) => `${name} (${id})`)
       .join(', ');
@@ -83,7 +82,7 @@ export function getTronRegistryAddresses(chainId: number): RegistryAddresses {
       `TRON chain ID ${chainId} is not supported. Supported chains: ${supportedChains}.`
     );
   }
-  return addresses;
+  return TRON_CHAIN_ADDRESSES[chainId];
 }
 
 /**
@@ -111,7 +110,10 @@ export function getTronRegistryAddress(
 
 /**
  * Check if a chain ID is a supported TRON chain.
+ * Acts as a type predicate to narrow `chainId` to `TronChainId`.
  */
-export function isTronChainSupported(chainId: number): boolean {
+export function isTronChainSupported(
+  chainId: number
+): chainId is TronChainId {
   return chainId in TRON_CHAIN_ADDRESSES;
 }
