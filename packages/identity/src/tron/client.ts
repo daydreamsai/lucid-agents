@@ -121,6 +121,12 @@ export function createTronWalletClient(tronWeb: TronWebLike): WalletClientLike {
   // TronWeb hex addresses use 41-prefix (e.g., "41abc123...").
   // Convert to 0x-prefixed EVM format by stripping the 41 prefix.
   const rawHex = tronWeb.defaultAddress.hex;
+  if (!rawHex) {
+    throw new Error(
+      'createTronWalletClient: TronWeb instance has no default address configured. ' +
+        'Provide a private key to the TronWeb constructor.'
+    );
+  }
   const evmAddress = rawHex.startsWith('41')
     ? (`0x${rawHex.slice(2).toLowerCase()}` as Hex)
     : (`0x${rawHex.toLowerCase()}` as Hex);

@@ -54,7 +54,7 @@ type RegistryAddresses = {
 };
 export type { RegistryAddresses };
 
-const TRON_CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
+const TRON_CHAIN_ADDRESSES = {
   // TRON Mainnet — M2M TRC-8004 deployment (Feb 2026)
   [TRON_CHAINS.MAINNET]: {
     IDENTITY_REGISTRY: '0x55924f4501997a8d9b6ddc4af351c4de957f8f29' as Hex,
@@ -67,7 +67,7 @@ const TRON_CHAIN_ADDRESSES: Record<number, RegistryAddresses> = {
     REPUTATION_REGISTRY: '0xab38fa199ec496d2b5dd570a0bb81056ca99c189' as Hex,
     VALIDATION_REGISTRY: '0x965d9e2d1b24d1d2746f1aaeee77de85c2b672d9' as Hex,
   },
-} as const;
+} as const satisfies Readonly<Record<number, RegistryAddresses>>;
 
 /**
  * Get all registry addresses for a specific TRON chain.
