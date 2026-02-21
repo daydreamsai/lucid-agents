@@ -1,0 +1,22 @@
+---
+title: NanoClaw
+description: Lightweight x402 Router integration for NanoClaw — coming soon.
+icon: Zap
+---
+
+<Callout type="warn">
+  NanoClaw integration is coming soon. This page will be updated when the integration is available.
+</Callout>
+
+NanoClaw will support the same x402 permit flow as the other integrations: sign a permit, attach the `PAYMENT-SIGNATURE` header, and stream provider responses through the router with asynchronous settlement.
+
+## What to expect
+
+- Native `PAYMENT-SIGNATURE` permit support
+- `X-Upto-Session` session tracking
+- Same OpenAI-compatible endpoint (`https://ai.xgate.run/v1`)
+- Conservative-by-default spend caps
+
+## In the meantime
+
+Start with the [OpenCode integration](./opencode) to get familiar with the x402 Router flow. The same permit signing and header patterns will apply to NanoClaw when it ships.

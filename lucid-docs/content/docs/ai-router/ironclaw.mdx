@@ -1,0 +1,41 @@
+---
+title: IronClaw
+description: Use x402 Router with IronClaw for permit-backed AI inference.
+icon: Shield
+---
+
+IronClaw can use the x402 Router flow: sign a permit, send a `PAYMENT-SIGNATURE` header, stream the provider response, and settle asynchronously via the facilitator.
+
+<Callout type="info">
+  Full IronClaw integration details coming soon. The pattern below mirrors the [OpenCode integration](./opencode) — same headers, same router endpoint.
+</Callout>
+
+## Integration model
+
+1. Configure IronClaw to use the OpenAI-compatible base URL (`https://ai.xgate.run/v1`).
+2. Ensure each request includes a valid `PAYMENT-SIGNATURE` permit payload.
+3. Track `X-Upto-Session` to reuse a session spend cap across multiple requests.
+
+## Required headers
+
+| Header | Description |
+| ------ | ----------- |
+| `PAYMENT-SIGNATURE` | Signed ERC-2612 permit payload |
+| `X-Upto-Session` | Active session ID (recommended for multi-request sessions) |
+
+## Controls
+
+| Variable | Description |
+| -------- | ----------- |
+| `X402_ROUTER_URL` | Router endpoint override |
+| `X402_PERMIT_CAP` | Session spend cap in USDC |
+
+## Security baseline
+
+- Use a dedicated wallet.
+- Start with low USDC caps.
+- Rotate keys and environment secrets regularly.
+
+## Data handling
+
+The router does not store prompts or responses. Payload retention is determined by your selected upstream provider.
