@@ -1,0 +1,105 @@
+---
+title: NanoClaw
+description: Use x402 Router with NanoClaw — a lightweight personal AI assistant built on Claude Agent SDK.
+icon: Zap
+---
+
+[NanoClaw](https://github.com/daydreamsai/nanoclaw) is a minimal Node.js personal AI assistant built on the Claude Agent SDK. It runs agents in isolated Linux containers (Apple Container on macOS, Docker elsewhere), supports WhatsApp I/O, scheduled tasks, and Agent Swarms. It's designed to be small enough to understand and fork — customization means modifying code, not configuration files.
+
+<Cards>
+  <Card title="Container isolation" description="Agents run in Linux containers with explicit filesystem mounts only" />
+  <Card title="Skills-based" description="Extend via Claude Code skills instead of config files" />
+  <Card title="Agent Swarms" description="First personal assistant to support multi-agent collaboration" />
+</Cards>
+
+## Prerequisites
+
+- macOS or Linux
+- Node.js 20+
+- [Claude Code](https://claude.ai/download)
+- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop)
+
+## Quick start
+
+```bash
+git clone https://github.com/daydreamsai/nanoclaw.git
+cd nanoclaw
+claude
+```
+
+Then run `/setup` inside Claude Code. The setup skill handles dependencies, authentication, container setup, and service configuration.
+
+## Architecture
+
+```
+WhatsApp (baileys) → SQLite → Polling loop → Container (Claude Agent SDK) → Response
+```
+
+Single Node.js process. Agents execute in isolated Linux containers with mounted directories. Per-group message queue with concurrency control. IPC via filesystem.
+
+## x402 Router integration
+
+NanoClaw runs on the Claude Agent SDK. To route inference through the x402 Router, configure the provider endpoint in your environment before running the setup:
+
+```bash
+X402_ROUTER_URL=https://ai.xgate.run/v1
+X402_PERMIT_CAP=5.00    # session spend cap in USDC
+```
+
+Or ask Claude Code to wire it up:
+
+```
+"Configure NanoClaw to use the x402 Router at https://ai.xgate.run/v1 with a $5 permit cap"
+```
+
+## Usage
+
+Once set up, interact via your configured channel using the trigger word (default `@Andy`):
+
+```
+@Andy send me a morning briefing every weekday at 9am
+@Andy review the git history each Friday and update the README if there's drift
+@Andy compile AI news from Hacker News every Monday morning
+```
+
+## Customization
+
+There are no configuration files. Modify behavior by asking Claude Code:
+
+```
+"Change the trigger word to @Nova"
+"Make responses shorter and more direct"
+"Store conversation summaries weekly"
+```
+
+Or run `/customize` for guided changes. The codebase is small enough that Claude can safely modify it.
+
+## Skills
+
+NanoClaw uses a skills system for extensions. Run skills to add capabilities without adding them to the base codebase:
+
+```bash
+/add-gmail          # Gmail integration
+/add-telegram       # Telegram channel
+/add-discord        # Discord channel
+```
+
+## Key files
+
+| File | Purpose |
+| ---- | ------- |
+| `src/index.ts` | Orchestrator: state, message loop, agent invocation |
+| `src/channels/whatsapp.ts` | WhatsApp connection and send/receive |
+| `src/container-runner.ts` | Spawns streaming agent containers |
+| `src/task-scheduler.ts` | Scheduled task runner |
+| `src/db.ts` | SQLite operations |
+| `groups/*/CLAUDE.md` | Per-group memory |
+
+## Data handling
+
+The router does not store prompts or responses. NanoClaw stores conversation data locally in SQLite. Agents only access explicitly mounted directories — no host filesystem access outside of those mounts.
+
+## Resources
+
+- [NanoClaw repository](https://github.com/daydreamsai/nanoclaw)
+- [x402 Router overview](/docs/ai-router)

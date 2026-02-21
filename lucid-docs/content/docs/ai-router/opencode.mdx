@@ -1,18 +1,18 @@
 ---
 title: OpenCode
-description: Integrate OpenCode with x402 Router using the published opencode x402 plugin.
+description: Integrate OpenCode with x402 Router using the published opencode-x402-plugin for automatic permit signing.
 icon: Plug
 ---
 
-The published `@lucid-agents/opencode-x402-plugin` signs x402 permits and injects the payment header automatically.
+The published `@lucid-agents/opencode-x402-plugin` signs x402 permits and injects the payment header automatically into every OpenCode request.
 
-## Integration summary
+<Cards>
+  <Card title="npm published" description="Install directly from npm — no manual build required" />
+  <Card title="Auto-signing" description="Permit signing is transparent; just run OpenCode normally" />
+  <Card title="OpenAI-compatible" description="Works with any model behind an OpenAI-compatible endpoint" />
+</Cards>
 
-- npm published package
-- Auto permit signing
-- OpenAI-compatible router endpoint
-
-## 1. Install plugin
+## 1. Install the plugin
 
 ```bash
 npm install -g @lucid-agents/opencode-x402-plugin
@@ -20,7 +20,7 @@ npm install -g @lucid-agents/opencode-x402-plugin
 
 ## 2. Configure OpenCode
 
-Use `~/.config/opencode/opencode.json`:
+Add the plugin and provider to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -41,26 +41,45 @@ Use `~/.config/opencode/opencode.json`:
 }
 ```
 
-## 3. Connect wallet in OpenCode
+## 3. Connect your wallet
 
-1. Run OpenCode and execute `/connect`.
-2. Select `x402`.
-3. Choose "Connect Wallet (Private Key)" and enter your private key.
+<Steps>
+  <Step>
+    Run OpenCode and execute `/connect`.
+  </Step>
+  <Step>
+    Select `x402`.
+  </Step>
+  <Step>
+    Choose **Connect Wallet (Private Key)** and enter your key.
+  </Step>
+</Steps>
 
 ## Request flow
 
-`OpenCode -> Plugin -> x402 Router -> Provider`  
-Plugin signs permit and injects `PAYMENT-SIGNATURE`; router verifies and streams provider response.
+```
+OpenCode → Plugin → x402 Router → Provider
+          (signs permit)    (streams response)
+```
+
+The plugin intercepts each request, signs an ERC-2612 permit with your configured cap, and injects the `PAYMENT-SIGNATURE` header before the request reaches the router. The router verifies the permit, opens or joins an `upto` session, and streams the provider response back.
 
 ## Controls
 
-- `X402_ROUTER_URL` sets router endpoint.
-- `X402_PERMIT_CAP` sets session cap in USDC.
+| Variable | Description |
+| -------- | ----------- |
+| `X402_ROUTER_URL` | Override the router endpoint (default: `https://ai.xgate.run/v1`) |
+| `X402_PERMIT_CAP` | Session spend cap in USDC |
 
 ## Security
 
-Use a dedicated wallet, fund minimally, and start with conservative caps.
+Use a dedicated wallet, fund it minimally, and set conservative caps when starting out. Rotate your key regularly and avoid reusing wallets across services.
 
 ## Data handling
 
-The router does not store prompts or responses. Requests are passed through to the selected provider, which may retain data under its own policy. Router logs and metrics are operational only and exclude payload content.
+The router does not store prompts or responses. Requests are passed through to the provider you select, and that provider may retain data according to its own retention policies. Router logs and metrics are operational only and exclude user payloads.
+
+## Resources
+
+- [OpenCode integration guide](https://router.daydreams.systems)
+- [Plugin README](https://github.com/daydreamsai/router/tree/master/packages/opencode-x402-auth)
