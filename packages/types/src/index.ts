@@ -9,3 +9,4 @@ export * from './identity';
 export * from './payments';
 export * from './scheduler';
 export * from './wallets';
+export * from './xmpt';
