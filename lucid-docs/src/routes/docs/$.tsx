@@ -3,14 +3,7 @@ import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { createServerFn } from '@tanstack/react-start';
 import { source } from '@/lib/source';
 import type * as PageTree from 'fumadocs-core/page-tree';
-import {
-  Children,
-  isValidElement,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { useMemo } from 'react';
 import browserCollections from 'fumadocs-mdx:collections/browser';
 import {
   DocsBody,
@@ -19,6 +12,8 @@ import {
   DocsTitle,
 } from 'fumadocs-ui/layouts/docs/page';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { baseOptions } from '@/lib/layout.shared';
 import { LLMCopyButton, ViewOptions } from '@/components/page-actions';
 
@@ -49,77 +44,6 @@ const loader = createServerFn({
 type DocsPageProps = {
   markdownUrl: string;
 };
-
-type TabsProps = {
-  items?: string[];
-  children?: ReactNode;
-};
-
-type TabProps = {
-  value?: string;
-  children?: ReactNode;
-};
-
-function Tab(_props: TabProps): null {
-  return null;
-}
-
-function Tabs({ items, children }: TabsProps) {
-  const tabs = useMemo(() => {
-    return Children.toArray(children)
-      .filter((child): child is ReactElement<TabProps> => isValidElement(child))
-      .map((child, index) => ({
-        label: child.props.value ?? items?.[index] ?? `Tab ${index + 1}`,
-        content: child.props.children,
-      }));
-  }, [children, items]);
-
-  const [activeTab, setActiveTab] = useState(0);
-
-  if (tabs.length === 0) {
-    return null;
-  }
-
-  const safeActiveTab = Math.min(activeTab, tabs.length - 1);
-
-  return (
-    <div className="my-6 overflow-hidden rounded-lg border border-fd-border bg-fd-card">
-      <div className="flex flex-wrap gap-2 border-b border-fd-border bg-fd-muted/30 p-2">
-        {tabs.map((tab, index) => (
-          <button
-            key={tab.label + index}
-            type="button"
-            onClick={() => setActiveTab(index)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-              index === safeActiveTab
-                ? 'bg-fd-primary text-fd-primary-foreground'
-                : 'bg-fd-secondary text-fd-secondary-foreground hover:bg-fd-accent'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <div className="p-4">{tabs[safeActiveTab]?.content}</div>
-    </div>
-  );
-}
-
-type StepsProps = {
-  children?: ReactNode;
-};
-
-function Steps({ children }: StepsProps) {
-  return <ol className="my-6 list-decimal space-y-2 pl-6">{children}</ol>;
-}
-
-type StepProps = {
-  children?: ReactNode;
-};
-
-function Step({ children }: StepProps) {
-  return <li>{children}</li>;
-}
 
 const clientLoader = browserCollections.docs.createClientLoader<DocsPageProps>({
   component({ toc, frontmatter, default: MDX }, { markdownUrl }) {

@@ -109,6 +109,10 @@ unsubscribe();
 ## Configuration
 
 ```ts
+import { createMemoryXMPTStore, xmpt } from '@lucid-agents/xmpt';
+
+const store = createMemoryXMPTStore();
+
 xmpt({
   inbox: {
     key: 'custom-inbox',
@@ -119,7 +123,7 @@ xmpt({
   discovery: {
     preferredSkillId: 'custom-inbox',
   },
-  store: myStore,
+  store,
 });
 ```
 
@@ -155,7 +159,7 @@ This example starts two agents (`alpha`, `beta`), sends a message with `sendAndW
 
 XMPT throws structured `XMPTError` instances with these codes:
 
-- `XMPT_PEER_UNREACHABLE`
-- `XMPT_INBOX_SKILL_MISSING`
-- `XMPT_INVALID_MESSAGE_PAYLOAD`
-- `XMPT_TIMEOUT`
+- `XMPT_PEER_UNREACHABLE` - A2A is unavailable, peer card fetch fails, message send fails, or remote task polling fails.
+- `XMPT_INBOX_SKILL_MISSING` - Peer card does not expose an inbox skill matching preferred/default/tag-based discovery.
+- `XMPT_INVALID_MESSAGE_PAYLOAD` - Message payload/content shape is invalid (missing required ids/timestamps or invalid field types).
+- `XMPT_TIMEOUT` - `sendAndWait` exceeded `timeoutMs` before the remote task completed.
