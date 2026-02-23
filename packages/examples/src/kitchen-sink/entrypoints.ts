@@ -1,6 +1,20 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { getSummary } from '@lucid-agents/analytics';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import { z } from 'zod';
+
+// Minimal interface covering the Anthropic API surface we use.
+// Accepting this interface (rather than the concrete Anthropic class) lets
+// tests inject a lightweight mock without importing the full SDK.
+type AnthropicLike = {
+  messages: {
+    create: (params: {
+      model: string;
+      max_tokens: number;
+      messages: Array<{ role: 'user'; content: string }>;
+    }) => Promise<{ content: Array<{ type: string; text?: string }> }>;
+  };
+};
 
 /**
  * Type alias for the addEntrypoint function returned by createAgentApp.
@@ -25,8 +39,11 @@ type AddEntrypoint = <
  */
 export function registerEntrypoints(
   addEntrypoint: AddEntrypoint,
-  runtime: AgentRuntime
+  runtime: AgentRuntime,
+  options?: { anthropic?: AnthropicLike }
 ): void {
+  // Use the injected client (for tests) or create one from ANTHROPIC_API_KEY
+  const anthropic: AnthropicLike = options?.anthropic ?? new Anthropic();
   // ------------------------------------------------------------------
   // 1. echo — demonstrates: basic entrypoint (no price, no streaming)
   //    Shows the minimal entrypoint shape: input schema, output schema,
@@ -181,6 +198,36 @@ export function registerEntrypoints(
       // direct store access which is internal. Return an empty snapshot
       // to confirm the scheduler is present and healthy.
       return { output: { present: true, jobs: [] } };
+    },
+  });
+
+  // ------------------------------------------------------------------
+  // 6. ask — demonstrates: LLM integration
+  //    Shows how to call Claude (via @anthropic-ai/sdk) inside a handler.
+  //    The Anthropic client is injected via `options.anthropic` so tests
+  //    can mock it without real API calls. In production, set
+  //    ANTHROPIC_API_KEY and the default Anthropic() client is used.
+  //
+  //    In production deployments, uncomment `price` to charge callers
+  //    for the LLM cost via x402 payments.
+  // ------------------------------------------------------------------
+  addEntrypoint({
+    key: 'ask',
+    description: 'Ask Claude a question and receive a streamed answer',
+    input: z.object({ question: z.string() }),
+    output: z.object({ answer: z.string() }),
+    // price: '10000', // Uncomment: 0.01 USDC per call to cover LLM cost
+    async handler({ input }) {
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: input.question }],
+      });
+
+      const textBlock = response.content.find(b => b.type === 'text');
+      const answer = textBlock?.text ?? '';
+
+      return { output: { answer } };
     },
   });
 }

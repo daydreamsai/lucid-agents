@@ -5,7 +5,7 @@ import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 import { scheduler } from '@lucid-agents/scheduler';
-import { beforeAll, describe, expect, it } from 'bun:test';
+import { beforeAll, describe, expect, it, mock } from 'bun:test';
 
 import { registerEntrypoints } from '../entrypoints';
 
@@ -91,6 +91,53 @@ describe('scheduler-status entrypoint', () => {
     const result = await invoke(app, 'scheduler-status', {});
     expect(Array.isArray(result.output.jobs)).toBe(true);
     expect(typeof result.output.present).toBe('boolean');
+  });
+});
+
+describe('ask entrypoint', () => {
+  it('calls the Anthropic API and returns the answer', async () => {
+    // Build a fresh app so we can inject a mock Anthropic client
+    const agent = await createAgent({
+      name: 'test-ask',
+      version: '1.0.0',
+      description: 'test',
+    })
+      .use(http())
+      .use(a2a())
+      .use(analytics())
+      .use(payments({ config: paymentsFromEnv() }))
+      .use(scheduler())
+      .build();
+
+    const agentApp = await createAgentApp(agent);
+
+    // Mock Anthropic client — no real API call
+    const mockCreate = mock(async () => ({
+      content: [{ type: 'text', text: 'Paris' }],
+    }));
+    const mockAnthropic = { messages: { create: mockCreate } };
+
+    registerEntrypoints(agentApp.addEntrypoint, agent, {
+      anthropic: mockAnthropic,
+    });
+
+    const result = await invoke(agentApp.app, 'ask', {
+      question: 'What is the capital of France?',
+    });
+
+    // Answer came back
+    expect(result.output.answer).toBe('Paris');
+
+    // The mock was called exactly once
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    // The question was forwarded to the LLM
+    const callArgs = mockCreate.mock.calls[0][0] as {
+      messages: Array<{ content: string }>;
+    };
+    expect(callArgs.messages[0].content).toContain(
+      'What is the capital of France?'
+    );
   });
 });
 

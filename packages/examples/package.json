@@ -14,6 +14,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@ax-llm/ax": "^14.0.37",
     "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/analytics": "workspace:*",
