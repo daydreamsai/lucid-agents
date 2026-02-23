@@ -159,26 +159,28 @@ export function registerEntrypoints(
   //    Reads from runtime.scheduler to surface active job state.
   //    SchedulerRuntime does not expose a getJobs() method (the store
   //    is internal), so we return an empty array as the baseline.
-  //    Falls back to { jobs: [] } when scheduler is unavailable.
+  //    The `present` boolean distinguishes "scheduler registered but
+  //    no jobs" from "scheduler extension absent".
   // ------------------------------------------------------------------
   addEntrypoint({
     key: 'scheduler-status',
     description: 'Return the list of scheduled jobs from the scheduler runtime',
     input: z.object({}),
     output: z.object({
+      present: z.boolean(),
       jobs: z.array(z.unknown()),
     }),
     async handler() {
       if (!runtime.scheduler) {
         // Graceful fallback: scheduler extension not registered
-        return { output: { jobs: [] } };
+        return { output: { present: false, jobs: [] } };
       }
 
       // SchedulerRuntime operates via createHire/tick/etc — there is no
       // public getJobs() on the runtime itself; job listing requires
       // direct store access which is internal. Return an empty snapshot
       // to confirm the scheduler is present and healthy.
-      return { output: { jobs: [] } };
+      return { output: { present: true, jobs: [] } };
     },
   });
 }

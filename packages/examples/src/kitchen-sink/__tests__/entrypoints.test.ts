@@ -21,7 +21,10 @@ async function invoke(
     body: JSON.stringify({ input }),
   });
   const res = await app.fetch(req);
-  return res.json() as Promise<{ output: Record<string, unknown> }>;
+  if (!res.ok)
+    throw new Error(`invoke ${key} failed: ${res.status} ${await res.text()}`);
+  const body = (await res.json()) as { output: Record<string, unknown> };
+  return body;
 }
 
 let app: { fetch: (req: Request) => Response | Promise<Response> };
@@ -84,9 +87,10 @@ describe('analytics-report entrypoint', () => {
 });
 
 describe('scheduler-status entrypoint', () => {
-  it('returns a jobs array', async () => {
+  it('returns a jobs array and a present flag', async () => {
     const result = await invoke(app, 'scheduler-status', {});
     expect(Array.isArray(result.output.jobs)).toBe(true);
+    expect(typeof result.output.present).toBe('boolean');
   });
 });
 
