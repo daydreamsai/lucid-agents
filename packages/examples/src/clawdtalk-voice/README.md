@@ -39,7 +39,7 @@ The ClawdTalk client connects via WebSocket to the ClawdTalk server, which route
 
 ## How It Works
 
-```
+```text
 Phone -> Telnyx (STT) -> ClawdTalk Server -> WebSocket -> Your Agent -> TTS -> Phone
 ```
 
@@ -64,7 +64,7 @@ This example includes a simple commerce agent with these entrypoints:
 
 ### Voice Context
 
-The `voice-context` entrypoint returns instructions for the ClawdTalk client on how to format responses for phone calls. This ensures your agent speaks naturally without markdown, bullet points, or other non-voice-friendly content.
+The `voice-context` entrypoint returns instructions for the ClawdTalk client on how to format responses for phone calls. This ensures your agent speaks naturally without Markdown, bullet points, or other non-voice-friendly content.
 
 ## Integration with Payments
 

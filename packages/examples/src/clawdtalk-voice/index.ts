@@ -7,8 +7,7 @@
  * Run: bun run packages/examples/src/clawdtalk-voice/index.ts
  *
  * Environment variables:
- *   CLAWDTALK_API_KEY - API key from clawdtalk.com
- *   PRIVATE_KEY - Wallet private key for payments (optional)
+ *   PAYMENTS_RECEIVABLE_ADDRESS - Wallet address for payments (optional)
  *   PORT - Server port (defaults to 8787)
  */
 
@@ -90,18 +89,37 @@ async function main() {
     }),
     handler: async ctx => {
       const { orderId, items } = ctx.input;
-      const total = items.reduce((sum, id) => {
-        const product = PRODUCTS.find(p => p.id === id);
-        return sum + (product?.price || 0);
+
+      // Validate item IDs against the PRODUCTS catalog
+      const validItems: string[] = [];
+      const invalidItems: string[] = [];
+
+      for (const id of items) {
+        if (PRODUCTS.find(p => p.id === id)) {
+          validItems.push(id);
+        } else {
+          invalidItems.push(id);
+        }
+      }
+
+      // Recompute total using only validated products
+      const total = validItems.reduce((sum, id) => {
+        const product = PRODUCTS.find(p => p.id === id)!;
+        return sum + product.price;
       }, 0);
 
-      orders.set(orderId, { items, total });
+      orders.set(orderId, { items: validItems, total });
+
+      let message = `Order ${orderId} placed for ${validItems.join(', ')}. Total: $${total.toFixed(2)}`;
+      if (invalidItems.length > 0) {
+        message += ` Warning: Invalid item IDs ignored: ${invalidItems.join(', ')}`;
+      }
 
       return {
         output: {
           success: true,
           total,
-          message: `Order ${orderId} placed for ${items.join(', ')}. Total: $${total.toFixed(2)}`,
+          message,
         },
       };
     },
