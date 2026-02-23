@@ -5,6 +5,7 @@
     "---Fundamentals---",
     "core",
     "a2a",
+    "xmpt",
     "---Payments---",
     "calling-paid-endpoints",
     "stripe-destination-mode",

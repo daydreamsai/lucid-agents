@@ -355,6 +355,45 @@ const result = await agent.a2a.client.invoke(
 );
 ```
 
+#### [`@lucid-agents/xmpt`](packages/xmpt/README.md)
+
+XMPT messaging extension for inbox semantics, thread-aware messaging, and local message observability.
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { a2a } from '@lucid-agents/a2a';
+import { http } from '@lucid-agents/http';
+import { xmpt } from '@lucid-agents/xmpt';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(a2a())
+  .use(
+    xmpt({
+      inbox: {
+        handler: async ({ message }) => ({
+          content: { text: `ack:${message.content.text ?? ''}` },
+        }),
+      },
+    })
+  )
+  .build();
+
+const result = await agent.xmpt!.sendAndWait(
+  { url: 'https://other-agent.com' },
+  {
+    threadId: 'thread-123',
+    content: { text: 'hello from xmpt' },
+  }
+);
+
+const messages = await agent.xmpt!.listMessages({ threadId: 'thread-123' });
+console.log(result.task.status, messages.length);
+```
+
 #### [`@lucid-agents/analytics`](packages/analytics/README.md)
 
 Payment analytics and reporting with CSV/JSON export for accounting systems.
