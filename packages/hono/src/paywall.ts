@@ -116,9 +116,9 @@ export function withPayments({
   const network = entrypoint.network ?? payments.network;
   const price = resolvePrice(entrypoint, payments, kind);
 
-  validatePaymentsConfig(payments, network, entrypoint.key);
-
   if (!price) return false;
+
+  validatePaymentsConfig(payments, network, entrypoint.key);
   const payTo = resolvePayTo(payments);
 
   const description =
