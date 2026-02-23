@@ -89,3 +89,23 @@ describe('scheduler-status entrypoint', () => {
     expect(Array.isArray(result.output.jobs)).toBe(true);
   });
 });
+
+describe('stream entrypoint', () => {
+  it('responds with a streaming SSE response containing the prompt', async () => {
+    const req = new Request('http://localhost/entrypoints/stream/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: { prompt: 'hi' } }),
+    });
+    const res = await app.fetch(req);
+    expect(res.ok).toBe(true);
+    const text = await res.text();
+    // The stream handler emits each character as a separate delta event, so
+    // 'h' and 'i' appear individually in the JSON data fields — not concatenated.
+    expect(text).toContain('event: delta');
+    expect(text).toContain('"delta":"h"');
+    expect(text).toContain('"delta":"i"');
+    expect(text).toContain('event: run-end');
+    expect(text).toContain('"status":"succeeded"');
+  });
+});
