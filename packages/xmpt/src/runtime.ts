@@ -55,12 +55,26 @@ export function createXMPTRuntime(
 
   const notifySubscribers = async (message: XMPTMessage): Promise<void> => {
     for (const handler of subscribers) {
-      await handler(message);
+      try {
+        await handler(message);
+      } catch {
+        // XMPT observers are best-effort and should not break message delivery.
+      }
     }
   };
 
   const appendRecord = async (message: XMPTMessageRecord): Promise<void> => {
     await Promise.resolve(store.append(message));
+  };
+
+  const appendRecordSafely = async (
+    message: XMPTMessageRecord
+  ): Promise<void> => {
+    try {
+      await appendRecord(message);
+    } catch {
+      // Local persistence failures should not alter delivery semantics.
+    }
   };
 
   const resolvePeerCard = async (
@@ -111,8 +125,9 @@ export function createXMPTRuntime(
       );
     }
 
+    let task: Awaited<ReturnType<typeof runtime.a2a.client.sendMessage>>;
     try {
-      const task = await runtime.a2a!.client.sendMessage(
+      task = await runtime.a2a!.client.sendMessage(
         card,
         resolvedSkillId,
         normalized,
@@ -129,26 +144,6 @@ export function createXMPTRuntime(
         }
       );
 
-      const delivery: XMPTDeliveryResult = {
-        taskId: task.taskId,
-        status: task.status,
-        messageId: normalized.id,
-      };
-
-      const peerUrl = resolvePeerUrl(peer);
-      await appendRecord({
-        ...normalized,
-        direction: 'outbound',
-        peer: peerUrl,
-        taskId: task.taskId,
-      });
-
-      return {
-        card,
-        normalized,
-        delivery,
-        peerUrl,
-      };
     } catch (error) {
       throw new XMPTError(
         'XMPT_PEER_UNREACHABLE',
@@ -156,6 +151,27 @@ export function createXMPTRuntime(
         error
       );
     }
+
+    const delivery: XMPTDeliveryResult = {
+      taskId: task.taskId,
+      status: task.status,
+      messageId: normalized.id,
+    };
+
+    const peerUrl = resolvePeerUrl(peer);
+    await appendRecordSafely({
+      ...normalized,
+      direction: 'outbound',
+      peer: peerUrl,
+      taskId: task.taskId,
+    });
+
+    return {
+      card,
+      normalized,
+      delivery,
+      peerUrl,
+    };
   };
 
   const receive = async (
@@ -163,7 +179,7 @@ export function createXMPTRuntime(
   ): Promise<XMPTMessage | undefined> => {
     const parsedMessage = parseXMPTMessage(message);
 
-    await appendRecord({
+    await appendRecordSafely({
       ...parsedMessage,
       direction: 'inbound',
       peer: parsedMessage.from,
@@ -199,7 +215,7 @@ export function createXMPTRuntime(
       }
     );
 
-    await appendRecord({
+    await appendRecordSafely({
       ...replyMessage,
       direction: 'outbound',
       peer: parsedMessage.from,
@@ -241,7 +257,7 @@ export function createXMPTRuntime(
         ) {
           const parsedReply = parseXMPTMessage(resolvedTask.result.output);
 
-          await appendRecord({
+          await appendRecordSafely({
             ...parsedReply,
             direction: 'inbound',
             peer: sent.peerUrl,

@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { AgentCard, A2AClient, A2ARuntime } from '@lucid-agents/types/a2a';
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { XMPTMessage } from '@lucid-agents/types/xmpt';
+import type { XMPTMessage, XMPTStore } from '@lucid-agents/types/xmpt';
 
 import { createXMPTRuntime } from '../runtime';
 
@@ -215,6 +215,33 @@ describe('createXMPTRuntime', () => {
     expect(result.task.result?.output?.content.text).toBe('ack:hello');
   });
 
+  it('send() succeeds even when store append fails after peer delivery', async () => {
+    const sendMessage = mock(async () => ({
+      taskId: 'task-store-failure',
+      status: 'running' as const,
+    }));
+    const runtime = createMockRuntime({ sendMessage });
+    const failingStore: XMPTStore = {
+      append: mock(async () => {
+        throw new Error('store unavailable');
+      }),
+      list: mock(() => []),
+    };
+    const xmpt = createXMPTRuntime({ runtime, store: failingStore });
+
+    const result = await xmpt.send(
+      { card: peerCard },
+      {
+        threadId: 'thread-store-failure',
+        content: { text: 'hello' },
+      }
+    );
+
+    expect(result.taskId).toBe('task-store-failure');
+    expect(result.status).toBe('running');
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('throws deterministic error when inbox skill is missing', async () => {
     const fetchCard = mock(async () => ({
       ...peerCard,
@@ -270,6 +297,62 @@ describe('createXMPTRuntime', () => {
     expect(
       threadMessages.some(message => message.direction === 'outbound')
     ).toBe(true);
+  });
+
+  it('receive() continues when a subscriber throws', async () => {
+    const inboxHandler = mock(async () => ({
+      content: { text: 'ack:hello' },
+    }));
+    const runtime = createMockRuntime();
+    const xmpt = createXMPTRuntime({ runtime, inboxHandler });
+    xmpt.onMessage(() => {
+      throw new Error('observer failure');
+    });
+
+    const reply = await xmpt.receive({
+      id: 'receive-observer-failure',
+      threadId: 'thread-observer-failure',
+      content: { text: 'hello' },
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(reply?.content.text).toBe('ack:hello');
+    expect(inboxHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('sendAndWait() continues when a subscriber throws while processing reply', async () => {
+    const runtime = createMockRuntime({
+      getTask: mock(async () => ({
+        taskId: 'task-observer-failure',
+        status: 'completed' as const,
+        result: {
+          output: {
+            id: 'reply-observer-failure',
+            threadId: 'thread-observer-failure',
+            content: { text: 'ack:hello' },
+            createdAt: new Date().toISOString(),
+          },
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })),
+    });
+    const xmpt = createXMPTRuntime({ runtime });
+    xmpt.onMessage(() => {
+      throw new Error('observer failure');
+    });
+
+    const result = await xmpt.sendAndWait(
+      { card: peerCard },
+      {
+        threadId: 'thread-observer-failure',
+        content: { text: 'hello' },
+      }
+    );
+
+    expect(result.delivery.taskId).toBe('task-1');
+    expect(result.task.status).toBe('completed');
+    expect(result.task.result?.output?.content.text).toBe('ack:hello');
   });
 
   it('onMessage() subscribes and unsubscribes handlers', async () => {

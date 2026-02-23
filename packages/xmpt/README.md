@@ -9,6 +9,11 @@ It provides:
 - local message observability with a pluggable store
 - manifest discoverability tags for XMPT inbox skills
 
+Runtime semantics:
+
+- A2A delivery errors fail `send`/`sendAndWait`
+- local message-store persistence and `onMessage` subscriber failures are best-effort and do not fail delivery
+
 ## Install
 
 ```bash
