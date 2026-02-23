@@ -14,15 +14,25 @@ export async function createKitchenSinkAgent() {
     version: '1.0.0',
     description: 'Demonstrates all major Lucid Agents SDK capabilities',
   })
+    // 1. HTTP transport — required for serving entrypoints via Hono
     .use(http())
+    // 2. Agent-to-Agent (A2A) — enables task-based agent card and inter-agent calls
     .use(a2a())
+    // 3. Analytics — tracks payment transactions; query from entrypoints via runtime.analytics
     .use(analytics())
+    // 4. Payments — paymentsFromEnv() always returns a config (never undefined), so this
+    //    is unconditional. The extension is passive until an entrypoint declares a price.
     .use(payments({ config: paymentsFromEnv() }))
+    // 5. Scheduler — manages recurring jobs; requires payments to be registered first
     .use(scheduler())
+    // 6. AP2 (Agent-to-Person Protocol) — adds AP2 extension to the agent manifest;
+    //    'merchant' is the valid role for an agent that accepts payments
     .use(ap2({ roles: ['merchant'] }));
 
   const walletsConfig = walletsFromEnv();
   if (walletsConfig) {
+    // Wallets and identity are optional: only added when wallet env vars are present.
+    // Identity depends on wallets to sign on-chain registration transactions.
     builder = builder.use(wallets({ config: walletsConfig }));
     builder = builder.use(
       identity({
