@@ -58,6 +58,7 @@ POST /entrypoints/summarize/invoke         0.001 USDC  Word/char count + preview
 POST /entrypoints/stream/stream            free        Stream characters via SSE
 POST /entrypoints/analytics-report/invoke  free        Payment summary
 POST /entrypoints/scheduler-status/invoke  free        Active scheduled jobs
+POST /entrypoints/ask/invoke               free*       Ask Claude a question (requires ANTHROPIC_API_KEY)
 GET  /.well-known/agent-card.json          free        A2A agent card
 ```
 
@@ -84,6 +85,11 @@ curl http://localhost:8787/entrypoints/scheduler-status/invoke \
   -H 'Content-Type: application/json' \
   -d '{"input":{}}'
 
+# Ask Claude (requires ANTHROPIC_API_KEY)
+curl http://localhost:8787/entrypoints/ask/invoke \
+  -H 'Content-Type: application/json' \
+  -d '{"input":{"question":"What is the Lucid Agents SDK?"}}'
+
 # Agent card (A2A discovery)
 curl http://localhost:8787/.well-known/agent-card.json | jq .
 ```
@@ -99,7 +105,7 @@ bun test packages/examples/src/kitchen-sink/__tests__
 ```
 src/kitchen-sink/
 ├── agent.ts          # Agent factory — all 8 extensions
-├── entrypoints.ts    # 5 entrypoints (echo, summarize, stream, analytics, scheduler)
+├── entrypoints.ts    # 6 entrypoints (echo, summarize, stream, analytics, scheduler, ask)
 ├── client.ts         # Client agent — discovers & calls via A2A
 ├── index.ts          # Startup — boots both agents, prints curl guide
 └── __tests__/

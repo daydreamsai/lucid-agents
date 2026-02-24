@@ -42,8 +42,11 @@ export function registerEntrypoints(
   runtime: AgentRuntime,
   options?: { anthropic?: AnthropicLike }
 ): void {
-  // Use the injected client (for tests) or create one from ANTHROPIC_API_KEY
-  const anthropic: AnthropicLike = options?.anthropic ?? new Anthropic();
+  // Lazily resolve the Anthropic client: use the injected mock (for tests) or
+  // defer construction until the ask handler is actually invoked so that a
+  // missing ANTHROPIC_API_KEY does not fail agents that never call ask.
+  const getAnthropic = (): AnthropicLike =>
+    options?.anthropic ?? new Anthropic();
   // ------------------------------------------------------------------
   // 1. echo — demonstrates: basic entrypoint (no price, no streaming)
   //    Shows the minimal entrypoint shape: input schema, output schema,
@@ -118,6 +121,7 @@ export function registerEntrypoints(
     input: z.object({
       prompt: z.string(),
     }),
+    output: z.object({ done: z.boolean() }),
     streaming: true,
     async stream({ input }, emit) {
       for (const char of input.prompt) {
@@ -218,7 +222,7 @@ export function registerEntrypoints(
     output: z.object({ answer: z.string() }),
     // price: '10000', // Uncomment: 0.01 USDC per call to cover LLM cost
     async handler({ input }) {
-      const response = await anthropic.messages.create({
+      const response = await getAnthropic().messages.create({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         messages: [{ role: 'user', content: input.question }],

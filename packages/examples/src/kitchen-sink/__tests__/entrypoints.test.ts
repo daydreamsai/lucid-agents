@@ -30,9 +30,9 @@ async function invoke(
 let app: { fetch: (req: Request) => Response | Promise<Response> };
 
 beforeAll(async () => {
-  // Provide minimal env vars so paymentsFromEnv() returns a valid config.
-  // withPayments validates payTo/facilitatorUrl/network even for free entrypoints
-  // before it checks whether a price is set; these stubs satisfy the validator.
+  // Provide minimal env vars so paymentsFromEnv() can construct a config object
+  // during agent initialisation. The paywall validator is only invoked for priced
+  // entrypoints, so these stubs are not exercised by the free-entrypoint tests here.
   process.env.PAYMENTS_RECEIVABLE_ADDRESS =
     process.env.PAYMENTS_RECEIVABLE_ADDRESS ??
     '0x0000000000000000000000000000000000000001';

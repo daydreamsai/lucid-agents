@@ -43,9 +43,9 @@ export async function runA2ADemo(kitchenSinkUrl: string) {
   });
 
   const task = await waitForTask(a2aRuntime.client, card, taskId);
-  if (task.status === 'failed') {
+  if (task.status !== 'completed') {
     throw new Error(
-      `A2A task failed: ${String(task.error?.message ?? 'unknown')}`
+      `A2A task ${task.status}: ${String(task.error?.message ?? 'unknown')}`
     );
   }
 

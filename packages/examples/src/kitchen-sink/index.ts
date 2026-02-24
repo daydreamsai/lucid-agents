@@ -23,8 +23,12 @@ import { createKitchenSinkAgent } from './agent';
 import { createClientAgent, runA2ADemo } from './client';
 import { registerEntrypoints } from './entrypoints';
 
-const PORT = Number(process.env.PORT ?? 8787);
-const CLIENT_PORT = Number(process.env.CLIENT_PORT ?? 8788);
+const PORT = Number.parseInt(process.env.PORT ?? '8787', 10);
+const CLIENT_PORT = Number.parseInt(process.env.CLIENT_PORT ?? '8788', 10);
+if (!Number.isFinite(PORT) || PORT < 1 || PORT > 65535)
+  throw new Error(`Invalid PORT: ${process.env.PORT}`);
+if (!Number.isFinite(CLIENT_PORT) || CLIENT_PORT < 1 || CLIENT_PORT > 65535)
+  throw new Error(`Invalid CLIENT_PORT: ${process.env.CLIENT_PORT}`);
 const ORIGIN = `http://localhost:${PORT}`;
 
 async function main() {
@@ -63,7 +67,10 @@ async function main() {
   // ── 3. Client agent ────────────────────────────────────────────────────────
   const clientAgent = await createClientAgent();
   const { app: clientApp } = await createAgentApp(clientAgent);
-  Bun.serve({ port: CLIENT_PORT, fetch: clientApp.fetch.bind(clientApp) });
+  const clientServer = Bun.serve({
+    port: CLIENT_PORT,
+    fetch: clientApp.fetch.bind(clientApp),
+  });
   console.log(`[client]       Server:    http://localhost:${CLIENT_PORT}`);
 
   // Give the kitchen-sink server a moment before the demo call
@@ -85,6 +92,7 @@ async function main() {
   process.on('SIGINT', () => {
     console.log('\n[kitchen-sink] Shutting down...');
     server.stop();
+    clientServer.stop();
     process.exit(0);
   });
 }
