@@ -16,6 +16,7 @@ import type {
   PaymentTracker,
 } from '@lucid-agents/types/payments';
 import { wallets } from '@lucid-agents/wallet';
+import { xmpt } from '@lucid-agents/xmpt';
 import { describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 
@@ -932,6 +933,42 @@ describe('A2A Extension', () => {
     // buildAgentCard adds trailing slash to origin
     expect(card?.url).toBe('https://agent.example.com/');
     expect(card?.entrypoints).toBeDefined();
+  });
+});
+
+describe('XMPT Extension', () => {
+  it('adds xmpt runtime and inbox entrypoint', async () => {
+    const agent = await createAgent({
+      name: 'xmpt-agent',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(http())
+      .use(xmpt())
+      .build();
+
+    expect(agent.xmpt).toBeDefined();
+    const inboxEntrypoint = agent.entrypoints
+      .snapshot()
+      .find(entrypoint => entrypoint.key === 'xmpt-inbox');
+    expect(inboxEntrypoint).toBeDefined();
+  });
+
+  it('marks inbox skill for manifest discoverability', async () => {
+    const agent = await createAgent({
+      name: 'xmpt-agent',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(http())
+      .use(xmpt())
+      .build();
+
+    const card = agent.manifest.build('https://agent.example.com');
+    const inboxSkill = card.skills?.find(skill => skill.id === 'xmpt-inbox');
+    expect(inboxSkill).toBeDefined();
+    expect(inboxSkill?.tags).toContain('xmpt');
+    expect(inboxSkill?.tags).toContain('xmpt-inbox');
   });
 });
 

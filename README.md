@@ -107,7 +107,7 @@ curl -X POST http://localhost:3000/entrypoints/echo/invoke \
 Lucid Agents is a TypeScript monorepo built for protocol-agnostic, multi-runtime agent deployment with a compositional extension architecture:
 
 - **Layer 1: Core** - Protocol-agnostic agent runtime with extension system (`@lucid-agents/core`) - no protocol-specific code
-- **Layer 2: Extensions** - Optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `ap2()` (Agent Payments Protocol)
+- **Layer 2: Extensions** - Optional capabilities added via composition: `http()` (HTTP protocol), `payments()` (x402), `wallets()` (wallet management), `identity()` (ERC-8004), `a2a()` (agent-to-agent), `xmpt()` (message inbox + threading), `ap2()` (Agent Payments Protocol)
 - **Layer 3: Adapters** - Framework integrations (hono, tanstack, express, next) that use the HTTP extension
 
 The core runtime is completely protocol-agnostic. Protocols like HTTP are provided as extensions that get merged into the runtime. Future protocols (gRPC, WebSocket, etc.) can be added as additional extensions.
@@ -124,6 +124,7 @@ The core runtime is completely protocol-agnostic. Protocols like HTTP are provid
 - **`@lucid-agents/analytics`** - Payment analytics and reporting with CSV/JSON export for accounting system integration
 - **`@lucid-agents/identity`** - ERC-8004 identity toolkit for onchain agent identity
 - **`@lucid-agents/a2a`** - A2A Protocol client for agent-to-agent communication
+- **`@lucid-agents/xmpt`** - XMPT messaging extension for inbox semantics, send/receive APIs, and thread-aware messaging
 - **`@lucid-agents/ap2`** - AP2 (Agent Payments Protocol) extension for Agent Cards
 - **`@lucid-agents/hono`** - Hono HTTP server adapter
 - **`@lucid-agents/express`** - Express HTTP server adapter
@@ -352,6 +353,45 @@ const result = await agent.a2a.client.invoke(
     input: 'data',
   }
 );
+```
+
+#### [`@lucid-agents/xmpt`](packages/xmpt/README.md)
+
+XMPT messaging extension for inbox semantics, thread-aware messaging, and local message observability.
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { a2a } from '@lucid-agents/a2a';
+import { http } from '@lucid-agents/http';
+import { xmpt } from '@lucid-agents/xmpt';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(a2a())
+  .use(
+    xmpt({
+      inbox: {
+        handler: async ({ message }) => ({
+          content: { text: `ack:${message.content.text ?? ''}` },
+        }),
+      },
+    })
+  )
+  .build();
+
+const result = await agent.xmpt!.sendAndWait(
+  { url: 'https://other-agent.com' },
+  {
+    threadId: 'thread-123',
+    content: { text: 'hello from xmpt' },
+  }
+);
+
+const messages = await agent.xmpt!.listMessages({ threadId: 'thread-123' });
+console.log(result.task.status, messages.length);
 ```
 
 #### [`@lucid-agents/analytics`](packages/analytics/README.md)

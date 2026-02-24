@@ -160,6 +160,7 @@
         "@lucid-agents/prettier-config": "workspace:*",
         "@lucid-agents/scheduler": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
+        "@lucid-agents/xmpt": "workspace:*",
         "tsup": "catalog:",
         "typescript": "catalog:",
       },
@@ -185,6 +186,7 @@
         "@lucid-agents/scheduler": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
+        "@lucid-agents/xmpt": "workspace:*",
         "@lucid-dreams/agent-auth": "latest",
         "@x402/core": "catalog:",
         "@x402/evm": "catalog:",
@@ -353,6 +355,22 @@
       },
       "peerDependencies": {
         "thirdweb": "^5.84.0",
+      },
+    },
+    "packages/xmpt": {
+      "name": "@lucid-agents/xmpt",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/a2a": "workspace:*",
+        "@lucid-agents/types": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@lucid-agents/core": "workspace:*",
+        "@lucid-agents/hono": "workspace:*",
+        "@lucid-agents/http": "workspace:*",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
       },
     },
   },
@@ -722,6 +740,8 @@
     "@lucid-agents/types": ["@lucid-agents/types@workspace:packages/types"],
 
     "@lucid-agents/wallet": ["@lucid-agents/wallet@workspace:packages/wallet"],
+
+    "@lucid-agents/xmpt": ["@lucid-agents/xmpt@workspace:packages/xmpt"],
 
     "@lucid-dreams/agent-auth": ["@lucid-dreams/agent-auth@0.2.24", "", { "dependencies": { "@lucid-dreams/sdk": "^0.2.24", "viem": "^2.38.5" } }, "sha512-QiJQ2FTJXtd1o6c1fkEq/qawBJbhZdmGukwt+B8LztTmjjkdhfRZvWbNk3DUBIZIPsbInWdwbgPAUkzGMUNyDg=="],
 

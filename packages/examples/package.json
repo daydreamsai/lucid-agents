@@ -27,6 +27,7 @@
     "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
+    "@lucid-agents/xmpt": "workspace:*",
     "@lucid-dreams/agent-auth": "latest",
     "thirdweb": "^5.113.0",
     "viem": "catalog:",
