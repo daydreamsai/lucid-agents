@@ -88,6 +88,15 @@ export function createReputationHandlers(config: ReputationHandlerConfig) {
   async function verifyPayment(request: Request): Promise<ErrorResponse | null> {
     if (!requirePayment) return null;
 
+    // Fail-closed: if payment required but no checker configured, reject
+    if (!checkPayment) {
+      return createErrorResponse(
+        'PAYMENT_REQUIRED',
+        'Payment verification not configured',
+        { x402: true }
+      );
+    }
+
     if (checkPayment) {
       const paid = await checkPayment(request);
       if (!paid) {

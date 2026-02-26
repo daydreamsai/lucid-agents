@@ -298,7 +298,7 @@ export class ReputationService {
     return {
       agentAddress,
       chain,
-      overallScore: Math.round(overallScore * 100) / 100,
+      overallScore: Math.round(Math.max(0, Math.min(100, overallScore)) * 100) / 100,
       components,
       freshness,
       confidence,

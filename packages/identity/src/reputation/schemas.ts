@@ -119,6 +119,7 @@ export const HistoryResponseSchema = z.object({
   limit: z.number().int(),
   offset: z.number().int(),
   freshness: FreshnessMetadataSchema,
+  confidence: ConfidenceMetadataSchema,
 });
 export type HistoryResponse = z.infer<typeof HistoryResponseSchema>;
 
