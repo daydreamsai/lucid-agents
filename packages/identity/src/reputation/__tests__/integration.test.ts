@@ -206,15 +206,16 @@ describe('Integration: Full API Flow', () => {
       expect(body.components.length).toBe(3);
 
       // Verify weights sum to 1
-      const totalWeight = body.components.reduce(
-        (sum: number, c: any) => sum + c.weight,
+      const components = body.components as Array<{ weight: number; score: number }>;
+      const totalWeight = components.reduce(
+        (sum: number, c) => sum + c.weight,
         0
       );
       expect(totalWeight).toBeCloseTo(1, 2);
 
       // Verify overall score matches weighted calculation
-      const calculatedScore = body.components.reduce(
-        (sum: number, c: any) => sum + c.score * c.weight,
+      const calculatedScore = components.reduce(
+        (sum: number, c) => sum + c.score * c.weight,
         0
       );
       expect(body.overallScore).toBeCloseTo(calculatedScore, 1);

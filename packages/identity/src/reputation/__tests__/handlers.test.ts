@@ -103,6 +103,11 @@ describe('createReputationHandlers', () => {
       dataAge: 60,
       source: 'onchain' as const,
     },
+    confidence: {
+      level: 'high' as const,
+      score: 0.9,
+      factors: ['verified'],
+    },
   };
 
   const mockTrustBreakdownResponse = {
@@ -380,6 +385,56 @@ describe('createReputationHandlers', () => {
         const response = await handler(request);
         expect(response.status).toBe(402);
       }
+    });
+
+    it('returns 402 when requirePayment is true but checkPayment is omitted (fail-closed)', async () => {
+      handlers = createReputationHandlers({
+        service: mockService,
+        requirePayment: true,
+        // checkPayment intentionally omitted
+      });
+
+      const address = '0x1234567890123456789012345678901234567890';
+
+      const repResponse = await handlers.handleReputation(
+        new Request(`https://api.example.com/v1/identity/reputation?agentAddress=${address}`)
+      );
+      expect(repResponse.status).toBe(402);
+      const repBody = await repResponse.json();
+      expect(repBody.error.code).toBe('PAYMENT_REQUIRED');
+      expect(repBody.error.details?.x402).toBe(true);
+
+      const histResponse = await handlers.handleHistory(
+        new Request(`https://api.example.com/v1/identity/history?agentAddress=${address}`)
+      );
+      expect(histResponse.status).toBe(402);
+      const histBody = await histResponse.json();
+      expect(histBody.error.code).toBe('PAYMENT_REQUIRED');
+
+      const trustResponse = await handlers.handleTrustBreakdown(
+        new Request(`https://api.example.com/v1/identity/trust-breakdown?agentAddress=${address}`)
+      );
+      expect(trustResponse.status).toBe(402);
+      const trustBody = await trustResponse.json();
+      expect(trustBody.error.code).toBe('PAYMENT_REQUIRED');
+    });
+
+    it('returns 402 when checkPayment throws an error (fail-closed)', async () => {
+      handlers = createReputationHandlers({
+        service: mockService,
+        requirePayment: true,
+        checkPayment: async () => { throw new Error('Payment service unavailable'); },
+      });
+
+      const request = new Request(
+        'https://api.example.com/v1/identity/reputation?agentAddress=0x1234567890123456789012345678901234567890'
+      );
+      const response = await handlers.handleReputation(request);
+
+      expect(response.status).toBe(402);
+      const body = await response.json();
+      expect(body.error.code).toBe('PAYMENT_REQUIRED');
+      expect(body.error.details?.x402).toBe(true);
     });
   });
 });

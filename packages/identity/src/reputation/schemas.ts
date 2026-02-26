@@ -119,7 +119,7 @@ export const HistoryResponseSchema = z.object({
   limit: z.number().int(),
   offset: z.number().int(),
   freshness: FreshnessMetadataSchema,
-  confidence: ConfidenceMetadataSchema,
+  confidence: ConfidenceAnnotationSchema,
 });
 export type HistoryResponse = z.infer<typeof HistoryResponseSchema>;
 
@@ -164,6 +164,7 @@ export const ErrorResponseSchema = z.object({
     message: z.string(),
     details: z.record(z.string(), z.unknown()).optional(),
   }),
-  freshness: FreshnessMetadataSchema.optional(),
+  freshness: FreshnessMetadataSchema,
+  confidence: ConfidenceAnnotationSchema,
 });
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;

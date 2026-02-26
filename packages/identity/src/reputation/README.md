@@ -1,6 +1,6 @@
 # ERC-8004 Identity Reputation Signal API
 
-A paid identity data API that sells agent trust/reputation signals from ERC-8004 plus verified offchain performance evidence.
+A paid identity data API that sells agent trust/reputation signals from ERC-8004 plus verified off-chain performance evidence.
 
 ## Overview
 
@@ -17,6 +17,7 @@ This module provides HTTP endpoints for machine consumers (agent-to-agent) to qu
 Returns comprehensive reputation data for an agent.
 
 **Query Parameters:**
+
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | agentAddress | string | Yes | - | Ethereum address (0x...) |
@@ -68,6 +69,7 @@ Returns comprehensive reputation data for an agent.
 Returns paginated history of reputation events.
 
 **Query Parameters:**
+
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | agentAddress | string | Yes | - | Ethereum address |
@@ -101,6 +103,7 @@ Returns paginated history of reputation events.
 Returns detailed breakdown of trust score components.
 
 **Query Parameters:**
+
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | agentAddress | string | Yes | - | Ethereum address |
@@ -156,6 +159,7 @@ All errors follow a consistent format:
 ```
 
 **Error Codes:**
+
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
 | INVALID_ADDRESS | 400 | Invalid Ethereum address format |

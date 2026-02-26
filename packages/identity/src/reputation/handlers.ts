@@ -21,11 +21,22 @@ export function createErrorResponse(
   message: string,
   details?: Record<string, unknown>
 ): ErrorResponse {
+  const now = new Date().toISOString();
   return {
     error: {
       code,
       message,
       ...(details && { details }),
+    },
+    freshness: {
+      lastUpdated: now,
+      dataAge: 0,
+      source: 'cache',
+    },
+    confidence: {
+      level: 'low',
+      score: 0,
+      factors: ['error_response'],
     },
   };
 }
@@ -58,14 +69,18 @@ function parseNumericParam(
 ): number | undefined {
   const value = params[key];
   if (value === undefined) return undefined;
-  const num = parseInt(value, 10);
-  return isNaN(num) ? undefined : num;
+  if (!/^-?\d+$/.test(value.trim())) return NaN;
+  return Number(value);
 }
 
 // Helper to extract first error from Zod result (v4 compatible)
-function getFirstZodError(error: any): { path: (string | number)[]; message: string } | undefined {
+type ZodIssueLike = { path?: (string | number)[]; message?: string };
+type ZodErrorLike = { issues?: ZodIssueLike[]; errors?: ZodIssueLike[] };
+
+function getFirstZodError(error: unknown): { path: (string | number)[]; message: string } | undefined {
   // Zod v4 uses .issues, Zod v3 uses .errors
-  const issues = error?.issues ?? error?.errors ?? [];
+  const e = (error ?? {}) as ZodErrorLike;
+  const issues = e.issues ?? e.errors ?? [];
   if (issues.length > 0) {
     return { path: issues[0].path ?? [], message: issues[0].message ?? 'Validation error' };
   }
@@ -97,7 +112,7 @@ export function createReputationHandlers(config: ReputationHandlerConfig) {
       );
     }
 
-    if (checkPayment) {
+    try {
       const paid = await checkPayment(request);
       if (!paid) {
         return createErrorResponse(
@@ -106,6 +121,12 @@ export function createReputationHandlers(config: ReputationHandlerConfig) {
           { x402: true }
         );
       }
+    } catch {
+      return createErrorResponse(
+        'PAYMENT_REQUIRED',
+        'Payment verification failed',
+        { x402: true }
+      );
     }
     return null;
   }

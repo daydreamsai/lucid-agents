@@ -5,16 +5,16 @@ export {
   createErrorResponse,
   createReputationHandlers,
   jsonResponse,
-  type ReputationHandlerConfig,
-  type ReputationHandlers,
 } from './handlers';
+export type { ReputationHandlerConfig, ReputationHandlers } from './handlers';
+
 export * from './schemas';
+
 export {
   calculateConfidence,
   calculateTrustScore,
   createFreshnessMetadata,
   createReputationService,
-  type ReputationDataSource,
   ReputationService,
-  type ReputationServiceConfig,
 } from './service';
+export type { ReputationDataSource, ReputationServiceConfig } from './service';

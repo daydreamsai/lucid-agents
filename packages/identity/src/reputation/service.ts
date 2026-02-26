@@ -77,7 +77,10 @@ export function calculateTrustScore(params: {
   isActive: boolean;
   historyEventCount: number;
 }): number {
-  const { completionRate, disputeRate, isRegistered, isActive, historyEventCount } = params;
+  const { isRegistered, isActive } = params;
+  const completionRate = Math.max(0, Math.min(100, params.completionRate));
+  const disputeRate = Math.max(0, Math.min(100, params.disputeRate));
+  const historyEventCount = Math.max(0, params.historyEventCount);
 
   // Completion rate contribution (0-100 -> 0-40)
   const completionScore = completionRate * TRUST_WEIGHTS.completionRate;
@@ -95,7 +98,7 @@ export function calculateTrustScore(params: {
   const historyScore = Math.min(historyEventCount / 100, 1) * 100 * TRUST_WEIGHTS.historyLength;
 
   const total = completionScore + disputeScore + identityScore + historyScore;
-  return Math.round(total * 100) / 100;
+  return Math.max(0, Math.min(100, Math.round(total * 100) / 100));
 }
 
 export function calculateConfidence(params: {
@@ -192,15 +195,24 @@ export class ReputationService {
 
   async getReputation(request: ReputationRequest): Promise<ReputationResponse> {
     const { agentAddress, chain, timeframe, evidenceDepth } = request;
-    const fetchStart = new Date();
 
     // Fetch all data in parallel
-    const [identityState, metrics, evidence, historyData] = await Promise.all([
-      this.dataSource.fetchIdentityState(agentAddress, chain),
-      this.dataSource.fetchPerformanceMetrics(agentAddress, chain, timeframe),
-      this.dataSource.fetchEvidence(agentAddress, chain, evidenceDepth),
-      this.dataSource.fetchHistory(agentAddress, chain, 1, 0), // Just to get total count
-    ]);
+    let identityState: OnchainIdentityState;
+    let metrics: { completionRate: number; disputeRate: number; totalTasks: number; totalDisputes: number };
+    let evidence: EvidenceUrl[];
+    let historyData: { events: HistoryEvent[]; total: number };
+
+    try {
+      [identityState, metrics, evidence, historyData] = await Promise.all([
+        this.dataSource.fetchIdentityState(agentAddress, chain),
+        this.dataSource.fetchPerformanceMetrics(agentAddress, chain, timeframe),
+        this.dataSource.fetchEvidence(agentAddress, chain, evidenceDepth),
+        this.dataSource.fetchHistory(agentAddress, chain, 1, 0), // Just to get total count
+      ]);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`getReputation failed for ${agentAddress} on ${chain}: ${msg}`);
+    }
 
     const trustScore = calculateTrustScore({
       completionRate: metrics.completionRate,
@@ -210,8 +222,9 @@ export class ReputationService {
       historyEventCount: historyData.total,
     });
 
+    const now = new Date();
     const freshness = createFreshnessMetadata(
-      fetchStart,
+      now,
       'aggregated',
       this.cacheTtlSeconds
     );
@@ -238,20 +251,35 @@ export class ReputationService {
 
   async getHistory(request: HistoryRequest): Promise<HistoryResponse> {
     const { agentAddress, chain, limit, offset } = request;
-    const fetchStart = new Date();
 
-    const { events, total } = await this.dataSource.fetchHistory(
-      agentAddress,
-      chain,
-      limit,
-      offset
-    );
+    let events: HistoryEvent[];
+    let total: number;
 
+    try {
+      ({ events, total } = await this.dataSource.fetchHistory(
+        agentAddress,
+        chain,
+        limit,
+        offset
+      ));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`getHistory failed for ${agentAddress} on ${chain}: ${msg}`);
+    }
+
+    const now = new Date();
     const freshness = createFreshnessMetadata(
-      fetchStart,
+      now,
       'onchain',
       this.cacheTtlSeconds
     );
+
+    const confidence = calculateConfidence({
+      dataAge: freshness.dataAge,
+      evidenceCount: total,
+      isRegistered: true,
+      stalenessThreshold: this.stalenessThresholdSeconds,
+    });
 
     return {
       agentAddress,
@@ -261,6 +289,7 @@ export class ReputationService {
       limit,
       offset,
       freshness,
+      confidence,
     };
   }
 
@@ -268,12 +297,19 @@ export class ReputationService {
     request: TrustBreakdownRequest
   ): Promise<TrustBreakdownResponse> {
     const { agentAddress, chain, timeframe } = request;
-    const fetchStart = new Date();
 
-    const [components, identityState] = await Promise.all([
-      this.dataSource.fetchTrustComponents(agentAddress, chain, timeframe),
-      this.dataSource.fetchIdentityState(agentAddress, chain),
-    ]);
+    let components: TrustComponent[];
+    let identityState: OnchainIdentityState;
+
+    try {
+      [components, identityState] = await Promise.all([
+        this.dataSource.fetchTrustComponents(agentAddress, chain, timeframe),
+        this.dataSource.fetchIdentityState(agentAddress, chain),
+      ]);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new Error(`getTrustBreakdown failed for ${agentAddress} on ${chain}: ${msg}`);
+    }
 
     // Calculate overall score from weighted components
     const overallScore = components.reduce(
@@ -281,8 +317,9 @@ export class ReputationService {
       0
     );
 
+    const now = new Date();
     const freshness = createFreshnessMetadata(
-      fetchStart,
+      now,
       'aggregated',
       this.cacheTtlSeconds
     );

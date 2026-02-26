@@ -342,6 +342,11 @@ describe('Response Schemas', () => {
           dataAge: 60,
           source: 'onchain',
         },
+        confidence: {
+          level: 'high',
+          score: 0.9,
+          factors: ['verified_identity', 'abundant_evidence'],
+        },
       };
       const result = HistoryResponseSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -395,6 +400,17 @@ describe('Response Schemas', () => {
 });
 
 describe('Error Schema', () => {
+  const validFreshness = {
+    lastUpdated: '2024-01-15T10:30:00Z',
+    dataAge: 0,
+    source: 'cache',
+  };
+  const validConfidence = {
+    level: 'low',
+    score: 0,
+    factors: ['error_response'],
+  };
+
   describe('ErrorResponseSchema', () => {
     it('validates error response with details', () => {
       const input = {
@@ -403,6 +419,8 @@ describe('Error Schema', () => {
           message: 'The provided address is not a valid Ethereum address',
           details: { provided: 'invalid', expected: '0x...' },
         },
+        freshness: validFreshness,
+        confidence: validConfidence,
       };
       const result = ErrorResponseSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -414,6 +432,8 @@ describe('Error Schema', () => {
           code: 'AGENT_NOT_FOUND',
           message: 'No agent found with the specified address',
         },
+        freshness: validFreshness,
+        confidence: validConfidence,
       };
       const result = ErrorResponseSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -426,11 +446,8 @@ describe('Error Schema', () => {
           message: 'Payment required to access this endpoint',
           details: { price: '0.001 ETH', payTo: '0x...' },
         },
-        freshness: {
-          lastUpdated: '2024-01-15T10:30:00Z',
-          dataAge: 0,
-          source: 'cache',
-        },
+        freshness: validFreshness,
+        confidence: validConfidence,
       };
       const result = ErrorResponseSchema.safeParse(input);
       expect(result.success).toBe(true);
@@ -442,6 +459,8 @@ describe('Error Schema', () => {
           code: 'UNKNOWN_ERROR',
           message: 'Something went wrong',
         },
+        freshness: validFreshness,
+        confidence: validConfidence,
       };
       const result = ErrorResponseSchema.safeParse(input);
       expect(result.success).toBe(false);
