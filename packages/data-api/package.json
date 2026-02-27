@@ -1,0 +1,23 @@
+{
+  "name": "@lucid-agents/data-api",
+  "version": "0.1.0",
+  "description": "Real-Time Gas & Inclusion Probability Oracle",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "tsup",
+    "test": "bun test",
+    "test:unit": "bun test __tests__/unit",
+    "test:integration": "bun test __tests__/integration",
+    "type-check": "tsc -p tsconfig.build.json --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "@types/bun": "latest"
+  }
+}
