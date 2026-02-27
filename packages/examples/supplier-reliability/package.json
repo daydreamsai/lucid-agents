@@ -1,0 +1,22 @@
+{
+  "name": "@lucid-agents/example-supplier-reliability",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "dev": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/types": "workspace:*",
+    "hono": "^4.7.11",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "bun-types": "latest"
+  }
+}
