@@ -197,4 +197,62 @@ describe('Gas Oracle API - Integration Tests', () => {
       expect(duration).toBeLessThan(500);
     });
   });
+
+  describe('Paid Success Path', () => {
+    test('should return 200 with valid data for paid request', async () => {
+      // Simulate a successful paid request (not 402)
+      const res = await app.request('/v1/gas/quote?chain=ethereum&urgency=high&txType=swap');
+      
+      expect(res.status).toBe(200);
+      
+      const data = await res.json();
+      expect(data.recommended_max_fee).toBeDefined();
+      expect(data.priority_fee).toBeDefined();
+      expect(data.inclusion_probability_curve).toBeInstanceOf(Array);
+      expect(data.inclusion_probability_curve.length).toBeGreaterThan(0);
+      expect(data.congestion_state).toMatch(/^(low|moderate|high|severe)$/);
+      expect(data.confidence_score).toBeGreaterThan(0);
+      expect(data.confidence_score).toBeLessThanOrEqual(1);
+      expect(data.freshness_ms).toBeGreaterThanOrEqual(0);
+      expect(data.timestamp).toBeDefined();
+      expect(data.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    test('should handle forecast paid request successfully', async () => {
+      const res = await app.request('/v1/gas/forecast?chain=base&targetBlocks=5');
+      
+      expect(res.status).toBe(200);
+      
+      const data = await res.json();
+      expect(data.chain).toBe('base');
+      expect(data.current_block).toBeGreaterThan(0);
+      expect(data.forecast).toBeInstanceOf(Array);
+      expect(data.forecast).toHaveLength(5);
+      
+      // Verify forecast structure
+      data.forecast.forEach((item: any, index: number) => {
+        expect(item.block_offset).toBe(index);
+        expect(item.estimated_base_fee).toBeDefined();
+        expect(item.estimated_priority_fee).toBeDefined();
+        expect(item.confidence).toBeGreaterThan(0);
+        expect(item.confidence).toBeLessThanOrEqual(1);
+      });
+    });
+
+    test('should handle congestion paid request successfully', async () => {
+      const res = await app.request('/v1/gas/congestion?chain=arbitrum');
+      
+      expect(res.status).toBe(200);
+      
+      const data = await res.json();
+      expect(data.chain).toBe('arbitrum');
+      expect(data.congestion_state).toMatch(/^(low|moderate|high|severe)$/);
+      expect(data.pending_tx_count).toBeGreaterThanOrEqual(0);
+      expect(data.avg_block_utilization).toBeGreaterThanOrEqual(0);
+      expect(data.avg_block_utilization).toBeLessThanOrEqual(1);
+      expect(data.base_fee_trend).toMatch(/^(rising|stable|falling)$/);
+      expect(data.freshness_ms).toBeGreaterThanOrEqual(0);
+      expect(data.timestamp).toBeDefined();
+    });
+  });
 });

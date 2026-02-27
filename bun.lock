@@ -221,6 +221,27 @@
         "typescript": "catalog:",
       },
     },
+    "packages/gas-oracle": {
+      "name": "@lucid-agents/gas-oracle",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/a2a": "workspace:*",
+        "@lucid-agents/ap2": "workspace:*",
+        "@lucid-agents/core": "workspace:*",
+        "@lucid-agents/http": "workspace:*",
+        "@lucid-agents/identity": "workspace:*",
+        "@lucid-agents/payments": "workspace:*",
+        "@lucid-agents/wallet": "workspace:*",
+        "hono": "catalog:",
+        "viem": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.21",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/hono": {
       "name": "@lucid-agents/hono",
       "version": "0.9.6",
@@ -704,6 +725,8 @@
     "@lucid-agents/examples": ["@lucid-agents/examples@workspace:packages/examples"],
 
     "@lucid-agents/express": ["@lucid-agents/express@workspace:packages/express"],
+
+    "@lucid-agents/gas-oracle": ["@lucid-agents/gas-oracle@workspace:packages/gas-oracle"],
 
     "@lucid-agents/hono": ["@lucid-agents/hono@workspace:packages/hono"],
 

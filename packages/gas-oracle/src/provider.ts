@@ -10,13 +10,15 @@ const CHAIN_MAP: Record<Chain, ViemChain> = {
   polygon: polygon,
 };
 
+type MockDataValue = bigint | number;
+
 /**
  * Mock gas data provider for testing
  */
 export class MockGasDataProvider implements GasDataProvider {
-  private mockData: Map<string, any> = new Map();
+  private mockData: Map<string, MockDataValue> = new Map();
 
-  setMockData(key: string, value: any): void {
+  setMockData(key: string, value: MockDataValue): void {
     this.mockData.set(key, value);
   }
 
@@ -145,7 +147,7 @@ export class ViemGasDataProvider implements GasDataProvider {
     const block = await client.getBlock({ blockTag: 'latest' });
     const gasUsed = Number(block.gasUsed);
     const gasLimit = Number(block.gasLimit);
-    const utilization = gasUsed / gasLimit;
+    const utilization = gasLimit > 0 ? gasUsed / gasLimit : 0;
     
     this.setCache(cacheKey, utilization);
     return utilization;
