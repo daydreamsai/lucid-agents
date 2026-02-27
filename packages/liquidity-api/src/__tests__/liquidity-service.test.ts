@@ -57,7 +57,7 @@ describe('LiquidityService', () => {
       });
     });
 
-    test('should reject stale data', async () => {
+    test('should return fresh data', async () => {
       const request: LiquiditySnapshotRequest = {
         chain: 'ethereum',
         baseToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',

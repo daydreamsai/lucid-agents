@@ -10,6 +10,9 @@ import {
   SlippageResponseSchema,
   RoutesRequestSchema,
   RoutesResponseSchema,
+  type LiquiditySnapshotRequest,
+  type SlippageRequest,
+  type RoutesRequest,
 } from './schemas';
 
 export * from './schemas';
@@ -18,7 +21,7 @@ export * from './liquidity-service';
 /**
  * Register liquidity API entrypoints
  */
-export async function registerEntrypoints(addEntrypoint: any) {
+export async function registerEntrypoints(addEntrypoint: (config: any) => void) {
   const service = new LiquidityService();
 
   // Snapshot endpoint
@@ -28,7 +31,7 @@ export async function registerEntrypoints(addEntrypoint: any) {
     price: '0.10', // $0.10 per call
     input: LiquiditySnapshotRequestSchema,
     output: LiquiditySnapshotResponseSchema,
-    handler: async (ctx: any) => {
+    handler: async (ctx: { input: LiquiditySnapshotRequest }) => {
       const output = await service.getSnapshot(ctx.input);
       return { output };
     },
@@ -41,7 +44,7 @@ export async function registerEntrypoints(addEntrypoint: any) {
     price: '0.15', // $0.15 per call
     input: SlippageRequestSchema,
     output: SlippageResponseSchema,
-    handler: async (ctx: any) => {
+    handler: async (ctx: { input: SlippageRequest }) => {
       const output = await service.getSlippage(ctx.input);
       return { output };
     },
@@ -54,7 +57,7 @@ export async function registerEntrypoints(addEntrypoint: any) {
     price: '0.20', // $0.20 per call
     input: RoutesRequestSchema,
     output: RoutesResponseSchema,
-    handler: async (ctx: any) => {
+    handler: async (ctx: { input: RoutesRequest }) => {
       const output = await service.getRoutes(ctx.input);
       return { output };
     },

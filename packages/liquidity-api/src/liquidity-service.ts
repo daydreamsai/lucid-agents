@@ -96,7 +96,7 @@ export class LiquidityService {
     ].filter(point => point.notionalUsd <= request.notionalUsd * 2);
 
     // Ensure we have at least the requested notional
-    if (slippage_bps_curve[slippage_bps_curve.length - 1].notionalUsd < request.notionalUsd) {
+    if (slippage_bps_curve.length === 0 || slippage_bps_curve[slippage_bps_curve.length - 1].notionalUsd < request.notionalUsd) {
       slippage_bps_curve.push({
         notionalUsd: request.notionalUsd,
         slippageBps: baseSlippage * Math.ceil(request.notionalUsd / 10000),
@@ -160,6 +160,10 @@ export class LiquidityService {
 
     // Sort by total cost (ascending)
     const sortedRoutes = [...filteredRoutes].sort((a, b) => a.totalCostBps - b.totalCostBps);
+
+    if (sortedRoutes.length === 0) {
+      throw new Error('No routes found for the given filters');
+    }
 
     const best_route = sortedRoutes[0];
     const alternatives = sortedRoutes.slice(1);

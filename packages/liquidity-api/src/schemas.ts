@@ -99,7 +99,7 @@ export type RoutesRequest = z.infer<typeof RoutesRequestSchema>;
 
 // Route info
 export const RouteInfoSchema = z.object({
-  path: z.array(VenueSchema),
+  path: z.array(VenueSchema).nonempty(),
   estimatedSlippageBps: z.number().nonnegative(),
   estimatedGasUsd: z.number().nonnegative(),
   totalCostBps: z.number().nonnegative(),
