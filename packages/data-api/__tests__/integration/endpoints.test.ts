@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { createApp } from '../../src/index';
 import { QuoteResponseSchema } from '../../src/schemas/quote';
 import { ForecastResponseSchema } from '../../src/schemas/forecast';
@@ -39,21 +39,21 @@ describe('Endpoint Integration Tests', () => {
 
   test('4.3 gas-quote response passes QuoteResponseSchema', async () => {
     const res = await req('/entrypoints/gas-quote/invoke', { chain: 'ethereum' }, { 'X-PAYMENT': 'mock-token' });
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(QuoteResponseSchema.safeParse(body).success).toBe(true);
   });
 
   test('4.4 gas-forecast returns valid ForecastResponse', async () => {
     const res = await req('/entrypoints/gas-forecast/invoke', { chain: 'base', target_blocks: 5 }, { 'X-PAYMENT': 'mock-token' });
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(ForecastResponseSchema.safeParse(body).success).toBe(true);
   });
 
   test('4.5 gas-congestion returns valid CongestionResponse', async () => {
     const res = await req('/entrypoints/gas-congestion/invoke', { chain: 'polygon' }, { 'X-PAYMENT': 'mock-token' });
     expect(res.status).toBe(200);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(CongestionResponseSchema.safeParse(body).success).toBe(true);
   });
 
@@ -64,7 +64,7 @@ describe('Endpoint Integration Tests', () => {
 
   test('4.7 all endpoints include freshness and confidence', async () => {
     const res = await req('/entrypoints/gas-quote/invoke', { chain: 'ethereum' }, { 'X-PAYMENT': 'mock-token' });
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(body.freshness).toBeDefined();
     expect(body.confidence).toBeDefined();
   });
@@ -76,17 +76,17 @@ describe('Endpoint Integration Tests', () => {
 
   test('4.9 400 response conforms to ErrorResponseSchema', async () => {
     const res = await req('/entrypoints/gas-quote/invoke', { chain: 'solana' }, { 'X-PAYMENT': 'mock-token' });
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(ErrorResponseSchema.safeParse(body).success).toBe(true);
   });
 
   test('4.10 402 response conforms to ErrorResponseSchema', async () => {
     const res = await req('/entrypoints/gas-quote/invoke', { chain: 'ethereum' });
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(ErrorResponseSchema.safeParse(body).success).toBe(true);
   });
 
-  test('4.11 429 rate-limited response conforms to ErrorResponseSchema', async () => {
+  test('4.11 ErrorResponseSchema accepts 429-shaped error object', async () => {
     // Create a fresh app with very low rate limit for testing
     // We'll just verify the error format from existing 400/402 since rate limit
     // requires 100+ requests. Instead verify schema structure.
@@ -103,7 +103,7 @@ describe('Endpoint Integration Tests', () => {
       body: JSON.stringify({ chain: 'ethereum' }),
     });
     expect(res.status).toBe(500);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(ErrorResponseSchema.safeParse(body).success).toBe(true);
   });
 
@@ -115,7 +115,7 @@ describe('Endpoint Integration Tests', () => {
       body: JSON.stringify({ chain: 'ethereum' }),
     });
     expect(res.status).toBe(500);
-    const body = await res.json() as Record<string, any>;
+    const body = await res.json() as Record<string, unknown>;
     expect(body.message).toBe('Internal server error');
   });
 });

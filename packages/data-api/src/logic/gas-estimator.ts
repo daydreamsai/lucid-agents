@@ -61,10 +61,12 @@ export function estimateGas(input: GasEstimateInput): GasEstimateOutput {
   const pct = URGENCY_TIP_PERCENTILES[urgency];
   let tipFee = percentile(sorted, pct);
 
-  // 4. Failure tolerance adjustment: lower tolerance → higher fee
-  // Default tolerance is 0.05. Multiplier = 1 + (0.05 - tolerance) * 4
-  const toleranceMultiplier = 1 + (0.05 - recent_failure_tolerance) * 4;
-  const adjustedTip = BigInt(Math.max(1, Math.round(Number(tipFee) * toleranceMultiplier)));
+  // 4. Failure tolerance adjustment using scaled BigInt arithmetic
+  // Multiplier = 1 + (0.05 - tolerance) * 4, scaled to SCALE=10000
+  const SCALE = 10000;
+  const scaledMultiplier = Math.round((1 + (0.05 - recent_failure_tolerance) * 4) * SCALE);
+  let adjustedTip = (tipFee * BigInt(scaledMultiplier) + BigInt(SCALE / 2)) / BigInt(SCALE);
+  if (adjustedTip < 1n) adjustedTip = 1n;
 
   // 5. recommended_max_fee = projected base fee + adjusted priority fee
   const recommendedMaxFee = projectedBaseFee + adjustedTip;

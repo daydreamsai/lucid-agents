@@ -1,15 +1,17 @@
-import type { FreshnessMetadata, Confidence } from '../schemas/common';
+import type { FreshnessMetadata, Confidence, MempoolVisibility } from '../schemas/common';
 
 const DEFAULT_STALE_THRESHOLD_MS = 30_000; // 30 seconds
 
+/** Input for building freshness metadata. */
 export interface FreshnessInput {
   fetched_at: Date;
   block_number: number;
   block_timestamp_ms: number;
-  data_source: 'live' | 'cached' | 'fallback';
+  data_source: FreshnessMetadata['data_source'];
   stale_threshold_ms?: number;
 }
 
+/** Build freshness metadata from block data. Marks data as stale if block age exceeds threshold. */
 export function buildFreshness(input: FreshnessInput): FreshnessMetadata {
   const now = Date.now();
   const blockAgeMs = now - input.block_timestamp_ms;
@@ -24,13 +26,15 @@ export function buildFreshness(input: FreshnessInput): FreshnessMetadata {
   };
 }
 
+/** Input for computing confidence score. */
 export interface ConfidenceInput {
-  sample_size: number;          // number of recent blocks used
-  base_fee_volatility: number;  // coefficient of variation (0-1+)
+  sample_size: number;
+  base_fee_volatility: number;
   block_age_ms: number;
-  mempool_available: boolean;
+  mempool_visibility: MempoolVisibility;
 }
 
+/** Compute a confidence score (0-1) based on data quality factors. */
 export function computeConfidence(input: ConfidenceInput): Confidence {
   const factors: string[] = [];
   let score = 1.0;
@@ -69,8 +73,11 @@ export function computeConfidence(input: ConfidenceInput): Confidence {
   }
 
   // Mempool visibility
-  if (input.mempool_available) {
+  if (input.mempool_visibility === 'full') {
+    factors.push('mempool_visibility:full');
+  } else if (input.mempool_visibility === 'partial') {
     factors.push('mempool_visibility:partial');
+    score -= 0.02;
   } else {
     factors.push('mempool_visibility:none');
     score -= 0.05;
@@ -82,9 +89,7 @@ export function computeConfidence(input: ConfidenceInput): Confidence {
   };
 }
 
-/**
- * Compute coefficient of variation for an array of bigints.
- */
+/** Compute coefficient of variation for an array of bigints. */
 export function computeVolatility(values: bigint[]): number {
   if (values.length < 2) return 0;
   const nums = values.map(Number);

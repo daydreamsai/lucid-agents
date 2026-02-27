@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { QuoteRequestSchema } from './schemas/quote';
-import { ForecastRequestSchema } from './schemas/forecast';
-import { CongestionRequestSchema } from './schemas/congestion';
+import { QuoteRequestSchema, type QuoteResponse } from './schemas/quote';
+import { ForecastRequestSchema, type ForecastResponse } from './schemas/forecast';
+import { CongestionRequestSchema, type CongestionResponse } from './schemas/congestion';
 import { handleQuote } from './handlers/quote';
 import { handleForecast } from './handlers/forecast';
 import { handleCongestion } from './handlers/congestion';
@@ -18,9 +18,10 @@ interface CacheEntry<T> {
   chain: Chain;
 }
 
-// Track all cache instances for clearCache
+/** Track all cache instances for clearCache. */
 const allCaches: Set<Map<string, CacheEntry<unknown>>> = new Set();
 
+/** Clear all app caches (used for test isolation). */
 export function clearCache(): void {
   for (const cache of allCaches) {
     cache.clear();
@@ -29,6 +30,7 @@ export function clearCache(): void {
 
 // ─── Error Helper ────────────────────────────────────────────────────────────
 
+/** Build a standardized error response object. */
 function errorResponse(code: number, message: string, details?: string) {
   return {
     code,
@@ -40,12 +42,14 @@ function errorResponse(code: number, message: string, details?: string) {
 
 // ─── App Factory ─────────────────────────────────────────────────────────────
 
+/** Options for creating a Gas Oracle app instance. */
 export interface CreateAppOptions {
   provider?: ChainDataProvider;
   requirePayment?: boolean;
   rateLimitPerMinute?: number;
 }
 
+/** Create a Hono app with gas oracle endpoints, caching, and optional payment enforcement. */
 export function createApp(options: CreateAppOptions = {}) {
   const provider = options.provider ?? new MockProvider();
   const requirePayment = options.requirePayment ?? true;
@@ -68,6 +72,15 @@ export function createApp(options: CreateAppOptions = {}) {
     cache.set(key, { data, timestamp: Date.now(), chain });
   }
 
+  /** Parse JSON body safely, returning null on invalid JSON. */
+  async function parseBody(c: { req: { json: () => Promise<unknown> } }): Promise<unknown | null> {
+    try {
+      return await c.req.json();
+    } catch {
+      return null;
+    }
+  }
+
   const app = new Hono();
 
   // Health check
@@ -83,7 +96,10 @@ export function createApp(options: CreateAppOptions = {}) {
         }
       }
 
-      const body = await c.req.json();
+      const body = await parseBody(c);
+      if (body === null) {
+        return c.json(errorResponse(400, 'Invalid JSON body'), 400);
+      }
       const parsed = QuoteRequestSchema.safeParse(body);
       if (!parsed.success) {
         return c.json(errorResponse(400, 'Invalid request', parsed.error.message), 400);
@@ -91,7 +107,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
       const input = parsed.data;
       const cacheKey = `quote:${input.chain}:${input.urgency}:${input.tx_type}:${input.recent_failure_tolerance}`;
-      const cached = getCached<any>(cacheKey, input.chain);
+      const cached = getCached<QuoteResponse>(cacheKey, input.chain);
       if (cached) {
         return c.json({ ...cached, freshness: { ...cached.freshness, data_source: 'cached' } });
       }
@@ -100,7 +116,7 @@ export function createApp(options: CreateAppOptions = {}) {
       setCache(cacheKey, input.chain, result);
       return c.json(result);
     } catch (err) {
-      return c.json(errorResponse(500, 'Internal server error', String(err)), 500);
+      return c.json(errorResponse(500, 'Internal server error'), 500);
     }
   });
 
@@ -114,7 +130,10 @@ export function createApp(options: CreateAppOptions = {}) {
         }
       }
 
-      const body = await c.req.json();
+      const body = await parseBody(c);
+      if (body === null) {
+        return c.json(errorResponse(400, 'Invalid JSON body'), 400);
+      }
       const parsed = ForecastRequestSchema.safeParse(body);
       if (!parsed.success) {
         return c.json(errorResponse(400, 'Invalid request', parsed.error.message), 400);
@@ -122,7 +141,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
       const input = parsed.data;
       const cacheKey = `forecast:${input.chain}:${input.target_blocks}`;
-      const cached = getCached<any>(cacheKey, input.chain);
+      const cached = getCached<ForecastResponse>(cacheKey, input.chain);
       if (cached) {
         return c.json({ ...cached, freshness: { ...cached.freshness, data_source: 'cached' } });
       }
@@ -131,7 +150,7 @@ export function createApp(options: CreateAppOptions = {}) {
       setCache(cacheKey, input.chain, result);
       return c.json(result);
     } catch (err) {
-      return c.json(errorResponse(500, 'Internal server error', String(err)), 500);
+      return c.json(errorResponse(500, 'Internal server error'), 500);
     }
   });
 
@@ -145,7 +164,10 @@ export function createApp(options: CreateAppOptions = {}) {
         }
       }
 
-      const body = await c.req.json();
+      const body = await parseBody(c);
+      if (body === null) {
+        return c.json(errorResponse(400, 'Invalid JSON body'), 400);
+      }
       const parsed = CongestionRequestSchema.safeParse(body);
       if (!parsed.success) {
         return c.json(errorResponse(400, 'Invalid request', parsed.error.message), 400);
@@ -153,7 +175,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
       const input = parsed.data;
       const cacheKey = `congestion:${input.chain}`;
-      const cached = getCached<any>(cacheKey, input.chain);
+      const cached = getCached<CongestionResponse>(cacheKey, input.chain);
       if (cached) {
         return c.json({ ...cached, freshness: { ...cached.freshness, data_source: 'cached' } });
       }
@@ -162,7 +184,7 @@ export function createApp(options: CreateAppOptions = {}) {
       setCache(cacheKey, input.chain, result);
       return c.json(result);
     } catch (err) {
-      return c.json(errorResponse(500, 'Internal server error', String(err)), 500);
+      return c.json(errorResponse(500, 'Internal server error'), 500);
     }
   });
 

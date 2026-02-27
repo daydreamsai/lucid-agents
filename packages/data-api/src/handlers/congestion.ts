@@ -1,7 +1,7 @@
 import type { CongestionRequest, CongestionResponse } from '../schemas/congestion';
 import type { ChainDataProvider } from '../providers/types';
 import { classifyCongestion, type BlockStats } from '../logic/congestion-detector';
-import { buildFreshness, computeConfidence } from '../logic/freshness';
+import { buildFreshness, computeConfidence, computeVolatility } from '../logic/freshness';
 import { RECENT_BLOCKS_COUNT } from '../config';
 
 export async function handleCongestion(
@@ -29,11 +29,7 @@ export async function handleCongestion(
 
   const result = classifyCongestion(blockStat, recentBaseFees, chain, mempoolVisibility, pendingTxCount);
 
-  // Volatility from base fees
-  const feeNumbers = recentBaseFees.map(f => Number(f));
-  const avg = feeNumbers.reduce((a, b) => a + b, 0) / (feeNumbers.length || 1);
-  const variance = feeNumbers.reduce((sum, f) => sum + (f - avg) ** 2, 0) / (feeNumbers.length || 1);
-  const volatility = avg > 0 ? Math.min(1, Math.sqrt(variance) / avg) : 0;
+  const volatility = computeVolatility(recentBaseFees);
 
   const freshness = buildFreshness({
     fetched_at: new Date(),
@@ -46,7 +42,7 @@ export async function handleCongestion(
     sample_size: recentBlocks.length,
     base_fee_volatility: volatility,
     block_age_ms: freshness.block_age_ms,
-    mempool_available: mempoolVisibility !== 'none',
+    mempool_visibility: mempoolVisibility,
   });
 
   return {

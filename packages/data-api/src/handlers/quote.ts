@@ -11,6 +11,9 @@ export async function handleQuote(
   const { chain, urgency, tx_type, recent_failure_tolerance } = input;
 
   const recentBlocks = await provider.getRecentBlocks(chain, RECENT_BLOCKS_COUNT);
+  if (recentBlocks.length === 0) {
+    throw new Error('No block data available');
+  }
   const latestBlock = recentBlocks[0];
 
   // Collect priority fees from all recent blocks
@@ -30,7 +33,7 @@ export async function handleQuote(
   const costUsd = estimateCostUsd(
     BigInt(estimate.recommended_max_fee),
     tx_type,
-    chainConfig.eth_price_usd,
+    chainConfig.native_token_price_usd,
   );
 
   const freshness = buildFreshness({
@@ -44,7 +47,7 @@ export async function handleQuote(
     sample_size: recentBlocks.length,
     base_fee_volatility: computeVolatility(recentBaseFees),
     block_age_ms: freshness.block_age_ms,
-    mempool_available: provider.getMempoolVisibility(chain) !== 'none',
+    mempool_visibility: provider.getMempoolVisibility(chain),
   });
 
   return {

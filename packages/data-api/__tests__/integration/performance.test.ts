@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import type { QuoteResponse } from '../../src/schemas/quote';
 import { createApp, clearCache } from '../../src/index';
 import { MockProvider } from '../../src/providers/mock-provider';
 
@@ -75,11 +76,11 @@ describe('Performance Tests', () => {
     clearCache();
     // Fire 20 concurrent requests for the same key
     const promises = Array.from({ length: 20 }, () =>
-      (async () => { const r = await req('/entrypoints/gas-quote/invoke', { chain: 'ethereum' }); return r.json(); })(),
+      (async () => { const r = await req('/entrypoints/gas-quote/invoke', { chain: 'ethereum' }); return r.json() as Promise<QuoteResponse>; })(),
     );
     const results = await Promise.all(promises);
     // All should return valid data (same recommended_max_fee due to deterministic mock)
-    const fees = results.map((r: any) => r.recommended_max_fee);
+    const fees = results.map((r: QuoteResponse) => r.recommended_max_fee);
     const uniqueFees = new Set(fees);
     expect(uniqueFees.size).toBe(1); // all same
   });

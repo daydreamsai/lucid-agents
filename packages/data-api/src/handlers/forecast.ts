@@ -11,6 +11,9 @@ export async function handleForecast(
   const { chain, target_blocks } = input;
 
   const recentBlocks = await provider.getRecentBlocks(chain, RECENT_BLOCKS_COUNT);
+  if (recentBlocks.length === 0) {
+    throw new Error('No block data available');
+  }
   const latestBlock = recentBlocks[0];
 
   const recentBaseFees = recentBlocks.map(b => b.base_fee);
@@ -35,7 +38,7 @@ export async function handleForecast(
     sample_size: recentBlocks.length,
     base_fee_volatility: computeVolatility(recentBaseFees),
     block_age_ms: freshness.block_age_ms,
-    mempool_available: provider.getMempoolVisibility(chain) !== 'none',
+    mempool_visibility: provider.getMempoolVisibility(chain),
   });
 
   return {

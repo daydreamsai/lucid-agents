@@ -59,7 +59,7 @@ describe('buildForecast', () => {
     }
   });
 
-  test('2.21 returns probability=1.0 for sufficiently high max_fee', () => {
+  test('2.21 approaches probability 1.0 for sufficiently high max_fee', () => {
     // With very low base fee, inclusion should approach 1.0
     const result = buildForecast({
       chain: 'ethereum', target_blocks: 50,

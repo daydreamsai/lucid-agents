@@ -1,10 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { estimateGas, projectBaseFee } from '../../src/logic/gas-estimator';
 
-const baseFees = [
-  2_000_000_000n, 2_100_000_000n, 1_900_000_000n, 2_050_000_000n, 2_200_000_000n,
-  1_800_000_000n, 2_300_000_000n, 2_150_000_000n, 2_000_000_000n, 2_100_000_000n,
-];
 
 const currentBaseFee = 30_000_000_000n; // 30 gwei
 

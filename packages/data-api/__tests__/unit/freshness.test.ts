@@ -31,13 +31,13 @@ describe('computeConfidence', () => {
       sample_size: 20,
       base_fee_volatility: 0.5,
       block_age_ms: 2000,
-      mempool_available: true,
+      mempool_visibility: 'partial',
     });
     const lowVol = computeConfidence({
       sample_size: 20,
       base_fee_volatility: 0.05,
       block_age_ms: 2000,
-      mempool_available: true,
+      mempool_visibility: 'partial',
     });
     expect(highVol.score).toBeLessThan(lowVol.score);
   });
@@ -47,13 +47,13 @@ describe('computeConfidence', () => {
       sample_size: 20,
       base_fee_volatility: 0.1,
       block_age_ms: 2000,
-      mempool_available: true,
+      mempool_visibility: 'partial',
     });
     const small = computeConfidence({
       sample_size: 5,
       base_fee_volatility: 0.1,
       block_age_ms: 2000,
-      mempool_available: true,
+      mempool_visibility: 'partial',
     });
     expect(large.score).toBeGreaterThan(small.score);
   });
@@ -63,7 +63,7 @@ describe('computeConfidence', () => {
       sample_size: 20,
       base_fee_volatility: 0.05,
       block_age_ms: 2000,
-      mempool_available: true,
+      mempool_visibility: 'partial',
     });
     expect(result.factors.length).toBeGreaterThan(0);
     expect(result.factors.some(f => f.startsWith('sample_size:'))).toBe(true);

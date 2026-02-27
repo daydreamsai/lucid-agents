@@ -1,5 +1,5 @@
 import type { Chain } from '../schemas/common';
-import { projectBaseFee, estimateGas } from './gas-estimator';
+import { estimateGas } from './gas-estimator';
 import { buildInclusionCurve, type InclusionCurvePoint } from './probability';
 import { computeBaseFeeTrend } from './congestion-detector';
 
