@@ -1,0 +1,25 @@
+{
+  "name": "@lucid-agents/gas-oracle",
+  "version": "0.1.0",
+  "description": "Real-Time Gas & Inclusion Probability Oracle — issue #178",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "build": "bun build src/index.ts --outdir dist"
+  },
+  "dependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "catalog:"
+  }
+}
