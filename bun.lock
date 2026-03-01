@@ -272,6 +272,12 @@
         "tsup": "^8.5.0",
         "typescript": "^5.9.2",
       },
+      "peerDependencies": {
+        "tronweb": ">=5.0.0",
+      },
+      "optionalPeers": [
+        "tronweb",
+      ],
     },
     "packages/payments": {
       "name": "@lucid-agents/payments",
