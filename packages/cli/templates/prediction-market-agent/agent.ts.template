@@ -1,0 +1,1988 @@
+{{TEMPLATE_IMPORTS}}
+import { createAgent } from "@lucid-agents/core";
+import { http } from "@lucid-agents/http";
+import {
+  Connection,
+  PublicKey,
+  Keypair,
+  Transaction,
+  TransactionInstruction,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+} from '@solana/web3.js';
+import bs58 from 'bs58';
+
+// ===========================================================================
+// Baozi On-Chain Client — Solana Prediction Markets
+// Program: FWyTPzm5cfJwRKzfkscxozatSxF6Qu78JQovQUwKPruJ
+//
+// Market Layers:
+//   Official (0) — Admin-created only, highest trust, 2.5% fee
+//   Lab      (1) — Community-created, anyone with CreatorProfile, 3% fee
+//   Private  (2) — Invite-only, whitelist access, 2% fee
+// ===========================================================================
+
+const PROGRAM_ID = new PublicKey('FWyTPzm5cfJwRKzfkscxozatSxF6Qu78JQovQUwKPruJ');
+
+// -- Account Discriminators (for getProgramAccounts filters) ----------------
+
+const MARKET_DISC = Buffer.from([219, 190, 213, 55, 0, 227, 198, 154]);
+const RACE_DISC = Buffer.from([235, 196, 111, 75, 230, 113, 118, 238]);
+const POS_DISC = Buffer.from([251, 248, 209, 245, 83, 234, 17, 27]);
+const RACE_POS_DISC = Buffer.from([44, 182, 16, 1, 230, 14, 174, 46]);
+
+const MARKET_DISC_B58 = bs58.encode(MARKET_DISC);
+const RACE_DISC_B58 = bs58.encode(RACE_DISC);
+const POS_DISC_B58 = bs58.encode(POS_DISC);
+const RACE_POS_DISC_B58 = bs58.encode(RACE_POS_DISC);
+const AFFILIATE_DISC = Buffer.from([136, 95, 107, 149, 36, 195, 146, 35]);
+const CREATOR_PROFILE_DISC = Buffer.from([251, 250, 184, 111, 214, 178, 32, 221]);
+const CREATOR_REP_DISC = Buffer.from([76, 107, 128, 9, 3, 235, 176, 152]);
+
+// -- Instruction Discriminators (hardcoded from IDL) ------------------------
+
+const PLACE_BET_DISC = Buffer.from([137, 137, 247, 253, 233, 243, 48, 170]);
+const RACE_BET_DISC = Buffer.from([195, 181, 151, 159, 105, 100, 234, 244]);
+const CREATE_PROFILE_DISC = Buffer.from([139, 244, 127, 145, 95, 172, 140, 154]);
+const CREATE_LAB_MARKET_DISC = Buffer.from([35, 159, 50, 67, 31, 134, 199, 157]);
+const CREATE_RACE_MARKET_DISC = Buffer.from([94, 237, 40, 47, 63, 233, 25, 67]);
+const CANCEL_MARKET_DISC = Buffer.from([205, 121, 84, 210, 222, 71, 150, 11]);
+const CANCEL_RACE_DISC = Buffer.from([223, 214, 232, 232, 43, 15, 165, 234]);
+const CLAIM_REFUND_DISC = Buffer.from([8, 82, 5, 144, 194, 114, 255, 20]);
+const CLAIM_RACE_REFUND_DISC = Buffer.from([174, 101, 101, 227, 171, 69, 173, 243]);
+const CLAIM_WINNINGS_DISC = Buffer.from([64, 158, 207, 116, 128, 129, 169, 76]);
+const CLAIM_RACE_WINNINGS_DISC = Buffer.from([46, 120, 202, 194, 126, 72, 22, 52]);
+const FINALIZE_RESOLUTION_DISC = Buffer.from([191, 74, 94, 214, 45, 150, 152, 125]);
+const FINALIZE_RACE_RESOLUTION_DISC = Buffer.from([19, 232, 81, 138, 191, 218, 54, 200]);
+const REGISTER_AFFILIATE_DISC = Buffer.from([87, 121, 99, 184, 126, 63, 103, 217]);
+const BET_WITH_AFFILIATE_DISC = Buffer.from([197, 186, 187, 145, 252, 239, 101, 96]);
+const RACE_BET_WITH_AFFILIATE_DISC = Buffer.from([26, 224, 14, 181, 67, 52, 24, 0]);
+const CLAIM_AFFILIATE_DISC = Buffer.from([125, 18, 164, 112, 216, 207, 197, 201]);
+const CLAIM_CREATOR_DISC = Buffer.from([21, 25, 164, 47, 81, 156, 199, 103]);
+const UPDATE_PROFILE_DISC = Buffer.from([8, 240, 162, 55, 110, 46, 177, 108]);
+const CLOSE_MARKET_DISC = Buffer.from([88, 154, 248, 186, 48, 14, 123, 244]);
+const CLOSE_RACE_MARKET_DISC = Buffer.from([39, 189, 166, 118, 134, 37, 102, 41]);
+const PROPOSE_RESOLUTION_HOST_DISC = Buffer.from([116, 231, 75, 185, 127, 129, 46, 124]);
+const PROPOSE_RACE_RESOLUTION_DISC = Buffer.from([14, 204, 17, 188, 243, 49, 107, 255]);
+const VOTE_REPUTATION_DISC = Buffer.from([70, 64, 70, 238, 141, 95, 102, 221]);
+
+const STATUS_NAMES: Record<number, string> = {
+  0: 'active', 1: 'closed', 2: 'resolved', 3: 'cancelled',
+  4: 'paused', 5: 'resolved_pending', 6: 'disputed',
+};
+
+// -- Borsh Reader -----------------------------------------------------------
+
+class BorshReader {
+  private buf: Buffer;
+  private off = 0;
+  constructor(buf: Buffer | Uint8Array) { this.buf = Buffer.from(buf); }
+  u8() { const v = this.buf.readUInt8(this.off); this.off += 1; return v; }
+  u16() { const v = this.buf.readUInt16LE(this.off); this.off += 2; return v; }
+  u32() { const v = this.buf.readUInt32LE(this.off); this.off += 4; return v; }
+  u64() { const v = this.buf.readBigUInt64LE(this.off); this.off += 8; return v; }
+  i64() { const v = this.buf.readBigInt64LE(this.off); this.off += 8; return v; }
+  bool() { return this.u8() === 1; }
+  pubkey() { const b = this.buf.subarray(this.off, this.off + 32); this.off += 32; return bs58.encode(b); }
+  string() {
+    const len = this.buf.readUInt32LE(this.off); this.off += 4;
+    if (this.off + len > this.buf.length) throw new Error(`BorshReader: string length ${len} exceeds buffer at offset ${this.off}`);
+    const s = this.buf.subarray(this.off, this.off + len).toString('utf8'); this.off += len; return s;
+  }
+  optBool(): boolean | null { if (!this.u8()) return null; return this.bool(); }
+  optU8(): number | null { if (!this.u8()) return null; return this.u8(); }
+  optPubkey(): string | null { if (!this.u8()) return null; return this.pubkey(); }
+  bytes(n: number) { const b = Buffer.from(this.buf.subarray(this.off, this.off + n)); this.off += n; return b; }
+  optBytes(n: number): Buffer | null { if (!this.u8()) return null; return this.bytes(n); }
+  skip(n: number) { this.off += n; }
+}
+
+// -- Borsh Writer -----------------------------------------------------------
+
+class BorshWriter {
+  private parts: Buffer[] = [];
+  u8(v: number) { const b = Buffer.alloc(1); b.writeUInt8(v); this.parts.push(b); return this; }
+  u16(v: number) { const b = Buffer.alloc(2); b.writeUInt16LE(v); this.parts.push(b); return this; }
+  u32(v: number) { const b = Buffer.alloc(4); b.writeUInt32LE(v); this.parts.push(b); return this; }
+  u64(v: bigint) { const b = Buffer.alloc(8); b.writeBigUInt64LE(v); this.parts.push(b); return this; }
+  i8(v: number) { const b = Buffer.alloc(1); b.writeInt8(v); this.parts.push(b); return this; }
+  i64(v: bigint) { const b = Buffer.alloc(8); b.writeBigInt64LE(v); this.parts.push(b); return this; }
+  bool(v: boolean) { return this.u8(v ? 1 : 0); }
+  string(s: string) { const buf = Buffer.from(s, 'utf8'); this.u32(buf.length); this.parts.push(buf); return this; }
+  pubkey(pk: PublicKey) { this.parts.push(Buffer.from(pk.toBytes())); return this; }
+  raw(b: Buffer) { this.parts.push(b); return this; }
+  vecString(arr: string[]) { this.u32(arr.length); for (const s of arr) this.string(s); return this; }
+  vecPubkey(arr: PublicKey[]) { this.u32(arr.length); for (const pk of arr) this.pubkey(pk); return this; }
+  optU8(v: number | null) { if (v === null) { this.u8(0); } else { this.u8(1); this.u8(v); } return this; }
+  optVecPubkey(arr: PublicKey[] | null) { if (arr === null) { this.u8(0); } else { this.u8(1); this.vecPubkey(arr); } return this; }
+  toBuffer() { return Buffer.concat(this.parts); }
+}
+
+// -- Types ------------------------------------------------------------------
+
+interface MarketOutcome { label: string; probability: number; poolSol: number; }
+
+interface Market {
+  id: string;
+  question: string;
+  type: 'boolean' | 'race';
+  outcomes: MarketOutcome[];
+  totalPoolSol: number;
+  status: string;
+  layer: string;
+  closingTime: string;
+  url: string;
+  rawMarketId: string;
+  creator: string;
+  rawCreatorProfile: string | null;
+}
+
+interface Position {
+  pubkey: string;
+  marketId: string;
+  user: string;
+  type: 'boolean' | 'race';
+  yesAmountSol?: number;
+  noAmountSol?: number;
+  bets?: { outcome: number; amountSol: number }[];
+  totalBetSol: number;
+  claimed: boolean;
+}
+
+interface GlobalConfigData {
+  marketCount: bigint;
+}
+
+// -- Parsers ----------------------------------------------------------------
+
+function parseMarket(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data);
+  r.skip(8);
+  const marketId = r.u64(); const question = r.string();
+  const closingTime = r.i64(); const resolutionTime = r.i64();
+  r.i64(); // auto_stop_buffer
+  const yesPool = r.u64(); const noPool = r.u64();
+  r.u64(); r.u64(); // snapshots
+  const status = r.u8(); const winningOutcome = r.optBool();
+  r.u8(); r.skip(33); // currency_type + reserved
+  r.u64(); r.u64(); r.u64(); // creator_bond, total_claimed, platform_fee_collected
+  const lastBetTime = r.i64();
+  r.u8(); // bump
+  const layer = r.u8();
+  r.u8(); r.u8(); // resolution_mode, access_gate
+  const creator = r.pubkey();
+  r.optPubkey(); r.skip(160); r.skip(4); // oracle_host, council, council_meta
+  r.u64(); // total_affiliate_fees
+  r.optBytes(32); // invite_hash
+  const creatorFeeBps = r.u16();
+  r.u64(); // total_creator_fees
+  const creatorProfile = r.optPubkey(); // creator_profile PDA (if Lab/Private)
+  const platformFeeBpsAtCreation = r.u16();
+  const affiliateFeeBps = r.u16(); r.i64(); // affiliate_fee_bps, betting_freeze_seconds
+  const hasBets = r.bool();
+  return { marketId, question, closingTime, resolutionTime, yesPool, noPool, status, winningOutcome, layer, creator, creatorFeeBps, creatorProfile, affiliateFeeBps, platformFeeBpsAtCreation, hasBets, lastBetTime };
+}
+
+function parseRaceMarket(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data);
+  r.skip(8);
+  const marketId = r.u64(); const question = r.string();
+  const closingTime = r.i64(); const resolutionTime = r.i64();
+  r.i64(); // auto_stop_buffer
+  const outcomeCount = r.u8();
+  const outcomeLabels: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const lb = r.bytes(32);
+    if (i < outcomeCount) outcomeLabels.push(Buffer.from(Array.from(lb).filter(b => b !== 0)).toString('utf8'));
+  }
+  const outcomePools: bigint[] = [];
+  for (let i = 0; i < 10; i++) outcomePools.push(r.u64());
+  const totalPool = r.u64();
+  r.skip(88); // snapshot_pools + snapshot_total
+  const status = r.u8(); const winningOutcome = r.optU8();
+  r.u8(); r.u64(); r.u64(); r.u64(); // currency, fees, claimed
+  const lastBetTime = r.i64();
+  r.u8(); const layer = r.u8();
+  r.u8(); r.u8(); // resolution_mode, access_gate
+  const creator = r.pubkey();
+  r.optPubkey(); r.skip(160); r.u8(); r.skip(10); r.u8(); // oracle, council
+  const creatorFeeBps = r.u16();
+  const creatorProfile = r.optPubkey(); // creator_profile PDA (if Lab/Private)
+  const platformFeeBpsAtCreation = r.u16();
+  return { marketId, question, closingTime, resolutionTime, outcomeCount, outcomeLabels: outcomeLabels.slice(0, outcomeCount), outcomePools: outcomePools.slice(0, outcomeCount), totalPool, status, winningOutcome, layer, creator, creatorFeeBps, creatorProfile, platformFeeBpsAtCreation, lastBetTime };
+}
+
+function parseUserPosition(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data); r.skip(8);
+  const user = r.pubkey(); const marketId = r.u64();
+  const yesAmount = r.u64(); const noAmount = r.u64();
+  const claimed = r.bool(); r.u8(); // bump
+  const referredBy = r.optPubkey(); // Option<Pubkey> — affiliate owner who referred this user
+  return { user, marketId, yesAmount, noAmount, claimed, referredBy };
+}
+
+function parseRacePosition(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data); r.skip(8);
+  const user = r.pubkey(); const marketId = r.u64();
+  const bets: bigint[] = []; for (let i = 0; i < 10; i++) bets.push(r.u64());
+  return { user, marketId, bets, totalBet: r.u64(), claimed: r.bool() };
+}
+
+function parseGlobalConfig(data: Buffer | Uint8Array): GlobalConfigData {
+  const r = new BorshReader(data);
+  r.skip(8);  // discriminator
+  r.skip(32); // admin
+  r.skip(32); // treasury
+  r.skip(32); // guardian
+  r.skip(32); // _reserved_usdc_mint
+  r.skip(8);  // _reserved_creation_fee_usdc
+  r.skip(8);  // creation_fee_sol
+  r.skip(8);  // _reserved_market_bond_usdc
+  r.skip(8);  // market_bond_sol
+  r.skip(2);  // platform_fee_bps
+  const marketCount = r.u64();
+  return { marketCount };
+}
+
+function parseCreatorProfile(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data);
+  r.skip(8); // discriminator
+  const owner = r.pubkey();
+  const displayName = r.string();
+  const isVerified = r.bool();
+  const verificationType = r.u8();
+  const totalMarketsCreated = r.u64();
+  const totalVolumeSol = r.u64();
+  r.u64(); // _reserved_total_volume_usdc
+  const marketsResolved = r.u64();
+  const disputesLost = r.u64();
+  const createdAt = r.i64();
+  const lastMarketAt = r.i64();
+  const defaultCreatorFeeBps = r.u16();
+  const totalEarningsSol = r.u64();
+  r.u64(); // _reserved_total_earnings_usdc
+  const pendingSol = r.u64();
+  return { owner, displayName, isVerified, verificationType, totalMarketsCreated, totalVolumeSol, marketsResolved, disputesLost, createdAt, lastMarketAt, defaultCreatorFeeBps, totalEarningsSol, pendingSol };
+}
+
+function parseAffiliate(data: Buffer | Uint8Array) {
+  const r = new BorshReader(data);
+  r.skip(8); // discriminator
+  const owner = r.pubkey();
+  const code = r.string();
+  const totalReferredUsers = r.u64();
+  const totalVolumeSol = r.u64();
+  r.u64(); // _reserved_total_volume_usdc
+  const totalEarningsSol = r.u64();
+  r.u64(); // _reserved_total_earnings_usdc
+  const pendingSol = r.u64();
+  r.u64(); // _reserved_pending_usdc
+  const createdAt = r.i64();
+  const isActive = r.bool();
+  return { owner, code, totalReferredUsers, totalVolumeSol, totalEarningsSol, pendingSol, createdAt, isActive };
+}
+
+// -- PDA Derivation ---------------------------------------------------------
+
+function configPda() {
+  return PublicKey.findProgramAddressSync([Buffer.from('config')], PROGRAM_ID)[0];
+}
+function positionPda(mid: bigint, user: PublicKey) {
+  const b = Buffer.alloc(8); b.writeBigUInt64LE(mid);
+  return PublicKey.findProgramAddressSync([Buffer.from('position'), b, user.toBuffer()], PROGRAM_ID)[0];
+}
+function racePosPda(mid: bigint, user: PublicKey) {
+  const b = Buffer.alloc(8); b.writeBigUInt64LE(mid);
+  return PublicKey.findProgramAddressSync([Buffer.from('race_position'), b, user.toBuffer()], PROGRAM_ID)[0];
+}
+function treasuryPda() {
+  return PublicKey.findProgramAddressSync([Buffer.from('sol_treasury')], PROGRAM_ID)[0];
+}
+function creatorProfilePda(owner: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('creator_profile'), owner.toBuffer()], PROGRAM_ID)[0];
+}
+function marketPda(id: bigint) {
+  const b = Buffer.alloc(8); b.writeBigUInt64LE(id);
+  return PublicKey.findProgramAddressSync([Buffer.from('market'), b], PROGRAM_ID)[0];
+}
+function raceMarketPda(id: bigint) {
+  const b = Buffer.alloc(8); b.writeBigUInt64LE(id);
+  return PublicKey.findProgramAddressSync([Buffer.from('race'), b], PROGRAM_ID)[0];
+}
+function revenueConfigPda() {
+  return PublicKey.findProgramAddressSync([Buffer.from('revenue_config')], PROGRAM_ID)[0];
+}
+function disputeMetaPda(marketPubkey: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('dispute_meta'), marketPubkey.toBuffer()], PROGRAM_ID)[0];
+}
+function affiliatePda(owner: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('affiliate'), owner.toBuffer()], PROGRAM_ID)[0];
+}
+function referredUserPda(user: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('referred'), user.toBuffer()], PROGRAM_ID)[0];
+}
+function raceReferralPda(raceMarket: PublicKey, user: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('race_referral'), raceMarket.toBuffer(), user.toBuffer()], PROGRAM_ID)[0];
+}
+function creatorRepPda(creator: PublicKey) {
+  return PublicKey.findProgramAddressSync([Buffer.from('creator_rep'), creator.toBuffer()], PROGRAM_ID)[0];
+}
+function repVotePda(voter: PublicKey, creator: PublicKey, marketId: bigint) {
+  const b = Buffer.alloc(8); b.writeBigUInt64LE(marketId);
+  return PublicKey.findProgramAddressSync([Buffer.from('rep_vote'), voter.toBuffer(), creator.toBuffer(), b], PROGRAM_ID)[0];
+}
+
+// -- Helpers ----------------------------------------------------------------
+
+function layerName(l: number) { return ['official', 'lab', 'private'][l] ?? 'unknown'; }
+
+function boolToMarket(raw: ReturnType<typeof parseMarket>, pk: string): Market {
+  const total = raw.yesPool + raw.noPool;
+  const s = Number(total) / LAMPORTS_PER_SOL;
+  let yp = 0.5, np = 0.5;
+  if (total > 0n) { yp = Number(raw.yesPool) / Number(total); np = Number(raw.noPool) / Number(total); }
+  return {
+    id: pk, question: raw.question, type: 'boolean',
+    outcomes: [
+      { label: 'Yes', probability: yp, poolSol: Number(raw.yesPool) / LAMPORTS_PER_SOL },
+      { label: 'No', probability: np, poolSol: Number(raw.noPool) / LAMPORTS_PER_SOL },
+    ],
+    totalPoolSol: s, status: STATUS_NAMES[raw.status] ?? 'unknown',
+    layer: layerName(raw.layer), closingTime: new Date(Number(raw.closingTime) * 1000).toISOString(),
+    url: `https://baozi.bet/market/${pk}`, rawMarketId: raw.marketId.toString(),
+    creator: raw.creator, rawCreatorProfile: raw.creatorProfile,
+  };
+}
+
+function raceToMarket(raw: ReturnType<typeof parseRaceMarket>, pk: string): Market {
+  const s = Number(raw.totalPool) / LAMPORTS_PER_SOL;
+  const outcomes: MarketOutcome[] = [];
+  for (let i = 0; i < raw.outcomeCount; i++) {
+    const pool = raw.outcomePools[i];
+    const prob = raw.totalPool > 0n ? Number(pool) / Number(raw.totalPool) : 1 / raw.outcomeCount;
+    outcomes.push({ label: raw.outcomeLabels[i] || `Outcome ${i + 1}`, probability: prob, poolSol: Number(pool) / LAMPORTS_PER_SOL });
+  }
+  return {
+    id: pk, question: raw.question, type: 'race', outcomes, totalPoolSol: s,
+    status: STATUS_NAMES[raw.status] ?? 'unknown', layer: layerName(raw.layer),
+    closingTime: new Date(Number(raw.closingTime) * 1000).toISOString(),
+    url: `https://baozi.bet/market/${pk}`, rawMarketId: raw.marketId.toString(),
+    creator: raw.creator, rawCreatorProfile: raw.creatorProfile,
+  };
+}
+
+// -- Parimutuel Rules v6.3 — Market Creation Guardrails --------------------
+//
+// THE GOLDEN RULE: Bettors must NEVER have access to ANY information that
+// could inform the outcome while betting is still open.
+//
+// Two market types with DISTINCT timing rules:
+//
+//   Type A (Event-Based): Sports, awards, announcements, crypto snapshots
+//     → Betting closes 8h+ BEFORE the event (12-24h recommended)
+//     → Best for: CS2/LoL matches, UFC fights, Super Bowl, elections
+//
+//   Type B (Measurement-Period): Charts, weekly metrics, accumulated data
+//     → Betting closes BEFORE measurement period starts
+//     → Best for: Netflix Top 10, Billboard, weekly DeFi metrics
+//     → Prefer SHORT periods (2-7 days) — users hate capital lockup
+
+const BLOCKED_SUBJECTIVE = [
+  'ai agent', 'an agent', 'autonomously', 'become popular', 'go viral',
+  'be successful', 'perform well', 'be the best', 'breakthrough',
+  'revolutionary',
+];
+const BLOCKED_SUBJECTIVE_PATTERNS = [
+  /\bwill i\b/i, /\bwill we\b/i, /\bwill my\b/i, /\bwill our\b/i,
+];
+const BLOCKED_MANIPULATION = [
+  'will someone', 'will anyone', 'will a person', 'will a user',
+  'purchase proxies', 'buy proxies', 'x402 payment', 'using credits',
+];
+const IMPLIED_SOURCES = [
+  /\b(btc|eth|sol|bitcoin|ethereum|solana|coingecko|coinmarketcap|binance|coinbase|tradingview)\b/i,
+  /\b(ufc|nba|nfl|mlb|nhl|champions league|world cup|super bowl|espn|uefa|fifa|atp|wta)\b/i,
+  /\b(cs2|csgo|counter.strike|league of legends|lol|dota|valorant|overwatch)\b/i,
+  /\b(tokyo|london|new york|los angeles|paris|snow|rain|temperature|nws|jma|weather)\b/i,
+  /\b(election|president|congress|parliament|vote|ap news|reuters|sec|nasdaq|nyse)\b/i,
+  /\b(netflix|billboard|spotify|grammy|oscar|golden globe|emmy)\b/i,
+  /source:/i, /official/i,
+];
+
+interface ParimutuelValidation {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+function validateParimutuelRules(params: {
+  question: string;
+  closingTimeMs: number;
+  marketType: 'event' | 'measurement';
+  eventTime?: string;         // ISO 8601 — when outcome is decided (Type A)
+  measurementStart?: string;  // ISO 8601 — when data collection begins (Type B)
+  measurementEnd?: string;    // ISO 8601 — when data collection ends (Type B)
+}): ParimutuelValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const q = params.question.toLowerCase();
+  const closeMs = params.closingTimeMs;
+
+  // ---- Content validation ----
+
+  const subjective = BLOCKED_SUBJECTIVE.filter(p => q.includes(p));
+  const subjectivePatterns = BLOCKED_SUBJECTIVE_PATTERNS.filter(p => p.test(params.question));
+  if (subjective.length > 0 || subjectivePatterns.length > 0)
+    errors.push(`BLOCKED: Unverifiable/subjective terms detected. Outcomes must be objectively verifiable by third party.`);
+
+  const manipulation = BLOCKED_MANIPULATION.filter(p => q.includes(p));
+  if (manipulation.length > 0)
+    errors.push(`BLOCKED: Manipulation risk — terms: "${manipulation.join('", "')}". Creators cannot make markets about outcomes they can influence.`);
+
+  const hasSource = IMPLIED_SOURCES.some(r => r.test(params.question));
+  if (!hasSource)
+    errors.push('BLOCKED: No verifiable data source. Reference a known entity (BTC, NBA, CS2, Netflix, etc.) or add "(Source: CoinGecko)". See approved sources list.');
+
+  const hasCriteria = /\$[\d,]+/.test(params.question) || /\d+%/.test(params.question) ||
+    /above|below|over|under|at least|more than|less than/i.test(params.question) ||
+    /will .+ (win|lose|defeat|advance|qualify|score|beat|knock|eliminate)/i.test(params.question) ||
+    /who will/i.test(params.question) || /which .+ will/i.test(params.question);
+  if (!hasCriteria)
+    warnings.push('Tip: Include clear criteria — "above $X", "will Team A win", "who will win". Ambiguous questions cause resolution disputes.');
+
+  // ---- Timing validation (THE CORE RULES) ----
+
+  if (params.marketType === 'event') {
+    // TYPE A: Betting must close 24h+ BEFORE event
+    if (!params.eventTime) {
+      errors.push('BLOCKED: Event-based markets MUST specify eventTime — the moment the outcome is decided (e.g. game kickoff, announcement time, snapshot time).');
+    } else {
+      const eventMs = new Date(params.eventTime).getTime();
+      if (isNaN(eventMs)) {
+        errors.push('BLOCKED: Invalid eventTime — must be valid ISO 8601.');
+      } else {
+        if (closeMs >= eventMs) {
+          errors.push('BLOCKED: Betting closes AFTER the event! Bettors would already know the outcome.');
+        } else {
+          const bufferHours = (eventMs - closeMs) / (1000 * 60 * 60);
+          if (bufferHours < 8) {
+            errors.push(`BLOCKED: Betting closes only ${bufferHours.toFixed(1)}h before event. MINIMUM is 8h. Late bets create information advantage.`);
+          } else if (bufferHours < 12) {
+            warnings.push(`Buffer is ${bufferHours.toFixed(1)}h before event. Minimum met, but 12-24h recommended for operational safety.`);
+          }
+        }
+      }
+    }
+  } else {
+    // TYPE B: Betting must close BEFORE measurement period starts
+    if (!params.measurementStart) {
+      errors.push('BLOCKED: Measurement-period markets MUST specify measurementStart — when data collection begins (e.g. Monday for weekly chart, month start for monthly metric).');
+    } else {
+      const startMs = new Date(params.measurementStart).getTime();
+      if (isNaN(startMs)) {
+        errors.push('BLOCKED: Invalid measurementStart — must be valid ISO 8601.');
+      } else {
+        if (closeMs >= startMs) {
+          const overlapHours = (closeMs - startMs) / (1000 * 60 * 60);
+          errors.push(`BLOCKED: Betting closes ${overlapHours.toFixed(1)}h AFTER measurement starts! Bettors can observe data accumulating and bet with foreknowledge. Betting MUST close BEFORE measurement period starts.`);
+        }
+        if (startMs <= Date.now()) {
+          errors.push('BLOCKED: Measurement period has already started. Cannot create a market for an ongoing measurement period — data is already accumulating.');
+        }
+      }
+      // Check measurement period length — prefer SHORT (2-7 days)
+      if (params.measurementEnd) {
+        const endMs = new Date(params.measurementEnd).getTime();
+        if (!isNaN(endMs) && !isNaN(new Date(params.measurementStart).getTime())) {
+          const periodDays = (endMs - new Date(params.measurementStart).getTime()) / (1000 * 60 * 60 * 24);
+          if (periodDays > 14) {
+            errors.push(`BLOCKED: Measurement period is ${Math.round(periodDays)} days. Max is 14 days. Users don't want funds locked that long. Convert to a snapshot (Type A) market or shorten the period to 2-7 days.`);
+          } else if (periodDays > 7) {
+            warnings.push(`${Math.round(periodDays)}-day measurement period. 2-7 days is ideal — shorter lockups = more betting volume.`);
+          }
+        }
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+// -- Cache ------------------------------------------------------------------
+
+class Cache<T> {
+  private data: T | null = null;
+  private ts = 0;
+  constructor(private ttl: number) {}
+  get(): T | null { return this.data && Date.now() - this.ts < this.ttl ? this.data : null; }
+  set(v: T) { this.data = v; this.ts = Date.now(); }
+  clear() { this.data = null; this.ts = 0; }
+}
+
+// -- Filter -----------------------------------------------------------------
+
+function applyFilters(markets: Market[], f?: { status?: string; query?: string; limit?: number; layer?: string }) {
+  let r = [...markets];
+  const status = f?.status || 'active';
+  if (status !== 'all') {
+    const nowMs = Date.now();
+    r = status === 'active'
+      ? r.filter(m => new Date(m.closingTime).getTime() > nowMs && m.status === 'active')
+      : r.filter(m => new Date(m.closingTime).getTime() <= nowMs || m.status !== 'active');
+  }
+  if (f?.layer && f.layer !== 'all') {
+    r = r.filter(m => m.layer === f.layer);
+  }
+  if (f?.query) { const q = f.query.toLowerCase(); r = r.filter(m => m.question.toLowerCase().includes(q)); }
+  r.sort((a, b) => b.totalPoolSol - a.totalPoolSol);
+  if (f?.limit && f.limit > 0) r = r.slice(0, f.limit);
+  return r;
+}
+
+// -- BaoziClient ------------------------------------------------------------
+
+class BaoziClient {
+  private conn: Connection;
+  private cache = new Cache<Market[]>(30_000);
+  private wallet?: Keypair;
+
+  constructor(opts: { rpcUrl: string; privateKey?: string }) {
+    this.conn = new Connection(opts.rpcUrl, {
+      commitment: 'confirmed',
+      confirmTransactionInitialTimeout: 30_000,
+    });
+    if (opts.privateKey) {
+      try { this.wallet = Keypair.fromSecretKey(bs58.decode(opts.privateKey)); }
+      catch { throw new Error('Invalid SOLANA_PRIVATE_KEY — must be a base58-encoded 64-byte secret key'); }
+    }
+  }
+
+  private async sendTx(ix: TransactionInstruction): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY to enable transactions.');
+    const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash();
+    const tx = new Transaction().add(ix);
+    tx.feePayer = this.wallet.publicKey;
+    tx.recentBlockhash = blockhash;
+    tx.sign(this.wallet);
+    const sig = await this.conn.sendRawTransaction(tx.serialize());
+    await this.conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+    return sig;
+  }
+
+  invalidateCache() { this.cache.clear(); }
+
+  async fetchMarkets(filter?: { status?: string; query?: string; limit?: number; layer?: string }): Promise<Market[]> {
+    const cached = this.cache.get();
+    if (cached) return applyFilters(cached, filter);
+
+    const [ba, ra] = await Promise.all([
+      this.conn.getProgramAccounts(PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: MARKET_DISC_B58 } }] }),
+      this.conn.getProgramAccounts(PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: RACE_DISC_B58 } }] }),
+    ]);
+
+    const markets: Market[] = [];
+    for (const a of ba) {
+      try { markets.push(boolToMarket(parseMarket(a.account.data), a.pubkey.toString())); }
+      catch (e) { console.warn(`Failed to parse boolean market ${a.pubkey}:`, e); }
+    }
+    for (const a of ra) {
+      try { markets.push(raceToMarket(parseRaceMarket(a.account.data), a.pubkey.toString())); }
+      catch (e) { console.warn(`Failed to parse race market ${a.pubkey}:`, e); }
+    }
+
+    this.cache.set(markets);
+    return applyFilters(markets, filter);
+  }
+
+  async fetchMarket(pubkey: string): Promise<Market | null> {
+    const cached = this.cache.get();
+    if (cached) { const found = cached.find(m => m.id === pubkey); if (found) return found; }
+
+    const info = await this.conn.getAccountInfo(new PublicKey(pubkey));
+    if (!info) return null;
+    const d = Buffer.from(info.data.subarray(0, 8));
+    if (d.equals(MARKET_DISC)) return boolToMarket(parseMarket(info.data), pubkey);
+    if (d.equals(RACE_DISC)) return raceToMarket(parseRaceMarket(info.data), pubkey);
+    return null;
+  }
+
+  async getPositions(wallet: string): Promise<Position[]> {
+    const pk = new PublicKey(wallet);
+    const [ba, ra] = await Promise.all([
+      this.conn.getProgramAccounts(PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: POS_DISC_B58 } }, { memcmp: { offset: 8, bytes: bs58.encode(pk.toBuffer()) } }] }),
+      this.conn.getProgramAccounts(PROGRAM_ID, { filters: [{ memcmp: { offset: 0, bytes: RACE_POS_DISC_B58 } }, { memcmp: { offset: 8, bytes: bs58.encode(pk.toBuffer()) } }] }),
+    ]);
+    const positions: Position[] = [];
+    for (const a of ba) {
+      try {
+        const p = parseUserPosition(a.account.data);
+        positions.push({ pubkey: a.pubkey.toString(), marketId: p.marketId.toString(), user: p.user, type: 'boolean', yesAmountSol: Number(p.yesAmount) / LAMPORTS_PER_SOL, noAmountSol: Number(p.noAmount) / LAMPORTS_PER_SOL, totalBetSol: Number(p.yesAmount + p.noAmount) / LAMPORTS_PER_SOL, claimed: p.claimed });
+      } catch (e) { console.warn(`Failed to parse boolean position ${a.pubkey}:`, e); }
+    }
+    for (const a of ra) {
+      try {
+        const p = parseRacePosition(a.account.data);
+        positions.push({ pubkey: a.pubkey.toString(), marketId: p.marketId.toString(), user: p.user, type: 'race', bets: p.bets.map((b, i) => ({ outcome: i, amountSol: Number(b) / LAMPORTS_PER_SOL })), totalBetSol: Number(p.totalBet) / LAMPORTS_PER_SOL, claimed: p.claimed });
+      } catch (e) { console.warn(`Failed to parse race position ${a.pubkey}:`, e); }
+    }
+    return positions;
+  }
+
+  async placeBet(params: { marketPubkey: string; outcome: number; amountSol: number }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY to enable trading.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+
+    if (market.status !== 'active') throw new Error(`Market is ${market.status}, not active — cannot place bet`);
+    if (new Date(market.closingTime).getTime() <= Date.now()) throw new Error('Market has passed its closing time — cannot place bet');
+
+    if (market.type === 'boolean' && (params.outcome < 0 || params.outcome > 1))
+      throw new Error(`Boolean markets accept outcome 0 (Yes) or 1 (No), got ${params.outcome}`);
+    if (market.type === 'race' && (params.outcome < 0 || params.outcome >= market.outcomes.length))
+      throw new Error(`Race market has ${market.outcomes.length} outcomes (0-${market.outcomes.length - 1}), got index ${params.outcome}`);
+
+    const amt = BigInt(Math.round(params.amountSol * LAMPORTS_PER_SOL));
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    const cfg = configPda();
+
+    let ix: TransactionInstruction;
+    if (market.type === 'boolean') {
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      const data = Buffer.alloc(17);
+      PLACE_BET_DISC.copy(data, 0);
+      data.writeUInt8(params.outcome === 0 ? 1 : 0, 8); // IDL: bool outcome (true=Yes, false=No)
+      data.writeBigUInt64LE(amt, 9);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: cfg, isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false }, // whitelist: None (optional)
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data });
+    } else {
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      const data = Buffer.alloc(17);
+      RACE_BET_DISC.copy(data, 0);
+      data.writeUInt8(params.outcome, 8); // IDL: u8 outcome_index
+      data.writeBigUInt64LE(amt, 9);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: cfg, isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false }, // whitelist: None (optional)
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async fetchGlobalConfig(): Promise<GlobalConfigData> {
+    const info = await this.conn.getAccountInfo(configPda());
+    if (!info) throw new Error('GlobalConfig not found — program may not be initialized');
+    return parseGlobalConfig(info.data);
+  }
+
+  async createCreatorProfile(params: { displayName: string; defaultFeeBps: number }): Promise<{ signature: string; profileAddress: string }> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const profilePda = creatorProfilePda(this.wallet.publicKey);
+    const w = new BorshWriter();
+    w.raw(CREATE_PROFILE_DISC);
+    w.string(params.displayName);
+    w.u16(params.defaultFeeBps);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: profilePda, isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+    const sig = await this.sendTx(ix);
+    return { signature: sig, profileAddress: profilePda.toString() };
+  }
+
+  async createLabMarket(params: { question: string; closingTime: number }): Promise<{ signature: string; marketAddress: string; marketId: number }> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    // Note: marketCount is read then used for PDA derivation. If another market is created
+    // between read and send, the tx will fail with account mismatch — retry in that case.
+    const config = await this.fetchGlobalConfig();
+    const mPda = marketPda(config.marketCount);
+    const w = new BorshWriter();
+    w.raw(CREATE_LAB_MARKET_DISC);
+    w.string(params.question);
+    w.i64(BigInt(params.closingTime));
+    w.i64(86400n);  // resolution_buffer: 24 hours
+    w.i64(0n);      // auto_stop_buffer: none
+    w.u8(1);        // resolution_mode: 1 = HostOracle
+    w.vecPubkey([]); // council: empty
+    w.u8(0);        // council_threshold: 0
+    // IDL account order: config, market, treasury, creator, creator_profile (optional), system_program
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: true },
+      { pubkey: mPda, isSigner: false, isWritable: true },
+      { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: creatorProfilePda(this.wallet.publicKey), isSigner: false, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return { signature: sig, marketAddress: mPda.toString(), marketId: Number(config.marketCount) };
+  }
+
+  async createLabRaceMarket(params: { question: string; closingTime: number; outcomes: string[] }): Promise<{ signature: string; marketAddress: string; marketId: number }> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const config = await this.fetchGlobalConfig();
+    const rmPda = raceMarketPda(config.marketCount);
+    const w = new BorshWriter();
+    w.raw(CREATE_RACE_MARKET_DISC);
+    w.string(params.question);
+    w.vecString(params.outcomes);
+    w.i64(BigInt(params.closingTime));
+    w.i64(86400n);  // resolution_buffer: 24 hours
+    w.i64(0n);      // auto_stop_buffer: none
+    w.u8(1);        // layer: 1 = Lab
+    w.u8(1);        // resolution_mode: 1 = HostOracle
+    w.u8(0);        // access_gate: 0 = Open
+    w.optVecPubkey(null); // council: None
+    w.optU8(null);        // council_threshold: None
+    // IDL account order: config, race_market, creator_profile (optional), treasury, creator, system_program
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: true },
+      { pubkey: rmPda, isSigner: false, isWritable: true },
+      { pubkey: creatorProfilePda(this.wallet.publicKey), isSigner: false, isWritable: false },
+      { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return { signature: sig, marketAddress: rmPda.toString(), marketId: Number(config.marketCount) };
+  }
+
+  async cancelMarket(params: { marketPubkey: string; reason: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status === 'cancelled') throw new Error('Market is already cancelled');
+    if (market.status === 'resolved') throw new Error('Market is already resolved — cannot cancel');
+    if (market.status === 'resolved_pending') throw new Error('Market has a pending resolution (6h dispute window active) — cannot cancel after oracle has proposed outcome');
+    if (market.status === 'disputed') throw new Error('Market is under dispute — cannot cancel while dispute is active');
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const w = new BorshWriter();
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      w.raw(CANCEL_MARKET_DISC);
+      w.string(params.reason);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: w.toBuffer() });
+    } else {
+      w.raw(CANCEL_RACE_DISC);
+      w.string(params.reason);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: w.toBuffer() });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async claimRefund(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'cancelled') throw new Error(`Market status is "${market.status}" — refunds are only available for cancelled markets`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_REFUND_DISC });
+    } else {
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_RACE_REFUND_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async claimWinnings(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'resolved') throw new Error(`Market status is "${market.status}" — winnings can only be claimed from resolved markets`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+
+    // Resolve optional accounts from on-chain state.
+    // The program REQUIRES affiliate PDA when position.referred_by is set (error 6251),
+    // and creator_profile PDA when market has creator fees (error 6262).
+    const creatorProfileKey = market.rawCreatorProfile ? new PublicKey(market.rawCreatorProfile) : PROGRAM_ID;
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      // Fetch position to check if referred_by is set
+      const posInfo = await this.conn.getAccountInfo(pos);
+      let affKey: PublicKey = PROGRAM_ID;
+      if (posInfo) {
+        const posData = parseUserPosition(posInfo.data);
+        if (posData.referredBy) affKey = affiliatePda(new PublicKey(posData.referredBy));
+      }
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+        { pubkey: affKey, isSigner: false, isWritable: affKey !== PROGRAM_ID },
+        { pubkey: creatorProfileKey, isSigner: false, isWritable: creatorProfileKey !== PROGRAM_ID },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_WINNINGS_DISC });
+    } else {
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      // Check if RaceReferral PDA exists for this user+market
+      const raceRefPda = raceReferralPda(mPk, this.wallet.publicKey);
+      const raceRefInfo = await this.conn.getAccountInfo(raceRefPda);
+      let affKey: PublicKey = PROGRAM_ID;
+      let raceRefKey: PublicKey = PROGRAM_ID;
+      if (raceRefInfo && raceRefInfo.data.length > 0) {
+        raceRefKey = raceRefPda;
+        // Parse race_referral to get referred_by field: skip disc(8) + race_market(32) + user(32) = offset 72
+        const rr = new BorshReader(raceRefInfo.data); rr.skip(8 + 32 + 32);
+        const referredBy = rr.pubkey();
+        affKey = affiliatePda(new PublicKey(referredBy));
+      }
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+        { pubkey: affKey, isSigner: false, isWritable: affKey !== PROGRAM_ID },
+        { pubkey: raceRefKey, isSigner: false, isWritable: false },
+        { pubkey: creatorProfileKey, isSigner: false, isWritable: creatorProfileKey !== PROGRAM_ID },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // revenue_config: None
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false },  // staking_vault: None
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data: CLAIM_RACE_WINNINGS_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async finalizeResolution(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'resolved_pending')
+      throw new Error(`Market status is "${market.status}" — finalizeResolution requires "resolved_pending" (after oracle proposal + 6h dispute window)`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const dMeta = disputeMetaPda(mPk);
+    let ix: TransactionInstruction;
+
+    if (market.type === 'boolean') {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: dMeta, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: FINALIZE_RESOLUTION_DISC });
+    } else {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: dMeta, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: FINALIZE_RACE_RESOLUTION_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  // -- Affiliate System -------------------------------------------------------
+
+  async registerAffiliate(params: { code: string }): Promise<{ signature: string; affiliateAddress: string }> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const affPda = affiliatePda(this.wallet.publicKey);
+    const w = new BorshWriter();
+    w.raw(REGISTER_AFFILIATE_DISC);
+    w.string(params.code);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: false },
+      { pubkey: affPda, isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+    const sig = await this.sendTx(ix);
+    return { signature: sig, affiliateAddress: affPda.toString() };
+  }
+
+  async placeBetWithAffiliate(params: { marketPubkey: string; outcome: number; amountSol: number; affiliateWallet: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'active') throw new Error(`Market is ${market.status}, not active — cannot place bet`);
+    if (new Date(market.closingTime).getTime() <= Date.now()) throw new Error('Market has passed its closing time — cannot place bet');
+
+    if (market.type === 'boolean' && (params.outcome < 0 || params.outcome > 1))
+      throw new Error(`Boolean markets accept outcome 0 (Yes) or 1 (No), got ${params.outcome}`);
+    if (market.type === 'race' && (params.outcome < 0 || params.outcome >= market.outcomes.length))
+      throw new Error(`Race market has ${market.outcomes.length} outcomes (0-${market.outcomes.length - 1}), got index ${params.outcome}`);
+
+    const amt = BigInt(Math.round(params.amountSol * LAMPORTS_PER_SOL));
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    const affWallet = new PublicKey(params.affiliateWallet);
+    const affPda = affiliatePda(affWallet);
+
+    let ix: TransactionInstruction;
+    if (market.type === 'boolean') {
+      const pos = positionPda(rawId, this.wallet.publicKey);
+      const referred = referredUserPda(this.wallet.publicKey);
+      const data = Buffer.alloc(17);
+      BET_WITH_AFFILIATE_DISC.copy(data, 0);
+      data.writeUInt8(params.outcome === 0 ? 1 : 0, 8); // IDL: bool outcome (true=Yes, false=No)
+      data.writeBigUInt64LE(amt, 9);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: affPda, isSigner: false, isWritable: true },
+        { pubkey: referred, isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false }, // whitelist: None (optional)
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data });
+    } else {
+      const pos = racePosPda(rawId, this.wallet.publicKey);
+      const raceRef = raceReferralPda(mPk, this.wallet.publicKey);
+      const data = Buffer.alloc(17);
+      RACE_BET_WITH_AFFILIATE_DISC.copy(data, 0);
+      data.writeUInt8(params.outcome, 8); // IDL: u8 outcome_index
+      data.writeBigUInt64LE(amt, 9);
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: pos, isSigner: false, isWritable: true },
+        { pubkey: affPda, isSigner: false, isWritable: true },
+        { pubkey: raceRef, isSigner: false, isWritable: true },
+        { pubkey: PROGRAM_ID, isSigner: false, isWritable: false }, // whitelist: None (optional)
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ], data });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async claimAffiliateEarnings(): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: true },
+      { pubkey: affiliatePda(this.wallet.publicKey), isSigner: false, isWritable: true },
+      { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: CLAIM_AFFILIATE_DISC });
+    return this.sendTx(ix);
+  }
+
+  async fetchAffiliate(wallet: string): Promise<ReturnType<typeof parseAffiliate> | null> {
+    const pk = new PublicKey(wallet);
+    const info = await this.conn.getAccountInfo(affiliatePda(pk));
+    if (!info) return null;
+    return parseAffiliate(info.data);
+  }
+
+  // -- Creator Management -----------------------------------------------------
+
+  async claimCreatorFees(): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: false },
+      { pubkey: creatorProfilePda(this.wallet.publicKey), isSigner: false, isWritable: true },
+      { pubkey: treasuryPda(), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: CLAIM_CREATOR_DISC });
+    return this.sendTx(ix);
+  }
+
+  async updateCreatorProfile(params: { displayName: string; defaultFeeBps: number }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const w = new BorshWriter();
+    w.raw(UPDATE_PROFILE_DISC);
+    w.string(params.displayName);
+    w.u16(params.defaultFeeBps);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: creatorProfilePda(this.wallet.publicKey), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+    ], data: w.toBuffer() });
+    return this.sendTx(ix);
+  }
+
+  async fetchCreatorProfile(wallet: string): Promise<ReturnType<typeof parseCreatorProfile> | null> {
+    const pk = new PublicKey(wallet);
+    const info = await this.conn.getAccountInfo(creatorProfilePda(pk));
+    if (!info) return null;
+    return parseCreatorProfile(info.data);
+  }
+
+  // -- Market Lifecycle Management --------------------------------------------
+
+  async closeMarket(params: { marketPubkey: string }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status === 'resolved' || market.status === 'cancelled')
+      throw new Error(`Market is already ${market.status} — cannot close`);
+    if (market.status === 'closed')
+      throw new Error('Market is already closed');
+    if (market.status === 'resolved_pending')
+      throw new Error('Market has a pending resolution — cannot close after oracle has proposed outcome');
+    if (market.status === 'disputed')
+      throw new Error('Market is under dispute — cannot close while dispute is active');
+    if (market.status === 'paused')
+      throw new Error('Market is paused — cannot close a paused market');
+
+    const mPk = new PublicKey(params.marketPubkey);
+    let ix: TransactionInstruction;
+    if (market.type === 'boolean') {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: CLOSE_MARKET_DISC });
+    } else {
+      ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+        { pubkey: configPda(), isSigner: false, isWritable: false },
+        { pubkey: mPk, isSigner: false, isWritable: true },
+        { pubkey: this.wallet.publicKey, isSigner: true, isWritable: false },
+      ], data: CLOSE_RACE_MARKET_DISC });
+    }
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async proposeResolutionHost(params: { marketPubkey: string; winningOutcome: boolean }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'closed') throw new Error(`Market status is "${market.status}" — must be "closed" to propose resolution`);
+    if (market.type !== 'boolean') throw new Error('Use proposeRaceResolution for race markets');
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const w = new BorshWriter();
+    w.raw(PROPOSE_RESOLUTION_HOST_DISC);
+    w.bool(params.winningOutcome);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: false },
+      { pubkey: mPk, isSigner: false, isWritable: true },
+      { pubkey: disputeMetaPda(mPk), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  async proposeRaceResolution(params: { marketPubkey: string; winningOutcome: number }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'closed') throw new Error(`Market status is "${market.status}" — must be "closed" to propose resolution`);
+    if (market.type !== 'race') throw new Error('Use proposeResolutionHost for boolean markets');
+    if (params.winningOutcome < 0 || params.winningOutcome >= market.outcomes.length)
+      throw new Error(`Invalid outcome index ${params.winningOutcome} — market has ${market.outcomes.length} outcomes (0-${market.outcomes.length - 1})`);
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const w = new BorshWriter();
+    w.raw(PROPOSE_RACE_RESOLUTION_DISC);
+    w.u8(params.winningOutcome);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: false },
+      { pubkey: mPk, isSigner: false, isWritable: true },
+      { pubkey: disputeMetaPda(mPk), isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+
+    const sig = await this.sendTx(ix);
+    this.invalidateCache();
+    return sig;
+  }
+
+  // -- Creator Reputation -----------------------------------------------------
+
+  async voteCreatorReputation(params: { marketPubkey: string; vote: 1 | -1 }): Promise<string> {
+    if (!this.wallet) throw new Error('Wallet not configured. Set SOLANA_PRIVATE_KEY.');
+    const market = await this.fetchMarket(params.marketPubkey);
+    if (!market) throw new Error(`Market not found: ${params.marketPubkey}`);
+    if (market.status !== 'resolved') throw new Error(`Market must be resolved to vote on creator reputation — current status: "${market.status}"`);
+    if (market.type !== 'boolean') throw new Error('Creator reputation voting is currently only supported for boolean markets');
+
+    const mPk = new PublicKey(params.marketPubkey);
+    const rawId = BigInt(market.rawMarketId);
+    const creatorPk = new PublicKey(market.creator);
+    const pos = positionPda(rawId, this.wallet.publicKey);
+    const repPda = creatorRepPda(creatorPk);
+    const votePda = repVotePda(this.wallet.publicKey, creatorPk, rawId);
+
+    const w = new BorshWriter();
+    w.raw(VOTE_REPUTATION_DISC);
+    w.i8(params.vote);
+    const ix = new TransactionInstruction({ programId: PROGRAM_ID, keys: [
+      { pubkey: configPda(), isSigner: false, isWritable: false },
+      { pubkey: mPk, isSigner: false, isWritable: false },
+      { pubkey: pos, isSigner: false, isWritable: false },
+      { pubkey: repPda, isSigner: false, isWritable: true },
+      { pubkey: votePda, isSigner: false, isWritable: true },
+      { pubkey: this.wallet.publicKey, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ], data: w.toBuffer() });
+
+    return this.sendTx(ix);
+  }
+}
+
+{{TEMPLATE_PRE_SETUP}}
+const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+if (rpcUrl.includes('api.mainnet-beta.solana.com') || rpcUrl.includes('api.devnet.solana.com')) {
+  console.warn('Warning: Using public Solana RPC — expect rate limits. Set SOLANA_RPC_URL to a dedicated provider (Helius, QuickNode) for production.');
+}
+const baozi = new BaoziClient({
+  rpcUrl,
+  privateKey: process.env.SOLANA_PRIVATE_KEY,
+});
+
+const agent = await createAgent({
+  name: process.env.AGENT_NAME ?? "prediction-market-agent",
+  version: process.env.AGENT_VERSION ?? "0.1.0",
+  description: process.env.AGENT_DESCRIPTION ?? "Prediction market data and trading agent for Baozi on Solana",
+})
+  .use(http())
+  .build();
+
+{{TEMPLATE_POST_SETUP}}
+
+/**
+ * Prediction Market Agent — Baozi on Solana (22 entrypoints)
+ *
+ * Read entrypoints:
+ *   getMarkets            — List markets with filters (status, layer, query)
+ *   getMarketOdds         — Probabilities and pool sizes for one market
+ *   getPortfolio          — Active positions for a wallet
+ *   analyzeMarket         — Statistical market summary
+ *   getCreatorProfile     — View creator profile, earnings, and reputation
+ *
+ * Write entrypoints — Trading:
+ *   placeBet              — Place a bet on any market
+ *   placeBetWithAffiliate — Place a bet with affiliate referral tracking (1% commission)
+ *
+ * Write entrypoints — Affiliate System:
+ *   registerAffiliate     — Register as an affiliate to earn referral commissions
+ *   claimAffiliateEarnings — Claim accumulated affiliate SOL earnings
+ *
+ * Write entrypoints — Market Creation:
+ *   createCreatorProfile  — Create on-chain creator profile (required for Labs)
+ *   createLabMarket       — Create a Yes/No Lab market
+ *   createLabRaceMarket   — Create a multi-outcome Lab race market
+ *
+ * Write entrypoints — Market Management:
+ *   updateCreatorProfile  — Update display name and default fee
+ *   claimCreatorFees      — Claim pending creator fee earnings
+ *   cancelLabMarket       — Cancel a Lab market you created (full refund to bettors)
+ *   closeMarket           — Permissionless close after closing time (takes snapshot)
+ *   proposeResolutionHost — Creator resolves own Lab boolean market
+ *   proposeRaceResolution — Creator resolves own Lab race market
+ *   finalizeResolution    — Finalize resolution after dispute window (permissionless)
+ *
+ * Write entrypoints — Claims & Reputation:
+ *   claimRefund           — Claim refund from a cancelled market
+ *   claimWinnings         — Claim SOL winnings from a resolved market
+ *   voteCreatorReputation — Vote +1/-1 on creator reputation after betting
+ */
+
+const solPubkey = z.string().refine(s => { try { new PublicKey(s); return true; } catch { return false; } }, 'Invalid Solana public key');
+
+const marketSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  type: z.enum(['boolean', 'race']),
+  outcomes: z.array(z.object({
+    label: z.string(),
+    probability: z.number(),
+    poolSol: z.number(),
+  })),
+  totalPoolSol: z.number(),
+  status: z.string(),
+  layer: z.string(),
+  closingTime: z.string(),
+  url: z.string(),
+});
+
+addEntrypoint({
+  key: 'getMarkets',
+  description: 'Fetch prediction markets from Solana with current odds. Filter by status, layer, or search query.',
+  input: z.object({
+    status: z.enum(['active', 'closed', 'all']).optional().describe('Filter by market status (default: active)'),
+    layer: z.enum(['official', 'lab', 'private', 'all']).optional().describe('Filter by layer: official (admin), lab (community), private (invite-only)'),
+    query: z.string().optional().describe('Search market titles'),
+    limit: z.number().optional().describe('Max results to return'),
+  }),
+  output: z.object({
+    markets: z.array(marketSchema),
+    count: z.number(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const markets = await baozi.fetchMarkets(ctx.input);
+    return {
+      output: { markets, count: markets.length },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'getMarketOdds',
+  description: 'Get current odds (implied probabilities) and pool sizes for a specific market',
+  input: z.object({
+    marketId: solPubkey.describe('Market public key (base58)'),
+  }),
+  output: z.object({
+    marketId: z.string(),
+    question: z.string(),
+    outcomes: z.array(z.object({
+      label: z.string(),
+      probability: z.number(),
+      poolSol: z.number(),
+    })),
+    totalPoolSol: z.number(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const market = await baozi.fetchMarket(ctx.input.marketId);
+    if (!market) throw new Error(`Market not found: ${ctx.input.marketId}`);
+    return {
+      output: {
+        marketId: market.id,
+        question: market.question,
+        outcomes: market.outcomes,
+        totalPoolSol: market.totalPoolSol,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'getPortfolio',
+  description: 'View active prediction market positions for a wallet',
+  input: z.object({
+    wallet: solPubkey.describe('Solana wallet address (base58)'),
+  }),
+  output: z.object({
+    positions: z.array(z.object({
+      pubkey: z.string(),
+      marketId: z.string(),
+      user: z.string(),
+      type: z.enum(['boolean', 'race']),
+      yesAmountSol: z.number().optional(),
+      noAmountSol: z.number().optional(),
+      bets: z.array(z.object({
+        outcome: z.number(),
+        amountSol: z.number(),
+      })).optional(),
+      totalBetSol: z.number(),
+      claimed: z.boolean(),
+    })),
+    count: z.number(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const positions = await baozi.getPositions(ctx.input.wallet);
+    return {
+      output: { positions, count: positions.length },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'placeBet',
+  description: 'Place a bet on a prediction market outcome (requires SOLANA_PRIVATE_KEY). Works on Official, Lab, and Private markets.',
+  input: z.object({
+    marketId: solPubkey.describe('Market public key (base58)'),
+    outcome: z.number().describe('Outcome index (0=Yes/first, 1=No/second, etc.)'),
+    amountSol: z.number().min(0.01).max(100).describe('Bet amount in SOL'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    market: z.string(),
+    outcome: z.number(),
+    amountSol: z.number(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const { marketId, outcome, amountSol } = ctx.input;
+    const signature = await baozi.placeBet({ marketPubkey: marketId, outcome, amountSol });
+    return {
+      output: {
+        signature,
+        market: marketId,
+        outcome,
+        amountSol,
+        explorerUrl: `https://solscan.io/tx/${signature}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'analyzeMarket',
+  description: 'Get a statistical summary and analysis of a prediction market',
+  input: z.object({
+    marketId: solPubkey.describe('Market public key (base58)'),
+  }),
+  output: z.object({
+    marketId: z.string(),
+    question: z.string(),
+    summary: z.string(),
+    odds: z.array(z.object({
+      label: z.string(),
+      probability: z.number(),
+      impliedReturn: z.number(),
+    })),
+    totalPoolSol: z.number(),
+    status: z.string(),
+    closingTime: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const market = await baozi.fetchMarket(ctx.input.marketId);
+    if (!market) throw new Error(`Market not found: ${ctx.input.marketId}`);
+
+    const odds = market.outcomes.map(o => ({
+      label: o.label,
+      probability: o.probability,
+      impliedReturn: o.probability > 0 ? 1 / o.probability : 0,
+    }));
+
+    const fav = market.outcomes.reduce((a, b) => a.probability > b.probability ? a : b);
+    const summary = [
+      `"${market.question}"`,
+      `Total pool: ${market.totalPoolSol.toFixed(2)} SOL`,
+      `${market.outcomes.length} outcomes — favorite is "${fav.label}" at ${(fav.probability * 100).toFixed(1)}%`,
+      `Status: ${market.status}, closes ${market.closingTime}`,
+      `Layer: ${market.layer}. Market type: ${market.type} (pari-mutuel pricing)`,
+    ].join('. ');
+
+    return {
+      output: {
+        marketId: market.id,
+        question: market.question,
+        summary,
+        odds,
+        totalPoolSol: market.totalPoolSol,
+        status: market.status,
+        closingTime: market.closingTime,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'createCreatorProfile',
+  description: 'Create an on-chain creator profile (required before creating Lab or Private markets). Each wallet can have one profile.',
+  input: z.object({
+    displayName: z.string().min(1).max(32).describe('Display name shown on your markets'),
+    defaultFeeBps: z.number().min(0).max(200).optional().default(50).describe('Default creator fee in basis points (50 = 0.5%). Max 200 (2%) — must satisfy solvency rule: creator_fee + affiliate_fee <= platform_fee'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    profileAddress: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const { displayName, defaultFeeBps } = ctx.input;
+    const result = await baozi.createCreatorProfile({ displayName, defaultFeeBps });
+    return {
+      output: {
+        ...result,
+        explorerUrl: `https://solscan.io/tx/${result.signature}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'createLabMarket',
+  description: `Create a boolean (Yes/No) Lab prediction market. Requires CreatorProfile. Enforces Parimutuel Rules v6.3.
+
+MARKET TYPES (you MUST specify one):
+- "event" (Type A): Sports, fights, awards, crypto snapshots, elections
+  → Provide eventTime (when outcome is decided). Betting closes 8h+ before (12-24h recommended).
+  → BEST FOR: CS2/LoL matches, UFC fights, Super Bowl, price snapshots
+- "measurement" (Type B): Charts, weekly metrics, accumulated data
+  → Provide measurementStart + measurementEnd. Betting closes before start.
+  → Max 14 days. BEST FOR: Netflix Top 10, Billboard, weekly DeFi metrics`,
+  input: z.object({
+    question: z.string().min(10).max(200).describe('Clear prediction question with verifiable outcome'),
+    closingTime: z.string().describe('ISO 8601 — when betting closes'),
+    marketType: z.enum(['event', 'measurement']).describe('Type A (event) or Type B (measurement-period)'),
+    eventTime: z.string().optional().describe('Type A only: ISO 8601 — when outcome is decided (game start, announcement, snapshot). Must be 8h+ after closingTime.'),
+    measurementStart: z.string().optional().describe('Type B only: ISO 8601 — when data collection begins. Must be after closingTime.'),
+    measurementEnd: z.string().optional().describe('Type B only: ISO 8601 — when data collection ends. Max 14 days from start.'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    marketAddress: z.string(),
+    marketId: z.number(),
+    explorerUrl: z.string(),
+    marketUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const closeMs = new Date(ctx.input.closingTime).getTime();
+    if (isNaN(closeMs) || closeMs <= Date.now()) throw new Error('closingTime must be a valid future ISO 8601 date');
+
+    const validation = validateParimutuelRules({
+      question: ctx.input.question,
+      closingTimeMs: closeMs,
+      marketType: ctx.input.marketType,
+      eventTime: ctx.input.eventTime,
+      measurementStart: ctx.input.measurementStart,
+      measurementEnd: ctx.input.measurementEnd,
+    });
+    if (!validation.valid) throw new Error(`Market creation blocked by Parimutuel Rules v6.3:\n${validation.errors.join('\n')}`);
+    if (validation.warnings.length > 0) console.warn(`Parimutuel warnings: ${validation.warnings.join('; ')}`);
+
+    const closingTimestamp = Math.floor(closeMs / 1000);
+    const result = await baozi.createLabMarket({ question: ctx.input.question, closingTime: closingTimestamp });
+    return {
+      output: {
+        ...result,
+        explorerUrl: `https://solscan.io/tx/${result.signature}`,
+        marketUrl: `https://baozi.bet/market/${result.marketAddress}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'createLabRaceMarket',
+  description: `Create a multi-outcome Lab race market (2-10 outcomes). Requires CreatorProfile. Enforces Parimutuel Rules v6.3.
+
+MARKET TYPES (you MUST specify one):
+- "event" (Type A): Who wins? Which team advances? Best for esports, sports, elections.
+  → Provide eventTime. Betting closes 8h+ before (12-24h recommended).
+- "measurement" (Type B): Which gets most X during period?
+  → Provide measurementStart + measurementEnd. Max 14 days.`,
+  input: z.object({
+    question: z.string().min(10).max(200).describe('Clear prediction question'),
+    closingTime: z.string().describe('ISO 8601 — when betting closes'),
+    outcomes: z.array(z.string().max(32)).min(2).max(10).describe('Outcome labels (e.g. ["NaVi", "FaZe", "G2", "Vitality"])'),
+    marketType: z.enum(['event', 'measurement']).describe('Type A (event) or Type B (measurement-period)'),
+    eventTime: z.string().optional().describe('Type A: when outcome is decided'),
+    measurementStart: z.string().optional().describe('Type B: when data collection begins'),
+    measurementEnd: z.string().optional().describe('Type B: when data collection ends (max 14 days)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    marketAddress: z.string(),
+    marketId: z.number(),
+    explorerUrl: z.string(),
+    marketUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const closeMs = new Date(ctx.input.closingTime).getTime();
+    if (isNaN(closeMs) || closeMs <= Date.now()) throw new Error('closingTime must be a valid future ISO 8601 date');
+
+    const validation = validateParimutuelRules({
+      question: ctx.input.question,
+      closingTimeMs: closeMs,
+      marketType: ctx.input.marketType,
+      eventTime: ctx.input.eventTime,
+      measurementStart: ctx.input.measurementStart,
+      measurementEnd: ctx.input.measurementEnd,
+    });
+    if (!validation.valid) throw new Error(`Market creation blocked by Parimutuel Rules v6.3:\n${validation.errors.join('\n')}`);
+    if (validation.warnings.length > 0) console.warn(`Parimutuel warnings: ${validation.warnings.join('; ')}`);
+
+    const closingTimestamp = Math.floor(closeMs / 1000);
+    const result = await baozi.createLabRaceMarket({ question: ctx.input.question, closingTime: closingTimestamp, outcomes: ctx.input.outcomes });
+    return {
+      output: {
+        ...result,
+        explorerUrl: `https://solscan.io/tx/${result.signature}`,
+        marketUrl: `https://baozi.bet/market/${result.marketAddress}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'cancelLabMarket',
+  description: `Cancel a Lab market you created. All bettors receive a full 100% refund (no fees deducted).
+
+CONSTRAINTS (enforced on-chain):
+- Creator can cancel if NO bets have been placed yet, OR if pool < 0.5 SOL
+- Admin/guardian can cancel any market at any time (emergency)
+- Cannot cancel resolved or already-cancelled markets
+- After cancellation, each bettor calls claimRefund to withdraw their SOL`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key to cancel'),
+    reason: z.string().min(1).max(200).describe('Reason for cancellation (stored on-chain)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.cancelMarket({ marketPubkey: ctx.input.marketId, reason: ctx.input.reason });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimRefund',
+  description: `Claim a full 100% refund from a cancelled market. No fees are deducted — you get your entire bet back.
+
+Works for both boolean and race markets. Race market refunds return ALL bets across all outcomes.
+Requires the market to be in "cancelled" status. Each wallet can only claim once.`,
+  input: z.object({
+    marketId: solPubkey.describe('Cancelled market public key'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimRefund({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimWinnings',
+  description: `Claim SOL winnings from a resolved prediction market. Works for both boolean and race markets.
+
+The market must be in "resolved" status. Your payout is calculated from the pari-mutuel pool:
+  payout = (your_bet / winning_pool) * total_pool — platform_fee
+
+Each wallet can only claim once per market. Race market claims pay out based on total_bet on the winning outcome.`,
+  input: z.object({
+    marketId: solPubkey.describe('Resolved market public key'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimWinnings({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'finalizeResolution',
+  description: `Finalize a market resolution after the 6-hour dispute window has passed. This is permissionless — anyone can call it.
+
+After an oracle proposes a resolution, there's a 6-hour window where anyone can raise a dispute. Once that window closes, this instruction finalizes the outcome and moves the market to "resolved" status, enabling winners to claim.
+
+Works for both boolean and race markets.`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key with pending resolution'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.finalizeResolution({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+// -- Affiliate System Entrypoints -------------------------------------------
+
+addEntrypoint({
+  key: 'registerAffiliate',
+  description: `Register as an affiliate to earn 1% referral commission on all bets placed through your link.
+
+HOW IT WORKS:
+1. Register with a unique code (your brand name, agent name, etc.)
+2. Share your wallet address with other agents/users
+3. They bet using placeBetWithAffiliate with your wallet as affiliateWallet
+4. You earn 1% of their winnings (paid from platform fee, NOT from bettor)
+5. Claim earnings anytime with claimAffiliateEarnings
+
+Commission comes from the platform fee split — bettors pay the same amount regardless.`,
+  input: z.object({
+    code: z.string().min(1).max(16).describe('Unique referral code (e.g. your agent name, max 16 chars)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    affiliateAddress: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const result = await baozi.registerAffiliate({ code: ctx.input.code });
+    return {
+      output: {
+        ...result,
+        explorerUrl: `https://solscan.io/tx/${result.signature}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'placeBetWithAffiliate',
+  description: `Place a bet with affiliate referral tracking. The affiliate earns 1% commission on winnings.
+
+Identical to placeBet but includes the referring affiliate's wallet address for commission attribution.
+Works on all market types (boolean and race) across all layers (Official, Lab, Private).
+The bettor pays the same amount — affiliate commission comes from the platform fee split.`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key (base58)'),
+    outcome: z.number().describe('Outcome index (0=Yes/first, 1=No/second, etc.)'),
+    amountSol: z.number().min(0.01).max(100).describe('Bet amount in SOL'),
+    affiliateWallet: solPubkey.describe('Wallet address of the referring affiliate'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    market: z.string(),
+    outcome: z.number(),
+    amountSol: z.number(),
+    affiliate: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const { marketId, outcome, amountSol, affiliateWallet } = ctx.input;
+    const signature = await baozi.placeBetWithAffiliate({ marketPubkey: marketId, outcome, amountSol, affiliateWallet });
+    return {
+      output: {
+        signature,
+        market: marketId,
+        outcome,
+        amountSol,
+        affiliate: affiliateWallet,
+        explorerUrl: `https://solscan.io/tx/${signature}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimAffiliateEarnings',
+  description: `Claim accumulated affiliate referral earnings (SOL). Transfers all pending earnings from the protocol treasury to your wallet.
+
+Check your pending earnings first with getCreatorProfile (affiliate earnings are tracked separately but visible there).`,
+  input: z.object({}),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimAffiliateEarnings();
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+// -- Creator Management Entrypoints -----------------------------------------
+
+addEntrypoint({
+  key: 'updateCreatorProfile',
+  description: 'Update your on-chain creator profile display name and default fee. Requires an existing CreatorProfile.',
+  input: z.object({
+    displayName: z.string().min(1).max(32).describe('New display name'),
+    defaultFeeBps: z.number().min(0).max(200).describe('New default creator fee in basis points (50 = 0.5%)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.updateCreatorProfile({ displayName: ctx.input.displayName, defaultFeeBps: ctx.input.defaultFeeBps });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'claimCreatorFees',
+  description: `Claim pending creator fee earnings (SOL). When bettors claim winnings from your markets, a portion of the platform fee is allocated to you as the creator.
+
+Creator fee is set when creating the market (default 0.5%, max 2%). Earnings accumulate in your CreatorProfile and can be claimed anytime.`,
+  input: z.object({}),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.claimCreatorFees();
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'getCreatorProfile',
+  description: 'View a creator profile including display name, market stats, earnings, and reputation.',
+  input: z.object({
+    wallet: solPubkey.describe('Creator wallet address (base58)'),
+  }),
+  output: z.object({
+    owner: z.string(),
+    displayName: z.string(),
+    isVerified: z.boolean(),
+    totalMarketsCreated: z.number(),
+    marketsResolved: z.number(),
+    disputesLost: z.number(),
+    totalVolumeSol: z.number(),
+    totalEarningsSol: z.number(),
+    pendingSol: z.number(),
+    defaultCreatorFeeBps: z.number(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const profile = await baozi.fetchCreatorProfile(ctx.input.wallet);
+    if (!profile) throw new Error(`No creator profile found for wallet: ${ctx.input.wallet}`);
+    return {
+      output: {
+        owner: profile.owner,
+        displayName: profile.displayName,
+        isVerified: profile.isVerified,
+        totalMarketsCreated: Number(profile.totalMarketsCreated),
+        marketsResolved: Number(profile.marketsResolved),
+        disputesLost: Number(profile.disputesLost),
+        totalVolumeSol: Number(profile.totalVolumeSol) / LAMPORTS_PER_SOL,
+        totalEarningsSol: Number(profile.totalEarningsSol) / LAMPORTS_PER_SOL,
+        pendingSol: Number(profile.pendingSol) / LAMPORTS_PER_SOL,
+        defaultCreatorFeeBps: profile.defaultCreatorFeeBps,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+// -- Market Lifecycle Entrypoints -------------------------------------------
+
+addEntrypoint({
+  key: 'closeMarket',
+  description: `Close a market after its closing time has passed (permissionless — anyone can call).
+
+This transitions the market from "active" to "closed" and takes a pool snapshot for payout calculations.
+Markets auto-close when the first bet is attempted after closing_time, but this instruction allows explicit closing.`,
+  input: z.object({
+    marketId: solPubkey.describe('Market public key to close'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.closeMarket({ marketPubkey: ctx.input.marketId });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'proposeResolutionHost',
+  description: `Propose resolution for a Lab boolean market you created (HostOracle mode).
+
+As the market creator, you determine the outcome. After proposing, a 6-hour dispute window opens.
+If no disputes are raised, anyone can call finalizeResolution to finalize the outcome.
+
+REQUIREMENTS:
+- You must be the market creator
+- Market must be in "closed" status
+- Only for boolean (Yes/No) markets — use proposeRaceResolution for race markets`,
+  input: z.object({
+    marketId: solPubkey.describe('Closed boolean market public key'),
+    winningOutcome: z.boolean().describe('true = Yes wins, false = No wins'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.proposeResolutionHost({ marketPubkey: ctx.input.marketId, winningOutcome: ctx.input.winningOutcome });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+addEntrypoint({
+  key: 'proposeRaceResolution',
+  description: `Propose resolution for a Lab race market you created.
+
+As the market creator, you determine which outcome won. After proposing, a 6-hour dispute window opens.
+If no disputes are raised, anyone can call finalizeResolution to finalize the outcome.
+
+REQUIREMENTS:
+- You must be the market creator (or authorized resolver)
+- Market must be in "closed" status
+- Only for race markets — use proposeResolutionHost for boolean markets`,
+  input: z.object({
+    marketId: solPubkey.describe('Closed race market public key'),
+    winningOutcome: z.number().min(0).max(9).describe('Index of winning outcome (0-based)'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.proposeRaceResolution({ marketPubkey: ctx.input.marketId, winningOutcome: ctx.input.winningOutcome });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
+
+// -- Reputation Entrypoints -------------------------------------------------
+
+addEntrypoint({
+  key: 'voteCreatorReputation',
+  description: `Vote on a market creator's reputation after participating in their resolved market.
+
+Sybil-resistant: requires a position in the resolved market (you must have bet). One vote per market per creator per user.
+Vote +1 (upvote) for fair markets, -1 (downvote) for unfair resolution or poor quality.`,
+  input: z.object({
+    marketId: solPubkey.describe('Resolved boolean market public key'),
+    vote: z.union([z.literal(1), z.literal(-1)]).describe('+1 for upvote, -1 for downvote'),
+  }),
+  output: z.object({
+    signature: z.string(),
+    explorerUrl: z.string(),
+  }),
+  price: process.env.DEFAULT_PRICE || undefined,
+  handler: async (ctx) => {
+    const sig = await baozi.voteCreatorReputation({ marketPubkey: ctx.input.marketId, vote: ctx.input.vote as 1 | -1 });
+    return {
+      output: {
+        signature: sig,
+        explorerUrl: `https://solscan.io/tx/${sig}`,
+      },
+      usage: { total_tokens: 0 },
+    };
+  },
+});
