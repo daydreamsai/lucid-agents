@@ -1,6 +1,7 @@
 {
   "name": "@lucid-agents/http",
   "version": "1.10.2",
+  "license": "MIT",
   "description": "HTTP extension for agent runtime",
   "repository": {
     "type": "git",

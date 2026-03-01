@@ -1,5 +1,6 @@
 {
   "name": "@lucid-agents/root",
+  "license": "MIT",
   "workspaces": {
     "packages": [
       "packages/*",

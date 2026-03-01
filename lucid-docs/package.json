@@ -1,5 +1,6 @@
 {
   "name": "lucid-docs",
+  "license": "MIT",
   "private": true,
   "sideEffects": false,
   "type": "module",
