@@ -3,6 +3,26 @@
 This directory contains runnable scripts that showcase different integration
 patterns for `@lucid-agents/core` and `@lucid-agents/hono`:
 
+## Macro Event Impact Vector API (Data API)
+
+Paid macro-data API for agent consumers with deterministic JSON contracts:
+
+- `GET /v1/macro/events`
+- `GET /v1/macro/impact-vectors`
+- `POST /v1/macro/scenario-score`
+
+Each response includes freshness and confidence metadata. Monetized routes
+enforce x402-style payment (`X-PAYMENT` / `PAYMENT`) when paywall is enabled.
+
+Run the API:
+
+```bash
+bun run packages/examples/src/macro-data-api/index.ts
+```
+
+See `packages/examples/src/macro-data-api/README.md` for full input/output
+examples and payment/receivable configuration.
+
 ## AxFlow + createAxLLMClient
 
 - Demonstrates how to instantiate an Ax LLM client with payments enabled and run
