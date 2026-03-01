@@ -10,6 +10,7 @@ import {
 import {
   buildEventFeed,
   buildImpactVector,
+  calculateAssumptionCoverage,
   computeFreshness,
   normalizeMacroInput,
   propagateConfidence,
@@ -75,12 +76,6 @@ function parseMacroQuery(url: URL): {
     sectorSet: parseListParam(url.searchParams.get('sectorSet')),
     horizon: url.searchParams.get('horizon') ?? '',
   };
-}
-
-function parseAssumptionCoverage(assumptions: ScenarioAssumptions): number {
-  const keys = ['inflationShock', 'oilShock', 'policySurprise', 'demandShock'] as const;
-  const present = keys.filter(key => typeof assumptions[key] === 'number').length;
-  return present / keys.length;
 }
 
 function clampAssumptions(input?: ScenarioAssumptions): ScenarioAssumptions {
@@ -317,7 +312,7 @@ export async function createMacroApiApp(options: MacroApiAppOptions = {}) {
       const confidence = propagateConfidence({
         base: 0.77,
         freshnessPenalty: freshness.is_stale ? 0.4 : 0.1,
-        assumptionCoverage: parseAssumptionCoverage(assumptions),
+        assumptionCoverage: calculateAssumptionCoverage(parsed.scenarioAssumptions),
       });
 
       return Response.json({

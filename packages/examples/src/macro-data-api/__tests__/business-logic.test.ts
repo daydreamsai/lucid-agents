@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  calculateAssumptionCoverage,
   normalizeMacroInput,
   buildImpactVector,
   scoreScenario,
@@ -55,5 +56,22 @@ describe('macro domain business logic', () => {
     });
 
     expect(severe.total).toBeLessThan(mild.total);
+  });
+
+  it('calculates assumption coverage from explicitly provided fields only', () => {
+    expect(
+      calculateAssumptionCoverage({
+        inflationShock: 0.7,
+      })
+    ).toBe(0.25);
+
+    expect(
+      calculateAssumptionCoverage({
+        inflationShock: 0.7,
+        oilShock: 0.2,
+        policySurprise: 0.1,
+        demandShock: 0.3,
+      })
+    ).toBe(1);
   });
 });

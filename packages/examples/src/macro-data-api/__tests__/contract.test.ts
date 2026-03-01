@@ -102,4 +102,52 @@ describe('macro api contract', () => {
     expect(body.error.code).toBe('invalid_request');
     expect(typeof body.error.message).toBe('string');
   });
+
+  it('POST /v1/macro/scenario-score lowers confidence when assumptions are sparse', async () => {
+    const { app } = await createMacroApiApp({
+      paywall: { enabled: false },
+      now: () => new Date('2026-02-15T12:00:00.000Z'),
+    });
+
+    const basePayload = {
+      eventTypes: ['CPI', 'Fed Rate'],
+      geography: 'US',
+      sectorSet: ['equities', 'bonds'],
+      horizon: '3m',
+    };
+
+    const [fullRes, sparseRes] = await Promise.all([
+      app.request('http://agent/v1/macro/scenario-score', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...basePayload,
+          scenarioAssumptions: {
+            inflationShock: 0.8,
+            oilShock: 0.2,
+            policySurprise: 0.6,
+            demandShock: 0.4,
+          },
+        }),
+      }),
+      app.request('http://agent/v1/macro/scenario-score', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...basePayload,
+          scenarioAssumptions: {
+            inflationShock: 0.8,
+          },
+        }),
+      }),
+    ]);
+
+    expect(fullRes.status).toBe(200);
+    expect(sparseRes.status).toBe(200);
+
+    const fullBody = await fullRes.json();
+    const sparseBody = await sparseRes.json();
+
+    expect(sparseBody.confidence.score).toBeLessThan(fullBody.confidence.score);
+  });
 });

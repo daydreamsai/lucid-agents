@@ -396,3 +396,9 @@ export function toConfidenceBand(score: number): {
     high: rounded(clamp(score + 0.12, 0, 1)),
   };
 }
+
+export function calculateAssumptionCoverage(assumptions: ScenarioAssumptions): number {
+  const keys = ['inflationShock', 'oilShock', 'policySurprise', 'demandShock'] as const;
+  const present = keys.filter(key => typeof assumptions[key] === 'number').length;
+  return present / keys.length;
+}
