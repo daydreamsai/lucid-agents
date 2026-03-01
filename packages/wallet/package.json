@@ -1,6 +1,7 @@
 {
   "name": "@lucid-agents/wallet",
   "version": "0.6.2",
+  "license": "MIT",
   "description": "Wallet connectors and helpers for Lucid agents",
   "repository": {
     "type": "git",

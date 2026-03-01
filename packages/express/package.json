@@ -1,6 +1,7 @@
 {
   "name": "@lucid-agents/express",
   "version": "0.5.6",
+  "license": "MIT",
   "description": "Express adapter for Lucid agent runtime",
   "type": "module",
   "main": "./dist/index.js",

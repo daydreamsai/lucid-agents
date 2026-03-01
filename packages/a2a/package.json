@@ -1,6 +1,7 @@
 {
   "name": "@lucid-agents/a2a",
   "version": "0.6.2",
+  "license": "MIT",
   "description": "Agent-to-Agent (A2A) protocol support for Lucid agents",
   "repository": {
     "type": "git",

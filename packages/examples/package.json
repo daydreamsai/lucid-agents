@@ -1,6 +1,7 @@
 {
   "name": "@lucid-agents/examples",
   "version": "0.3.6",
+  "license": "MIT",
   "description": "Example implementations for lucid-agents framework",
   "type": "module",
   "private": true,
