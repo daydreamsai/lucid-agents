@@ -4,7 +4,6 @@
  */
 
 import type { TrustConfig } from '@lucid-agents/types/identity';
-// @ts-ignore — 8004-solana is a peer/dependency
 import { SolanaSDK } from '8004-solana';
 
 import { parseCluster, resolveRpcUrl } from './config';
@@ -17,7 +16,7 @@ import {
   createSolanaReputationRegistryClient,
   type SolanaReputationRegistryClient,
 } from './registries/reputation';
-import { resolveAutoRegister } from './validation';
+import { parseSolanaPrivateKey, resolveAutoRegister } from './validation';
 
 export type SolanaRegistryClients = {
   identity: SolanaIdentityRegistryClient;
@@ -36,7 +35,7 @@ export type SolanaAgentRegistrationOptions = {
 export type CreateSolanaAgentIdentityOptions = {
   /** Solana private key as Uint8Array */
   privateKey?: Uint8Array;
-  /** Cluster: mainnet-beta | devnet | testnet (default: mainnet-beta) */
+  /** Cluster: mainnet-beta | devnet | testnet | localnet (default: mainnet-beta) */
   cluster?: string;
   /** Optional RPC URL override */
   rpcUrl?: string;
@@ -48,7 +47,10 @@ export type CreateSolanaAgentIdentityOptions = {
   trustModels?: string[];
   /** Registration metadata */
   registration?: SolanaAgentRegistrationOptions;
-  /** Pre-resolved TrustConfig (bypasses auto-derivation from trustModels) */
+  /**
+   * Pre-resolved TrustConfig. When provided, bypasses auto-derivation from
+   * trustModels and registration state — used directly as the identity trust.
+   */
   trust?: TrustConfig;
   /** Custom env vars (defaults to process.env) */
   env?: Record<string, string | undefined>;
@@ -73,10 +75,11 @@ export type SolanaAgentIdentity = {
 };
 
 /**
- * Map a Solana TrustTier value to a Lucid TrustConfig.
+ * Map a Solana registration result to a Lucid TrustConfig.
+ * The tier value from on-chain reads is intentionally omitted here because
+ * fresh registrations have no tier yet — callers should query it separately.
  */
 export function mapTrustTierToConfig(
-  tier: number | string | undefined,
   agentId: string | bigint | number | null | undefined,
   cluster: string,
   feedbackDataUri?: string,
@@ -120,6 +123,16 @@ export function createSdk(options: {
 }
 
 /**
+ * Resolve the effective TrustConfig for a given set of options.
+ * If options.trust is provided it wins; otherwise derive from trustModels.
+ */
+export function getSolanaTrustConfig(
+  result: SolanaAgentIdentity
+): TrustConfig | undefined {
+  return result.trust;
+}
+
+/**
  * Create Solana agent identity with automatic registration.
  * Mirrors createAgentIdentity() from @lucid-agents/identity.
  */
@@ -127,6 +140,16 @@ export async function createSolanaAgentIdentity(
   options: CreateSolanaAgentIdentityOptions
 ): Promise<SolanaAgentIdentity> {
   const { env, logger, registration: regOpts } = options;
+
+  // Short-circuit: if a pre-resolved TrustConfig is supplied, use it directly
+  // without touching the chain at all.
+  if (options.trust) {
+    return {
+      status: 'Pre-resolved TrustConfig supplied — skipping on-chain lookup',
+      trust: options.trust,
+      domain: options.domain,
+    };
+  }
 
   // Resolve cluster + RPC
   const clusterRaw =
@@ -141,8 +164,8 @@ export async function createSolanaAgentIdentity(
       (typeof process !== 'undefined' ? process.env?.SOLANA_RPC_URL : undefined)
   );
 
-  // Resolve private key
-  const privateKey =
+  // Resolve private key — single source of truth via parseSolanaPrivateKey
+  const privateKey: Uint8Array | undefined =
     options.privateKey ??
     (() => {
       const raw =
@@ -150,12 +173,7 @@ export async function createSolanaAgentIdentity(
         (typeof process !== 'undefined'
           ? process.env?.SOLANA_PRIVATE_KEY
           : undefined);
-      if (!raw) return undefined;
-      try {
-        return new Uint8Array(JSON.parse(raw));
-      } catch {
-        return undefined;
-      }
+      return parseSolanaPrivateKey(raw) ?? undefined;
     })();
 
   // Resolve domain
@@ -181,11 +199,11 @@ export async function createSolanaAgentIdentity(
   let existing: SolanaAgentRecord | null = null;
   if (privateKey) {
     try {
-      const { PublicKey, Keypair } = await import('@solana/web3.js');
+      const { Keypair } = await import('@solana/web3.js');
       const kp = Keypair.fromSecretKey(privateKey);
       existing = await identityClient.getAgentByOwner(kp.publicKey.toString());
     } catch {
-      // Ignore — may not be registered yet
+      // Ignore — agent may not be registered yet
     }
   }
 
@@ -194,7 +212,6 @@ export async function createSolanaAgentIdentity(
       `[identity-solana] Found existing Solana agent ID: ${existing.agentId}`
     );
     const trust = mapTrustTierToConfig(
-      undefined,
       existing.agentId,
       cluster,
       undefined,
@@ -211,14 +228,22 @@ export async function createSolanaAgentIdentity(
     };
   }
 
-  // Register if requested
+  // Auto-register if requested
   if (autoRegister && privateKey) {
+    // Fail fast: writing placeholder domain on-chain is worse than an early error.
+    if (!domain) {
+      throw new Error(
+        '[identity-solana] Missing required domain for auto-registration. ' +
+          'Set the AGENT_DOMAIN environment variable or provide options.domain.'
+      );
+    }
+
     logger?.info?.(
       '[identity-solana] No existing registration found, registering...'
     );
     const skipSend = regOpts?.skipSend ?? false;
     const result = await identityClient.registerAgent({
-      domain: domain ?? 'unknown',
+      domain,
       name: regOpts?.name,
       description: regOpts?.description,
       image: regOpts?.image,
@@ -228,7 +253,6 @@ export async function createSolanaAgentIdentity(
 
     if (result.alreadyExists) {
       const trust = mapTrustTierToConfig(
-        undefined,
         result.agentId,
         cluster,
         undefined,
@@ -247,7 +271,17 @@ export async function createSolanaAgentIdentity(
       };
     }
 
-    if (skipSend && result.unsignedTransaction) {
+    if (skipSend) {
+      // Guard: the SDK must return a serialised unsigned transaction.
+      if (
+        !result.unsignedTransaction ||
+        result.unsignedTransaction.length === 0
+      ) {
+        throw new Error(
+          '[identity-solana] skipSend=true but SDK returned no unsigned transaction payload. ' +
+            'Ensure assetPubkey is provided and the SDK version supports PreparedTransaction.'
+        );
+      }
       return {
         status: 'Unsigned transaction ready for browser wallet signing',
         domain,
@@ -259,7 +293,6 @@ export async function createSolanaAgentIdentity(
     }
 
     const trust = mapTrustTierToConfig(
-      undefined,
       result.agentId,
       cluster,
       undefined,
@@ -279,7 +312,7 @@ export async function createSolanaAgentIdentity(
     };
   }
 
-  // No registration — return trust config with no on-chain record
+  // No registration — return without on-chain identity
   if (autoRegister && !privateKey) {
     logger?.warn?.(
       '[identity-solana] autoRegister=true but no SOLANA_PRIVATE_KEY. Cannot register.'
@@ -292,11 +325,4 @@ export async function createSolanaAgentIdentity(
     domain,
     clients,
   };
-}
-
-/** Extract TrustConfig from a SolanaAgentIdentity. */
-export function getSolanaTrustConfig(
-  result: SolanaAgentIdentity
-): TrustConfig | undefined {
-  return result.trust;
 }

@@ -17,7 +17,8 @@ export function parseBoolean(
 
 /**
  * Parse a Solana private key from a JSON array string (Uint8Array serialized).
- * Returns null if not set or invalid.
+ * Returns null if not set, invalid JSON, not an array, or contains out-of-range values.
+ * Every element must be a finite integer in [0, 255].
  */
 export function parseSolanaPrivateKey(
   raw: string | undefined
@@ -26,6 +27,18 @@ export function parseSolanaPrivateKey(
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return null;
+    if (
+      !arr.every(
+        v =>
+          typeof v === 'number' &&
+          Number.isInteger(v) &&
+          Number.isFinite(v) &&
+          v >= 0 &&
+          v <= 255
+      )
+    ) {
+      return null;
+    }
     return new Uint8Array(arr);
   } catch {
     return null;
@@ -34,14 +47,16 @@ export function parseSolanaPrivateKey(
 
 /**
  * Resolve autoRegister from options and env, defaulting to true.
+ * Uses strict presence check (not truthiness) so `REGISTER_IDENTITY=false` is honoured.
  */
 export function resolveAutoRegister(
   options: { autoRegister?: boolean },
   env?: Record<string, string | undefined>
 ): boolean {
   if (options.autoRegister !== undefined) return options.autoRegister;
+  // Strict presence check: falsy values like "" and "false" must still be read
   const envVal =
-    typeof env === 'object' && env?.REGISTER_IDENTITY
+    typeof env === 'object' && env !== null && 'REGISTER_IDENTITY' in env
       ? env.REGISTER_IDENTITY
       : typeof process !== 'undefined'
         ? process.env?.REGISTER_IDENTITY
@@ -52,21 +67,24 @@ export function resolveAutoRegister(
 
 /**
  * Validate that a Solana identity config has the required fields.
- * Throws descriptive errors if required env vars are missing.
+ * Throws a descriptive error if domain is set but no private key is available,
+ * because on-chain registration requires signing.
  */
 export function validateSolanaIdentityConfig(
   options: { privateKey?: Uint8Array; cluster?: string; domain?: string },
   env?: Record<string, string | undefined>
 ): void {
-  // Private key validation (only required if actually registering)
   const hasPrivateKey =
     options.privateKey != null ||
     Boolean(env?.SOLANA_PRIVATE_KEY) ||
     Boolean(typeof process !== 'undefined' && process.env?.SOLANA_PRIVATE_KEY);
 
   if (!hasPrivateKey && options.domain) {
-    // Private key is needed to sign transactions — warn but don't throw
-    // (read-only operations work without it)
+    throw new Error(
+      '[identity-solana] SOLANA_PRIVATE_KEY is required when a domain is provided ' +
+        'because on-chain registration requires transaction signing. ' +
+        'Set options.privateKey or the SOLANA_PRIVATE_KEY environment variable.'
+    );
   }
 }
 

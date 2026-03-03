@@ -38,15 +38,16 @@ describe('createSolanaReputationRegistryClient', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on SDK error', async () => {
+    it('rethrows SDK errors so callers distinguish outages from missing data', async () => {
       const sdk = makeMockSdk({
         getAgentReputationFromIndexer: mock(async () => {
           throw new Error('network error');
         }),
       });
       const client = createSolanaReputationRegistryClient(sdk);
-      const result = await client.getSummary(ASSET_ADDR);
-      expect(result).toBeNull();
+      await expect(client.getSummary(ASSET_ADDR)).rejects.toThrow(
+        'getSummary: failed to fetch reputation'
+      );
     });
 
     it('handles null avg_score gracefully', async () => {

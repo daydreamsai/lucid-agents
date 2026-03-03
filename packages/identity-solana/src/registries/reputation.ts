@@ -52,21 +52,33 @@ export function createSolanaReputationRegistryClient(
 ): SolanaReputationRegistryClient {
   return {
     async getSummary(assetAddress) {
+      // Only return null when the agent genuinely has no reputation record.
+      // SDK/network failures are surfaced as errors so callers can distinguish
+      // "not found" from "service unavailable".
+      let indexerData: Record<string, unknown> | null | undefined;
       try {
-        // Use indexer-based reputation (avoids PublicKey construction in wrapper)
-        const indexerData = await (sdk as any).getAgentReputationFromIndexer(
+        indexerData = await (sdk as any).getAgentReputationFromIndexer(
           assetAddress as any
         );
-        if (!indexerData) return null;
-        return {
-          assetAddress,
-          score: indexerData.avg_score ?? null,
-          tier: String(indexerData.trust_tier ?? 'Unrated'),
-          feedbackCount: indexerData.feedback_count ?? 0,
-        };
-      } catch {
-        return null;
+      } catch (err: unknown) {
+        throw new Error(
+          `getSummary: failed to fetch reputation for asset ${assetAddress}: ` +
+            (err instanceof Error ? err.message : String(err))
+        );
       }
+      if (!indexerData) return null;
+      return {
+        assetAddress,
+        score:
+          typeof indexerData.avg_score === 'number'
+            ? indexerData.avg_score
+            : null,
+        tier: String(indexerData.trust_tier ?? 'Unrated'),
+        feedbackCount:
+          typeof indexerData.feedback_count === 'number'
+            ? indexerData.feedback_count
+            : 0,
+      };
     },
 
     async giveFeedback(opts) {

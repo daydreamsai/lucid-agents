@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import {
+  createSolanaAgentIdentity,
   identitySolana,
   identitySolanaFromEnv,
-  createSolanaAgentIdentity,
   mapTrustTierToConfig,
 } from '@lucid-agents/identity-solana';
 
@@ -43,14 +43,21 @@ describe('solana-identity example: createSolanaAgentIdentity', () => {
     expect(identity.clients?.reputation).toBeDefined();
   });
 
+  it('short-circuits when options.trust is pre-supplied', async () => {
+    const trust = { trustModels: ['feedback'] as string[] };
+    const identity = await createSolanaAgentIdentity({
+      trust,
+      cluster: 'devnet',
+      env: {},
+    });
+    expect(identity.trust).toBe(trust);
+    expect(identity.status).toContain('Pre-resolved');
+  });
+
   it('maps TrustTier to TrustConfig correctly', () => {
-    const trust = mapTrustTierToConfig(
-      3, // Gold
-      BigInt(100),
-      'devnet',
-      undefined,
-      ['feedback']
-    );
+    const trust = mapTrustTierToConfig(BigInt(100), 'devnet', undefined, [
+      'feedback',
+    ]);
     expect(trust.registrations?.[0].agentId).toBe('100');
     expect(trust.registrations?.[0].agentRegistry).toContain('solana:devnet');
     expect(trust.trustModels).toContain('feedback');

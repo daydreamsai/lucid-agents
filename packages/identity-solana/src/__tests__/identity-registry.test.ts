@@ -44,15 +44,16 @@ describe('createSolanaIdentityRegistryClient', () => {
       expect(result?.cluster).toBe('devnet');
     });
 
-    it('returns null on SDK error', async () => {
+    it('rethrows SDK errors so callers distinguish outages from missing agents', async () => {
       const sdk = makeMockSdk({
         getAgentByAgentId: mock(async () => {
           throw new Error('network error');
         }),
       });
       const client = createSolanaIdentityRegistryClient(sdk);
-      const result = await client.getAgent(1n);
-      expect(result).toBeNull();
+      await expect(client.getAgent(1n)).rejects.toThrow(
+        'getAgent: failed to fetch agent'
+      );
     });
   });
 

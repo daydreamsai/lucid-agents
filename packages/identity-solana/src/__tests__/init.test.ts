@@ -10,7 +10,7 @@ import {
 
 describe('mapTrustTierToConfig', () => {
   it('builds TrustConfig with registrations when agentId provided', () => {
-    const cfg = mapTrustTierToConfig(3, BigInt(99), 'devnet', undefined, [
+    const cfg = mapTrustTierToConfig(BigInt(99), 'devnet', undefined, [
       'feedback',
     ]);
     expect(cfg.registrations).toHaveLength(1);
@@ -19,12 +19,12 @@ describe('mapTrustTierToConfig', () => {
   });
 
   it('builds TrustConfig with empty registrations when no agentId', () => {
-    const cfg = mapTrustTierToConfig(undefined, undefined, 'devnet');
+    const cfg = mapTrustTierToConfig(undefined, 'devnet');
     expect(cfg.registrations).toHaveLength(0);
   });
 
   it('includes trustModels', () => {
-    const cfg = mapTrustTierToConfig(1, 1n, 'mainnet-beta', undefined, [
+    const cfg = mapTrustTierToConfig(1n, 'mainnet-beta', undefined, [
       'feedback',
       'inference-validation',
     ]);
@@ -34,7 +34,6 @@ describe('mapTrustTierToConfig', () => {
 
   it('includes feedbackDataUri when provided', () => {
     const cfg = mapTrustTierToConfig(
-      1,
       1n,
       'devnet',
       'https://agent.example.com/feedback',
@@ -104,5 +103,37 @@ describe('createSolanaAgentIdentity', () => {
       env: { AGENT_DOMAIN: 'agent.example.com' },
     });
     expect(result.domain).toBe('agent.example.com');
+  });
+});
+
+// ── options.trust short-circuit ───────────────────────────────────────────────
+
+describe('createSolanaAgentIdentity: options.trust short-circuit', () => {
+  it('returns pre-resolved TrustConfig without touching the chain', async () => {
+    const trust = { trustModels: ['feedback'] as string[], registrations: [] };
+    const result = await createSolanaAgentIdentity({
+      trust,
+      cluster: 'devnet',
+      env: {},
+    });
+    expect(result.trust).toBe(trust);
+    expect(result.status).toContain('Pre-resolved');
+    // Should not have registry clients (skipped chain interaction)
+    expect(result.clients).toBeUndefined();
+  });
+});
+
+// ── domain fail-fast ──────────────────────────────────────────────────────────
+
+describe('createSolanaAgentIdentity: domain fail-fast', () => {
+  it('throws when autoRegister=true, privateKey provided, but domain missing', async () => {
+    await expect(
+      createSolanaAgentIdentity({
+        privateKey: new Uint8Array(64),
+        autoRegister: true,
+        cluster: 'devnet',
+        env: {},
+      })
+    ).rejects.toThrow('Missing required domain for auto-registration');
   });
 });
