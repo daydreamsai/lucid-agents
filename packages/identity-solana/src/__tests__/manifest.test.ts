@@ -1,14 +1,15 @@
 import type { TrustConfig } from '@lucid-agents/types/identity';
-import { describe, expect,it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { createAgentCardWithSolanaIdentity } from '../manifest';
 
-const makeCard = () => ({
-  name: 'test-agent',
-  version: '1.0.0',
-  entrypoints: [],
-  capabilities: {},
-} as any);
+const makeCard = () =>
+  ({
+    name: 'test-agent',
+    version: '1.0.0',
+    entrypoints: [],
+    capabilities: {},
+  }) as any;
 
 describe('createAgentCardWithSolanaIdentity', () => {
   it('returns a new card object (immutable)', () => {
@@ -20,7 +21,9 @@ describe('createAgentCardWithSolanaIdentity', () => {
 
   it('adds trustModels to card', () => {
     const card = makeCard();
-    const trust: TrustConfig = { trustModels: ['feedback', 'inference-validation'] };
+    const trust: TrustConfig = {
+      trustModels: ['feedback', 'inference-validation'],
+    };
     const result = createAgentCardWithSolanaIdentity(card, trust);
     expect(result.trustModels).toEqual(['feedback', 'inference-validation']);
   });

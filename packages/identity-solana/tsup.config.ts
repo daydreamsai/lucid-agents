@@ -1,18 +1,18 @@
-import { definePackageConfig } from "../tsup.config.base";
+import { definePackageConfig } from '../tsup.config.base';
 
 export default definePackageConfig({
   entry: {
-    index: "src/index.ts",
+    index: 'src/index.ts',
   },
   dts: {
     entry: {
-      index: "src/index.ts",
+      index: 'src/index.ts',
     },
   },
   external: [
-    "8004-solana",
-    "@solana/web3.js",
-    "@lucid-agents/core",
-    "@lucid-agents/types",
+    '8004-solana',
+    '@solana/web3.js',
+    '@lucid-agents/core',
+    '@lucid-agents/types',
   ],
 });

@@ -1,4 +1,4 @@
-import { describe, expect,it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import {
   hasRegistrationCapability,
@@ -69,9 +69,9 @@ describe('resolveAutoRegister', () => {
 
 describe('hasRegistrationCapability', () => {
   it('returns true when privateKey is present', () => {
-    expect(
-      hasRegistrationCapability({ privateKey: new Uint8Array(64) })
-    ).toBe(true);
+    expect(hasRegistrationCapability({ privateKey: new Uint8Array(64) })).toBe(
+      true
+    );
   });
 
   it('returns false when no privateKey', () => {

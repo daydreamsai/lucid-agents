@@ -45,7 +45,7 @@ describe('solana-identity example: createSolanaAgentIdentity', () => {
 
   it('maps TrustTier to TrustConfig correctly', () => {
     const trust = mapTrustTierToConfig(
-      3,       // Gold
+      3, // Gold
       BigInt(100),
       'devnet',
       undefined,

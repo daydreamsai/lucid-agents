@@ -10,7 +10,9 @@ import {
 
 describe('mapTrustTierToConfig', () => {
   it('builds TrustConfig with registrations when agentId provided', () => {
-    const cfg = mapTrustTierToConfig(3, BigInt(99), 'devnet', undefined, ['feedback']);
+    const cfg = mapTrustTierToConfig(3, BigInt(99), 'devnet', undefined, [
+      'feedback',
+    ]);
     expect(cfg.registrations).toHaveLength(1);
     expect(cfg.registrations?.[0].agentId).toBe('99');
     expect(cfg.registrations?.[0].agentRegistry).toContain('solana');
@@ -32,7 +34,11 @@ describe('mapTrustTierToConfig', () => {
 
   it('includes feedbackDataUri when provided', () => {
     const cfg = mapTrustTierToConfig(
-      1, 1n, 'devnet', 'https://agent.example.com/feedback', ['feedback']
+      1,
+      1n,
+      'devnet',
+      'https://agent.example.com/feedback',
+      ['feedback']
     );
     expect(cfg.feedbackDataUri).toBe('https://agent.example.com/feedback');
   });

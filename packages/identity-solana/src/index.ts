@@ -29,17 +29,13 @@ export type {
   SolanaAgentRecord,
   SolanaIdentityRegistryClient,
 } from './registries/identity';
-export {
-  createSolanaIdentityRegistryClient,
-} from './registries/identity';
+export { createSolanaIdentityRegistryClient } from './registries/identity';
 export type {
   GiveFeedbackOptions,
   SolanaReputationRegistryClient,
   SolanaReputationSummary,
 } from './registries/reputation';
-export {
-  createSolanaReputationRegistryClient,
-} from './registries/reputation';
+export { createSolanaReputationRegistryClient } from './registries/reputation';
 
 // Config helpers
 export type { SolanaCluster } from './config';

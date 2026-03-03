@@ -48,10 +48,15 @@ export type CreateSolanaAgentIdentityOptions = {
   trustModels?: string[];
   /** Registration metadata */
   registration?: SolanaAgentRegistrationOptions;
+  /** Pre-resolved TrustConfig (bypasses auto-derivation from trustModels) */
+  trust?: TrustConfig;
   /** Custom env vars (defaults to process.env) */
   env?: Record<string, string | undefined>;
   /** Logger */
-  logger?: { info?(msg: string): void; warn?(msg: string, err?: unknown): void };
+  logger?: {
+    info?(msg: string): void;
+    warn?(msg: string, err?: unknown): void;
+  };
 };
 
 export type SolanaAgentIdentity = {
@@ -72,17 +77,20 @@ export type SolanaAgentIdentity = {
  */
 export function mapTrustTierToConfig(
   tier: number | string | undefined,
-  agentId: bigint | number | undefined,
+  agentId: string | bigint | number | null | undefined,
   cluster: string,
   feedbackDataUri?: string,
   trustModels: string[] = ['feedback']
 ): TrustConfig {
-  const registrations = agentId != null
-    ? [{
-        agentId: String(agentId),
-        agentRegistry: `solana:${cluster}:8004-solana`,
-      }]
-    : [];
+  const registrations =
+    agentId != null
+      ? [
+          {
+            agentId: String(agentId),
+            agentRegistry: `solana:${cluster}:8004-solana`,
+          },
+        ]
+      : [];
 
   return {
     registrations,
@@ -139,9 +147,15 @@ export async function createSolanaAgentIdentity(
     (() => {
       const raw =
         env?.SOLANA_PRIVATE_KEY ??
-        (typeof process !== 'undefined' ? process.env?.SOLANA_PRIVATE_KEY : undefined);
+        (typeof process !== 'undefined'
+          ? process.env?.SOLANA_PRIVATE_KEY
+          : undefined);
       if (!raw) return undefined;
-      try { return new Uint8Array(JSON.parse(raw)); } catch { return undefined; }
+      try {
+        return new Uint8Array(JSON.parse(raw));
+      } catch {
+        return undefined;
+      }
     })();
 
   // Resolve domain
@@ -176,8 +190,16 @@ export async function createSolanaAgentIdentity(
   }
 
   if (existing) {
-    logger?.info?.(`[identity-solana] Found existing Solana agent ID: ${existing.agentId}`);
-    const trust = mapTrustTierToConfig(undefined, existing.agentId, cluster, undefined, trustModels);
+    logger?.info?.(
+      `[identity-solana] Found existing Solana agent ID: ${existing.agentId}`
+    );
+    const trust = mapTrustTierToConfig(
+      undefined,
+      existing.agentId,
+      cluster,
+      undefined,
+      trustModels
+    );
     return {
       status: 'Found existing registration in 8004-Solana registry',
       trust,
@@ -191,7 +213,9 @@ export async function createSolanaAgentIdentity(
 
   // Register if requested
   if (autoRegister && privateKey) {
-    logger?.info?.('[identity-solana] No existing registration found, registering...');
+    logger?.info?.(
+      '[identity-solana] No existing registration found, registering...'
+    );
     const skipSend = regOpts?.skipSend ?? false;
     const result = await identityClient.registerAgent({
       domain: domain ?? 'unknown',
@@ -203,11 +227,19 @@ export async function createSolanaAgentIdentity(
     });
 
     if (result.alreadyExists) {
-      const trust = mapTrustTierToConfig(undefined, result.agentId, cluster, undefined, trustModels);
+      const trust = mapTrustTierToConfig(
+        undefined,
+        result.agentId,
+        cluster,
+        undefined,
+        trustModels
+      );
       return {
         status: 'Found existing registration in 8004-Solana registry',
         trust,
-        record: result.agentId ? { agentId: result.agentId, owner: '', uri: '', cluster } : undefined,
+        record: result.agentId
+          ? { agentId: result.agentId, owner: '', uri: '', cluster }
+          : undefined,
         domain,
         isNewRegistration: false,
         didRegister: false,
@@ -226,7 +258,13 @@ export async function createSolanaAgentIdentity(
       };
     }
 
-    const trust = mapTrustTierToConfig(undefined, result.agentId, cluster, undefined, trustModels);
+    const trust = mapTrustTierToConfig(
+      undefined,
+      result.agentId,
+      cluster,
+      undefined,
+      trustModels
+    );
     return {
       status: 'Successfully registered agent in 8004-Solana registry',
       trust,
@@ -249,7 +287,8 @@ export async function createSolanaAgentIdentity(
   }
 
   return {
-    status: 'No 8004-Solana identity — agent will run without on-chain identity',
+    status:
+      'No 8004-Solana identity — agent will run without on-chain identity',
     domain,
     clients,
   };

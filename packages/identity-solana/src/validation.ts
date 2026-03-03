@@ -73,6 +73,8 @@ export function validateSolanaIdentityConfig(
 /**
  * Narrow a SolanaIdentityConfig to confirm it has what's needed for registration.
  */
-export function hasRegistrationCapability(config: SolanaIdentityConfig): boolean {
+export function hasRegistrationCapability(
+  config: SolanaIdentityConfig
+): boolean {
   return Boolean(config.privateKey);
 }

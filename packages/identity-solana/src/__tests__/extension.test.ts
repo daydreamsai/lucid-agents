@@ -1,18 +1,26 @@
-import { describe, expect,it } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 
 import { identitySolana } from '../extension';
 
-const makeRuntime = () => ({
-  wallets: {},
-  entrypoints: { snapshot: () => [] },
-} as any);
+const makeRuntime = () =>
+  ({
+    wallets: {},
+    entrypoints: { snapshot: () => [] },
+  }) as any;
 
-const makeCard = () => ({
-  name: 'test-agent',
-  version: '1.0.0',
-  entrypoints: [],
-  capabilities: {},
-} as any);
+const makeBuildCtx = () =>
+  ({
+    meta: { name: 'test-agent', version: '1.0.0' },
+    runtime: {},
+  }) as any;
+
+const makeCard = () =>
+  ({
+    name: 'test-agent',
+    version: '1.0.0',
+    entrypoints: [],
+    capabilities: {},
+  }) as any;
 
 describe('identitySolana extension', () => {
   describe('contract: .use() attaches correctly', () => {
@@ -32,7 +40,7 @@ describe('identitySolana extension', () => {
   describe('build()', () => {
     it('returns empty object when no config provided', () => {
       const ext = identitySolana();
-      const result = ext.build();
+      const result = ext.build(makeBuildCtx());
       expect(result.trust).toBeUndefined();
       expect(result.identity).toBeUndefined();
     });
@@ -40,7 +48,7 @@ describe('identitySolana extension', () => {
     it('returns trust from config when pre-supplied', () => {
       const trust = { trustModels: ['feedback'] as string[] };
       const ext = identitySolana({ config: { trust } });
-      const result = ext.build();
+      const result = ext.build(makeBuildCtx());
       expect(result.trust).toBe(trust);
     });
 
@@ -50,7 +58,7 @@ describe('identitySolana extension', () => {
           registration: { name: 'Test Agent', skipSend: false },
         },
       });
-      const result = ext.build();
+      const result = ext.build(makeBuildCtx());
       expect(result.identity?.registration?.name).toBe('Test Agent');
     });
   });

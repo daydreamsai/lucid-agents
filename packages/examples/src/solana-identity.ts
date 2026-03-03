@@ -13,11 +13,22 @@
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
-import { identitySolana, identitySolanaFromEnv } from '@lucid-agents/identity-solana';
+import {
+  createSolanaAgentIdentity,
+  identitySolana,
+  identitySolanaFromEnv,
+} from '@lucid-agents/identity-solana';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 import { z } from 'zod';
 
 async function main() {
+  // Fail fast: SOLANA_PRIVATE_KEY is required for on-chain registration
+  if (!process.env.SOLANA_PRIVATE_KEY) {
+    throw new Error(
+      'SOLANA_PRIVATE_KEY is required. Set it to a JSON array of numbers, e.g. [1,2,...,64].'
+    );
+  }
+
   // Build agent with Solana identity
   const agent = await createAgent({
     name: 'solana-identity-example',
@@ -37,7 +48,7 @@ async function main() {
           SOLANA_CLUSTER: process.env.SOLANA_CLUSTER ?? 'devnet',
           AGENT_DOMAIN: process.env.AGENT_DOMAIN ?? 'solana-agent.example.com',
           REGISTER_IDENTITY: 'true',
-          SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY ?? '',
+          SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY,
         }),
       })
     )
@@ -46,10 +57,16 @@ async function main() {
   const { app, addEntrypoint } = await createAgentApp(agent);
 
   // Paid endpoint — analyze a creator's distribution strategy
+  // After completing the task, submit reputation feedback to the requesting agent.
   addEntrypoint({
     key: 'analyze-distribution',
     description: 'Analyze a creator distribution strategy for $0.01 USDC',
-    input: z.object({ creatorHandle: z.string(), platform: z.string() }),
+    input: z.object({
+      creatorHandle: z.string(),
+      platform: z.string(),
+      /** Optional: caller's Solana address to receive positive feedback after task */
+      callerAddress: z.string().optional(),
+    }),
     output: z.object({
       summary: z.string(),
       signals: z.array(z.string()),
@@ -57,14 +74,40 @@ async function main() {
     }),
     price: '0.01',
     async handler({ input }) {
-      // Minimal implementation for example purposes
-      return {
-        output: {
-          summary: `Distribution analysis for @${input.creatorHandle} on ${input.platform}`,
-          signals: ['Shipping velocity: high', 'Narrative spread: building'],
-          recommendation: 'Continue current cadence. Diversify to Farcaster.',
-        },
+      const result = {
+        summary: `Distribution analysis for @${input.creatorHandle} on ${input.platform}`,
+        signals: ['Shipping velocity: high', 'Narrative spread: building'],
+        recommendation: 'Continue current cadence. Diversify to Farcaster.',
       };
+
+      // Demonstration: give reputation feedback to the caller after task completion.
+      // In production, resolve callerAddress from the payment proof or session context.
+      if (input.callerAddress) {
+        try {
+          const { clients } = await createSolanaAgentIdentity(
+            identitySolanaFromEnv({
+              SOLANA_CLUSTER: process.env.SOLANA_CLUSTER ?? 'devnet',
+              SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY!,
+              AGENT_DOMAIN:
+                process.env.AGENT_DOMAIN ?? 'solana-agent.example.com',
+            })
+          );
+          await clients?.reputation.giveFeedback({
+            targetAddress: input.callerAddress,
+            score: 5,
+            comment:
+              'Task completed successfully via analyze-distribution entrypoint',
+          });
+          console.log(
+            `[solana-identity] Reputation feedback sent to ${input.callerAddress}`
+          );
+        } catch (err) {
+          // Non-fatal: log and continue; reputation is best-effort
+          console.warn(`[solana-identity] Reputation feedback failed: ${err}`);
+        }
+      }
+
+      return { output: result };
     },
   });
 
@@ -86,7 +129,9 @@ async function main() {
 
   const port = parseInt(process.env.PORT ?? '3099');
   console.log(`[solana-identity] Agent running on port ${port}`);
-  console.log(`[solana-identity] Entrypoints: analyze-distribution ($0.01), health (free)`);
+  console.log(
+    `[solana-identity] Entrypoints: analyze-distribution ($0.01), health (free)`
+  );
 
   return { app, port };
 }

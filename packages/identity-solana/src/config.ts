@@ -26,12 +26,23 @@ export function resolveRpcUrl(
 }
 
 /**
- * Parse cluster from string, defaulting to mainnet-beta.
+ * Parse cluster from string, defaulting to mainnet-beta when unset.
+ * Throws a descriptive error when a value is provided but not a valid SolanaCluster.
  */
 export function parseCluster(raw: string | undefined): SolanaCluster {
-  const valid: SolanaCluster[] = ['mainnet-beta', 'devnet', 'testnet', 'localnet'];
-  if (raw && valid.includes(raw as SolanaCluster)) {
+  const valid: SolanaCluster[] = [
+    'mainnet-beta',
+    'devnet',
+    'testnet',
+    'localnet',
+  ];
+  if (raw === undefined) {
+    return 'mainnet-beta';
+  }
+  if (valid.includes(raw as SolanaCluster)) {
     return raw as SolanaCluster;
   }
-  return 'mainnet-beta';
+  throw new Error(
+    `parseCluster: invalid SOLANA_CLUSTER value "${raw}". Allowed values: ${valid.join(', ')}.`
+  );
 }

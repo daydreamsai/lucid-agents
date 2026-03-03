@@ -13,7 +13,10 @@ bun add @lucid-agents/identity-solana @solana/web3.js 8004-solana
 ```ts
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { identitySolana, identitySolanaFromEnv } from '@lucid-agents/identity-solana';
+import {
+  identitySolana,
+  identitySolanaFromEnv,
+} from '@lucid-agents/identity-solana';
 
 const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
   .use(http())
@@ -23,31 +26,36 @@ const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|---|---|---|
-| `SOLANA_PRIVATE_KEY` | JSON array of numbers (Uint8Array) — e.g. `[1,2,3,...]` | For registration |
-| `SOLANA_CLUSTER` | `mainnet-beta` \| `devnet` \| `testnet` (default: `mainnet-beta`) | No |
-| `SOLANA_RPC_URL` | Custom RPC endpoint | No |
-| `AGENT_DOMAIN` | Agent domain for identity registration | Recommended |
-| `REGISTER_IDENTITY` | `true`/`false` — auto-register on startup | No (default: `true`) |
-| `PINATA_JWT` | Pinata JWT for IPFS metadata upload | No |
-| `ATOM_ENABLED` | Enable ATOM protocol support | No |
+| Variable             | Description                                                                     | Required             |
+| -------------------- | ------------------------------------------------------------------------------- | -------------------- |
+| `SOLANA_PRIVATE_KEY` | JSON array of numbers (Uint8Array) — e.g. `[1,2,3,...]`                         | For registration     |
+| `SOLANA_CLUSTER`     | `mainnet-beta` \| `devnet` \| `testnet` \| `localnet` (default: `mainnet-beta`) | No                   |
+| `SOLANA_RPC_URL`     | Custom RPC endpoint                                                             | No                   |
+| `AGENT_DOMAIN`       | Agent domain for identity registration                                          | Recommended          |
+| `REGISTER_IDENTITY`  | `true`/`false` — auto-register on startup                                       | No (default: `true`) |
+| `PINATA_JWT`         | Pinata JWT for IPFS metadata upload                                             | No                   |
+| `ATOM_ENABLED`       | Enable ATOM protocol support                                                    | No                   |
 
 ## Manual Configuration
 
 ```ts
+import { createAgent } from '@lucid-agents/core';
 import { identitySolana } from '@lucid-agents/identity-solana';
 
 const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
-  .use(identitySolana({
-    config: {
-      privateKey: new Uint8Array([/* your 64-byte keypair */]),
-      cluster: 'devnet',
-      domain: 'my-agent.example.com',
-      autoRegister: true,
-      trustModels: ['feedback', 'inference-validation'],
-    },
-  }))
+  .use(
+    identitySolana({
+      config: {
+        privateKey: new Uint8Array([
+          /* your 64-byte keypair */
+        ]),
+        cluster: 'devnet',
+        domain: 'my-agent.example.com',
+        autoRegister: true,
+        trustModels: ['feedback', 'inference-validation'],
+      },
+    })
+  )
   .build();
 ```
 
@@ -88,25 +96,31 @@ if (identity.clients) {
   });
 
   // Get agent record
-  const record = await identity.clients.identity.getAgentByOwner('wallet-address');
+  const record =
+    await identity.clients.identity.getAgentByOwner('wallet-address');
 }
 ```
 
 ## API Reference
 
 ### `identitySolana(options?)`
+
 Extension for Lucid SDK. Accepts `config?: SolanaIdentityConfig`.
 
 ### `identitySolanaFromEnv(env?)`
+
 Creates `SolanaIdentityConfig` from environment variables.
 
 ### `createSolanaAgentIdentity(options)`
+
 Core function — registers agent on 8004-Solana, returns `SolanaAgentIdentity` with `trust`, `record`, and `clients`.
 
 ### `createAgentCardWithSolanaIdentity(card, trustConfig)`
+
 Merges Solana trust into an A2A Agent Card (immutable).
 
 ### `SolanaRegistryClients`
+
 ```ts
 type SolanaRegistryClients = {
   identity: SolanaIdentityRegistryClient;
@@ -116,10 +130,10 @@ type SolanaRegistryClients = {
 
 ## Differences from @lucid-agents/identity (EVM)
 
-| Feature | EVM | Solana |
-|---|---|---|
-| Registry | ERC-8004 on Ethereum/Base | 8004-Solana program |
-| Key format | `0x…` hex private key | JSON array `[1,2,3,…]` |
-| Chain config | `chainId` + `rpcUrl` | `cluster` + `rpcUrl` |
-| Peer deps | `viem` | `@solana/web3.js` |
-| Extension name | `identity` | `identity-solana` |
+| Feature        | EVM                       | Solana                 |
+| -------------- | ------------------------- | ---------------------- |
+| Registry       | ERC-8004 on Ethereum/Base | 8004-Solana program    |
+| Key format     | `0x…` hex private key     | JSON array `[1,2,3,…]` |
+| Chain config   | `chainId` + `rpcUrl`      | `cluster` + `rpcUrl`   |
+| Peer deps      | `viem`                    | `@solana/web3.js`      |
+| Extension name | `identity`                | `identity-solana`      |

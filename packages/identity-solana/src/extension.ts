@@ -55,7 +55,11 @@ export function identitySolana(options?: {
       if (trustConfig) return;
 
       // If identity config is present, auto-configure
-      if (config?.domain || config?.autoRegister !== undefined || config?.privateKey) {
+      if (
+        config?.domain ||
+        config?.autoRegister !== undefined ||
+        config?.privateKey
+      ) {
         const identityResult = await createSolanaAgentIdentity(config ?? {});
         trustConfig = getSolanaTrustConfig(identityResult);
       }
