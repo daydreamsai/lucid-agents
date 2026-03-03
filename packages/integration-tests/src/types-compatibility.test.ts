@@ -83,19 +83,20 @@ describe('Types Compatibility', () => {
       .snapshot()
       .find((e: { key: string }) => e.key === 'context-test');
 
-    if (entrypoint?.handler) {
-      await entrypoint.handler({
-        key: 'context-test',
-        input: { data: 'test' },
-        signal: new AbortController().signal,
-        metadata: { headers: new Headers() },
-      });
+    expect(entrypoint).toBeDefined();
+    expect(entrypoint?.handler).toBeDefined();
 
-      // Verify context structure
-      expect(receivedContext).toHaveProperty('key', 'context-test');
-      expect(receivedContext).toHaveProperty('input');
-      expect(receivedContext).toHaveProperty('signal');
-      expect(receivedContext).toHaveProperty('metadata');
-    }
+    await entrypoint!.handler({
+      key: 'context-test',
+      input: { data: 'test' },
+      signal: new AbortController().signal,
+      metadata: { headers: new Headers() },
+    });
+
+    // Verify context structure
+    expect(receivedContext).toHaveProperty('key', 'context-test');
+    expect(receivedContext).toHaveProperty('input');
+    expect(receivedContext).toHaveProperty('signal');
+    expect(receivedContext).toHaveProperty('metadata');
   });
 });

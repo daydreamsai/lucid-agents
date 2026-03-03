@@ -49,16 +49,15 @@ describe('Core + Express Integration', () => {
     // Verify the handler works
     const entrypoint = entrypoints.find((e: { key: string }) => e.key === 'reverse');
     expect(entrypoint).toBeDefined();
+    expect(entrypoint?.handler).toBeDefined();
 
-    if (entrypoint?.handler) {
-      const result = await entrypoint.handler({
-        key: 'reverse',
-        input: { text: 'hello' },
-        signal: new AbortController().signal,
-        metadata: { headers: new Headers() },
-      });
-      expect(result.output).toHaveProperty('reversed', 'olleh');
-    }
+    const result = await entrypoint!.handler({
+      key: 'reverse',
+      input: { text: 'hello' },
+      signal: new AbortController().signal,
+      metadata: { headers: new Headers() },
+    });
+    expect(result.output).toHaveProperty('reversed', 'olleh');
   });
 
   test('should create agent runtime with express adapter config', async () => {

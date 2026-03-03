@@ -93,8 +93,9 @@ describe('Core + Hono Integration', () => {
       body: JSON.stringify({}),
     });
 
-    // Should return error status (400 or 404)
+    // Should return a client error status (4xx, not server error)
     expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
   });
 
   test('should expose agent-card.json at well-known path', async () => {

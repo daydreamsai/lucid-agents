@@ -148,12 +148,12 @@ jobs:
         working-directory: /tmp/scaffold-test/test-project
         run: |
           if [ -f "tsconfig.json" ]; then
-            bunx tsc --noEmit || echo "Type-check completed with warnings"
+            bunx tsc --noEmit
           fi
 
       - name: Build scaffolded project
         working-directory: /tmp/scaffold-test/test-project
         run: |
           if grep -q '"build"' package.json; then
-            bun run build || echo "Build completed with warnings"
+            bun run build
           fi

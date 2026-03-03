@@ -29,6 +29,7 @@ The following packages are configuration-only and are exempt from script require
 Some packages have special build processes:
 
 - `@lucid-agents/api-sdk` - Uses codegen, exempt from standard build
+- `@lucid-agents/integration-tests` - Test-only package, exempt from standard publishable-package script requirements
 
 ## Script Definitions
 
