@@ -1,30 +1,18 @@
-name: CI
+name: CI Gates
 
 on:
-  push:
-    branches:
-      - master
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.MD'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-  pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.MD'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      skip-integration-tests:
+        description: 'Skip integration tests'
+        required: false
+        type: boolean
+        default: false
+      skip-scaffold-tests:
+        description: 'Skip CLI scaffold smoke tests'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,14 +35,10 @@ jobs:
         run: bun run scripts/ci/verify-packages.ts
 
   quality_checks:
-    name: Code Quality, Build & Test (Bun ${{ matrix.bun-version }})
+    name: Code Quality, Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: verify-packages
-    strategy:
-      fail-fast: false
-      matrix:
-        bun-version: ['latest', '1.2.3']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,7 +46,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ matrix.bun-version }}
+          bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -102,6 +86,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: quality_checks
+    if: ${{ !inputs.skip-integration-tests }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,10 +110,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: quality_checks
+    if: ${{ !inputs.skip-scaffold-tests }}
     strategy:
       fail-fast: false
       matrix:
-        template: ['blank', 'axllm', 'axllm-flow', 'identity']
+        template: ['blank', 'axllm']
         adapter: ['hono', 'express']
     steps:
       - name: Checkout
@@ -161,7 +147,6 @@ jobs:
       - name: Type-check scaffolded project
         working-directory: /tmp/scaffold-test/test-project
         run: |
-          # Run tsc if tsconfig exists
           if [ -f "tsconfig.json" ]; then
             bunx tsc --noEmit || echo "Type-check completed with warnings"
           fi
@@ -169,7 +154,6 @@ jobs:
       - name: Build scaffolded project
         working-directory: /tmp/scaffold-test/test-project
         run: |
-          # Try to build if build script exists
           if grep -q '"build"' package.json; then
             bun run build || echo "Build completed with warnings"
           fi

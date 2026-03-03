@@ -1,0 +1,24 @@
+{
+  "name": "@lucid-agents/integration-tests",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Integration tests for cross-package functionality",
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/express": "workspace:*",
+    "@lucid-agents/tanstack": "workspace:*",
+    "@lucid-agents/types": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "typescript": "catalog:",
+    "zod": "catalog:",
+    "hono": "catalog:"
+  }
+}

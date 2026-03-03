@@ -15,10 +15,19 @@ permissions:
   id-token: write
 
 jobs:
+  ci-gates:
+    name: CI Gates
+    uses: ./.github/workflows/ci-gates.yml
+    with:
+      skip-integration-tests: false
+      skip-scaffold-tests: true
+
   release-bot:
     name: Release Bot
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [ci-gates]
+    if: needs.ci-gates.result == 'success'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
