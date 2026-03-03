@@ -2,8 +2,16 @@ import { describe, expect, it, mock } from 'bun:test';
 
 import { createSolanaIdentityRegistryClient } from '../registries/identity';
 
+/** Typed shape for the subset of SolanaSDK methods used by the identity registry client */
+type MockSolanaSDK = {
+  getAgentByAgentId: ReturnType<typeof mock>;
+  getAgentByWallet: ReturnType<typeof mock>;
+  registerAgent: ReturnType<typeof mock>;
+  getCluster: ReturnType<typeof mock>;
+};
+
 /** Build a mock SolanaSDK matching the methods actually used in the registry client */
-function makeMockSdk(overrides: Record<string, unknown> = {}) {
+function makeMockSdk(overrides: Partial<MockSolanaSDK> = {}): MockSolanaSDK {
   return {
     // getAgentByAgentId is used for getAgent(agentId)
     getAgentByAgentId: mock(async () => null),
@@ -13,7 +21,7 @@ function makeMockSdk(overrides: Record<string, unknown> = {}) {
     registerAgent: mock(async () => ({ agentId: '42', signature: 'sig123' })),
     getCluster: mock(() => 'devnet'),
     ...overrides,
-  } as any;
+  };
 }
 
 const INDEXED_AGENT = {
@@ -23,11 +31,19 @@ const INDEXED_AGENT = {
   asset: 'AssetAddress11111111111111111111111111111111',
 };
 
+// A valid PreparedTransaction-shaped response for skipSend flows
+const FAKE_PREPARED_TX = {
+  transaction: Buffer.from('fake-unsigned-tx-bytes').toString('base64'),
+  blockhash: 'FakeBlocKHash1111111111111111111111111111111',
+  lastValidBlockHeight: 999,
+  signer: 'SignerPubkey11111111111111111111111111111111',
+};
+
 describe('createSolanaIdentityRegistryClient', () => {
   describe('getAgent', () => {
     it('returns null when agent not found', async () => {
       const sdk = makeMockSdk({ getAgentByAgentId: mock(async () => null) });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.getAgent(1n);
       expect(result).toBeNull();
     });
@@ -36,7 +52,7 @@ describe('createSolanaIdentityRegistryClient', () => {
       const sdk = makeMockSdk({
         getAgentByAgentId: mock(async () => INDEXED_AGENT),
       });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.getAgent(5);
       expect(result?.agentId).toBe(5);
       expect(result?.owner).toBe(INDEXED_AGENT.owner);
@@ -50,7 +66,7 @@ describe('createSolanaIdentityRegistryClient', () => {
           throw new Error('network error');
         }),
       });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       await expect(client.getAgent(1n)).rejects.toThrow(
         'getAgent: failed to fetch agent'
       );
@@ -60,7 +76,7 @@ describe('createSolanaIdentityRegistryClient', () => {
   describe('getAgentByOwner', () => {
     it('returns null when wallet not found', async () => {
       const sdk = makeMockSdk({ getAgentByWallet: mock(async () => null) });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.getAgentByOwner('ABC123');
       expect(result).toBeNull();
     });
@@ -69,18 +85,30 @@ describe('createSolanaIdentityRegistryClient', () => {
       const sdk = makeMockSdk({
         getAgentByWallet: mock(async () => INDEXED_AGENT),
       });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.getAgentByOwner(INDEXED_AGENT.owner);
       expect(result?.agentId).toBe(5);
       expect(result?.owner).toBe(INDEXED_AGENT.owner);
       expect(result?.uri).toBe(INDEXED_AGENT.agent_uri);
+    });
+
+    it('rethrows SDK errors for getAgentByOwner', async () => {
+      const sdk = makeMockSdk({
+        getAgentByWallet: mock(async () => {
+          throw new Error('network error');
+        }),
+      });
+      const client = createSolanaIdentityRegistryClient(sdk as any);
+      await expect(client.getAgentByOwner('ABC123')).rejects.toThrow(
+        'getAgentByOwner: failed to fetch agent'
+      );
     });
   });
 
   describe('registerAgent', () => {
     it('calls sdk.registerAgent with tokenUri', async () => {
       const sdk = makeMockSdk();
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
         name: 'Test Agent',
@@ -91,7 +119,7 @@ describe('createSolanaIdentityRegistryClient', () => {
 
     it('uses custom agentURI when provided', async () => {
       const sdk = makeMockSdk();
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       await client.registerAgent({
         domain: 'agent.example.com',
         agentURI: 'https://custom.example.com/agent.json',
@@ -107,7 +135,7 @@ describe('createSolanaIdentityRegistryClient', () => {
           throw new Error('agent already exists');
         }),
       });
-      const client = createSolanaIdentityRegistryClient(sdk);
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
       });
@@ -115,15 +143,20 @@ describe('createSolanaIdentityRegistryClient', () => {
       expect(result.didRegister).toBe(false);
     });
 
-    it('returns unsignedTransaction when skipSend=true', async () => {
-      const sdk = makeMockSdk();
-      const client = createSolanaIdentityRegistryClient(sdk);
+    it('returns non-empty unsignedTransaction when skipSend=true', async () => {
+      // Mock must return PreparedTransaction shape ({transaction: base64}) so the
+      // registry client can decode it into a real Uint8Array.
+      const sdk = makeMockSdk({
+        registerAgent: mock(async () => FAKE_PREPARED_TX),
+      });
+      const client = createSolanaIdentityRegistryClient(sdk as any);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
         skipSend: true,
       });
       expect(result.didRegister).toBe(false);
       expect(result.unsignedTransaction).toBeInstanceOf(Uint8Array);
+      expect(result.unsignedTransaction?.length).toBeGreaterThan(0);
     });
   });
 });

@@ -125,3 +125,31 @@ describe('createSolanaReputationRegistryClient', () => {
     });
   });
 });
+
+describe('giveFeedback (input validation)', () => {
+  it('throws for score > 100', async () => {
+    const sdk = makeMockSdk();
+    const client = createSolanaReputationRegistryClient(sdk);
+    await expect(
+      client.giveFeedback({ targetAddress: ASSET_ADDR, score: 101 })
+    ).rejects.toThrow('invalid score 101');
+  });
+
+  it('throws for negative score', async () => {
+    const sdk = makeMockSdk();
+    const client = createSolanaReputationRegistryClient(sdk);
+    await expect(
+      client.giveFeedback({ targetAddress: ASSET_ADDR, score: -1 })
+    ).rejects.toThrow('invalid score -1');
+  });
+});
+
+describe('revokeFeedback (input validation)', () => {
+  it('throws for negative feedbackIndex', async () => {
+    const sdk = makeMockSdk();
+    const client = createSolanaReputationRegistryClient(sdk);
+    await expect(
+      client.revokeFeedback({ assetAddress: ASSET_ADDR, feedbackIndex: -1 })
+    ).rejects.toThrow('invalid feedbackIndex');
+  });
+});

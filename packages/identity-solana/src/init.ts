@@ -185,6 +185,15 @@ export async function createSolanaAgentIdentity(
   const autoRegister = resolveAutoRegister(options, env);
   const trustModels = options.trustModels ?? ['feedback'];
 
+  // Fail fast before any network I/O: writing placeholder domain on-chain is
+  // worse than an early error, and users expect config errors up front.
+  if (autoRegister && privateKey && !domain) {
+    throw new Error(
+      '[identity-solana] Missing required domain for auto-registration. ' +
+        'Set the AGENT_DOMAIN environment variable or provide options.domain.'
+    );
+  }
+
   // Create SDK (read-only if no private key)
   const sdk = createSdk({ privateKey, cluster, rpcUrl });
 
@@ -198,12 +207,17 @@ export async function createSolanaAgentIdentity(
   // Check existing registration (by domain owner if possible)
   let existing: SolanaAgentRecord | null = null;
   if (privateKey) {
+    const { Keypair } = await import('@solana/web3.js');
+    const kp = Keypair.fromSecretKey(privateKey);
     try {
-      const { Keypair } = await import('@solana/web3.js');
-      const kp = Keypair.fromSecretKey(privateKey);
       existing = await identityClient.getAgentByOwner(kp.publicKey.toString());
-    } catch {
-      // Ignore — agent may not be registered yet
+    } catch (err: unknown) {
+      // getAgentByOwner returns null for missing agents and throws for SDK/RPC errors.
+      // Propagate errors so callers know the registry is unavailable.
+      throw new Error(
+        `[identity-solana] Failed to look up existing agent for owner ${kp.publicKey.toString()}: ` +
+          (err instanceof Error ? err.message : String(err))
+      );
     }
   }
 
@@ -228,16 +242,8 @@ export async function createSolanaAgentIdentity(
     };
   }
 
-  // Auto-register if requested
+  // Auto-register if requested (domain already validated above)
   if (autoRegister && privateKey) {
-    // Fail fast: writing placeholder domain on-chain is worse than an early error.
-    if (!domain) {
-      throw new Error(
-        '[identity-solana] Missing required domain for auto-registration. ' +
-          'Set the AGENT_DOMAIN environment variable or provide options.domain.'
-      );
-    }
-
     logger?.info?.(
       '[identity-solana] No existing registration found, registering...'
     );
@@ -258,12 +264,12 @@ export async function createSolanaAgentIdentity(
         undefined,
         trustModels
       );
+      // We only have the agentId at this point, not a full record (owner/uri
+      // unknown). Return undefined rather than a semantically invalid stub.
       return {
         status: 'Found existing registration in 8004-Solana registry',
         trust,
-        record: result.agentId
-          ? { agentId: result.agentId, owner: '', uri: '', cluster }
-          : undefined,
+        record: undefined,
         domain,
         isNewRegistration: false,
         didRegister: false,
@@ -298,12 +304,12 @@ export async function createSolanaAgentIdentity(
       undefined,
       trustModels
     );
+    // owner/uri are not returned by registerAgent — omit the record rather than
+    // emitting a stub with empty fields. Callers can query getAgent for the full record.
     return {
       status: 'Successfully registered agent in 8004-Solana registry',
       trust,
-      record: result.agentId
-        ? { agentId: result.agentId, owner: '', uri: '', cluster }
-        : undefined,
+      record: undefined,
       domain,
       isNewRegistration: true,
       didRegister: true,

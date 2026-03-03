@@ -81,20 +81,19 @@ describe('hasRegistrationCapability', () => {
 });
 
 describe('parseSolanaPrivateKey (element range validation)', () => {
-  it('rejects arrays with values > 255', () => {
-    const bad = JSON.stringify([0, 256, 1]);
-    expect(parseSolanaPrivateKey(bad)).toBeNull();
-  });
+  const invalidCases: [string, unknown[]][] = [
+    ['value > 255', [0, 256, 1]],
+    ['negative value', [0, -1, 128]],
+    ['non-integer (float)', [0, 1.5, 128]],
+    ['non-numeric (string element)', [0, 'x', 128]],
+    ['Infinity', [0, Infinity, 1]],
+  ];
 
-  it('rejects arrays with negative values', () => {
-    const bad = JSON.stringify([0, -1, 128]);
-    expect(parseSolanaPrivateKey(bad)).toBeNull();
-  });
-
-  it('rejects arrays with non-integer values', () => {
-    const bad = JSON.stringify([0, 1.5, 128]);
-    expect(parseSolanaPrivateKey(bad)).toBeNull();
-  });
+  for (const [desc, arr] of invalidCases) {
+    it(`rejects array with ${desc}`, () => {
+      expect(parseSolanaPrivateKey(JSON.stringify(arr))).toBeNull();
+    });
+  }
 
   it('accepts a valid 64-byte key array', () => {
     const valid = JSON.stringify(Array.from({ length: 64 }, (_, i) => i % 256));
@@ -109,9 +108,9 @@ describe('resolveAutoRegister (presence not truthiness)', () => {
     expect(resolveAutoRegister({}, { REGISTER_IDENTITY: 'false' })).toBe(false);
   });
 
-  it('honours empty string REGISTER_IDENTITY as false', () => {
-    // Empty string is falsy but present — parseBoolean("", default=true) → true
-    // because empty string returns defaultValue; presence check ensures we read it.
+  it('treats empty string REGISTER_IDENTITY as true (parseBoolean falls back to default)', () => {
+    // Empty string is present in env (presence check passes) but parseBoolean("", default=true)
+    // returns the default value of true because empty string is treated as unset by parseBoolean.
     expect(resolveAutoRegister({}, { REGISTER_IDENTITY: '' })).toBe(true);
   });
 });
