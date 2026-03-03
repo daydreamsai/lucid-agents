@@ -12,3 +12,6 @@ export {
   type SSEWriteOptions,
 } from './sse';
 
+
+export { createAgentApp, type CreateAgentAppOptions } from '@lucid-agents/hono';
+export { withPayments, type WithPaymentsParams } from '@lucid-agents/hono';

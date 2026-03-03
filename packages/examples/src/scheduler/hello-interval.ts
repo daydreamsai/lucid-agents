@@ -29,7 +29,7 @@
 
 import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
-import { createAgentApp } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/http';
 import { http } from '@lucid-agents/http';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 import { createSchedulerWorker, scheduler } from '@lucid-agents/scheduler';

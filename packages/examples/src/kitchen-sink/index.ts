@@ -17,7 +17,7 @@
  *   CLIENT_PORT=8788                   Client agent port
  */
 
-import { createAgentApp } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/http';
 
 import { createKitchenSinkAgent } from './agent';
 import { createClientAgent, runA2ADemo } from './client';

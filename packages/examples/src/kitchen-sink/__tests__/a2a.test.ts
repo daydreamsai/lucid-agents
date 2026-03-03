@@ -1,5 +1,5 @@
 import { waitForTask } from '@lucid-agents/a2a';
-import { createAgentApp } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/http';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 import { createKitchenSinkAgent } from '../agent';
