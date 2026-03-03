@@ -89,11 +89,9 @@ describe('parseSolanaPrivateKey (element range validation)', () => {
     ['Infinity', [0, Infinity, 1]],
   ];
 
-  for (const [desc, arr] of invalidCases) {
-    it(`rejects array with ${desc}`, () => {
-      expect(parseSolanaPrivateKey(JSON.stringify(arr))).toBeNull();
-    });
-  }
+  it.each(invalidCases)('rejects array with %s', (_desc, arr) => {
+    expect(parseSolanaPrivateKey(JSON.stringify(arr))).toBeNull();
+  });
 
   it('accepts a valid 64-byte key array', () => {
     const valid = JSON.stringify(Array.from({ length: 64 }, (_, i) => i % 256));

@@ -1,3 +1,4 @@
+import { SolanaSDK } from '8004-solana';
 import { describe, expect, it, mock } from 'bun:test';
 
 import { createSolanaIdentityRegistryClient } from '../registries/identity';
@@ -24,6 +25,16 @@ function makeMockSdk(overrides: Partial<MockSolanaSDK> = {}): MockSolanaSDK {
   };
 }
 
+/**
+ * Typed factory: wraps the single unavoidable cast in one place so individual
+ * tests never need `as any`.
+ */
+function createClientFromMock(sdk: MockSolanaSDK) {
+  return createSolanaIdentityRegistryClient(
+    sdk as unknown as InstanceType<typeof SolanaSDK>
+  );
+}
+
 const INDEXED_AGENT = {
   agent_id: 5,
   owner: 'OwnerAddress111111111111111111111111111111',
@@ -43,7 +54,7 @@ describe('createSolanaIdentityRegistryClient', () => {
   describe('getAgent', () => {
     it('returns null when agent not found', async () => {
       const sdk = makeMockSdk({ getAgentByAgentId: mock(async () => null) });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.getAgent(1n);
       expect(result).toBeNull();
     });
@@ -52,7 +63,7 @@ describe('createSolanaIdentityRegistryClient', () => {
       const sdk = makeMockSdk({
         getAgentByAgentId: mock(async () => INDEXED_AGENT),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.getAgent(5);
       expect(result?.agentId).toBe(5);
       expect(result?.owner).toBe(INDEXED_AGENT.owner);
@@ -66,7 +77,7 @@ describe('createSolanaIdentityRegistryClient', () => {
           throw new Error('network error');
         }),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       await expect(client.getAgent(1n)).rejects.toThrow(
         'getAgent: failed to fetch agent'
       );
@@ -76,7 +87,7 @@ describe('createSolanaIdentityRegistryClient', () => {
   describe('getAgentByOwner', () => {
     it('returns null when wallet not found', async () => {
       const sdk = makeMockSdk({ getAgentByWallet: mock(async () => null) });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.getAgentByOwner('ABC123');
       expect(result).toBeNull();
     });
@@ -85,7 +96,7 @@ describe('createSolanaIdentityRegistryClient', () => {
       const sdk = makeMockSdk({
         getAgentByWallet: mock(async () => INDEXED_AGENT),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.getAgentByOwner(INDEXED_AGENT.owner);
       expect(result?.agentId).toBe(5);
       expect(result?.owner).toBe(INDEXED_AGENT.owner);
@@ -98,7 +109,7 @@ describe('createSolanaIdentityRegistryClient', () => {
           throw new Error('network error');
         }),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       await expect(client.getAgentByOwner('ABC123')).rejects.toThrow(
         'getAgentByOwner: failed to fetch agent'
       );
@@ -108,7 +119,7 @@ describe('createSolanaIdentityRegistryClient', () => {
   describe('registerAgent', () => {
     it('calls sdk.registerAgent with tokenUri', async () => {
       const sdk = makeMockSdk();
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
         name: 'Test Agent',
@@ -119,7 +130,7 @@ describe('createSolanaIdentityRegistryClient', () => {
 
     it('uses custom agentURI when provided', async () => {
       const sdk = makeMockSdk();
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       await client.registerAgent({
         domain: 'agent.example.com',
         agentURI: 'https://custom.example.com/agent.json',
@@ -135,7 +146,7 @@ describe('createSolanaIdentityRegistryClient', () => {
           throw new Error('agent already exists');
         }),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
       });
@@ -149,7 +160,7 @@ describe('createSolanaIdentityRegistryClient', () => {
       const sdk = makeMockSdk({
         registerAgent: mock(async () => FAKE_PREPARED_TX),
       });
-      const client = createSolanaIdentityRegistryClient(sdk as any);
+      const client = createClientFromMock(sdk);
       const result = await client.registerAgent({
         domain: 'agent.example.com',
         skipSend: true,
