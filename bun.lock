@@ -185,6 +185,7 @@
         "@lucid-agents/scheduler": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
+        "@lucid-agents/xmpt": "workspace:*",
         "@lucid-dreams/agent-auth": "latest",
         "@x402/core": "catalog:",
         "@x402/evm": "catalog:",
@@ -353,6 +354,19 @@
       },
       "peerDependencies": {
         "thirdweb": "^5.84.0",
+      },
+    },
+    "packages/xmpt": {
+      "name": "@lucid-agents/xmpt",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@lucid-agents/core": "workspace:*",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
       },
     },
   },
@@ -722,6 +736,8 @@
     "@lucid-agents/types": ["@lucid-agents/types@workspace:packages/types"],
 
     "@lucid-agents/wallet": ["@lucid-agents/wallet@workspace:packages/wallet"],
+
+    "@lucid-agents/xmpt": ["@lucid-agents/xmpt@workspace:packages/xmpt"],
 
     "@lucid-dreams/agent-auth": ["@lucid-dreams/agent-auth@0.2.24", "", { "dependencies": { "@lucid-dreams/sdk": "^0.2.24", "viem": "^2.38.5" } }, "sha512-QiJQ2FTJXtd1o6c1fkEq/qawBJbhZdmGukwt+B8LztTmjjkdhfRZvWbNk3DUBIZIPsbInWdwbgPAUkzGMUNyDg=="],
 
@@ -3119,7 +3135,7 @@
 
     "@hey-api/openapi-ts/semver": ["semver@7.7.2", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-RF0Fw+rO5AMf9MAyaRXI4AV0Ulj5lMHqVxxdSgiVbixSCXoEmmX/jk0CuJw4+3SqroYO9VoUh+HcuJivvtJemA=="],
 
-    "@lucid-agents/examples/bun-types": ["bun-types@1.3.9", "", { "dependencies": { "@types/node": "*" } }, "sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg=="],
+    "@lucid-agents/examples/bun-types": ["bun-types@1.3.10", "", { "dependencies": { "@types/node": "*" } }, "sha512-tcpfCCl6XWo6nCVnpcVrxQ+9AYN1iqMIzgrSKYMB/fjLtV2eyAVEg7AxQJuCq/26R6HpKWykQXuSOq/21RYcbg=="],
 
     "@manypkg/find-root/@types/node": ["@types/node@12.20.55", "", {}, "sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ=="],
 
