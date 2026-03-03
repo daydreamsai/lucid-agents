@@ -98,6 +98,7 @@ async function buildPackages() {
     '@lucid-agents/identity',
     '@lucid-agents/a2a',
     '@lucid-agents/ap2',
+    '@lucid-agents/xmpt',
     '@lucid-agents/http',
     '@lucid-agents/scheduler',
 
