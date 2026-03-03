@@ -8,6 +8,7 @@ import type { EntrypointsRuntime } from './entrypoint';
 import type { AnalyticsRuntime } from '../analytics';
 import type { SchedulerRuntime } from '../scheduler';
 import type { AgentCore } from './agent';
+import type { XMPTRuntime } from '../xmpt';
 
 /**
  * Agent runtime interface.
@@ -27,6 +28,7 @@ export type AgentRuntime = {
   a2a?: A2ARuntime;
   ap2?: AP2Runtime;
   scheduler?: SchedulerRuntime;
+  xmpt?: XMPTRuntime;
   handlers?: AgentHttpHandlers;
   entrypoints: EntrypointsRuntime;
   manifest: ManifestRuntime;

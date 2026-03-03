@@ -1,6 +1,7 @@
 export * from './core';
 export type { BuildContext } from './core';
 export type { Extension } from './core';
+export * from './xmpt/index';
 export * from './a2a';
 export * from './analytics';
 export * from './ap2';
