@@ -9,7 +9,6 @@ import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
-import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import { beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
@@ -102,17 +101,6 @@ describe('Pong agent — ping entrypoint', () => {
 
 describe('A2A task lifecycle — in-process', () => {
   it('creates a task and gets a completed result via app.fetch', async () => {
-    // Build a lightweight ping agent (client only)
-    const pingAgent = await createAgent({
-      name: 'test-ping-agent',
-      version: '1.0.0',
-    })
-      .use(a2a())
-      .build();
-
-    const pingA2A = pingAgent.a2a as A2ARuntime;
-    expect(pingA2A).toBeDefined();
-
     // Build a server-side pong agent backed by app.fetch
     const pongAgent = await createAgent({
       name: 'in-process-pong',

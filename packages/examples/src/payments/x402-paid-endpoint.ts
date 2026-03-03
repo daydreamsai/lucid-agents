@@ -2,9 +2,10 @@
  * x402 Paid Endpoint Example
  *
  * Demonstrates a minimal paid HTTP endpoint using x402 protocol.
- * The agent exposes two entrypoints:
- *   - /entrypoints/free-info/invoke   — free, no payment required
- *   - /entrypoints/premium-data/invoke — requires x402 payment
+ * The agent exposes three entrypoints:
+ *   - /entrypoints/free-info/invoke    — free, no payment required
+ *   - /entrypoints/premium-data/invoke — requires x402 payment ($0.01)
+ *   - /entrypoints/deep-analysis/invoke — requires x402 payment ($0.10)
  *
  * Run with:
  *   PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddress \
@@ -100,7 +101,8 @@ export async function createPaidEndpointAgent() {
       summary: z.string(),
     }),
     handler: async ctx => {
-      const words = ctx.input.text.trim().split(/\s+/);
+      const trimmed = ctx.input.text.trim();
+      const words = trimmed ? trimmed.split(/\s+/) : [];
       return {
         output: {
           wordCount: words.length,

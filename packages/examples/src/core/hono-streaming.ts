@@ -2,9 +2,10 @@
  * Hono SSE Streaming Example
  *
  * Demonstrates streaming responses via Hono's SSE support.
- * The agent exposes two streaming entrypoints:
+ * The agent exposes three streaming entrypoints:
  *   - char-stream  — emits each character as a delta event
  *   - count-stream — emits a numeric countdown then a final message
+ *   - word-stream  — emits text word by word
  *
  * Run with: bun run packages/examples/src/core/hono-streaming.ts
  *
@@ -98,7 +99,8 @@ export async function createStreamingAgent() {
     output: z.object({ wordCount: z.number() }),
     streaming: true,
     stream: async (ctx, emit) => {
-      const words = ctx.input.text.trim().split(/\s+/);
+      const trimmed = ctx.input.text.trim();
+      const words = trimmed ? trimmed.split(/\s+/) : [];
 
       for (const word of words) {
         await emit({ kind: 'delta', delta: word + ' ', mime: 'text/plain' });

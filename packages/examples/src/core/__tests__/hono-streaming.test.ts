@@ -106,4 +106,9 @@ describe('word-stream entrypoint', () => {
     });
     expect(text).toContain('"wordCount":4');
   });
+
+  it('returns wordCount=0 for empty string input', async () => {
+    const { text } = await stream(app, 'word-stream', { text: '' });
+    expect(text).toContain('"wordCount":0');
+  });
 });

@@ -4,7 +4,7 @@
  * Unit/contract tests — all calls go via app.fetch(), no real network.
  */
 
-import { beforeAll, describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 import { createMultiRouteAgent } from '../http-multi-route';
 
@@ -31,6 +31,13 @@ async function invoke(
 
 let app: App;
 
+// Capture original values so we can restore them after tests
+const originalEnv = {
+  PAYMENTS_RECEIVABLE_ADDRESS: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
+  FACILITATOR_URL: process.env.FACILITATOR_URL,
+  NETWORK: process.env.NETWORK,
+};
+
 beforeAll(async () => {
   // Do NOT set payment env vars — we want payments disabled in tests
   // so that paid entrypoints are called without x402 paywall validation
@@ -41,6 +48,20 @@ beforeAll(async () => {
 
   const result = await createMultiRouteAgent();
   app = result.app;
+});
+
+afterAll(() => {
+  // Restore env vars to avoid leaking state into other test suites
+  if (originalEnv.PAYMENTS_RECEIVABLE_ADDRESS !== undefined) {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      originalEnv.PAYMENTS_RECEIVABLE_ADDRESS;
+  }
+  if (originalEnv.FACILITATOR_URL !== undefined) {
+    process.env.FACILITATOR_URL = originalEnv.FACILITATOR_URL;
+  }
+  if (originalEnv.NETWORK !== undefined) {
+    process.env.NETWORK = originalEnv.NETWORK;
+  }
 });
 
 // ── Free route ────────────────────────────────────────────────────────────────

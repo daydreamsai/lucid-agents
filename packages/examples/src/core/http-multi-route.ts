@@ -76,7 +76,8 @@ export async function createMultiRouteAgent() {
     }),
     handler: async ctx => {
       const { text } = ctx.input;
-      const words = text.trim().split(/\s+/);
+      const trimmed = text.trim();
+      const words = trimmed ? trimmed.split(/\s+/) : [];
       const preview = words.slice(0, 20).join(' ');
       return {
         output: {

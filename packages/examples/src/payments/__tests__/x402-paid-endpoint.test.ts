@@ -5,7 +5,7 @@
  * We build the agent in-process and test via app.fetch().
  */
 
-import { beforeAll, describe, expect, it } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 import { createPaidEndpointAgent } from '../x402-paid-endpoint';
 
@@ -36,6 +36,13 @@ async function invoke(
 
 let app: App;
 
+// Capture original values so we can restore them after tests
+const originalEnv = {
+  PAYMENTS_RECEIVABLE_ADDRESS: process.env.PAYMENTS_RECEIVABLE_ADDRESS,
+  FACILITATOR_URL: process.env.FACILITATOR_URL,
+  NETWORK: process.env.NETWORK,
+};
+
 beforeAll(async () => {
   // Clear payment env vars so x402 paywall validation is skipped in tests.
   // The agent still builds; entrypoints return 200 without a payment header.
@@ -45,6 +52,20 @@ beforeAll(async () => {
 
   const result = await createPaidEndpointAgent();
   app = result.app;
+});
+
+afterAll(() => {
+  // Restore env vars to avoid leaking state into other test suites
+  if (originalEnv.PAYMENTS_RECEIVABLE_ADDRESS !== undefined) {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      originalEnv.PAYMENTS_RECEIVABLE_ADDRESS;
+  }
+  if (originalEnv.FACILITATOR_URL !== undefined) {
+    process.env.FACILITATOR_URL = originalEnv.FACILITATOR_URL;
+  }
+  if (originalEnv.NETWORK !== undefined) {
+    process.env.NETWORK = originalEnv.NETWORK;
+  }
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -76,7 +97,7 @@ describe('premium-data entrypoint', () => {
       expect(body?.output.data as string).toContain('test query');
     } else {
       // 402 Payment Required is the expected paywall response
-      expect([402, 200]).toContain(res.status);
+      expect(res.status).toBe(402);
     }
   });
 
@@ -103,7 +124,7 @@ describe('deep-analysis entrypoint', () => {
       expect(body?.output.wordCount as number).toBeGreaterThan(0);
       expect(typeof body?.output.sentiment).toBe('string');
     } else {
-      expect([402, 200]).toContain(res.status);
+      expect(res.status).toBe(402);
     }
   });
 });
