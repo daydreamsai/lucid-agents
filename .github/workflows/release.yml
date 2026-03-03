@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_ci_gates:
+        description: 'Skip CI gates (not recommended)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,11 +31,23 @@ permissions:
   id-token: write
 
 jobs:
+  ci-gates:
+    name: CI Gates
+    if: ${{ !inputs.skip_ci_gates }}
+    uses: ./.github/workflows/ci-gates.yml
+    with:
+      skip-integration-tests: false
+      skip-scaffold-tests: true
+
   release:
     name: Publish Release
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.ref_type == 'branch'
+    needs: [ci-gates]
+    if: |
+      always() &&
+      github.ref_type == 'branch' &&
+      (needs.ci-gates.result == 'success' || inputs.skip_ci_gates)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
