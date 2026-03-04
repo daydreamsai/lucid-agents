@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "test": "echo \"No tests yet\" && exit 0",
+    "test": "bun test",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",

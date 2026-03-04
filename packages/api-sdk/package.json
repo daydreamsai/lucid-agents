@@ -38,8 +38,8 @@
   "scripts": {
     "clean": "rm -rf src/sdk",
     "generate": "bun run codegen.ts",
-    "build": "echo \"api-sdk: generated package, skipping build\" && exit 0",
-    "test": "echo \"No tests yet\" && exit 0",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json --noEmit",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",

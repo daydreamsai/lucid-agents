@@ -16,13 +16,10 @@ export const REQUIRED_SCRIPTS = [
   "format:check",
 ] as const;
 
-/** Packages that are config-only and exempt from the full policy. */
+/** Package directory names that are config-only and exempt from the full policy. */
 export const SKIP_PACKAGES = [
   "eslint-config",
   "prettier-config",
-  "tsconfig.base.json",
-  "tsconfig.build.base.json",
-  "tsup.config.base.ts",
 ] as const;
 
 export type RequiredScript = (typeof REQUIRED_SCRIPTS)[number];

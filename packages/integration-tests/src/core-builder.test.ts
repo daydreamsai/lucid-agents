@@ -31,10 +31,10 @@ describe("Core + HTTP integration", () => {
   });
 
   /**
-   * Verifies that extensions can be chained via .use() and the
+   * Verifies that an extension can be chained via .use() and the
    * resulting builder still exposes .build().
    */
-  it("agent builder supports chaining multiple extensions", () => {
+  it("agent builder supports chaining an extension", () => {
     const chained = createAgent(META).use(http());
     expect(typeof chained.build).toBe("function");
   });

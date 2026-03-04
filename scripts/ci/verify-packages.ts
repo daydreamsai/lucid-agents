@@ -11,18 +11,11 @@ import { REQUIRED_SCRIPTS, SKIP_PACKAGES } from "./policy";
 const ROOT = resolve(import.meta.dir, "../..");
 const PACKAGES_DIR = join(ROOT, "packages");
 
+/** Shape of a package.json relevant to policy checking. */
 interface PackageJson {
   name?: string;
   private?: boolean;
   scripts?: Record<string, string>;
-}
-
-function isDirectory(path: string): boolean {
-  try {
-    return Bun.file(path).size === undefined; // fallback below
-  } catch {
-    return false;
-  }
 }
 
 let hasErrors = false;
@@ -39,8 +32,18 @@ for (const entry of entries) {
   // Skip config-only packages
   if ((SKIP_PACKAGES as readonly string[]).includes(entry)) continue;
 
-  const raw = readFileSync(pkgJsonPath, "utf-8");
-  const pkg: PackageJson = JSON.parse(raw);
+  let pkg: PackageJson;
+  try {
+    const raw = readFileSync(pkgJsonPath, "utf-8");
+    pkg = JSON.parse(raw);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `❌ Failed to read/parse package.json at ${pkgJsonPath}: ${message}`
+    );
+    hasErrors = true;
+    continue;
+  }
 
   // Skip private packages
   if (pkg.private) continue;

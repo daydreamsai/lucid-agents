@@ -11,7 +11,7 @@ import { REQUIRED_SCRIPTS, SKIP_PACKAGES } from "./policy";
 const ROOT = resolve(import.meta.dir, "../..");
 const PACKAGES_DIR = join(ROOT, "packages");
 
-/** Default script commands when missing */
+/** Default script commands when missing. */
 const DEFAULTS: Record<string, string> = {
   build: "tsup",
   test: 'echo "No tests yet" && exit 0',
@@ -30,8 +30,19 @@ for (const entry of entries) {
   if (!existsSync(pkgJsonPath)) continue;
   if ((SKIP_PACKAGES as readonly string[]).includes(entry)) continue;
 
-  const raw = readFileSync(pkgJsonPath, "utf-8");
-  const pkg = JSON.parse(raw);
+  let raw: string;
+  let pkg: Record<string, any>;
+  try {
+    raw = readFileSync(pkgJsonPath, "utf-8");
+    pkg = JSON.parse(raw);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Failed to read/parse package.json at ${pkgJsonPath}: ${message}`,
+      { cause: err }
+    );
+  }
+
   if (pkg.private) continue;
 
   const scripts = pkg.scripts ?? {};
@@ -46,7 +57,15 @@ for (const entry of entries) {
 
   if (modified) {
     pkg.scripts = scripts;
-    writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+    try {
+      writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Failed to write package.json at ${pkgJsonPath}: ${message}`,
+        { cause: err }
+      );
+    }
     console.log(`✏️  Updated ${pkg.name ?? entry}`);
     changed++;
   }

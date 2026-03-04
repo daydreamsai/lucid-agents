@@ -45,7 +45,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "bun test"
   },
   "dependencies": {
     "zod": "catalog:",
