@@ -54,6 +54,9 @@ jobs:
       - name: CI Gate — Typecheck
         run: bun run type-check
 
+      - name: CI Gate — Format check
+        run: bun run format:check
+
       - name: CI Gate — Lint
         run: bun run lint
 

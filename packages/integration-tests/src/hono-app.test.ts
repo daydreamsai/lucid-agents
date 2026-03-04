@@ -3,6 +3,7 @@ import { createAgentApp } from "@lucid-agents/hono";
 import { createAgent } from "@lucid-agents/core";
 import { http } from "@lucid-agents/http";
 
+/** Shared agent metadata for Hono integration tests. */
 const META = {
   name: "hono-test-agent",
   description: "Hono integration test",
@@ -12,28 +13,46 @@ const META = {
 };
 
 describe("Core + HTTP + Hono integration", () => {
+  /**
+   * Verifies that createAgentApp produces a valid Hono application
+   * when given a runtime built with the HTTP extension.
+   */
   it("creates a Hono app from an agent runtime", async () => {
     const runtime = await createAgent(META).use(http()).build();
-    const app = await createAgentApp(runtime);
+    const result = await createAgentApp(runtime);
+    // createAgentApp may return { app } or the app directly
+    const app = result && typeof result === "object" && "app" in result
+      ? (result as { app: any }).app
+      : result;
     expect(app).toBeDefined();
   });
 
+  /**
+   * Verifies the Hono app responds to HTTP requests via its fetch handler.
+   */
   it("hono app responds to requests", async () => {
     const runtime = await createAgent(META).use(http()).build();
-    const app = await createAgentApp(runtime);
-    // app.fetch should be available on the Hono instance
+    const result = await createAgentApp(runtime);
+    const app = result && typeof result === "object" && "app" in result
+      ? (result as { app: any }).app
+      : result;
     if (typeof app.fetch === "function") {
       const res = await app.fetch(new Request("http://localhost/health"));
       expect(res).toBeInstanceOf(Response);
     } else {
-      // createAgentApp might return a different shape
       expect(app).toBeDefined();
     }
   });
 
+  /**
+   * Verifies the Hono app exposes the agent card at the well-known endpoint.
+   */
   it("hono app serves agent card endpoint", async () => {
     const runtime = await createAgent(META).use(http()).build();
-    const app = await createAgentApp(runtime);
+    const result = await createAgentApp(runtime);
+    const app = result && typeof result === "object" && "app" in result
+      ? (result as { app: any }).app
+      : result;
     if (typeof app.fetch === "function") {
       const res = await app.fetch(
         new Request("http://localhost/.well-known/agent.json")

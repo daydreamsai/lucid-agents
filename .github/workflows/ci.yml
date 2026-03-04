@@ -165,31 +165,22 @@ jobs:
 
       - name: Scaffold ${{ matrix.template }} with ${{ matrix.adapter }}
         run: |
+          set -euo pipefail
           mkdir -p /tmp/scaffold-test
           cd /tmp/scaffold-test
-          # Use the CLI to create a new agent from template
           node ${{ github.workspace }}/packages/cli/dist/index.js create test-agent \
             --template ${{ matrix.template }} \
             --adapter ${{ matrix.adapter }} \
-            --non-interactive \
-            2>&1 || echo "Scaffold exited (may need interactive prompts — skipping)"
+            --non-interactive
 
       - name: Install scaffolded project dependencies
-        if: success()
         run: |
-          if [ -d /tmp/scaffold-test/test-agent ]; then
-            cd /tmp/scaffold-test/test-agent
-            bun install 2>&1 || echo "Install completed with warnings"
-          else
-            echo "No scaffolded project found — template may require interactive mode"
-          fi
+          set -euo pipefail
+          cd /tmp/scaffold-test/test-agent
+          bun install
 
       - name: Type-check scaffolded project
-        if: success()
         run: |
-          if [ -f /tmp/scaffold-test/test-agent/tsconfig.json ]; then
-            cd /tmp/scaffold-test/test-agent
-            bunx tsc --noEmit 2>&1 || echo "Type-check completed with issues"
-          else
-            echo "No tsconfig.json — skipping type-check"
-          fi
+          set -euo pipefail
+          cd /tmp/scaffold-test/test-agent
+          bunx tsc --noEmit
