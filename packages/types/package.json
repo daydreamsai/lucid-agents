@@ -56,6 +56,11 @@
       "import": "./dist/wallets/index.js",
       "default": "./dist/wallets/index.js"
     },
+    "./xmpt": {
+      "types": "./dist/xmpt/index.d.ts",
+      "import": "./dist/xmpt/index.js",
+      "default": "./dist/xmpt/index.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
