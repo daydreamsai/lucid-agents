@@ -273,6 +273,23 @@
         "typescript": "^5.9.2",
       },
     },
+    "packages/identity-solana": {
+      "name": "@lucid-agents/identity-solana",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+      },
+      "devDependencies": {
+        "@lucid-agents/eslint-config": "workspace:*",
+        "@lucid-agents/prettier-config": "workspace:*",
+        "@solana/web3.js": "^1.98.0",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@solana/web3.js": "^1.95.0",
+      },
+    },
     "packages/payments": {
       "name": "@lucid-agents/payments",
       "version": "2.5.0",
@@ -719,6 +736,8 @@
     "@lucid-agents/http": ["@lucid-agents/http@workspace:packages/http"],
 
     "@lucid-agents/identity": ["@lucid-agents/identity@workspace:packages/identity"],
+
+    "@lucid-agents/identity-solana": ["@lucid-agents/identity-solana@workspace:packages/identity-solana"],
 
     "@lucid-agents/payments": ["@lucid-agents/payments@workspace:packages/payments"],
 
