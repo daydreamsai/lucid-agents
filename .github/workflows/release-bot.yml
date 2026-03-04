@@ -36,6 +36,21 @@ jobs:
       - name: Build packages
         run: bun run build:packages
 
+      - name: CI Gate — Verify package policy
+        run: bun run scripts/ci/verify-packages.ts
+
+      - name: CI Gate — Typecheck
+        run: bun run type-check
+
+      - name: CI Gate — Lint
+        run: bun run lint
+
+      - name: CI Gate — Tests
+        run: bun test
+
+      - name: CI Gate — Integration tests
+        run: cd packages/integration-tests && bun test
+
       - name: Configure git user
         run: |
           git config user.name "github-actions[bot]"
