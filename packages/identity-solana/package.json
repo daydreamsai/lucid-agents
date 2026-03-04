@@ -1,0 +1,42 @@
+{
+  "name": "@lucid-agents/identity-solana",
+  "version": "0.1.0",
+  "description": "Solana identity plugin for Lucid Agents SDK",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "8004-solana": "*",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "peerDependenciesMeta": {
+    "8004-solana": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@lucid-agents/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@solana/web3.js": "^1.98.0",
+    "bun-types": "^1.2.4",
+    "typescript": "^5.8.2"
+  }
+}
