@@ -1,1 +1,0 @@
-**Planning full package implementation****Designing detailed package module structure****Detailing identity module core logic****Completing client instantiation and identity methods**
