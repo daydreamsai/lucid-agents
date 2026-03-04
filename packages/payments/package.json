@@ -42,7 +42,16 @@
     "stripe": "catalog:",
     "zod": "catalog:"
   },
+  "peerDependencies": {
+    "@circle-fin/x402-batching": "^2.0.4"
+  },
+  "peerDependenciesMeta": {
+    "@circle-fin/x402-batching": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@circle-fin/x402-batching": "^2.0.4",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "@types/pg": "^8.11.10"

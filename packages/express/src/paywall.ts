@@ -3,16 +3,15 @@ import {
   paymentMiddlewareFromConfig,
   type SchemeRegistration,
 } from '@x402/express';
-import { ExactEvmScheme } from '@x402/evm/exact/server';
 import {
-  HTTPFacilitatorClient,
   type FacilitatorConfig,
   type RouteConfig,
 } from '@x402/core/server';
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
-  createFacilitatorAuthHeaders,
+  createPaymentSchemeRegistrations,
+  createPaymentsFacilitatorClient,
   resolvePrice,
   resolvePayTo,
   validatePaymentsConfig,
@@ -25,12 +24,6 @@ import {
 } from '@lucid-agents/payments';
 
 const DEFAULT_SCHEME = 'exact';
-const DEFAULT_SCHEMES: SchemeRegistration[] = [
-  {
-    network: 'eip155:*',
-    server: new ExactEvmScheme(),
-  },
-];
 
 type PaymentMiddlewareFactory = typeof paymentMiddlewareFromConfig;
 
@@ -44,25 +37,6 @@ export type WithPaymentsParams = {
   middlewareFactory?: PaymentMiddlewareFactory;
   runtime?: AgentRuntime;
 };
-
-function addFacilitatorAuth(
-  facilitator: FacilitatorConfig,
-  token?: string
-): FacilitatorConfig {
-  if (facilitator.createAuthHeaders) {
-    return facilitator;
-  }
-
-  const authHeaders = createFacilitatorAuthHeaders(token);
-  if (!authHeaders) {
-    return facilitator;
-  }
-
-  return {
-    ...facilitator,
-    createAuthHeaders: async () => authHeaders,
-  };
-}
 
 export function withPayments({
   app,
@@ -89,14 +63,6 @@ export function withPayments({
     `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`;
   const postMimeType =
     kind === 'stream' ? 'text/event-stream' : 'application/json';
-
-  const baseFacilitator: FacilitatorConfig =
-    facilitator ??
-    ({ url: payments.facilitatorUrl } satisfies FacilitatorConfig);
-  const resolvedFacilitator = addFacilitatorAuth(
-    baseFacilitator,
-    payments.facilitatorAuth
-  );
 
   const postRoute: RouteConfig = {
     accepts: {
@@ -167,7 +133,13 @@ export function withPayments({
     });
   }
 
-  const facilitatorClient = new HTTPFacilitatorClient(resolvedFacilitator);
+  const schemeRegistrations = createPaymentSchemeRegistrations(
+    payments
+  ) as SchemeRegistration[];
+  const facilitatorClient = createPaymentsFacilitatorClient({
+    payments,
+    facilitator,
+  });
   const routes: Record<string, RouteConfig> = {
     [`POST ${path}`]: postRoute,
     [`GET ${path}`]: getRoute,
@@ -176,7 +148,7 @@ export function withPayments({
   const middleware = middlewareFactory(
     routes,
     facilitatorClient,
-    DEFAULT_SCHEMES
+    schemeRegistrations
   ) as RequestHandler;
 
   app.use((req, res, next) => {

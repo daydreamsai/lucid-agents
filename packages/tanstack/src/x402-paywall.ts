@@ -7,6 +7,7 @@ import {
   x402ResourceServer,
   x402HTTPResourceServer,
   HTTPFacilitatorClient,
+  type FacilitatorClient,
   type FacilitatorConfig,
   type PaywallConfig,
   type RoutesConfig,
@@ -17,6 +18,16 @@ import {
 type RoutesConfigResolver =
   | RoutesConfig
   | (() => RoutesConfig | Promise<RoutesConfig>);
+
+type SchemeRegistration = {
+  network: string;
+  server: unknown;
+};
+
+type PaymentMiddlewareOptions = {
+  facilitatorClient?: FacilitatorClient;
+  schemeRegistrations?: SchemeRegistration[];
+};
 
 type AnyRequestServerOptions = RequestServerOptions<any, any>;
 type AnyRequestServerResult = RequestServerResult<any, any, any>;
@@ -157,7 +168,8 @@ function createPaymentHandler(
 export function paymentMiddleware(
   routes: RoutesConfigResolver,
   facilitator?: FacilitatorConfig,
-  paywall?: PaywallConfig
+  paywall?: PaywallConfig,
+  options?: PaymentMiddlewareOptions
 ) {
   let resolvedRoutes: RoutesConfig | null = null;
   let routesPromise: Promise<RoutesConfig> | null = null;
@@ -166,8 +178,15 @@ export function paymentMiddleware(
     resolvedRoutes = routes;
   }
 
-  const facilitatorClient = new HTTPFacilitatorClient(facilitator);
+  const facilitatorClient =
+    options?.facilitatorClient ?? new HTTPFacilitatorClient(facilitator);
   const resourceServer = new x402ResourceServer(facilitatorClient);
+  for (const registration of options?.schemeRegistrations ?? []) {
+    resourceServer.register(
+      registration.network as `${string}:${string}`,
+      registration.server as Parameters<typeof resourceServer.register>[1]
+    );
+  }
 
   let httpServer: x402HTTPResourceServer | null = null;
   let initPromise: Promise<void> | null = null;

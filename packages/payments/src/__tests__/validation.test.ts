@@ -42,4 +42,17 @@ describe('validatePaymentsConfig', () => {
       'Stripe destination mode currently supports only Base mainnet'
     );
   });
+
+  it('accepts arc testnet CAIP network for circle gateway compatibility', () => {
+    const config: PaymentsConfig = {
+      payTo: '0xabc0000000000000000000000000000000000000',
+      facilitatorUrl: 'https://facilitator.test',
+      network: 'eip155:5042002',
+      facilitator: 'circle-gateway',
+    };
+
+    expect(() =>
+      validatePaymentsConfig(config, config.network, 'echo')
+    ).not.toThrow();
+  });
 });

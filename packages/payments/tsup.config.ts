@@ -12,5 +12,8 @@ export default definePackageConfig({
     'viem',
     'stripe',
     'zod',
+    '@circle-fin/x402-batching',
+    '@circle-fin/x402-batching/client',
+    '@circle-fin/x402-batching/server',
   ],
 });

@@ -266,6 +266,37 @@ describe('withPayments helper', () => {
     const postRoute = capturedRoutes?.['POST /entrypoints/test/invoke'] ?? null;
     expect(typeof postRoute?.accepts?.payTo).toBe('function');
   });
+
+  it('uses gateway scheme registration when circle gateway facilitator is enabled', () => {
+    let capturedSchemes: any[] | null = null;
+    const app = { use: (..._args: any[]) => {} };
+    const middlewareFactory = (
+      routes: Record<string, any>,
+      facilitatorClient: any,
+      schemes?: any[]
+    ) => {
+      capturedSchemes = schemes ?? null;
+      return { routes, facilitator: facilitatorClient };
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: {
+        ...payments,
+        facilitator: 'circle-gateway',
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(true);
+    expect(capturedSchemes).toBeTruthy();
+    expect(capturedSchemes?.[0]?.server?.constructor?.name).toBe(
+      'GatewayEvmScheme'
+    );
+  });
 });
 
 describe('manifest building', () => {

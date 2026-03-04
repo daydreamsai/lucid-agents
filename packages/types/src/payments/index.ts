@@ -147,6 +147,18 @@ export type StripePaymentsConfig = {
 };
 
 /**
+ * Optional settlement facilitator mode.
+ * - Omitted: standard x402 facilitator behavior
+ * - circle-gateway: Circle Gateway batched settlement support
+ */
+export type PaymentsFacilitator = 'circle-gateway';
+
+/**
+ * Supported Circle Gateway chain aliases for buyer-side helpers.
+ */
+export type CircleGatewayChain = 'arcTestnet' | 'base' | 'baseSepolia';
+
+/**
  * Static destination configuration where payTo is known upfront.
  */
 export type StaticPaymentsDestination = {
@@ -170,6 +182,13 @@ export type PaymentsConfig = {
   facilitatorUrl: Resource;
   /** Optional bearer token used to authenticate facilitator requests. */
   facilitatorAuth?: string;
+  /** Optional facilitator mode for settlement routing. */
+  facilitator?: PaymentsFacilitator;
+  /**
+   * Optional Circle Gateway chain alias used by helper utilities.
+   * This does not replace `network`; it is used for gateway-specific helpers.
+   */
+  circleGatewayChain?: CircleGatewayChain;
   network: Network;
   /** Optional policy groups for payment controls and limits */
   policyGroups?: PaymentPolicyGroup[];

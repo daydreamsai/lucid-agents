@@ -3,6 +3,7 @@ import { privateKeyToAccount, type LocalAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
 import type { Hex } from './crypto';
+export { createGatewayFetch } from './gateway/fetch';
 
 const DEFAULT_MODEL = 'gpt-5';
 const DEFAULT_PROVIDER = 'openai';

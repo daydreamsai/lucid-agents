@@ -120,4 +120,39 @@ describe('withPayments middleware registration', () => {
     ] as any;
     expect(typeof postRoute?.accepts?.payTo).toBe('function');
   });
+
+  it('registers gateway evm scheme when circle gateway facilitator is enabled', () => {
+    let capturedSchemes: any[] | null = null;
+
+    const app = {
+      use: (..._args: any[]) => {},
+    };
+
+    const middlewareFactory = (
+      _routes: Record<string, unknown>,
+      _facilitatorClient: unknown,
+      schemes?: any[]
+    ) => {
+      capturedSchemes = schemes ?? null;
+      return (_req: unknown, _res: unknown, next: () => void) => next();
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: {
+        ...payments,
+        facilitator: 'circle-gateway',
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(true);
+    expect(capturedSchemes).toBeTruthy();
+    expect(capturedSchemes?.[0]?.server?.constructor?.name).toBe(
+      'GatewayEvmScheme'
+    );
+  });
 });

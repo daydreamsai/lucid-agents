@@ -32,6 +32,7 @@ export {
 } from './payto-resolver';
 export {
   createX402Fetch,
+  createGatewayFetch,
   accountFromPrivateKey,
   createX402LLM,
   x402LLM,
@@ -40,6 +41,18 @@ export {
   type WrappedFetch,
   type X402Account,
 } from './x402';
+export {
+  createCircleGatewayFacilitator,
+  createPaymentsFacilitatorClient,
+  createPaymentSchemeRegistrations,
+  isCircleGatewayFacilitator,
+} from './gateway/facilitator';
+export { depositToGateway } from './gateway/deposit';
+export type {
+  CircleGatewayConfig,
+  GatewayFetchOptions,
+  GatewayDepositOptions,
+} from './gateway/types';
 export {
   sanitizeAddress,
   normalizeAddress,
