@@ -1,11 +1,11 @@
 {
   "name": "@lucid-agents/identity-solana",
   "version": "0.1.0",
-  "description": "Solana identity plugin for Lucid Agents SDK",
+  "description": "Solana identity plugin for Lucid agents",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "README.md"
@@ -13,30 +13,24 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "rm -rf dist",
-    "test": "bun test",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "peerDependencies": {
-    "8004-solana": "*",
-    "@solana/web3.js": "^1.98.0"
-  },
-  "peerDependenciesMeta": {
-    "8004-solana": {
-      "optional": true
-    }
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*"
   },
-  "devDependencies": {
+  "peerDependencies": {
     "@solana/web3.js": "^1.98.0",
-    "bun-types": "^1.2.4",
-    "typescript": "^5.8.2"
+    "8004-solana": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
   }
 }

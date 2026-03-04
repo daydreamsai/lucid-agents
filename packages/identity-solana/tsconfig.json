@@ -1,20 +1,21 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
-    "strict": true,
     "skipLibCheck": true,
-    "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["bun-types"]
+    "isolatedModules": true,
+    "noEmitOnError": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["dist", "test", "node_modules"]
+  "exclude": ["dist", "test"]
 }

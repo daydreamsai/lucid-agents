@@ -1,94 +1,69 @@
+import type { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import type { TrustConfig } from "@lucid-agents/types/identity";
 
+export type AnyRecord = Record<string, unknown>;
 export type SolanaCluster = "mainnet-beta" | "devnet" | "testnet" | (string & {});
 
-export interface BrowserWalletAdapter {
-  publicKey?: string | { toBase58?: () => string; toString?: () => string };
+export interface BrowserWalletAdapterLike {
+  publicKey?: PublicKey | string | { toBase58: () => string };
   signTransaction?: (transaction: unknown) => Promise<unknown>;
   signAllTransactions?: (transactions: unknown[]) => Promise<unknown[]>;
-  sendTransaction?: (...args: unknown[]) => Promise<string>;
 }
 
 export interface IdentitySolanaConfig {
-  cluster: SolanaCluster;
+  privateKey?: number[];
+  cluster?: SolanaCluster;
   rpcUrl?: string;
-  privateKey?: Uint8Array;
-  wallet?: BrowserWalletAdapter;
-  agentDomain?: string;
-  registerIdentity: boolean;
+  domain?: string;
+  registerIdentity?: boolean;
   pinataJwt?: string;
-  atomEnabled: boolean;
+  atomEnabled?: boolean;
   skipSend?: boolean;
-}
-
-export interface RegisterIdentityParams {
-  agentDomain: string;
-  metadataUri?: string;
+  walletAdapter?: BrowserWalletAdapterLike;
+  identityProgramId?: string;
+  reputationProgramId?: string;
   trust?: TrustConfig;
-  skipSend?: boolean;
-  [key: string]: unknown;
+  commitment?: string;
+  sdk?: Record<string, unknown>;
 }
 
-export interface RevokeIdentityParams {
-  identityId?: string;
-  reason?: string;
-  skipSend?: boolean;
-  [key: string]: unknown;
-}
-
-export interface ReputationFeedbackParams {
-  to: string;
-  score: number;
-  comment?: string;
-  paid?: boolean;
-  skipSend?: boolean;
-  [key: string]: unknown;
-}
-
-export interface SolanaIdentityRegistrationResult {
-  address?: string;
-  identityId?: string;
-  txid?: string;
-  trust?: TrustConfig;
+export interface SolanaTrustMetadata {
   trustTier?: string;
-  asset?: unknown;
-  [key: string]: unknown;
+  asset?: string;
 }
 
-export interface SolanaTxResult {
-  txid?: string;
-  signature?: string;
-  [key: string]: unknown;
-}
-
-export interface SolanaRegistryIdentityClient {
-  register(params: RegisterIdentityParams): Promise<SolanaIdentityRegistrationResult>;
-  revoke(params: RevokeIdentityParams): Promise<SolanaTxResult>;
-}
-
-export interface SolanaRegistryReputationClient {
-  feedback(params: ReputationFeedbackParams): Promise<SolanaTxResult>;
-}
-
-export interface SolanaRegistryClients {
-  identity: SolanaRegistryIdentityClient;
-  reputation: SolanaRegistryReputationClient;
-}
-
-export type SolanaSdkFactory = (config: IdentitySolanaConfig) => Promise<unknown> | unknown;
-
-export interface IdentitySolanaOptions {
-  config?: Partial<IdentitySolanaConfig>;
-  clients?: SolanaRegistryClients | Promise<SolanaRegistryClients>;
-  sdkFactory?: SolanaSdkFactory;
+export interface RegistrySendOptions {
+  skipSend?: boolean;
 }
 
 export interface SolanaAgentIdentity {
+  id: string;
+  did: string;
   chain: "solana";
   cluster: SolanaCluster;
   address: string;
-  identityId?: string;
-  txid?: string;
+  domain?: string;
   trust?: TrustConfig;
-  raw?: unknown;
+}
+
+export interface SolanaRegistryClientState {
+  connection: Connection;
+  keypair?: Keypair;
+  address?: string;
+  identityClient?: unknown;
+  reputationClient?: unknown;
+}
+
+export interface IdentitySolanaPluginOptions {
+  config?: IdentitySolanaConfig;
+}
+
+export interface AgentPluginLike {
+  name: string;
+  setup?: (agent: AnyRecord) => Promise<void> | void;
+  onManifestBuild?: (manifest: AnyRecord, ctx?: AnyRecord) => Promise<AnyRecord> | AnyRecord;
+  hooks?: {
+    setup?: (agent: AnyRecord) => Promise<void> | void;
+    onManifestBuild?: (manifest: AnyRecord, ctx?: AnyRecord) => Promise<AnyRecord> | AnyRecord;
+  };
 }

@@ -1,13 +1,14 @@
 # @lucid-agents/identity-solana
 
-Solana identity plugin for Lucid Agents SDK, designed to mirror the EVM identity package API while keeping Solana dependencies isolated.
+Solana identity plugin for Lucid SDK, aligned with the `@lucid-agents/identity` (EVM) style API.
 
 ## Install
 
-```bash
-bun add @lucid-agents/identity-solana
-bun add @solana/web3.js 8004-solana
-```
+Add this package and keep Solana SDK dependencies as peers in your app:
+
+- `@lucid-agents/identity-solana`
+- `@solana/web3.js`
+- `8004-solana`
 
 ## Usage
 
@@ -16,7 +17,8 @@ import { createAgent } from "@lucid-agents/core";
 import { identitySolana, identitySolanaFromEnv } from "@lucid-agents/identity-solana";
 
 const agent = await createAgent({
-  name: "solana-agent"
+  name: "solana-agent",
+  description: "Agent with Solana registry identity"
 })
   .use(
     identitySolana({
@@ -31,55 +33,27 @@ const agent = await createAgent({
 - `identitySolana()`
 - `identitySolanaFromEnv()`
 - `createSolanaAgentIdentity()`
-- `createSolanaRegistryClients()`
+- `SolanaRegistryClients` (identity + reputation registry clients)
 - `createAgentCardWithSolanaIdentity()`
-- `mapSolanaTrustToTrustConfig()`
-- `SolanaRegistryClients` (type)
 
-## Environment Variables
+## Environment variables
 
-- `SOLANA_PRIVATE_KEY` JSON array (e.g. `[12,34,...]`)
-- `SOLANA_CLUSTER` default: `mainnet-beta`
-- `SOLANA_RPC_URL` optional custom RPC URL
-- `AGENT_DOMAIN` domain used for registration
-- `REGISTER_IDENTITY` `true|false`
-- `PINATA_JWT` optional metadata pinning JWT
-- `ATOM_ENABLED` `true|false`
+- `SOLANA_PRIVATE_KEY`: JSON array secret key bytes (optional for browser wallet mode)
+- `SOLANA_CLUSTER`: Solana cluster (`mainnet-beta` default)
+- `SOLANA_RPC_URL`: custom RPC URL override
+- `AGENT_DOMAIN`: domain for identity registration
+- `REGISTER_IDENTITY`: boolean, register on manifest build
+- `PINATA_JWT`: optional pinning token forwarded to SDK
+- `ATOM_ENABLED`: boolean forwarded to SDK
 
-## Browser wallets and `skipSend`
+## Browser wallet mode
 
-If a wallet adapter is provided and no `SOLANA_PRIVATE_KEY` is configured, `skipSend` is automatically enabled. This allows browser-wallet-first flows where transactions are prepared/signed externally.
+When using a browser wallet adapter and no `SOLANA_PRIVATE_KEY`, `skipSend` is auto-enabled unless explicitly set.
 
-You can still override explicitly per call:
-
-```ts
-await agent.sendSolanaFeedback({
-  to: "ReceiverPubkey1111111111111111111111111111111",
-  score: 1,
-  comment: "x402 settled",
-  skipSend: false
-});
-```
-
-## Programmatic registration
-
-```ts
-import {
-  createSolanaAgentIdentity,
-  identitySolanaFromEnv
-} from "@lucid-agents/identity-solana";
-
-const identity = await createSolanaAgentIdentity({
-  config: identitySolanaFromEnv(),
-  agentCard: {
-    domain: "agent.example",
-    metadataUri: "ipfs://..."
-  }
-});
-```
-
-## Tests
+## Local testing
 
 ```bash
-bun test packages/identity-solana
+bun test
 ```
+
+This package includes unit, integration (SDK-mocked), and plugin contract tests.
