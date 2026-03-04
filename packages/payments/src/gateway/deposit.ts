@@ -1,5 +1,4 @@
 import type { GatewayDepositOptions, GatewayDepositResult } from './types';
-import { GatewayClient } from '@circle-fin/x402-batching/client';
 
 /**
  * Default chain for deposit operations.
@@ -38,9 +37,10 @@ export async function depositToGateway(
     );
   }
 
-  if (!options.amount || parseFloat(options.amount) <= 0) {
+  const parsedAmount = parseFloat(options.amount);
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
     throw new Error(
-      '[agent-kit-payments:gateway] depositToGateway requires a positive amount'
+      '[agent-kit-payments:gateway] depositToGateway requires a positive numeric amount'
     );
   }
 
@@ -51,8 +51,11 @@ export async function depositToGateway(
     chain
   );
 
+  // Dynamic import to avoid hard failure when optional peer dep is missing
+  const { GatewayClient } = await import('@circle-fin/x402-batching/client');
+
   const client = new GatewayClient({
-    chain: chain as any,
+    chain: chain as import('@circle-fin/x402-batching/client').SupportedChainName,
     privateKey: options.privateKey as `0x${string}`,
   });
 

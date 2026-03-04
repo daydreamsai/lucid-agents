@@ -1,5 +1,4 @@
 import type { CircleGatewayConfig } from './types';
-import { BatchFacilitatorClient } from '@circle-fin/x402-batching/server';
 
 /**
  * Default Circle Gateway facilitator URL.
@@ -27,7 +26,11 @@ const DEFAULT_GATEWAY_URL = 'https://gateway.circle.com';
  * .use(payments({ config: { ...paymentsFromEnv(), facilitator: 'circle-gateway' } }))
  * ```
  */
-export function createCircleGatewayFacilitator(config?: CircleGatewayConfig) {
+export async function createCircleGatewayFacilitator(config?: CircleGatewayConfig) {
   const url = config?.facilitatorUrl ?? DEFAULT_GATEWAY_URL;
+
+  // Dynamic import to avoid hard failure when optional peer dep is missing
+  const { BatchFacilitatorClient } = await import('@circle-fin/x402-batching/server');
+
   return new BatchFacilitatorClient({ url });
 }

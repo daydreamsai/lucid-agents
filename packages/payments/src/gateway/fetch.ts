@@ -1,7 +1,6 @@
 import type { GatewayFetchOptions } from './types';
 import type { WrappedFetch } from '../x402';
 import { privateKeyToAccount } from 'viem/accounts';
-import { registerBatchScheme } from '@circle-fin/x402-batching/client';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 
@@ -33,7 +32,7 @@ const DEFAULT_CHAIN = 'base';
  * const response = await fetch('https://api.example.com/paid-endpoint');
  * ```
  */
-export function createGatewayFetch(options: GatewayFetchOptions): WrappedFetch {
+export async function createGatewayFetch(options: GatewayFetchOptions): Promise<WrappedFetch> {
   const chain = options.chain ?? DEFAULT_CHAIN;
 
   if (!options.privateKey) {
@@ -44,6 +43,9 @@ export function createGatewayFetch(options: GatewayFetchOptions): WrappedFetch {
 
   const account = privateKeyToAccount(options.privateKey as `0x${string}`);
   const signer = toClientEvmSigner(account);
+
+  // Dynamic import to avoid hard failure when optional peer dep is missing
+  const { registerBatchScheme } = await import('@circle-fin/x402-batching/client');
 
   // Create x402 client with composite scheme (Gateway + standard)
   const client = new x402Client();

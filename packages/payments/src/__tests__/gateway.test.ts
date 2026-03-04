@@ -185,7 +185,7 @@ describe('Circle Gateway Integration', () => {
       const { createCircleGatewayFacilitator } = await import(
         '../gateway/facilitator'
       );
-      const facilitator = createCircleGatewayFacilitator();
+      const facilitator = await createCircleGatewayFacilitator();
       expect(facilitator).toBeDefined();
       expect(facilitator.url).toBe('https://gateway.circle.com');
     });
@@ -194,7 +194,7 @@ describe('Circle Gateway Integration', () => {
       const { createCircleGatewayFacilitator } = await import(
         '../gateway/facilitator'
       );
-      const facilitator = createCircleGatewayFacilitator({
+      const facilitator = await createCircleGatewayFacilitator({
         facilitatorUrl: 'https://custom-gateway.example.com',
       });
       expect(facilitator.url).toBe('https://custom-gateway.example.com');
@@ -204,7 +204,7 @@ describe('Circle Gateway Integration', () => {
       const { createCircleGatewayFacilitator } = await import(
         '../gateway/facilitator'
       );
-      const facilitator = createCircleGatewayFacilitator();
+      const facilitator = await createCircleGatewayFacilitator();
       const result = await facilitator.verify(
         { x402Version: 2, payload: {} } as any,
         {
@@ -224,7 +224,7 @@ describe('Circle Gateway Integration', () => {
       const { createCircleGatewayFacilitator } = await import(
         '../gateway/facilitator'
       );
-      const facilitator = createCircleGatewayFacilitator();
+      const facilitator = await createCircleGatewayFacilitator();
       const result = await facilitator.settle(
         { x402Version: 2, payload: {} } as any,
         {
@@ -245,7 +245,7 @@ describe('Circle Gateway Integration', () => {
       const { createCircleGatewayFacilitator } = await import(
         '../gateway/facilitator'
       );
-      const facilitator = createCircleGatewayFacilitator();
+      const facilitator = await createCircleGatewayFacilitator();
       const supported = await facilitator.getSupported();
       expect(supported.kinds).toHaveLength(1);
       expect(supported.kinds[0].extra?.name).toBe('GatewayWalletBatched');
@@ -262,7 +262,7 @@ describe('Circle Gateway Integration', () => {
   describe('createGatewayFetch', () => {
     it('creates a wrapped fetch function', async () => {
       const { createGatewayFetch } = await import('../gateway/fetch');
-      const gFetch = createGatewayFetch({
+      const gFetch = await await createGatewayFetch({
         privateKey:
           '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
         chain: 'base',
@@ -273,14 +273,14 @@ describe('Circle Gateway Integration', () => {
 
     it('throws without privateKey', async () => {
       const { createGatewayFetch } = await import('../gateway/fetch');
-      expect(() => createGatewayFetch({ privateKey: '' })).toThrow(
+      expect(createGatewayFetch({ privateKey: '' })).rejects.toThrow(
         'requires a privateKey'
       );
     });
 
     it('defaults chain to base', async () => {
       const { createGatewayFetch } = await import('../gateway/fetch');
-      const gFetch = createGatewayFetch({
+      const gFetch = await await createGatewayFetch({
         privateKey:
           '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       });
@@ -290,7 +290,7 @@ describe('Circle Gateway Integration', () => {
     it('registers batch scheme with registerBatchScheme', async () => {
       mockRegister.mockClear();
       const { createGatewayFetch } = await import('../gateway/fetch');
-      createGatewayFetch({
+      await createGatewayFetch({
         privateKey:
           '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
         chain: 'base',
@@ -300,7 +300,7 @@ describe('Circle Gateway Integration', () => {
 
     it('fetch makes request and returns response', async () => {
       const { createGatewayFetch } = await import('../gateway/fetch');
-      const gFetch = createGatewayFetch({
+      const gFetch = await await createGatewayFetch({
         privateKey:
           '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       });
@@ -312,7 +312,7 @@ describe('Circle Gateway Integration', () => {
 
     it('fetch detects payment response header', async () => {
       const { createGatewayFetch } = await import('../gateway/fetch');
-      const gFetch = createGatewayFetch({
+      const gFetch = await await createGatewayFetch({
         privateKey:
           '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
       });
@@ -355,7 +355,7 @@ describe('Circle Gateway Integration', () => {
             '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
           amount: '0',
         })
-      ).rejects.toThrow('requires a positive amount');
+      ).rejects.toThrow('requires a positive numeric amount');
     });
 
     it('throws with negative amount', async () => {
@@ -366,7 +366,7 @@ describe('Circle Gateway Integration', () => {
             '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
           amount: '-5',
         })
-      ).rejects.toThrow('requires a positive amount');
+      ).rejects.toThrow('requires a positive numeric amount');
     });
 
     it('throws with empty amount', async () => {
@@ -377,7 +377,7 @@ describe('Circle Gateway Integration', () => {
             '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
           amount: '',
         })
-      ).rejects.toThrow('requires a positive amount');
+      ).rejects.toThrow('requires a positive numeric amount');
     });
 
     it('calls GatewayClient.deposit with correct amount', async () => {
@@ -484,9 +484,10 @@ describe('Circle Gateway Integration', () => {
       expect(mod.depositToGateway).toBeDefined();
     });
 
-    it('re-exports createGatewayFetch from x402', async () => {
+    it('x402 module exports GatewayFetchOptions type but not createGatewayFetch value', async () => {
       const mod = await import('../x402');
-      expect(mod.createGatewayFetch).toBeDefined();
+      // createGatewayFetch was moved to direct import from gateway/fetch
+      expect(mod.createGatewayFetch).toBeUndefined();
     });
 
     it('payments extension accepts facilitator option', async () => {

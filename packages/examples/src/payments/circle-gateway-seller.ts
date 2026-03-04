@@ -34,7 +34,9 @@ const agent = createAgent({
     payments({
       config: {
         ...paymentsFromEnv(),
-        facilitator: 'circle-gateway',
+        ...(process.env.CIRCLE_GATEWAY_FACILITATOR === 'true'
+          ? { facilitator: 'circle-gateway' as const }
+          : {}),
       },
     })
   );

@@ -30,11 +30,20 @@ export function paymentsFromEnv(
     process.env.DREAMS_AUTH_TOKEN;
 
   // Circle Gateway facilitator detection
+  const overridesWithFacilitator = configOverrides as
+    | (Partial<PaymentsConfig> & { facilitator?: string })
+    | undefined;
   const circleGatewayEnabled =
-    (configOverrides as any)?.facilitator === 'circle-gateway' ||
+    overridesWithFacilitator?.facilitator === 'circle-gateway' ||
     process.env.CIRCLE_GATEWAY_FACILITATOR === 'true';
+  const validGatewayChains = ['base', 'base-sepolia'];
   const circleGatewayChain =
     process.env.CIRCLE_GATEWAY_CHAIN ?? 'base';
+  if (circleGatewayEnabled && !validGatewayChains.includes(circleGatewayChain)) {
+    throw new Error(
+      `[agent-kit-payments] invalid CIRCLE_GATEWAY_CHAIN '${circleGatewayChain}'. Valid: ${validGatewayChains.join(', ')}`
+    );
+  }
 
   const baseConfig = {
     facilitatorUrl: facilitatorUrl as PaymentsConfig['facilitatorUrl'],
