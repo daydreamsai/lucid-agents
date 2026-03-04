@@ -1,0 +1,1 @@
+**Planning full identity-solana package****Detailing robust identity-solana code design****Finalizing plugin and example with tests plan****Detailing identity service and plugin implementation**
