@@ -5,6 +5,7 @@ import type {
   CreateSolanaAgentIdentityOptions,
   SolanaTrustConfig,
   SolanaAgentRegistration,
+  SolanaRegistryClients,
 } from './types';
 import { TrustTier } from './types';
 import { validateRegistration, validateCluster, validatePrivateKey } from './validation';
@@ -475,4 +476,37 @@ export async function revokeSolanaIdentity(params: {
     console.error('[identity-solana] Revoke failed:', error);
     return false;
   }
+}
+
+/**
+ * Create Solana Registry Clients for identity and reputation
+ * 
+ * @example
+ * const { identity, reputation } = createSolanaRegistryClients({
+ *   rpcUrl: 'https://api.devnet.solana.com',
+ *   cluster: 'devnet'
+ * });
+ */
+export function createSolanaRegistryClients(params: {
+  rpcUrl: string;
+  cluster?: 'mainnet-beta' | 'testnet' | 'devnet';
+}): SolanaRegistryClients {
+  const { rpcUrl, cluster = 'mainnet-beta' } = params;
+  
+  // Default program IDs for Solana identity/reputation registries
+  const IDENTITY_PROGRAM_ID = 'idenxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+  const REPUTATION_PROGRAM_ID = 'reputxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+  
+  return {
+    identity: {
+      programId: IDENTITY_PROGRAM_ID,
+      rpcUrl,
+      connection: null, // Will be initialized on first use
+    },
+    reputation: {
+      programId: REPUTATION_PROGRAM_ID,
+      rpcUrl,
+      connection: null,
+    },
+  };
 }
