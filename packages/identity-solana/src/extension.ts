@@ -96,7 +96,8 @@ export function identitySolana(
           throw new Error(
             `[identity-solana] Failed to initialize identity for domain "${config.domain ?? 'unknown'}": ${
               error instanceof Error ? error.message : String(error)
-            }`
+            }`,
+            { cause: error }
           );
         }
       }

@@ -11,6 +11,12 @@ interface AgentMailConfig {
   apiKey?: string;
 }
 
+// ============================================================================
+// Module-level shared mailbox for local transport (cross-instance messaging)
+// ============================================================================
+const localMailbox = new Map<string, Envelope[]>();
+const localSubscribers = new Map<string, Set<(envelope: Envelope) => void | Promise<void>>>();
+
 /**
  * Dispatch callbacks safely, handling async functions and catching errors
  */
@@ -25,11 +31,20 @@ function dispatchCallbacks(
   }
 }
 
+/**
+ * Notify subscribers for a specific inbox
+ */
+function notifySubscribers(inbox: string, envelope: Envelope): void {
+  const subs = localSubscribers.get(inbox);
+  if (subs) {
+    dispatchCallbacks(Array.from(subs), envelope);
+  }
+}
+
 export function createXmptRuntime(
   runtime: AgentRuntime,
   options: XmptExtensionOptions
 ): XmptRuntimeImpl {
-  const messages: Envelope[] = [];
   const callbacks: ((envelope: Envelope) => void | Promise<void>)[] = [];
   const inbox = options.inbox || 'agent@agentmail.to';
   const transportMode = options.transport || 'local';
@@ -52,14 +67,13 @@ export function createXmptRuntime(
     if (!agentMailConfig.apiKey) {
       // Fallback to local mode
       console.log('[xmpt] No AGENTMAIL_API_KEY, falling back to local mode');
-      messages.push(envelope);
-      return envelope;
+      return sendLocal(to, body, envelope);
     }
 
     try {
       const response = await fetch(`${agentMailConfig.baseUrl}/messages/send`, {
         method: 'POST',
-        signal: AbortSignal.timeout(10_000), // 10s timeout
+        signal: AbortSignal.timeout(10_000),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${agentMailConfig.apiKey}`,
@@ -82,10 +96,25 @@ export function createXmptRuntime(
       return { ...envelope, id: result.id || envelope.id };
     } catch (error) {
       console.error('[xmpt] AgentMail send failed, falling back to local:', error);
-      // Fallback to local on error
-      messages.push(envelope);
-      return envelope;
+      return sendLocal(to, body, envelope);
     }
+  }
+
+  // Local transport: publish to shared mailbox
+  function sendLocal(
+    to: string,
+    body: string,
+    envelope: Envelope
+  ): Envelope {
+    // Store in recipient's mailbox
+    const targetMailbox = localMailbox.get(to) ?? [];
+    targetMailbox.push(envelope);
+    localMailbox.set(to, targetMailbox);
+    
+    // Notify subscribers for this inbox
+    notifySubscribers(to, envelope);
+    
+    return envelope;
   }
 
   // Poll AgentMail for new messages
@@ -99,7 +128,7 @@ export function createXmptRuntime(
         `${agentMailConfig.baseUrl}/messages/inbox?inbox=${encodeURIComponent(inbox)}`,
         {
           method: 'GET',
-          signal: AbortSignal.timeout(10_000), // 10s timeout
+          signal: AbortSignal.timeout(10_000),
           headers: {
             'Authorization': `Bearer ${agentMailConfig.apiKey}`,
           },
@@ -126,8 +155,10 @@ export function createXmptRuntime(
         });
         
         // Avoid duplicates
-        if (!messages.find(m => m.id === envelope.id)) {
-          messages.push(envelope);
+        const mailbox = localMailbox.get(inbox) ?? [];
+        if (!mailbox.find(m => m.id === envelope.id)) {
+          mailbox.push(envelope);
+          localMailbox.set(inbox, mailbox);
           dispatchCallbacks(callbacks, envelope);
         }
       }
@@ -138,14 +169,23 @@ export function createXmptRuntime(
 
   return {
     async initialize(): Promise<void> {
+      // Validate agentmail config at startup
+      if (transportMode === 'agentmail' && !agentMailConfig.apiKey) {
+        throw new Error(
+          '[xmpt] AgentMail transport requires AGENTMAIL_API_KEY environment variable'
+        );
+      }
+      
       // Initialize transport connection
       console.log(`[xmpt] Initialized with inbox: ${inbox}, transport: ${transportMode}`);
       
+      // Register local subscriber for this inbox
+      const subs = localSubscribers.get(inbox) ?? new Set();
+      localSubscribers.set(inbox, subs);
+      
       // Start polling for agentmail transport
       if (transportMode === 'agentmail') {
-        // Poll every 30 seconds
         setInterval(pollAgentMail, 30000);
-        // Initial poll
         await pollAgentMail();
       }
     },
@@ -170,30 +210,27 @@ export function createXmptRuntime(
       EnvelopeSchema.parse(envelope);
 
       if (transportMode === 'agentmail') {
-        // Use real AgentMail API
         return sendViaAgentMail(to, body, envelope);
       } else {
-        // Local mode - just store locally
-        messages.push(envelope);
-        // Echo back for local testing, but only if it's TO our inbox
-        if (envelope.to === inbox) {
-          dispatchCallbacks(callbacks, envelope);
-        }
-        return envelope;
+        return sendLocal(to, body, envelope);
       }
     },
 
     onMessage(callback: (envelope: Envelope) => void | Promise<void>) {
       callbacks.push(callback);
       
-      // Process any existing messages
-      for (const msg of messages) {
-        if (msg.to === inbox) {
-          void Promise.resolve(callback(msg)).catch((error) => {
-            console.error('[xmpt] onMessage replay callback failed:', error);
-          });
-        }
+      // Process any existing messages in mailbox
+      const mailbox = localMailbox.get(inbox) ?? [];
+      for (const msg of mailbox) {
+        void Promise.resolve(callback(msg)).catch((error) => {
+          console.error('[xmpt] onMessage replay callback failed:', error);
+        });
       }
+      
+      // Register as subscriber
+      const subs = localSubscribers.get(inbox) ?? new Set();
+      subs.add(callback);
+      localSubscribers.set(inbox, subs);
     },
 
     async reply(
@@ -204,7 +241,12 @@ export function createXmptRuntime(
       const reply = ReplySchema.parse({ threadId, body, metadata: options?.metadata });
       
       // Find original message to get 'from' - search by id OR threadId
-      const original = messages.find(m => m.id === threadId || m.threadId === threadId);
+      // Search across all mailboxes
+      let original: Envelope | undefined;
+      for (const [, messages] of localMailbox) {
+        original = messages.find(m => m.id === threadId || m.threadId === threadId);
+        if (original) break;
+      }
       
       // Throw descriptive error if original message not found
       if (!original) {
@@ -224,7 +266,7 @@ export function createXmptRuntime(
       if (transportMode === 'agentmail') {
         await pollAgentMail();
       }
-      return messages.filter(m => m.to === inbox);
+      return localMailbox.get(inbox) ?? [];
     },
   };
 }
