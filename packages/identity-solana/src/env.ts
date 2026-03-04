@@ -60,6 +60,15 @@ export function identitySolanaFromEnv(
     });
   }
   
+  // Parse skipSend for browser wallets
+  const skipSend = parseBoolean(process.env?.SKIP_SEND);
+  
+  // Parse PINATA_JWT for IPFS uploads
+  const pinataJwt = process.env?.PINATA_JWT;
+  
+  // Parse ATOM protocol support
+  const atomEnabled = parseBoolean(process.env?.ATOM_ENABLED);
+  
   let registration: SolanaRegistrationOptions | undefined;
   
   if (services.length > 0 || domain || configOverrides?.registration) {
@@ -73,6 +82,14 @@ export function identitySolanaFromEnv(
       x402Support: parseBoolean(process.env?.AGENT_X402_SUPPORT),
       skipSend: parseBoolean(process.env?.SKIP_SEND),
     };
+  }
+  
+  // Add IPFS/ATOM config to registration if present
+  if (pinataJwt || atomEnabled) {
+    const metadata: Record<string, unknown> = {};
+    if (pinataJwt) metadata.pinataJwt = pinataJwt;
+    if (atomEnabled) metadata.atomEnabled = atomEnabled;
+    registration = { ...registration, metadata };
   }
   
   return {

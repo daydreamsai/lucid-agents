@@ -87,6 +87,7 @@ export interface SolanaRegistrationOptions {
   services?: AgentService[];
   x402Support?: boolean;
   skipSend?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 /**
