@@ -1,1 +1,1 @@
-**Planning Solana identity package design****Detailing package dependencies, types, and tests****Completing plugin, clients, and example implementation****Implementing registry client class with SDK method dispatch and comprehensive tests**
+**Scoping full package implementation****Detailing package config, typings, plugin, and tests****Implementing manifest merge, typings, env parsing, and example file****Drafting robust client, identity, trust, typing, env, and plugin implementations**
