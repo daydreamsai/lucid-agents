@@ -121,6 +121,10 @@ export const createX402Fetch = ({
   return wrappedFetch;
 };
 
+// Re-export Gateway fetch for convenience
+export { createGatewayFetch } from './gateway/fetch';
+export type { GatewayFetchOptions } from './gateway/types';
+
 export const accountFromPrivateKey = (privateKey: Hex): X402Account => {
   if (!privateKey || privateKey.trim().length === 0) {
     throw new Error(
