@@ -32,6 +32,7 @@ describe("Core + HTTP + Hono integration", () => {
     const { app } = await createAgentApp(runtime);
     const res = await app.fetch(new Request("http://localhost/health"));
     expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(200);
   });
 
   /**

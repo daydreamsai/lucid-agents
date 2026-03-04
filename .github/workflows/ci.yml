@@ -105,7 +105,7 @@ jobs:
       - name: Stop PostgreSQL test database
         if: always()
         run: |
-          docker compose -f platform/dev/docker-compose.yml stop test-db || true
+          docker compose -f platform/dev/docker-compose.yml down -v --remove-orphans || true
 
   # ──────────────────────────────────────────────────
   # Phase 2: Cross-package integration tests
