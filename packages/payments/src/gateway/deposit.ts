@@ -51,15 +51,47 @@ export async function depositToGateway(
     chain
   );
 
+  // Validate chain and privateKey before use
+  const supportedChains = ['base', 'base-sepolia'];
+  if (!supportedChains.includes(chain)) {
+    throw new Error(
+      `[agent-kit-payments:gateway] invalid chain '${chain}'. Supported: ${supportedChains.join(', ')}`
+    );
+  }
+  if (
+    typeof options.privateKey !== 'string' ||
+    !/^0x[0-9a-fA-F]{64}$/.test(options.privateKey)
+  ) {
+    throw new Error(
+      '[agent-kit-payments:gateway] privateKey must be a hex string matching /^0x[0-9a-fA-F]{64}$/'
+    );
+  }
+
   // Dynamic import to avoid hard failure when optional peer dep is missing
-  const { GatewayClient } = await import('@circle-fin/x402-batching/client');
+  let GatewayClient: typeof import('@circle-fin/x402-batching/client').GatewayClient;
+  try {
+    ({ GatewayClient } = await import('@circle-fin/x402-batching/client'));
+  } catch (err) {
+    throw new Error(
+      `Failed to load Circle batching client: ${err instanceof Error ? err.message : err}`,
+      { cause: err }
+    );
+  }
 
   const client = new GatewayClient({
     chain: chain as import('@circle-fin/x402-batching/client').SupportedChainName,
     privateKey: options.privateKey as `0x${string}`,
   });
 
-  const result = await client.deposit(options.amount);
+  let result: Awaited<ReturnType<typeof client.deposit>>;
+  try {
+    result = await client.deposit(options.amount);
+  } catch (err) {
+    throw new Error(
+      `Deposit via GatewayClient failed for amount ${options.amount} on chain ${chain}: ${err instanceof Error ? err.message : err}`,
+      { cause: err }
+    );
+  }
 
   console.info(
     '[agent-kit-payments:gateway] deposit complete',

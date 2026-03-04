@@ -59,7 +59,7 @@ agent.add(
   entrypoint({
     key: 'premium-content',
     description: 'Premium content endpoint ($0.01/call)',
-    price: '$0.01',
+    price: '0.01',
     schema: {
       input: z.object({
         topic: z.string().optional(),
