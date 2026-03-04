@@ -123,3 +123,12 @@ export interface SolanaFeedbackEntry {
   timestamp: number;
   txHash?: string;
 }
+
+/**
+ * Registration result from blockchain
+ */
+export interface SolanaRegistrationResult {
+  trustTier: TrustTier;
+  signature: string;
+  registeredAt?: number;
+}

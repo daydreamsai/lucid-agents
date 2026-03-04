@@ -4,7 +4,7 @@ export { identitySolana } from './extension';
 export type { IdentityConfig } from './extension';
 
 export { identitySolanaFromEnv } from './env';
-export { createSolanaAgentIdentity, getSolanaTrustConfig } from './init';
+export { createSolanaAgentIdentity, getSolanaTrustConfig, getSolanaIdentity, revokeSolanaIdentity } from './init';
 export { createAgentCardWithSolanaIdentity, getTrustTierName, getTrustTierColor } from './manifest';
 export {
   parseBoolean,
