@@ -13,6 +13,7 @@ const SupportedEVMNetworks: Network[] = [
   'eip155:80002',    // Polygon Amoy
   'eip155:43114',    // Avalanche
   'eip155:43113',    // Avalanche Fuji
+  'eip155:5042002',  // Arc Testnet
 ];
 
 /**

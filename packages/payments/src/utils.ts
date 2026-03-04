@@ -1,7 +1,34 @@
 import type {
+  CircleGatewayChain,
   PaymentsConfig,
   StripePaymentsConfig,
 } from '@lucid-agents/types/payments';
+
+function parseBooleanEnv(value?: string): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === '1' ||
+    normalized === 'true' ||
+    normalized === 'yes' ||
+    normalized === 'on'
+  );
+}
+
+function gatewayChainToNetwork(
+  chain?: string
+): PaymentsConfig['network'] | undefined {
+  if (!chain) return undefined;
+  const normalized = chain.trim().toLowerCase();
+  if (normalized === 'base') return 'base' as PaymentsConfig['network'];
+  if (normalized === 'basesepolia' || normalized === 'base-sepolia') {
+    return 'base-sepolia' as PaymentsConfig['network'];
+  }
+  if (normalized === 'arctestnet' || normalized === 'arc-testnet') {
+    return 'eip155:5042002' as PaymentsConfig['network'];
+  }
+  return undefined;
+}
 
 /**
  * Creates PaymentsConfig from environment variables and optional overrides.
@@ -12,6 +39,10 @@ import type {
 export function paymentsFromEnv(
   configOverrides?: Partial<PaymentsConfig>
 ): PaymentsConfig {
+  const circleGatewayChain =
+    configOverrides?.circleGatewayChain ??
+    (process.env.CIRCLE_GATEWAY_CHAIN as CircleGatewayChain | undefined);
+  const networkFromGatewayChain = gatewayChainToNetwork(circleGatewayChain);
   const facilitatorUrl =
     configOverrides?.facilitatorUrl ??
     process.env.FACILITATOR_URL ??
@@ -21,7 +52,12 @@ export function paymentsFromEnv(
     configOverrides?.network ??
     process.env.NETWORK ??
     process.env.PAYMENTS_NETWORK ??
-    undefined;
+    networkFromGatewayChain;
+  const facilitatorMode =
+    configOverrides?.facilitator ??
+    (parseBooleanEnv(process.env.CIRCLE_GATEWAY_FACILITATOR)
+      ? 'circle-gateway'
+      : undefined);
   const facilitatorAuth =
     configOverrides?.facilitatorAuth ??
     process.env.FACILITOR_AUTH ??
@@ -33,6 +69,8 @@ export function paymentsFromEnv(
     facilitatorUrl: facilitatorUrl as PaymentsConfig['facilitatorUrl'],
     facilitatorAuth,
     network: network as PaymentsConfig['network'],
+    facilitator: facilitatorMode,
+    circleGatewayChain,
     policyGroups: configOverrides?.policyGroups,
     storage: configOverrides?.storage,
   };

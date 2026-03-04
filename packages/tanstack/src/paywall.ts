@@ -2,6 +2,8 @@ import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
   createFacilitatorAuthHeaders,
+  createPaymentSchemeRegistrations,
+  createPaymentsFacilitatorClient,
   resolvePrice,
   resolvePayTo,
   validatePaymentsConfig,
@@ -153,6 +155,11 @@ export function createTanStackPaywall({
     baseFacilitator,
     activePayments.facilitatorAuth
   );
+  const schemeRegistrations = createPaymentSchemeRegistrations(activePayments);
+  const facilitatorClient = createPaymentsFacilitatorClient({
+    payments: activePayments,
+    facilitator: resolvedFacilitator,
+  });
 
   const invokeRoutes = buildEntrypointRoutes({
     entrypoints,
@@ -170,12 +177,18 @@ export function createTanStackPaywall({
 
   const invoke =
     Object.keys(invokeRoutes).length > 0
-      ? middlewareFactory(invokeRoutes, resolvedFacilitator, paywall)
+      ? middlewareFactory(invokeRoutes, resolvedFacilitator, paywall, {
+          facilitatorClient,
+          schemeRegistrations,
+        })
       : undefined;
 
   const stream =
     Object.keys(streamRoutes).length > 0
-      ? middlewareFactory(streamRoutes, resolvedFacilitator, paywall)
+      ? middlewareFactory(streamRoutes, resolvedFacilitator, paywall, {
+          facilitatorClient,
+          schemeRegistrations,
+        })
       : undefined;
 
   return { invoke, stream };

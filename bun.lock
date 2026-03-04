@@ -288,10 +288,17 @@
         "zod": "catalog:",
       },
       "devDependencies": {
+        "@circle-fin/x402-batching": "^2.0.4",
         "@types/pg": "^8.11.10",
         "tsup": "catalog:",
         "typescript": "catalog:",
       },
+      "peerDependencies": {
+        "@circle-fin/x402-batching": "^2.0.4",
+      },
+      "optionalPeers": [
+        "@circle-fin/x402-batching",
+      ],
     },
     "packages/prettier-config": {
       "name": "@lucid-agents/prettier-config",
@@ -478,6 +485,8 @@
     "@changesets/types": ["@changesets/types@6.1.0", "", {}, "sha512-rKQcJ+o1nKNgeoYRHKOS07tAMNd3YSN0uHaJOZYjBAgxfV7TUE7JE+z4BzZdQwb5hKaYbayKN5KrYV7ODb2rAA=="],
 
     "@changesets/write": ["@changesets/write@0.4.0", "", { "dependencies": { "@changesets/types": "^6.1.0", "fs-extra": "^7.0.1", "human-id": "^4.1.1", "prettier": "^2.7.1" } }, "sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q=="],
+
+    "@circle-fin/x402-batching": ["@circle-fin/x402-batching@2.0.4", "", { "peerDependencies": { "@x402/core": "^2.3.0", "@x402/evm": "^2.3.0", "viem": "^2.0.0" }, "optionalPeers": ["@x402/evm"] }, "sha512-q1rGOuFHyday0Rbc5V9PnNmoRotxGjc+CxqimjW+A0fjcdvYUi3Lnud/+94/KYqUqFLgOR9/5E2X41a1HxaA4g=="],
 
     "@cloudflare/kv-asset-handler": ["@cloudflare/kv-asset-handler@0.4.1", "", { "dependencies": { "mime": "^3.0.0" } }, "sha512-Nu8ahitGFFJztxUml9oD/DLb7Z28C8cd8F46IVQ7y5Btz575pvMY8AqZsXkX7Gds29eCKdMgIHjIvzskHgPSFg=="],
 

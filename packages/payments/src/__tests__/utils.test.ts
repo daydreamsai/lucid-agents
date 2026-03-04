@@ -13,6 +13,8 @@ const ENV_KEYS = [
   'FACILITATOR_AUTH',
   'PAYMENTS_FACILITATOR_AUTH',
   'DREAMS_AUTH_TOKEN',
+  'CIRCLE_GATEWAY_FACILITATOR',
+  'CIRCLE_GATEWAY_CHAIN',
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
@@ -131,6 +133,53 @@ describe('paymentsFromEnv', () => {
 
     expect(config.facilitatorUrl).toBe('https://facilitator.alias.test');
     expect(config.network).toBe('eip155:84532');
+  });
+
+  it('enables circle gateway facilitator mode from env', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.NETWORK = 'base';
+    process.env.CIRCLE_GATEWAY_FACILITATOR = 'true';
+
+    const config = paymentsFromEnv();
+
+    expect(config.facilitator).toBe('circle-gateway');
+  });
+
+  it('does not enable circle gateway facilitator mode when env is false', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.NETWORK = 'base';
+    process.env.CIRCLE_GATEWAY_FACILITATOR = 'false';
+
+    const config = paymentsFromEnv();
+
+    expect(config.facilitator).toBeUndefined();
+  });
+
+  it('derives payments network from CIRCLE_GATEWAY_CHAIN when NETWORK is unset', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.CIRCLE_GATEWAY_CHAIN = 'baseSepolia';
+
+    const config = paymentsFromEnv();
+
+    expect(config.circleGatewayChain).toBe('baseSepolia');
+    expect(config.network as string).toBe('base-sepolia');
+  });
+
+  it('maps CIRCLE_GATEWAY_CHAIN=arcTestnet to network eip155:5042002', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.CIRCLE_GATEWAY_CHAIN = 'arcTestnet';
+
+    const config = paymentsFromEnv();
+
+    expect(config.network).toBe('eip155:5042002');
   });
 });
 
