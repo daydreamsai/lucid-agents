@@ -1,1 +1,1 @@
-**Summarizing complete package design****Detailing plugin and client architecture****Implementing trust mapping and lazy client initialization****Planning example package dependency and build setup**
+**Scoping Solana identity package structure****Designing Solana identity SDK adapter and plugin API****Defining signer resolver, env parsing, and SDK adapter instantiation patterns****Implementing private key parsing, RPC URL resolution, config validation, and key shared types**
