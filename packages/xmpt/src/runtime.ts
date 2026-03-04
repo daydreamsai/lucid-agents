@@ -11,6 +11,20 @@ interface AgentMailConfig {
   apiKey?: string;
 }
 
+/**
+ * Dispatch callbacks safely, handling async functions and catching errors
+ */
+function dispatchCallbacks(
+  listeners: Array<(envelope: Envelope) => void | Promise<void>>,
+  envelope: Envelope
+): void {
+  for (const cb of listeners) {
+    void Promise.resolve(cb(envelope)).catch((error) => {
+      console.error('[xmpt] onMessage callback failed:', error);
+    });
+  }
+}
+
 export function createXmptRuntime(
   runtime: AgentRuntime,
   options: XmptExtensionOptions
@@ -45,6 +59,7 @@ export function createXmptRuntime(
     try {
       const response = await fetch(`${agentMailConfig.baseUrl}/messages/send`, {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000), // 10s timeout
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${agentMailConfig.apiKey}`,
@@ -80,12 +95,16 @@ export function createXmptRuntime(
     }
 
     try {
-      const response = await fetch(`${agentMailConfig.baseUrl}/messages/inbox?inbox=${encodeURIComponent(inbox)}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${agentMailConfig.apiKey}`,
-        },
-      });
+      const response = await fetch(
+        `${agentMailConfig.baseUrl}/messages/inbox?inbox=${encodeURIComponent(inbox)}`,
+        {
+          method: 'GET',
+          signal: AbortSignal.timeout(10_000), // 10s timeout
+          headers: {
+            'Authorization': `Bearer ${agentMailConfig.apiKey}`,
+          },
+        }
+      );
 
       if (!response.ok) {
         return;
@@ -109,7 +128,7 @@ export function createXmptRuntime(
         // Avoid duplicates
         if (!messages.find(m => m.id === envelope.id)) {
           messages.push(envelope);
-          callbacks.forEach(cb => cb(envelope));
+          dispatchCallbacks(callbacks, envelope);
         }
       }
     } catch (error) {
@@ -158,7 +177,7 @@ export function createXmptRuntime(
         messages.push(envelope);
         // Echo back for local testing, but only if it's TO our inbox
         if (envelope.to === inbox) {
-          callbacks.forEach(cb => cb(envelope));
+          dispatchCallbacks(callbacks, envelope);
         }
         return envelope;
       }
@@ -168,11 +187,13 @@ export function createXmptRuntime(
       callbacks.push(callback);
       
       // Process any existing messages
-      messages.forEach(msg => {
+      for (const msg of messages) {
         if (msg.to === inbox) {
-          callback(msg);
+          void Promise.resolve(callback(msg)).catch((error) => {
+            console.error('[xmpt] onMessage replay callback failed:', error);
+          });
         }
-      });
+      }
     },
 
     async reply(
@@ -184,9 +205,18 @@ export function createXmptRuntime(
       
       // Find original message to get 'from' - search by id OR threadId
       const original = messages.find(m => m.id === threadId || m.threadId === threadId);
-      const to = original?.from || 'unknown';
       
-      return this.send(to, body, { threadId, metadata: options?.metadata });
+      // Throw descriptive error if original message not found
+      if (!original) {
+        throw new Error(
+          `[xmpt] Cannot reply: thread "${reply.threadId}" not found for inbox "${inbox}"`
+        );
+      }
+
+      return this.send(original.from, reply.body, {
+        threadId: reply.threadId,
+        metadata: reply.metadata,
+      });
     },
 
     async getInbox(): Promise<Envelope[]> {

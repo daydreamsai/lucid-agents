@@ -43,6 +43,13 @@ export function identitySolana(
   let identityResult:
     | Awaited<ReturnType<typeof createSolanaAgentIdentity>>
     | undefined;
+  // Store runtime slice reference to update trust after async creation
+  let runtimeSliceRef: {
+    trust?: SolanaTrustConfig;
+    identitySolana?: {
+      registration?: SolanaIdentityConfig['registration'];
+    };
+  } | null = null;
 
   return {
     name: 'identity-solana',
@@ -53,10 +60,13 @@ export function identitySolana(
       };
     } {
       const registration = config?.registration;
-      return {
+      const slice = {
         trust: trustConfig,
         identitySolana: registration ? { registration } : undefined,
       };
+      // Store reference so we can update it later
+      runtimeSliceRef = slice;
+      return slice;
     },
     async onBuild(runtime: AgentRuntime): Promise<void> {
       // If trust config is already provided, no need to create identity
@@ -75,8 +85,20 @@ export function identitySolana(
           registration: config.registration,
         };
 
-        identityResult = await createSolanaAgentIdentity(identityOptions);
-        trustConfig = getSolanaTrustConfig(identityResult);
+        try {
+          identityResult = await createSolanaAgentIdentity(identityOptions);
+          trustConfig = getSolanaTrustConfig(identityResult);
+          // Update the runtime slice with the new trust config
+          if (runtimeSliceRef) {
+            runtimeSliceRef.trust = trustConfig;
+          }
+        } catch (error) {
+          throw new Error(
+            `[identity-solana] Failed to initialize identity for domain "${config.domain ?? 'unknown'}": ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
       }
     },
     onManifestBuild(

@@ -1,11 +1,16 @@
 /**
- * Solana Identity types - ERC-8004 equivalent for Solana blockchain
+ * Solana Payment & Utility types for Lucid SDK
+ * 
+ * IMPORTANT: In the Lucid architecture, on-chain identity registration 
+ * uses ERC-8004 on EVM networks. This package provides Solana-specific 
+ * payment helpers and optional Solana identity ADAPTER (non-EVM) for 
+ * payment/utility purposes, NOT as a replacement for ERC-8004 identity.
  */
 
-import type { TrustConfig, AgentRegistration, OASFStructuredConfig, AgentService } from '@lucid-agents/types/identity';
+import type { TrustConfig, AgentService } from '@lucid-agents/types/identity';
 
 /**
- * Trust tier levels for Solana identity
+ * Trust tier levels for Solana utility/payments
  */
 export enum TrustTier {
   NONE = 0,
@@ -15,7 +20,7 @@ export enum TrustTier {
 }
 
 /**
- * Trust tier config for Solana
+ * Trust tier config for Solana payments
  */
 export interface SolanaTrustTierConfig {
   tier: TrustTier;
@@ -25,7 +30,8 @@ export interface SolanaTrustTierConfig {
 }
 
 /**
- * Solana-specific TrustConfig that extends EVM TrustConfig
+ * Solana-specific TrustConfig for payment/utility features
+ * Extends EVM TrustConfig with Solana-specific payment info
  */
 export type SolanaTrustConfig = TrustConfig & {
   solana?: {
@@ -36,14 +42,14 @@ export type SolanaTrustConfig = TrustConfig & {
 };
 
 /**
- * Solana Agent Registration - similar to ERC-8004 but for Solana
+ * Solana Payment Info - instead of identity registration
+ * This package provides Solana payment/utility support, not ERC-8004 identity
  */
-export type SolanaAgentRegistration = Omit<AgentRegistration, 'registrations'> & {
+export type SolanaPaymentInfo = {
   namespace: 'solana';
   chainId: number;
   programId: string;
-  registryPDA: string;
-  identityPDA?: string;
+  paymentPDA?: string;
   signature?: string;
 };
 
@@ -51,7 +57,7 @@ export type SolanaAgentRegistration = Omit<AgentRegistration, 'registrations'> &
  * Solana Registry Clients
  */
 export interface SolanaRegistryClients {
-  identity: {
+  payments: {
     programId: string;
     rpcUrl: string;
     connection?: unknown;
@@ -64,7 +70,7 @@ export interface SolanaRegistryClients {
 }
 
 /**
- * Solana Identity Config
+ * Solana Identity/Payment Config
  */
 export interface SolanaIdentityConfig {
   trust?: SolanaTrustConfig;
@@ -76,7 +82,7 @@ export interface SolanaIdentityConfig {
 }
 
 /**
- * Registration options for Solana identity
+ * Registration options for Solana identity (optional, non-EVM adapter)
  */
 export interface SolanaRegistrationOptions {
   name: string;
@@ -91,7 +97,7 @@ export interface SolanaRegistrationOptions {
 }
 
 /**
- * Create Solana Agent Identity options
+ * Create Solana Agent Identity options (for optional on-chain registration)
  */
 export interface CreateSolanaAgentIdentityOptions {
   runtime: unknown;

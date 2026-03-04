@@ -104,11 +104,11 @@ export function identitySolanaFromEnv(
 
 /**
  * Check if Solana identity is configured for auto-registration
+ * Only returns true when explicit configuration exists
  */
 export function isSolanaIdentityConfigured(config: SolanaIdentityConfig): boolean {
   return Boolean(
     config.rpcUrl ||
-    config.cluster ||
     config.registration ||
     process.env?.SOLANA_PRIVATE_KEY
   );

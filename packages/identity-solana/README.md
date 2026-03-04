@@ -1,6 +1,6 @@
 # @lucid-agents/identity-solana
 
-Solana identity extension for Lucid SDK - ERC-8004 equivalent for Solana blockchain.
+Solana payment and utility extension for Lucid SDK. Provides Solana-specific payment helpers and optional Solana identity adapter (non-EVM). Note: On-chain identity registration in Lucid uses ERC-8004 on EVM networks; this package does not replace ERC-8004 identity.
 
 ## Installation
 
