@@ -4,6 +4,9 @@ import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
 import type { Hex } from './crypto';
 
+// Re-export Circle Gateway fetch alongside standard x402 fetch
+export { createGatewayFetch, type GatewayFetch } from './gateway/fetch';
+
 const DEFAULT_MODEL = 'gpt-5';
 const DEFAULT_PROVIDER = 'openai';
 const DEFAULT_API_URL = 'https://api-beta.daydreams.systems/v1';

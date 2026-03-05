@@ -39,7 +39,21 @@ export {
   type CreateX402LLMOptions,
   type WrappedFetch,
   type X402Account,
+  // Circle Gateway fetch (buyer-side)
+  createGatewayFetch,
+  type GatewayFetch,
 } from './x402';
+export {
+  createCircleGatewayFacilitator,
+  type CircleGatewayFacilitator,
+} from './gateway/facilitator';
+export { depositToGateway } from './gateway/deposit';
+export type {
+  CircleGatewayChain,
+  CircleGatewayConfig,
+  GatewayFetchOptions,
+  GatewayDepositResult,
+} from './gateway/types';
 export {
   sanitizeAddress,
   normalizeAddress,
