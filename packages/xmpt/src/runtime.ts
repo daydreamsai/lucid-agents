@@ -54,13 +54,12 @@ export function createXMPTRuntime(
   const subscribers = new Set<XMPTOnMessageHandler>();
 
   const notifySubscribers = async (message: XMPTMessage): Promise<void> => {
-    for (const handler of subscribers) {
-      try {
-        await handler(message);
-      } catch {
-        // XMPT observers are best-effort and should not break message delivery.
-      }
-    }
+    // Run all observers concurrently — none can block delivery or each other.
+    await Promise.allSettled(
+      Array.from(subscribers).map(handler =>
+        Promise.resolve().then(() => handler(message))
+      )
+    );
   };
 
   const appendRecord = async (message: XMPTMessageRecord): Promise<void> => {

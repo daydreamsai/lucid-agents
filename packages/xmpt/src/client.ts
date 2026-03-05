@@ -93,9 +93,16 @@ export function parseXMPTMessage(payload: unknown): XMPTMessage {
   assertXMPTContent(content);
 
   const metadata =
-    value.metadata && typeof value.metadata === 'object'
+    value.metadata && typeof value.metadata === 'object' && !Array.isArray(value.metadata)
       ? (value.metadata as Record<string, unknown>)
-      : undefined;
+      : value.metadata !== undefined && value.metadata !== null
+        ? (() => {
+            throw new XMPTError(
+              'XMPT_INVALID_MESSAGE_PAYLOAD',
+              'Message metadata must be a plain object (not an array or primitive)'
+            );
+          })()
+        : undefined;
 
   return {
     id,
