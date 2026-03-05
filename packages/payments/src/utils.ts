@@ -2,18 +2,29 @@ import type {
   PaymentsConfig,
   StripePaymentsConfig,
 } from '@lucid-agents/types/payments';
+import type { CircleGatewayConfig } from './gateway/types';
 
 /**
  * Creates PaymentsConfig from environment variables and optional overrides.
+ *
+ * Reads `CIRCLE_GATEWAY_FACILITATOR=true` to activate Circle Gateway settlement
+ * in place of the default Daydreams facilitator.
  *
  * @param configOverrides - Optional config overrides from agent-kit config
  * @returns PaymentsConfig resolved from env + overrides
  */
 export function paymentsFromEnv(
-  configOverrides?: Partial<PaymentsConfig>
+  configOverrides?: Partial<PaymentsConfig> & { circleGateway?: CircleGatewayConfig }
 ): PaymentsConfig {
+  const useCircleGateway =
+    Boolean(configOverrides?.circleGateway) ||
+    process.env.CIRCLE_GATEWAY_FACILITATOR?.trim().toLowerCase() === 'true';
+
   const facilitatorUrl =
     configOverrides?.facilitatorUrl ??
+    (useCircleGateway
+      ? (configOverrides?.circleGateway?.gatewayUrl ?? 'https://gateway.circle.com')
+      : undefined) ??
     process.env.FACILITATOR_URL ??
     process.env.PAYMENTS_FACILITATOR_URL ??
     undefined;
@@ -35,6 +46,9 @@ export function paymentsFromEnv(
     network: network as PaymentsConfig['network'],
     policyGroups: configOverrides?.policyGroups,
     storage: configOverrides?.storage,
+    ...(useCircleGateway
+      ? { facilitator: 'circle-gateway' as const }
+      : {}),
   };
 
   const stripeConfig = (configOverrides as { stripe?: StripePaymentsConfig })

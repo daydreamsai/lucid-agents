@@ -46,5 +46,16 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "@types/pg": "^8.11.10"
+  },
+  "optionalDependencies": {
+    "@circle-fin/x402-batching": "^2.0.4"
+  },
+  "peerDependencies": {
+    "@circle-fin/x402-batching": "*"
+  },
+  "peerDependenciesMeta": {
+    "@circle-fin/x402-batching": {
+      "optional": true
+    }
   }
 }

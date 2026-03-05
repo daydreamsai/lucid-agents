@@ -15,6 +15,8 @@ import { createPaymentsRuntime, entrypointHasExplicitPrice } from './payments';
 import { policiesFromConfig } from './env';
 import type { PaymentStorageConfig } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
+import type { CircleGatewayConfig } from './gateway/types';
+import { createCircleGatewayFacilitator } from './gateway/facilitator';
 
 type PaymentStorageFactory = (
   storageConfig?: PaymentStorageConfig,
@@ -22,7 +24,7 @@ type PaymentStorageFactory = (
 ) => PaymentStorage;
 
 export function payments(options?: {
-  config?: PaymentsConfig | false;
+  config?: (PaymentsConfig & { facilitator?: 'circle-gateway'; circleGateway?: CircleGatewayConfig }) | false;
   policies?: string;
   agentId?: string;
   storageFactory?: PaymentStorageFactory;
@@ -46,6 +48,20 @@ export function payments(options?: {
           throw new Error(`Failed to load policies from config: ${message}`, {
             cause: error,
           });
+        }
+      }
+
+      // When facilitator is 'circle-gateway', initialise the Circle Gateway
+      // facilitator and log a notice. The config is passed through unchanged;
+      // the facilitator property is only used for routing decisions here.
+      if (config && config !== false) {
+        const cfg = config as PaymentsConfig & { facilitator?: 'circle-gateway'; circleGateway?: CircleGatewayConfig };
+        if (cfg.facilitator === 'circle-gateway') {
+          const circleGatewayFacilitator = createCircleGatewayFacilitator(cfg.circleGateway);
+          console.info(
+            '[lucid-agents/payments] Circle Gateway facilitator active:',
+            circleGatewayFacilitator.gatewayUrl
+          );
         }
       }
 
