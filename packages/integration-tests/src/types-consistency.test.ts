@@ -7,7 +7,7 @@ describe("Types cross-package consistency", () => {
   /**
    * Verifies that the core types module resolves and exports expected types.
    */
-  it("@lucid-agents/types exports core types", async () => {
+  it("@lucid-agents/types/core resolves and AgentConfig type is importable", async () => {
     const types = await import("@lucid-agents/types/core");
     expect(types).toBeDefined();
     // Compile-time assertion: AgentConfig type is importable
