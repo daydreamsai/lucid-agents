@@ -18,6 +18,9 @@ bun run src/core/full-agent.ts
 
 # Or from the repo root
 bun run packages/examples/src/core/full-agent.ts
+
+# NASA NeoWs risk agent
+bun run packages/examples/src/core/nasa-neows-agent.ts
 ```
 
 ## Type Checking
