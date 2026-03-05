@@ -26,6 +26,46 @@ PORT             # Optional; defaults to 3000
 The agent exposes a single `/entrypoints/brainstorm/invoke` route that accepts a
 `topic` string and responds with a summary plus a few follow-up ideas.
 
+## NASA NeoWs Asteroid Risk Agent
+
+`core/nasa-neows-agent.ts` runs a Lucid Agent that calls NASA NeoWs for the next
+7 days of near-earth objects, computes a per-object threat score, ranks
+asteroids, and returns an overall risk assessment.
+
+Run with Bun:
+
+```bash
+bun run packages/examples/src/core/nasa-neows-agent.ts
+```
+
+Invoke the entrypoint:
+
+```bash
+curl -X POST http://localhost:8788/entrypoints/asteroid-risk/invoke \
+  -H "content-type: application/json" \
+  -d '{"input":{"topN":5}}'
+```
+
+Environment variables:
+
+```
+NASA_API_KEY   # NASA API key; defaults to DEMO_KEY
+PORT           # Optional; defaults to 8788
+```
+
+Threat score inputs and weighting:
+
+- `estimatedDiameterMeters` (45%)
+- `relativeVelocityKph` (35%)
+- `missDistanceKm` proximity factor (20%)
+- hazard bonus if NASA flags object as potentially hazardous
+
+The result payload includes:
+
+- `topThreats[]` ranked by computed `threatScore`
+- `assessment.level` (`low` | `guarded` | `elevated` | `high`)
+- summary stats for the 7-day window (`windowStart`, `windowEnd`, `objectCount`)
+
 ## Full-Stack Agent Example
 
 This script contains a minimal, end-to-end showcase of everything
