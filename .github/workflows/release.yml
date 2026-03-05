@@ -26,10 +26,16 @@ permissions:
   id-token: write
 
 jobs:
+  # Phase 5: Gate release on CI passing
+  ci_gate:
+    name: "CI Gate (Phase 5)"
+    uses: ./.github/workflows/ci.yml
+
   release:
     name: Publish Release
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: ci_gate
     if: github.ref_type == 'branch'
     steps:
       - name: Checkout
