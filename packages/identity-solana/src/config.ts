@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const IdentitySolanaConfigSchema = z.object({
-  solanaPrivateKey: z.string().optional().describe('JSON array of numbers or hex string'),
-  solanaCluster: z.string().default('mainnet-beta'),
+  solanaPrivateKey: z.string().optional().describe('JSON array of numbers or hex string (with or without 0x)'),
+  solanaCluster: z.enum(['mainnet-beta', 'testnet', 'devnet', 'localnet']).default('mainnet-beta'),
   solanaRpcUrl: z.string().optional(),
   agentDomain: z.string().optional(),
   registerIdentity: z.boolean().default(false),
