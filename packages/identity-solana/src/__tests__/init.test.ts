@@ -240,6 +240,28 @@ describe('getSolanaTrustConfig', () => {
   });
 });
 
+describe('createSolanaAgentIdentity — fail fast on missing prerequisites', () => {
+  it('throws when autoRegister=true but no private key', async () => {
+    await expect(
+      createSolanaAgentIdentity({
+        domain: 'agent.example.com',
+        autoRegister: true,
+        cluster: 'devnet',
+      })
+    ).rejects.toThrow('autoRegister requires a private key');
+  });
+
+  it('throws when autoRegister=true but no domain', async () => {
+    await expect(
+      createSolanaAgentIdentity({
+        autoRegister: true,
+        cluster: 'devnet',
+        privateKey: makePrivateKey(),
+      })
+    ).rejects.toThrow('autoRegister requires a domain');
+  });
+});
+
 describe('createSolanaAgentIdentity — custom trust models', () => {
   it('uses custom trustModels', async () => {
     const result = await createSolanaAgentIdentity({

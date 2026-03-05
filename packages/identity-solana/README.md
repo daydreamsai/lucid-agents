@@ -21,7 +21,7 @@ AGENT_DOMAIN=my-agent.example.com
 SOLANA_PRIVATE_KEY='[1,2,3,...,64]'   # JSON array — solana-keygen JSON format
 SOLANA_CLUSTER=devnet                  # mainnet-beta | devnet | testnet
 SOLANA_RPC_URL=https://api.devnet.solana.com   # optional, uses cluster default
-REGISTER_IDENTITY=true
+IDENTITY_AUTO_REGISTER=true
 ```
 
 ### 2. Use with Lucid Agent Builder
@@ -71,7 +71,7 @@ identitySolana({
   config: {
     trust?: TrustConfig;       // Pre-built trust (skips registry call)
     domain?: string;           // Falls back to AGENT_DOMAIN env
-    autoRegister?: boolean;    // Falls back to REGISTER_IDENTITY env
+    autoRegister?: boolean;    // Falls back to IDENTITY_AUTO_REGISTER env
     cluster?: string;          // Falls back to SOLANA_CLUSTER env
     rpcUrl?: string;           // Falls back to SOLANA_RPC_URL env
     skipSend?: boolean;        // For browser wallets that sign externally
@@ -89,7 +89,7 @@ Read config from environment variables (mirrors `identityFromEnv()` from `@lucid
 | `SOLANA_CLUSTER`         | `mainnet-beta`| Solana cluster                                     |
 | `SOLANA_RPC_URL`         | cluster URL   | Custom RPC endpoint                                |
 | `SOLANA_PRIVATE_KEY`     | —             | JSON array of secret key bytes                     |
-| `REGISTER_IDENTITY`      | `false`       | Auto-register if not found                         |
+| `IDENTITY_AUTO_REGISTER`      | `false`       | Auto-register if not found                         |
 | `SOLANA_IDENTITY_PROGRAM_ID` | built-in  | Override identity program ID                       |
 | `SOLANA_REPUTATION_PROGRAM_ID` | built-in | Override reputation program ID                    |
 
@@ -215,7 +215,7 @@ const identity = await createSolanaAgentIdentity({
 
 ## Architecture
 
-```
+```text
 packages/identity-solana/
 ├── src/
 │   ├── index.ts            # Public exports
@@ -242,17 +242,17 @@ packages/identity-solana/
 The identity and reputation programs are the Solana analogs of ERC-8004. Account layout:
 
 **Identity account** (PDA: `[b"agent", agentId.to_le_bytes()]`):
-```
+```text
 [is_initialized(1), owner(32), agentId(4), uri_len(4), uri(N)]
 ```
 
 **Counter account** (PDA: `[b"counter"]`):
-```
+```text
 [count(4)]
 ```
 
 **Feedback account** (PDA: `[b"feedback", agentId.to_le_bytes()]`):
-```
+```text
 [count(4), entries[is_revoked(1), from(32), value(1), valueDecimals(1), timestamp(8), ...]]
 ```
 

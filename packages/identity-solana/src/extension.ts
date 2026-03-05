@@ -32,10 +32,15 @@ function createAgentCardWithSolanaIdentity(
   const enhanced: AgentCardWithEntrypoints = { ...card };
 
   if (trustConfig.registrations) {
-    enhanced.registrations = trustConfig.registrations;
+    enhanced.registrations = [
+      ...(card.registrations ?? []),
+      ...trustConfig.registrations,
+    ];
   }
   if (trustConfig.trustModels) {
-    enhanced.trustModels = Array.from(new Set(trustConfig.trustModels));
+    enhanced.trustModels = Array.from(
+      new Set([...(card.trustModels ?? []), ...trustConfig.trustModels])
+    );
   }
   if (trustConfig.validationRequestsUri) {
     enhanced.ValidationRequestsURI = trustConfig.validationRequestsUri;
@@ -89,6 +94,11 @@ export function identitySolana(options?: {
           skipSend: config?.skipSend,
         });
         trustConfig = getSolanaTrustConfig(identity);
+
+        // Update the runtime extension state so downstream consumers see the resolved trust
+        if (trustConfig && runtime.extensions?.['identity-solana']) {
+          (runtime.extensions['identity-solana'] as { trust?: TrustConfig }).trust = trustConfig;
+        }
       }
     },
 

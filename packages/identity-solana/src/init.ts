@@ -119,7 +119,7 @@ export async function createSolanaAgentIdentity(
   let shouldRegister =
     autoRegister ??
     (() => {
-      const raw = resolvedEnv.REGISTER_IDENTITY ?? resolvedEnv.IDENTITY_AUTO_REGISTER;
+      const raw = resolvedEnv.IDENTITY_AUTO_REGISTER ?? resolvedEnv.REGISTER_IDENTITY;
       if (raw !== undefined) {
         return raw.toLowerCase() === 'true' || raw === '1';
       }
@@ -158,38 +158,34 @@ export async function createSolanaAgentIdentity(
   let transactionSignature: string | undefined;
 
   if (!record && shouldRegister) {
-    if (!resolvedDomain) {
-      logger?.warn?.(
-        '[identity-solana] AGENT_DOMAIN is not set; registration will use a placeholder URI.'
+    if (!keypair) {
+      throw new Error(
+        '[identity-solana] autoRegister requires a private key. Set SOLANA_PRIVATE_KEY or pass privateKey option.'
       );
     }
-    const agentURI = resolvedDomain
-      ? buildAgentURI(resolvedDomain)
-      : 'https://placeholder.invalid/.well-known/agent-registration.json';
-
-    try {
-      const result = await identityClient.register({ agentURI, skipSend });
-      didRegister = true;
-      isNewRegistration = true;
-      if (result.signature) {
-        transactionSignature = result.signature;
-      }
-      // Fetch the newly created record
-      record = await identityClient.get(result.agentId).catch(() => null);
-      if (!record) {
-        // Build a synthetic record when skipSend is true or network lookup fails
-        record = {
-          agentId: result.agentId,
-          owner: keypair?.publicKey.toBase58() ?? 'unknown',
-          agentURI,
-          network: `solana:${cluster}`,
-        };
-      }
-    } catch (err) {
-      logger?.warn?.(
-        '[identity-solana] Registration failed',
-        err
+    if (!resolvedDomain) {
+      throw new Error(
+        '[identity-solana] autoRegister requires a domain. Set AGENT_DOMAIN or pass domain option.'
       );
+    }
+    const agentURI = buildAgentURI(resolvedDomain);
+
+    const result = await identityClient.register({ agentURI, skipSend });
+    didRegister = true;
+    isNewRegistration = true;
+    if (result.signature) {
+      transactionSignature = result.signature;
+    }
+    // Fetch the newly created record
+    record = await identityClient.get(result.agentId).catch(() => null);
+    if (!record) {
+      // Build a synthetic record when skipSend is true or network lookup fails
+      record = {
+        agentId: result.agentId,
+        owner: keypair.publicKey.toBase58(),
+        agentURI,
+        network: `solana:${cluster}`,
+      };
     }
   }
 
