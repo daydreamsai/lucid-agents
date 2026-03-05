@@ -1,0 +1,17 @@
+{
+  "name": "@lucid-agents/integration-tests",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/types": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*"
+  }
+}

@@ -273,6 +273,19 @@
         "typescript": "^5.9.2",
       },
     },
+    "packages/integration-tests": {
+      "name": "@lucid-agents/integration-tests",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@lucid-agents/core": "workspace:*",
+        "@lucid-agents/hono": "workspace:*",
+        "@lucid-agents/http": "workspace:*",
+        "@lucid-agents/identity": "workspace:*",
+        "@lucid-agents/payments": "workspace:*",
+        "@lucid-agents/types": "workspace:*",
+        "@lucid-agents/wallet": "workspace:*",
+      },
+    },
     "packages/payments": {
       "name": "@lucid-agents/payments",
       "version": "2.5.0",
@@ -710,6 +723,8 @@
     "@lucid-agents/http": ["@lucid-agents/http@workspace:packages/http"],
 
     "@lucid-agents/identity": ["@lucid-agents/identity@workspace:packages/identity"],
+
+    "@lucid-agents/integration-tests": ["@lucid-agents/integration-tests@workspace:packages/integration-tests"],
 
     "@lucid-agents/payments": ["@lucid-agents/payments@workspace:packages/payments"],
 

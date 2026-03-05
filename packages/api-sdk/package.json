@@ -37,7 +37,14 @@
   },
   "scripts": {
     "clean": "rm -rf src/sdk",
-    "generate": "bun run codegen.ts"
+    "generate": "bun run codegen.ts",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json --noEmit",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.10.0"
