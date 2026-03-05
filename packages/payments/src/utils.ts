@@ -29,12 +29,31 @@ export function paymentsFromEnv(
     process.env.PAYMENTS_FACILITATOR_AUTH ??
     process.env.DREAMS_AUTH_TOKEN;
 
+  // Circle Gateway facilitator detection
+  const overridesWithFacilitator = configOverrides as
+    | (Partial<PaymentsConfig> & { facilitator?: string })
+    | undefined;
+  const circleGatewayEnabled =
+    overridesWithFacilitator?.facilitator === 'circle-gateway' ||
+    process.env.CIRCLE_GATEWAY_FACILITATOR === 'true';
+  const validGatewayChains = ['base', 'base-sepolia'];
+  const circleGatewayChain =
+    process.env.CIRCLE_GATEWAY_CHAIN ?? 'base';
+  if (circleGatewayEnabled && !validGatewayChains.includes(circleGatewayChain)) {
+    throw new Error(
+      `[agent-kit-payments] invalid CIRCLE_GATEWAY_CHAIN '${circleGatewayChain}'. Valid: ${validGatewayChains.join(', ')}`
+    );
+  }
+
   const baseConfig = {
     facilitatorUrl: facilitatorUrl as PaymentsConfig['facilitatorUrl'],
     facilitatorAuth,
     network: network as PaymentsConfig['network'],
     policyGroups: configOverrides?.policyGroups,
     storage: configOverrides?.storage,
+    ...(circleGatewayEnabled
+      ? { facilitator: 'circle-gateway' as const, circleGatewayChain }
+      : {}),
   };
 
   const stripeConfig = (configOverrides as { stripe?: StripePaymentsConfig })

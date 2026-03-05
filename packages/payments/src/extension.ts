@@ -22,7 +22,7 @@ type PaymentStorageFactory = (
 ) => PaymentStorage;
 
 export function payments(options?: {
-  config?: PaymentsConfig | false;
+  config?: (PaymentsConfig & { facilitator?: 'circle-gateway'; circleGatewayChain?: string }) | false;
   policies?: string;
   agentId?: string;
   storageFactory?: PaymentStorageFactory;

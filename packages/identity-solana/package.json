@@ -1,11 +1,11 @@
 {
-  "name": "@lucid-agents/payments",
-  "version": "2.5.0",
-  "description": "Payment logic for bidirectional agent-to-agent payments",
+  "name": "@lucid-agents/identity-solana",
+  "version": "0.1.0",
+  "description": "Solana identity (8004-solana) for Lucid SDK — mirrors @lucid-agents/identity (EVM) API",
   "repository": {
     "type": "git",
     "url": "https://github.com/daydreamsai/lucid-agents",
-    "directory": "packages/payments"
+    "directory": "packages/identity-solana"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -21,7 +21,8 @@
   },
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -29,31 +30,25 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
-    "@ax-llm/ax": "catalog:",
-    "@lucid-agents/types": "workspace:*",
-    "pg": "^8.13.1",
-    "viem": "catalog:",
-    "@x402/core": "catalog:",
-    "@x402/fetch": "catalog:",
-    "@x402/evm": "catalog:",
-    "stripe": "catalog:",
-    "zod": "catalog:"
+    "@lucid-agents/types": "workspace:*"
   },
   "peerDependencies": {
-    "@circle-fin/x402-batching": ">=2.0.0"
+    "@solana/web3.js": "^1.95.0"
   },
   "peerDependenciesMeta": {
-    "@circle-fin/x402-batching": {
-      "optional": true
+    "@solana/web3.js": {
+      "optional": false
     }
   },
   "devDependencies": {
-    "@circle-fin/x402-batching": "^2.0.4",
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@lucid-agents/prettier-config": "workspace:*",
+    "@solana/web3.js": "^1.98.0",
     "tsup": "catalog:",
-    "typescript": "catalog:",
-    "@types/pg": "^8.11.10"
+    "typescript": "catalog:"
   }
 }

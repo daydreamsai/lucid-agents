@@ -47,6 +47,15 @@ export {
   type Hex,
 } from './crypto';
 export { payments } from './extension';
+export {
+  createCircleGatewayFacilitator,
+  createGatewayFetch,
+  depositToGateway,
+  type CircleGatewayConfig,
+  type GatewayFetchOptions,
+  type GatewayDepositOptions,
+  type GatewayDepositResult,
+} from './gateway';
 export { createPaymentTracker, type PaymentTracker } from './payment-tracker';
 export type { PaymentStorage } from './payment-storage';
 export {
