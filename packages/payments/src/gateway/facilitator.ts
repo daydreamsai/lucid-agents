@@ -21,7 +21,7 @@ const DEFAULT_GATEWAY_URL = 'https://gateway.circle.com';
  * ```typescript
  * import { createCircleGatewayFacilitator } from '@lucid-agents/payments';
  *
- * const facilitator = createCircleGatewayFacilitator();
+ * const facilitator = await createCircleGatewayFacilitator();
  * // Use with payments extension:
  * .use(payments({ config: { ...paymentsFromEnv(), facilitator: 'circle-gateway' } }))
  * ```

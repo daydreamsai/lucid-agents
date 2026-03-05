@@ -35,6 +35,7 @@ export function paymentsFromEnv(
     process.env.CIRCLE_GATEWAY_FACILITATOR === 'true';
   const validGatewayChains = ['base', 'base-sepolia'];
   const circleGatewayChain =
+    (configOverrides as { circleGatewayChain?: string } | undefined)?.circleGatewayChain ??
     process.env.CIRCLE_GATEWAY_CHAIN ?? 'base';
   if (circleGatewayEnabled && !validGatewayChains.includes(circleGatewayChain)) {
     throw new Error(
