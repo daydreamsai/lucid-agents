@@ -30,9 +30,12 @@ export function paymentsFromEnv(
     process.env.DREAMS_AUTH_TOKEN;
 
   // Circle Gateway facilitator detection
-  const circleGatewayEnabled =
-    configOverrides?.facilitator === 'circle-gateway' ||
+  const envCircleGatewayEnabled =
     process.env.CIRCLE_GATEWAY_FACILITATOR === 'true';
+  const circleGatewayEnabled =
+    configOverrides?.facilitator !== undefined
+      ? configOverrides.facilitator === 'circle-gateway'
+      : envCircleGatewayEnabled;
   const validGatewayChains = ['base', 'base-sepolia'];
   const circleGatewayChain =
     (configOverrides as { circleGatewayChain?: string } | undefined)?.circleGatewayChain ??
