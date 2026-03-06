@@ -6,15 +6,15 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun test",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/payments": "workspace:*"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "typescript": "^5.6.3"
+    "@types/bun": "^1.2.3",
+    "typescript": "^5.7.3"
   }
 }

@@ -1,49 +1,49 @@
 import * as LucidHttp from "@lucid-agents/http";
 
-export type RequestHandler = (request: Request) => Response | Promise<Response>;
+export type FetchHandler = (request: Request) => Response | Promise<Response>;
 
-export interface StartedServer {
-  stop?: () => void;
-  port?: number;
-}
+export function startHttpServer(fetchHandler: FetchHandler, port: number): unknown {
+  const sdk = LucidHttp as Record<string, unknown>;
 
-function tryStartViaLucidHttp(port: number, handler: RequestHandler): StartedServer | null {
-  const api = LucidHttp as unknown as Record<string, unknown>;
-
-  const candidates: Array<[name: string, call: (fn: (...args: unknown[]) => unknown) => unknown]> = [
-    ["serve", (fn) => fn({ port, fetch: handler })],
-    ["startServer", (fn) => fn({ port, fetch: handler })],
-    ["createServer", (fn) => fn({ port, fetch: handler })],
-    ["createHttpServer", (fn) => fn({ port, fetch: handler })]
-  ];
-
-  for (const [name, call] of candidates) {
-    const maybeFn = api[name];
-    if (typeof maybeFn !== "function") {
-      continue;
-    }
-
+  const serve = sdk["serve"];
+  if (typeof serve === "function") {
     try {
-      const result = call(maybeFn as (...args: unknown[]) => unknown);
-      if (result) {
-        return result as StartedServer;
-      }
+      return (serve as (...args: unknown[]) => unknown)({ port, fetch: fetchHandler });
     } catch {
-      // Try next candidate.
+      // fall through
+    }
+    try {
+      return (serve as (...args: unknown[]) => unknown)(fetchHandler, { port });
+    } catch {
+      // fall through
     }
   }
 
-  return null;
-}
+  const createServer = sdk["createServer"];
+  if (typeof createServer === "function") {
+    try {
+      return (createServer as (...args: unknown[]) => unknown)({ port, fetch: fetchHandler });
+    } catch {
+      // fall through
+    }
+    try {
+      return (createServer as (...args: unknown[]) => unknown)(fetchHandler, { port });
+    } catch {
+      // fall through
+    }
+  }
 
-export function startHttpServer(port: number, handler: RequestHandler): StartedServer {
-  const lucidServer = tryStartViaLucidHttp(port, handler);
-  if (lucidServer) {
-    return lucidServer;
+  const startServer = sdk["startServer"];
+  if (typeof startServer === "function") {
+    try {
+      return (startServer as (...args: unknown[]) => unknown)({ port, fetch: fetchHandler });
+    } catch {
+      // fall through
+    }
   }
 
   return Bun.serve({
     port,
-    fetch: handler
+    fetch: fetchHandler
   });
 }
