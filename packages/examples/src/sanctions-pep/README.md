@@ -56,12 +56,9 @@ Analyze ownership chain for sanctions/PEP exposure.
 
 **Price:** $0.15 per analysis
 
-**Request:**
-```json
-{
-  "entityName": "Acme Corp",
-  "ownershipDepth": 3
-}
+**Request (Query Parameters):**
+```
+GET /v1/screening/exposure-chain?entityName=Acme%20Corp&ownershipDepth=3
 ```
 
 **Response:**
@@ -90,11 +87,9 @@ Assess jurisdiction-specific compliance risks.
 
 **Price:** $0.08 per jurisdiction
 
-**Request:**
-```json
-{
-  "jurisdictions": ["US", "EU", "CN"]
-}
+**Request (Query Parameters):**
+```
+GET /v1/screening/jurisdiction-risk?jurisdictions=US,EU,CN
 ```
 
 **Response:**
@@ -166,22 +161,15 @@ curl -X POST http://localhost:3010/v1/screening/check \
     "addresses": ["123 Main St"]
   }'
 
-# Get exposure chain
-curl -X GET http://localhost:3010/v1/screening/exposure-chain \
+# Get exposure chain (use query parameters for GET)
+curl -X GET "http://localhost:3010/v1/screening/exposure-chain?entityName=Test%20Corp&ownershipDepth=3" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <x402-token>" \
-  -d '{
-    "entityName": "Test Corp",
-    "ownershipDepth": 3
-  }'
+  -H "Authorization: Bearer <x402-token>"
 
-# Check jurisdiction risk
-curl -X GET http://localhost:3010/v1/screening/jurisdiction-risk \
+# Check jurisdiction risk (use query parameters for GET)
+curl -X GET "http://localhost:3010/v1/screening/jurisdiction-risk?jurisdictions=US,EU" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <x402-token>" \
-  -d '{
-    "jurisdictions": ["US", "EU"]
-  }'
+  -H "Authorization: Bearer <x402-token>"
 ```
 
 ## Architecture

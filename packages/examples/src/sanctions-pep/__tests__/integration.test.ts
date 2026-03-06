@@ -1,15 +1,16 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
+import type { Server } from 'bun';
 
 /**
  * Integration Tests - Phase 3 of TDD
- * 
+ *
  * These tests validate endpoint handlers with payment middleware.
  * They should fail initially until the full agent is implemented.
  */
 
 describe('Integration Tests - Endpoint Handlers', () => {
   let serverUrl: string;
-  let server: any;
+  let server: Server | undefined;
 
   beforeAll(async () => {
     // Server will be started by index.ts implementation
@@ -18,6 +19,9 @@ describe('Integration Tests - Endpoint Handlers', () => {
 
   afterAll(async () => {
     // Cleanup if needed
+    if (server) {
+      server.stop();
+    }
   });
 
   describe('POST /v1/screening/check', () => {
@@ -219,9 +223,14 @@ describe('Integration Tests - Endpoint Handlers', () => {
       const response = await fetch(`${serverUrl}/.well-known/agent.json`);
       const manifest = await response.json();
 
+      interface ManifestEntrypoint {
+        key: string;
+        price?: string;
+      }
+
       // Check that entrypoints have pricing
       const checkEndpoint = manifest.entrypoints?.find(
-        (e: any) => e.key === 'screening-check'
+        (e: ManifestEntrypoint) => e.key === 'screening-check'
       );
       expect(checkEndpoint?.price).toBeDefined();
     });
@@ -321,8 +330,7 @@ describe('Integration Tests - Payment Middleware', () => {
 
     // x402 middleware should add payment headers
     const paymentHeader = response.headers.get('x-payment-required');
-    // In real implementation, this would be present
-    // expect(paymentHeader).toBeDefined();
+    expect(paymentHeader).toBeDefined();
   });
 });
 

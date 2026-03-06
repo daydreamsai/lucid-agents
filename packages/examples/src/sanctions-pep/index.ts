@@ -10,14 +10,14 @@ import {
   JurisdictionRiskOutputSchema,
   ScreeningCheckInputSchema,
   ScreeningCheckOutputSchema,
-} from './__tests__/contracts.test';
+} from './contracts';
 import {
   buildOwnershipChain,
   calculateAggregateRisk,
   calculateFreshnessMetadata,
   calculateMatchConfidence,
   determineScreeningStatus,
-} from './__tests__/business-logic.test';
+} from './business-logic';
 
 /**
  * Sanctions & PEP Exposure Intelligence API
@@ -32,6 +32,36 @@ import {
  *
  * Run: bun run packages/examples/src/sanctions-pep/index.ts
  */
+
+// Validate required environment variables
+function validateEnv(): void {
+  const required = [
+    'FACILITATOR_URL',
+    'PAYMENTS_RECEIVABLE_ADDRESS',
+    'NETWORK',
+  ];
+
+  const missing = required.filter(key => !process.env[key]);
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(', ')}`
+    );
+  }
+
+  // Validate PORT if provided
+  if (process.env.PORT) {
+    const port = Number(process.env.PORT);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      throw new Error(
+        `Invalid PORT: ${process.env.PORT}. Must be a valid port number (1-65535).`
+      );
+    }
+  }
+}
+
+// Validate environment before starting
+validateEnv();
 
 // Mock data sources (in production, these would be real databases)
 const SANCTIONS_LISTS = [
@@ -124,67 +154,75 @@ addEntrypoint({
   input: ScreeningCheckInputSchema,
   output: ScreeningCheckOutputSchema,
   handler: async ctx => {
-    const { entityName } = ctx.input;
+    try {
+      const { entityName } = ctx.input;
 
-    // Perform sanctions screening
-    const matches = [];
-    let maxConfidence = 0;
+      // Perform sanctions screening
+      const matches = [];
+      let maxConfidence = 0;
 
-    for (const listEntry of SANCTIONS_LISTS) {
-      const confidence = calculateMatchConfidence(entityName, listEntry);
+      for (const listEntry of SANCTIONS_LISTS) {
+        const confidence = calculateMatchConfidence(entityName, listEntry);
 
-      if (confidence > 0) {
-        matches.push({
-          list: listEntry.list,
-          entity: listEntry.name,
-          confidence,
-          reason:
-            confidence === 1.0
-              ? 'Exact name match'
-              : confidence === 0.95
-                ? 'Alias match'
-                : 'Similar name match',
-        });
-        maxConfidence = Math.max(maxConfidence, confidence);
+        if (confidence > 0) {
+          matches.push({
+            list: listEntry.list,
+            entity: listEntry.name,
+            confidence,
+            reason:
+              confidence === 1.0
+                ? 'Exact name match'
+                : confidence === 0.95
+                  ? 'Alias match'
+                  : 'Similar name match',
+          });
+          maxConfidence = Math.max(maxConfidence, confidence);
+        }
       }
-    }
 
-    // Check PEP database
-    for (const pepEntry of PEP_DATABASE) {
-      const confidence = calculateMatchConfidence(entityName, {
-        name: pepEntry.name,
-        aliases: [],
-        list: 'PEP Database',
-        addedDate: '2024-01-01',
-      });
-
-      if (confidence > 0) {
-        matches.push({
+      // Check PEP database
+      for (const pepEntry of PEP_DATABASE) {
+        const confidence = calculateMatchConfidence(entityName, {
+          name: pepEntry.name,
+          aliases: [],
           list: 'PEP Database',
-          entity: pepEntry.name,
-          confidence,
-          reason: `${pepEntry.position} in ${pepEntry.country}`,
+          addedDate: '2024-01-01',
         });
-        maxConfidence = Math.max(maxConfidence, confidence);
+
+        if (confidence > 0) {
+          matches.push({
+            list: 'PEP Database',
+            entity: pepEntry.name,
+            confidence,
+            reason: `${pepEntry.position} in ${pepEntry.country}`,
+          });
+          maxConfidence = Math.max(maxConfidence, confidence);
+        }
       }
-    }
 
-    const screening_status = determineScreeningStatus(matches);
-    const lastUpdated = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hour ago
-    const freshness = calculateFreshnessMetadata(lastUpdated);
+      const screening_status = determineScreeningStatus(matches);
+      const lastUpdated = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hour ago
+      const freshness = calculateFreshnessMetadata(lastUpdated);
 
-    return {
-      output: {
-        screening_status,
-        match_confidence: maxConfidence,
-        matches,
-        evidence_bundle: {
-          sources: ['OFAC', 'UN', 'EU', 'PEP Database'],
-          last_updated: lastUpdated.toISOString(),
+      return {
+        output: {
+          screening_status,
+          match_confidence: maxConfidence,
+          matches,
+          evidence_bundle: {
+            sources: ['OFAC', 'UN', 'EU', 'PEP Database'],
+            last_updated: lastUpdated.toISOString(),
+          },
+          freshness,
         },
-        freshness,
-      },
-    };
+      };
+    } catch (error) {
+      throw new Error(
+        `[screening-check] failed for entity "${ctx.input.entityName}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   },
 });
 
@@ -200,68 +238,76 @@ addEntrypoint({
   input: ExposureChainInputSchema,
   output: ExposureChainOutputSchema,
   handler: async ctx => {
-    const { entityName, ownershipDepth } = ctx.input;
+    try {
+      const { entityName, ownershipDepth } = ctx.input;
 
-    // Build ownership chain
-    const chain = buildOwnershipChain(
-      entityName,
-      OWNERSHIP_RECORDS,
-      ownershipDepth
-    );
+      // Build ownership chain
+      const chain = buildOwnershipChain(
+        entityName,
+        OWNERSHIP_RECORDS,
+        ownershipDepth
+      );
 
-    // Check each entity in chain for exposure
-    const exposure_chain = [];
+      // Check each entity in chain for exposure
+      const exposure_chain = [];
 
-    for (const record of chain) {
-      let exposure_type: 'sanctions' | 'pep' | 'none' = 'none';
-      let confidence = 0;
+      for (const record of chain) {
+        let exposure_type: 'sanctions' | 'pep' | 'none' = 'none';
+        let confidence = 0;
 
-      // Check sanctions
-      for (const listEntry of SANCTIONS_LISTS) {
-        const matchConfidence = calculateMatchConfidence(
-          record.parent,
-          listEntry
-        );
-        if (matchConfidence > confidence) {
-          confidence = matchConfidence;
-          exposure_type = 'sanctions';
+        // Check sanctions
+        for (const listEntry of SANCTIONS_LISTS) {
+          const matchConfidence = calculateMatchConfidence(
+            record.parent,
+            listEntry
+          );
+          if (matchConfidence > confidence) {
+            confidence = matchConfidence;
+            exposure_type = 'sanctions';
+          }
         }
-      }
 
-      // Check PEP
-      for (const pepEntry of PEP_DATABASE) {
-        const matchConfidence = calculateMatchConfidence(record.parent, {
-          name: pepEntry.name,
-          aliases: [],
-          list: 'PEP',
-          addedDate: '2024-01-01',
+        // Check PEP
+        for (const pepEntry of PEP_DATABASE) {
+          const matchConfidence = calculateMatchConfidence(record.parent, {
+            name: pepEntry.name,
+            aliases: [],
+            list: 'PEP',
+            addedDate: '2024-01-01',
+          });
+          if (matchConfidence > confidence) {
+            confidence = matchConfidence;
+            exposure_type = 'pep';
+          }
+        }
+
+        exposure_chain.push({
+          level: record.level,
+          entity: record.parent,
+          ownership_pct: record.ownershipPct,
+          exposure_type,
+          confidence,
         });
-        if (matchConfidence > confidence) {
-          confidence = matchConfidence;
-          exposure_type = 'pep';
-        }
       }
 
-      exposure_chain.push({
-        level: record.level,
-        entity: record.parent,
-        ownership_pct: record.ownershipPct,
-        exposure_type,
-        confidence,
-      });
+      const aggregate_risk = calculateAggregateRisk(exposure_chain);
+      const lastUpdated = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
+      const freshness = calculateFreshnessMetadata(lastUpdated);
+
+      return {
+        output: {
+          exposure_chain,
+          aggregate_risk,
+          freshness,
+        },
+      };
+    } catch (error) {
+      throw new Error(
+        `[exposure-chain] failed for entity "${ctx.input.entityName}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
-
-    const aggregate_risk = calculateAggregateRisk(exposure_chain);
-    const lastUpdated = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
-    const freshness = calculateFreshnessMetadata(lastUpdated);
-
-    return {
-      output: {
-        exposure_chain,
-        aggregate_risk,
-        freshness,
-      },
-    };
   },
 });
 
@@ -277,32 +323,40 @@ addEntrypoint({
   input: JurisdictionRiskInputSchema,
   output: JurisdictionRiskOutputSchema,
   handler: async ctx => {
-    const { jurisdictions } = ctx.input;
+    try {
+      const { jurisdictions } = ctx.input;
 
-    const jurisdiction_risk = jurisdictions.map(code => {
-      const data = JURISDICTION_DATA[
-        code as keyof typeof JURISDICTION_DATA
-      ] || {
-        risk_level: 'medium' as const,
-        sanctions_active: false,
-        pep_requirements: 'standard_due_diligence' as const,
-      };
+      const jurisdiction_risk = jurisdictions.map(code => {
+        const data = JURISDICTION_DATA[
+          code as keyof typeof JURISDICTION_DATA
+        ] || {
+          risk_level: 'medium' as const,
+          sanctions_active: false,
+          pep_requirements: 'standard_due_diligence' as const,
+        };
+
+        return {
+          jurisdiction: code,
+          ...data,
+        };
+      });
+
+      const lastUpdated = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+      const freshness = calculateFreshnessMetadata(lastUpdated);
 
       return {
-        jurisdiction: code,
-        ...data,
+        output: {
+          jurisdiction_risk,
+          freshness,
+        },
       };
-    });
-
-    const lastUpdated = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
-    const freshness = calculateFreshnessMetadata(lastUpdated);
-
-    return {
-      output: {
-        jurisdiction_risk,
-        freshness,
-      },
-    };
+    } catch (error) {
+      throw new Error(
+        `[jurisdiction-risk] failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   },
 });
 
