@@ -1,29 +1,15 @@
-# News Headlines Lucid Agent (x402 payments)
+# News Headlines Lucid Agent (x402)
 
-Built via TaskMarket bounty for taskmarket.xyz.
+Built via a TaskMarket bounty at taskmarket.xyz.
 
-This package provides a Bun + TypeScript Lucid Agent that returns top headlines from newsapi.org and enforces x402-style payment at $0.001/request.
+This package provides a Bun + TypeScript Lucid Agent that:
+- Uses `@lucid-agents/http` and `@lucid-agents/payments`.
+- Exposes `GET /headlines?category=technology&count=5`.
+- Enforces x402-style payment with HTTP `402` when payment is missing.
+- Returns top headlines from newsapi.org free tier in this format:
+  - `{ "articles": [{ "title", "source", "url", "publishedAt" }] }`
 
-## Endpoint
-
-`GET /headlines?category=technology&count=5`
-
-Response shape:
-
-```json
-{
-  "articles": [
-    {
-      "title": "Some headline",
-      "source": "Source Name",
-      "url": "https://...",
-      "publishedAt": "2026-03-06T10:00:00Z"
-    }
-  ]
-}
-```
-
-Valid categories:
+## Valid categories
 - business
 - technology
 - science
@@ -31,49 +17,40 @@ Valid categories:
 - sports
 - entertainment
 
-## Payment enforcement
+## Setup
+1. Copy `.env.example` to `.env`.
+2. Set `NEWSAPI_KEY`.
+3. Run:
+   - `bun install`
+   - `bun run dev`
 
-`/headlines` is paywalled:
-- No valid payment header -> HTTP 402
-- Valid payment header -> HTTP 200 + headlines
+## API behavior
 
-Accepted headers:
-- `x402-payment: <token>`
-- `x-payment: <token>`
-- `authorization: Bearer <token>`
+### Unpaid request
+`GET /headlines?category=technology&count=5` without payment header returns:
+- `402 Payment Required`
+- JSON body with payment details
 
-Default token for local/dev demo: `taskmarket-demo-paid` (override with `X402_VALID_TOKEN`).
+### Paid request
+Send a valid payment header:
+- Header name: `x402-payment`
+- Header value: `X402_TEST_TOKEN` from env (default: `paid-demo-token`)
 
-## Run locally
-
-```bash
-cd packages/news-headlines-agent
-bun install
-cp .env.example .env
-# set NEWS_API_KEY in .env
-bun run dev
-```
-
-## Deploy (Railway / Render / Fly.io)
-
-Use this package folder as the service root.
-- Build/install: `bun install`
-- Start command: `bun run start`
-- Set environment variable: `NEWS_API_KEY=<your_newsapi_key>`
-- Optional: `X402_VALID_TOKEN=<your_token>`
+Then the same request returns:
+- `200 OK`
+- `{ "articles": [...] }`
 
 ## curl examples
-
-Unpaid request (402):
-
 ```bash
-curl -i "http://localhost:3000/headlines?category=technology&count=5"
+curl -i "<LIVE_ENDPOINT_URL>/headlines?category=technology&count=5"
 ```
-
-Paid request (200):
 
 ```bash
 curl -i \
-  -H "x402-payment: taskmarket-demo-paid" \
-  "http://localhost:3000/headlines?category=technology&count=5"
+  -H "x402-payment: paid-demo-token" \
+  "<LIVE_ENDPOINT_URL>/headlines?category=technology&count=5"
 ```
+
+## Notes
+- Uses `https://newsapi.org/v2/top-headlines`.
+- Free-tier NewsAPI key is supported via `NEWSAPI_KEY`.

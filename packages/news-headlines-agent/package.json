@@ -3,17 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Lucid Agent that returns top news headlines with x402 payment enforcement.",
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "start": "bun run src/index.ts",
-    "typecheck": "bunx tsc --noEmit"
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "check": "tsc --noEmit"
   },
   "dependencies": {
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/payments": "workspace:*"
   },
   "devDependencies": {
-    "bun-types": "^1.2.4",
-    "typescript": "^5.6.3"
+    "@types/bun": "latest",
+    "typescript": "^5.7.3"
   }
 }

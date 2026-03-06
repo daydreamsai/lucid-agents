@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "moduleDetection": "force",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
-    "noEmit": true,
     "skipLibCheck": true,
-    "types": ["bun-types"]
+    "noEmit": true,
+    "types": ["bun"]
   },
   "include": ["src/**/*.ts"]
 }
