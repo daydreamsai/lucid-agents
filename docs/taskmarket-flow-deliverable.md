@@ -1,10 +1,10 @@
 # TaskMarket Explainer Diagram Deliverable
 
-- GitHub PR URL: `<FILL_IN_AFTER_OPENING_PR>`
-- Direct image URL: `<FILL_IN_AFTER_PUSHING_IMAGE>`
+- GitHub PR URL: PENDING_OPEN_PR
+- Direct image URL: PENDING_IMAGE_URL
 
-Generated asset path:
-- `docs/assets/taskmarket-flow.png`
+## Asset
+- docs/assets/taskmarket-flow.png
 
-Generation command:
-- `node scripts/generate-taskmarket-flow-png.mjs`
+## Regenerate
+- node scripts/generate-taskmarket-flow-png.mjs
