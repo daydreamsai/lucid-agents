@@ -1,82 +1,68 @@
-# GeoIP x402 Lucid Agent
+# IP Geolocation Lucid Agent (x402 payments)
 
-Bun + TypeScript Lucid Agent that returns IP geolocation using ip-api.com and enforces x402-style payment before each lookup.
+Built via TaskMarket bounty from taskmarket.xyz.
 
-This was built via a TaskMarket bounty on https://taskmarket.xyz.
-
-## Features
-
+## What this package does
 - Uses `@lucid-agents/http` and `@lucid-agents/payments`
-- `GET /geoip?ip=8.8.8.8`
-- Returns:
+- Exposes `GET /geoip?ip=8.8.8.8`
+- Calls ip-api.com free tier and returns:
   - `ip`
   - `country`
   - `city`
   - `lat`
   - `lon`
   - `isp`
-- Enforces payment:
-  - no valid payment header -> `402 Payment Required`
-  - valid payment header -> `200 OK` with geolocation payload
+- Enforces x402-style payment:
+  - No valid payment header => `402 Payment Required`
+  - Valid payment header => returns geolocation data
 
-## Local run
+## API
 
+### `GET /geoip?ip=8.8.8.8`
+Success response:
+```json
+{
+  "ip": "8.8.8.8",
+  "country": "United States",
+  "city": "Mountain View",
+  "lat": 37.4056,
+  "lon": -122.0775,
+  "isp": "Google LLC"
+}
+```
+
+### Payment header
+Set one of:
+- `x-402-payment`
+- `x402-payment`
+- `x-payment`
+- `authorization` (`Bearer <token>` or `x402 <token>`)
+
+By default, token must match `X402_PAYMENT_TOKEN`.
+
+## Local run (Bun)
 ```bash
 bun install
 cp .env.example .env
 bun run dev
 ```
 
-## Environment variables
+## Deployment notes
+This service is ready for deployment to Railway / Render / Fly.io:
+- Runtime: Bun
+- Start command: `bun src/server.ts`
+- Required environment variables:
+  - `X402_PAYMENT_TOKEN`
+  - `X402_PAYMENT_RECEIVER` (optional, default `geoip-agent`)
+  - `X402_PAYMENT_NETWORK` (optional, default `base`)
+  - `X402_PRICE_USD` (optional, default `0.0005`)
+  - `PORT` (platform-provided)
 
-- `PORT` (default: `3000`)
-- `X402_PRICE` (default: `0.0005`)
-- `X402_PAYMENT_HEADER` (default: `x-payment`)
-- `X402_DEV_TOKEN` (default: `dev-token-change-me`)
-- `IP_API_BASE` (default: `http://ip-api.com/json`)
-- `UPSTREAM_TIMEOUT_MS` (default: `5000`)
-
-## API
-
-### GET /geoip?ip=8.8.8.8
-
-Requires a valid payment header.
-
-Successful response:
-
-```json
-{
-  "ip": "8.8.8.8",
-  "country": "United States",
-  "city": "Mountain View",
-  "lat": 37.386,
-  "lon": -122.0838,
-  "isp": "Google LLC"
-}
-```
-
-## Curl examples
-
+## Quick test
 ```bash
-BASE_URL="http://localhost:3000"
-curl -i "$BASE_URL/geoip?ip=8.8.8.8"
+# unpaid request -> 402
+curl -i "http://localhost:3000/geoip?ip=8.8.8.8"
+
+# paid request -> 200
+curl -i -H "x-402-payment: dev-x402-token" "http://localhost:3000/geoip?ip=8.8.8.8"
 ```
-
-Expected: `402 Payment Required`
-
-```bash
-BASE_URL="http://localhost:3000"
-curl -i -H "x-payment: dev-token-change-me" "$BASE_URL/geoip?ip=8.8.8.8"
-```
-
-Expected: `200 OK` and geolocation JSON.
-
-## Deploy (Railway / Render / Fly.io)
-
-Use start command:
-
-```bash
-bun run start
-```
-
-Set required environment variables in the platform dashboard (especially `X402_DEV_TOKEN` and `X402_PRICE`).
