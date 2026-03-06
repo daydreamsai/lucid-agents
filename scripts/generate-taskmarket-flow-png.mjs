@@ -3,574 +3,438 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { fileURLToPath } from "node:url";
 
 const WIDTH = 1600;
 const HEIGHT = 1000;
+const pixels = Buffer.alloc(WIDTH * HEIGHT * 4, 0);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "..");
-const outputPath = process.argv[2]
-  ? path.resolve(process.cwd(), process.argv[2])
-  : path.join(repoRoot, "docs/assets/taskmarket-flow.png");
+const FONT = {
+  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+  ".": ["00000", "00000", "00000", "00000", "00000", "00110", "00110"],
+  "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  ">": ["10000", "01000", "00100", "00010", "00100", "01000", "10000"],
+  ":": ["00000", "00110", "00110", "00000", "00110", "00110", "00000"],
+  "/": ["00001", "00010", "00100", "01000", "10000", "00000", "00000"],
+  "?": ["01110", "10001", "00010", "00100", "00100", "00000", "00100"],
 
-const pixels = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
 
-const COLORS = {
-  bg: [247, 250, 255, 255],
-  grid: [232, 238, 248, 255],
-  card: [255, 255, 255, 255],
-  border: [214, 224, 240, 255],
-  title: [29, 45, 74, 255],
-  text: [63, 81, 116, 255],
-  white: [255, 255, 255, 255],
-  arrow: [73, 107, 171, 255],
-  shadow: [53, 72, 113, 44],
-  accent1: [69, 120, 255, 255],
-  accent2: [83, 186, 144, 255],
-  accent3: [255, 170, 71, 255],
-  accent4: [178, 109, 250, 255],
-  accent5: [18, 143, 208, 255],
-  badge: [18, 36, 74, 255]
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01110", "10001", "10000", "10111", "10001", "10001", "01110"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["01110", "00100", "00100", "00100", "00100", "00100", "01110"],
+  J: ["00001", "00001", "00001", "00001", "10001", "10001", "01110"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "11011", "10001"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
 };
 
-function inBounds(x, y) {
-  return x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT;
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return [
+    Number.parseInt(h.slice(0, 2), 16),
+    Number.parseInt(h.slice(2, 4), 16),
+    Number.parseInt(h.slice(4, 6), 16),
+  ];
 }
 
-function setPixel(x, y, color) {
-  if (!inBounds(x, y)) return;
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function setPixel(x, y, r, g, b, a = 255) {
   const xi = x | 0;
   const yi = y | 0;
+  if (xi < 0 || yi < 0 || xi >= WIDTH || yi >= HEIGHT) return;
   const idx = (yi * WIDTH + xi) * 4;
-  const [r, g, b, a] = color;
-
-  if (a === 255) {
+  if (a >= 255) {
     pixels[idx] = r;
     pixels[idx + 1] = g;
     pixels[idx + 2] = b;
     pixels[idx + 3] = 255;
     return;
   }
+  if (a <= 0) return;
 
-  const alpha = a / 255;
-  const inv = 1 - alpha;
-  pixels[idx] = Math.round(r * alpha + pixels[idx] * inv);
-  pixels[idx + 1] = Math.round(g * alpha + pixels[idx + 1] * inv);
-  pixels[idx + 2] = Math.round(b * alpha + pixels[idx + 2] * inv);
+  const inv = 255 - a;
+  pixels[idx] = ((r * a + pixels[idx] * inv) / 255) | 0;
+  pixels[idx + 1] = ((g * a + pixels[idx + 1] * inv) / 255) | 0;
+  pixels[idx + 2] = ((b * a + pixels[idx + 2] * inv) / 255) | 0;
   pixels[idx + 3] = 255;
 }
 
-function fillRect(x, y, w, h, color) {
-  const x0 = Math.max(0, x | 0);
-  const y0 = Math.max(0, y | 0);
-  const x1 = Math.min(WIDTH, (x + w) | 0);
-  const y1 = Math.min(HEIGHT, (y + h) | 0);
+function fillRect(x, y, w, h, color, alpha = 255) {
+  const [r, g, b] = hexToRgb(color);
+  const x0 = clamp(Math.floor(x), 0, WIDTH);
+  const y0 = clamp(Math.floor(y), 0, HEIGHT);
+  const x1 = clamp(Math.ceil(x + w), 0, WIDTH);
+  const y1 = clamp(Math.ceil(y + h), 0, HEIGHT);
 
-  for (let py = y0; py < y1; py++) {
-    for (let px = x0; px < x1; px++) setPixel(px, py, color);
-  }
-}
-
-function pointInRoundedRect(px, py, x, y, w, h, r) {
-  const rr = Math.max(0, Math.min(r, Math.floor(Math.min(w, h) / 2)));
-  const rx = px < x + rr ? x + rr : px > x + w - rr - 1 ? x + w - rr - 1 : px;
-  const ry = py < y + rr ? y + rr : py > y + h - rr - 1 ? y + h - rr - 1 : py;
-  const dx = px - rx;
-  const dy = py - ry;
-  return dx * dx + dy * dy <= rr * rr;
-}
-
-function drawRoundedRect(x, y, w, h, r, fillColor, strokeColor = null, strokeWidth = 0) {
-  const x0 = Math.max(0, x | 0);
-  const y0 = Math.max(0, y | 0);
-  const x1 = Math.min(WIDTH, (x + w) | 0);
-  const y1 = Math.min(HEIGHT, (y + h) | 0);
-
-  if (fillColor) {
-    for (let py = y0; py < y1; py++) {
-      for (let px = x0; px < x1; px++) {
-        if (pointInRoundedRect(px, py, x, y, w, h, r)) setPixel(px, py, fillColor);
-      }
+  for (let yy = y0; yy < y1; yy += 1) {
+    for (let xx = x0; xx < x1; xx += 1) {
+      setPixel(xx, yy, r, g, b, alpha);
     }
   }
+}
 
-  if (strokeColor && strokeWidth > 0) {
-    const ix = x + strokeWidth;
-    const iy = y + strokeWidth;
-    const iw = w - strokeWidth * 2;
-    const ih = h - strokeWidth * 2;
-    const ir = Math.max(0, r - strokeWidth);
+function fillRoundedRect(x, y, w, h, radius, color, alpha = 255) {
+  const [r, g, b] = hexToRgb(color);
+  const rr = Math.max(0, Math.min(radius, Math.floor(Math.min(w, h) / 2)));
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.ceil(x + w);
+  const y1 = Math.ceil(y + h);
 
-    for (let py = y0; py < y1; py++) {
-      for (let px = x0; px < x1; px++) {
-        const inOuter = pointInRoundedRect(px, py, x, y, w, h, r);
-        if (!inOuter) continue;
-        const inInner = iw > 0 && ih > 0 ? pointInRoundedRect(px, py, ix, iy, iw, ih, ir) : false;
-        if (!inInner) setPixel(px, py, strokeColor);
+  for (let yy = y0; yy < y1; yy += 1) {
+    for (let xx = x0; xx < x1; xx += 1) {
+      const cx = xx < x + rr ? x + rr : xx > x + w - rr - 1 ? x + w - rr - 1 : xx;
+      const cy = yy < y + rr ? y + rr : yy > y + h - rr - 1 ? y + h - rr - 1 : yy;
+      const dx = xx - cx;
+      const dy = yy - cy;
+      if (dx * dx + dy * dy <= rr * rr) {
+        setPixel(xx, yy, r, g, b, alpha);
       }
     }
   }
 }
 
-function drawFilledCircle(cx, cy, radius, color) {
-  const r = radius | 0;
-  const x0 = Math.max(0, (cx - r) | 0);
-  const y0 = Math.max(0, (cy - r) | 0);
-  const x1 = Math.min(WIDTH - 1, (cx + r) | 0);
-  const y1 = Math.min(HEIGHT - 1, (cy + r) | 0);
+function fillCircle(cx, cy, radius, color, alpha = 255) {
+  const [r, g, b] = hexToRgb(color);
+  const rr = radius * radius;
+  const x0 = Math.floor(cx - radius);
+  const x1 = Math.ceil(cx + radius);
+  const y0 = Math.floor(cy - radius);
+  const y1 = Math.ceil(cy + radius);
 
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      if (dx * dx + dy * dy <= r * r) setPixel(x, y, color);
+  for (let yy = y0; yy <= y1; yy += 1) {
+    for (let xx = x0; xx <= x1; xx += 1) {
+      const dx = xx - cx;
+      const dy = yy - cy;
+      if (dx * dx + dy * dy <= rr) {
+        setPixel(xx, yy, r, g, b, alpha);
+      }
     }
   }
 }
 
-function drawCircleStroke(cx, cy, radius, color, stroke = 2) {
-  const rOut = radius;
-  const rIn = Math.max(0, radius - stroke);
-  const x0 = Math.max(0, (cx - rOut) | 0);
-  const y0 = Math.max(0, (cy - rOut) | 0);
-  const x1 = Math.min(WIDTH - 1, (cx + rOut) | 0);
-  const y1 = Math.min(HEIGHT - 1, (cy + rOut) | 0);
-
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      const d2 = dx * dx + dy * dy;
-      if (d2 <= rOut * rOut && d2 >= rIn * rIn) setPixel(x, y, color);
-    }
-  }
-}
-
-function drawLine(x1, y1, x2, y2, color, thickness = 2) {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const steps = Math.max(Math.abs(dx), Math.abs(dy));
-  const radius = Math.max(1, Math.floor(thickness / 2));
-
+function drawLine(x0, y0, x1, y1, thickness, color, alpha = 255) {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
   if (steps === 0) {
-    drawFilledCircle(x1, y1, radius, color);
+    fillCircle(x0, y0, thickness / 2, color, alpha);
     return;
   }
-
-  for (let i = 0; i <= steps; i++) {
+  const radius = Math.max(1, thickness / 2);
+  for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
-    const x = x1 + dx * t;
-    const y = y1 + dy * t;
-    drawFilledCircle(x, y, radius, color);
+    const x = x0 + (x1 - x0) * t;
+    const y = y0 + (y1 - y0) * t;
+    fillCircle(x, y, radius, color, alpha);
   }
 }
 
-function pointInTriangle(px, py, x1, y1, x2, y2, x3, y3) {
-  const d1 = (px - x2) * (y1 - y2) - (x1 - x2) * (py - y2);
-  const d2 = (px - x3) * (y2 - y3) - (x2 - x3) * (py - y3);
-  const d3 = (px - x1) * (y3 - y1) - (x3 - x1) * (py - y1);
-  const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
-  const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
-  return !(hasNeg && hasPos);
-}
+function fillTriangle(p1, p2, p3, color, alpha = 255) {
+  const [r, g, b] = hexToRgb(color);
 
-function fillTriangle(x1, y1, x2, y2, x3, y3, color) {
-  const minX = Math.floor(Math.min(x1, x2, x3));
-  const maxX = Math.ceil(Math.max(x1, x2, x3));
-  const minY = Math.floor(Math.min(y1, y2, y3));
-  const maxY = Math.ceil(Math.max(y1, y2, y3));
+  const minX = Math.floor(Math.min(p1.x, p2.x, p3.x));
+  const maxX = Math.ceil(Math.max(p1.x, p2.x, p3.x));
+  const minY = Math.floor(Math.min(p1.y, p2.y, p3.y));
+  const maxY = Math.ceil(Math.max(p1.y, p2.y, p3.y));
 
-  for (let y = minY; y <= maxY; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      if (pointInTriangle(x + 0.5, y + 0.5, x1, y1, x2, y2, x3, y3)) setPixel(x, y, color);
+  const edge = (a, b, p) => (p.x - a.x) * (b.y - a.y) - (p.y - a.y) * (b.x - a.x);
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const p = { x: x + 0.5, y: y + 0.5 };
+      const w0 = edge(p2, p3, p);
+      const w1 = edge(p3, p1, p);
+      const w2 = edge(p1, p2, p);
+      const hasNeg = w0 < 0 || w1 < 0 || w2 < 0;
+      const hasPos = w0 > 0 || w1 > 0 || w2 > 0;
+      if (!(hasNeg && hasPos)) {
+        setPixel(x, y, r, g, b, alpha);
+      }
     }
   }
 }
 
-function drawArrow(x1, y1, x2, y2, color, thickness = 5, headLength = 18) {
-  drawLine(x1, y1, x2, y2, color, thickness);
-  const angle = Math.atan2(y2 - y1, x2 - x1);
-  const wing = headLength * 0.62;
-  const bx = x2 - headLength * Math.cos(angle);
-  const by = y2 - headLength * Math.sin(angle);
-  const x3 = bx + wing * Math.cos(angle + Math.PI / 2);
-  const y3 = by + wing * Math.sin(angle + Math.PI / 2);
-  const x4 = bx + wing * Math.cos(angle - Math.PI / 2);
-  const y4 = by + wing * Math.sin(angle - Math.PI / 2);
-  fillTriangle(x2, y2, x3, y3, x4, y4, color);
+function drawArrow(x0, y0, x1, y1, color) {
+  drawLine(x0, y0, x1, y1, 6, color, 255);
+  const angle = Math.atan2(y1 - y0, x1 - x0);
+  const len = 18;
+  const p1 = { x: x1, y: y1 };
+  const p2 = {
+    x: x1 - len * Math.cos(angle - Math.PI / 7),
+    y: y1 - len * Math.sin(angle - Math.PI / 7),
+  };
+  const p3 = {
+    x: x1 - len * Math.cos(angle + Math.PI / 7),
+    y: y1 - len * Math.sin(angle + Math.PI / 7),
+  };
+  fillTriangle(p1, p2, p3, color, 255);
 }
 
-const FONT = {
-  " ": [".....", ".....", ".....", ".....", ".....", ".....", "....."],
-  A: [".###.", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
-  B: ["####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."],
-  C: [".###.", "#...#", "#....", "#....", "#....", "#...#", ".###."],
-  D: ["####.", "#...#", "#...#", "#...#", "#...#", "#...#", "####."],
-  E: ["#####", "#....", "#....", "####.", "#....", "#....", "#####"],
-  F: ["#####", "#....", "#....", "####.", "#....", "#....", "#...."],
-  G: [".###.", "#...#", "#....", "#.###", "#...#", "#...#", ".###."],
-  H: ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"],
-  I: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "#####"],
-  J: ["#####", "...#.", "...#.", "...#.", "...#.", "#..#.", ".##.."],
-  K: ["#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"],
-  L: ["#....", "#....", "#....", "#....", "#....", "#....", "#####"],
-  M: ["#...#", "##.##", "#.#.#", "#.#.#", "#...#", "#...#", "#...#"],
-  N: ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"],
-  O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
-  P: ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."],
-  Q: [".###.", "#...#", "#...#", "#...#", "#.#.#", "#..#.", ".##.#"],
-  R: ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"],
-  S: [".####", "#....", "#....", ".###.", "....#", "....#", "####."],
-  T: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."],
-  U: ["#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."],
-  V: ["#...#", "#...#", "#...#", "#...#", ".#.#.", ".#.#.", "..#.."],
-  W: ["#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"],
-  X: ["#...#", "#...#", ".#.#.", "..#..", ".#.#.", "#...#", "#...#"],
-  Y: ["#...#", "#...#", ".#.#.", "..#..", "..#..", "..#..", "..#.."],
-  Z: ["#####", "....#", "...#.", "..#..", ".#...", "#....", "#####"],
-  0: [".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."],
-  1: ["..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."],
-  2: [".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"],
-  3: ["#####", "....#", "...#.", "..##.", "....#", "#...#", ".###."],
-  4: ["...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."],
-  5: ["#####", "#....", "####.", "....#", "....#", "#...#", ".###."],
-  6: [".###.", "#...#", "#....", "####.", "#...#", "#...#", ".###."],
-  7: ["#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."],
-  8: [".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."],
-  9: [".###.", "#...#", "#...#", ".####", "....#", "#...#", ".###."],
-  ".": [".....", ".....", ".....", ".....", ".....", "..##.", "..##."],
-  "-": [".....", ".....", ".....", ".###.", ".....", ".....", "....."],
-  "+": [".....", "..#..", "..#..", "#####", "..#..", "..#..", "....."],
-  ":": [".....", "..##.", "..##.", ".....", "..##.", "..##.", "....."],
-  "/": ["....#", "...#.", "..#..", ".#...", "#....", ".....", "....."],
-  "?": [".###.", "#...#", "...#.", "..#..", "..#..", ".....", "..#.."]
-};
-
-function glyphFor(ch) {
-  if (FONT[ch]) return FONT[ch];
-  const up = ch.toUpperCase();
-  if (FONT[up]) return FONT[up];
-  return FONT["?"];
+function drawGlyph(ch, x, y, scale, color) {
+  const key = ch.toUpperCase();
+  const glyph = FONT[key] ?? FONT["?"];
+  for (let row = 0; row < 7; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      if (glyph[row][col] === "1") {
+        fillRect(x + col * scale, y + row * scale, scale, scale, color, 255);
+      }
+    }
+  }
 }
 
-function measureText(text, scale = 1, spacing = 1) {
+function measureText(text, scale) {
   if (!text || text.length === 0) return 0;
-  let width = 0;
-  for (let i = 0; i < text.length; i++) {
-    width += glyphFor(text[i])[0].length * scale;
-    if (i < text.length - 1) width += spacing * scale;
-  }
-  return width;
+  return text.length * 5 * scale + (text.length - 1) * scale;
 }
 
-function drawChar(ch, x, y, scale, color) {
-  const glyph = glyphFor(ch);
-  for (let gy = 0; gy < glyph.length; gy++) {
-    const row = glyph[gy];
-    for (let gx = 0; gx < row.length; gx++) {
-      if (row[gx] !== "#") continue;
-      fillRect(x + gx * scale, y + gy * scale, scale, scale, color);
-    }
+function drawText(text, x, y, scale, color, align = "left") {
+  const t = String(text).toUpperCase();
+  const width = measureText(t, scale);
+  let cursorX = x;
+  if (align === "center") cursorX = x - Math.floor(width / 2);
+  if (align === "right") cursorX = x - width;
+
+  for (let i = 0; i < t.length; i += 1) {
+    drawGlyph(t[i], cursorX, y, scale, color);
+    cursorX += 6 * scale;
   }
 }
 
-function drawText(text, x, y, options = {}) {
-  const scale = options.scale ?? 2;
-  const spacing = options.spacing ?? 1;
-  const color = options.color ?? COLORS.text;
-  const align = options.align ?? "left";
-  const width = measureText(text, scale, spacing);
-
-  let startX = x;
-  if (align === "center") startX = Math.round(x - width / 2);
-  if (align === "right") startX = x - width;
-
-  let cx = startX;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    drawChar(ch, cx, y, scale, color);
-    cx += glyphFor(ch)[0].length * scale;
-    if (i < text.length - 1) cx += spacing * scale;
-  }
-}
-
-function wrapText(text, maxWidth, scale = 2, spacing = 1) {
-  const words = text.split(/\s+/).filter(Boolean);
+function wrapText(text, maxWidth, scale) {
+  const words = text.toUpperCase().split(/\s+/).filter(Boolean);
   const lines = [];
   let current = "";
 
   for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (measureText(candidate, scale, spacing) <= maxWidth || current.length === 0) {
-      current = candidate;
+    const test = current.length > 0 ? `${current} ${word}` : word;
+    if (measureText(test, scale) <= maxWidth) {
+      current = test;
     } else {
-      lines.push(current);
+      if (current.length > 0) lines.push(current);
       current = word;
     }
   }
 
-  if (current) lines.push(current);
+  if (current.length > 0) lines.push(current);
   return lines;
 }
 
-function drawWrappedText(text, x, y, maxWidth, options = {}) {
-  const scale = options.scale ?? 2;
-  const color = options.color ?? COLORS.text;
-  const align = options.align ?? "left";
-  const lineGap = options.lineGap ?? 2;
-  const maxLines = options.maxLines ?? Infinity;
-  const spacing = options.spacing ?? 1;
+function drawWrappedCenteredText(text, centerX, topY, maxWidth, scale, color, boxHeight) {
+  const lines = wrapText(text, maxWidth, scale);
+  const lineHeight = 8 * scale;
+  const totalHeight = lines.length * lineHeight;
+  let y = topY + Math.floor((boxHeight - totalHeight) / 2);
 
-  const lines = wrapText(text, maxWidth, scale, spacing).slice(0, maxLines);
-  const lineHeight = 7 * scale + lineGap;
-
-  for (let i = 0; i < lines.length; i++) {
-    drawText(lines[i], x, y + i * lineHeight, { scale, color, align, spacing });
+  for (const line of lines) {
+    drawText(line, centerX, y, scale, color, "center");
+    y += lineHeight;
   }
-
-  return lines.length * lineHeight;
 }
 
-function drawCard({
-  x,
-  y,
-  w,
-  h,
-  step,
-  title,
-  body,
-  accent
-}) {
-  drawRoundedRect(x + 8, y + 10, w, h, 18, COLORS.shadow, null, 0);
-  drawRoundedRect(x, y, w, h, 18, COLORS.card, COLORS.border, 2);
-  drawRoundedRect(x, y, w, 16, 18, accent, null, 0);
+function drawVerticalGradient(topHex, bottomHex) {
+  const [tr, tg, tb] = hexToRgb(topHex);
+  const [br, bg, bb] = hexToRgb(bottomHex);
 
-  const bubbleX = x + 36;
-  const bubbleY = y + 42;
-  drawFilledCircle(bubbleX, bubbleY, 17, accent);
-  drawCircleStroke(bubbleX, bubbleY, 17, COLORS.white, 2);
-  drawText(String(step), bubbleX, bubbleY - 10, {
-    scale: 3,
-    align: "center",
-    color: COLORS.white
-  });
-
-  drawWrappedText(title, x + 66, y + 22, w - 84, {
-    scale: 3,
-    color: COLORS.title,
-    maxLines: 3
-  });
-
-  drawWrappedText(body, x + 24, y + 110, w - 48, {
-    scale: 3,
-    color: COLORS.text,
-    maxLines: 4
-  });
-}
-
-function drawBackground() {
-  fillRect(0, 0, WIDTH, HEIGHT, COLORS.bg);
-
-  for (let y = 180; y < HEIGHT; y += 32) {
-    for (let x = 26; x < WIDTH; x += 32) {
-      drawFilledCircle(x, y, 1, COLORS.grid);
+  for (let y = 0; y < HEIGHT; y += 1) {
+    const t = y / (HEIGHT - 1);
+    const r = Math.round(tr + (br - tr) * t);
+    const g = Math.round(tg + (bg - tg) * t);
+    const b = Math.round(tb + (bb - tb) * t);
+    for (let x = 0; x < WIDTH; x += 1) {
+      setPixel(x, y, r, g, b, 255);
     }
   }
-
-  drawFilledCircle(130, 120, 60, [231, 239, 255, 255]);
-  drawFilledCircle(1470, 900, 100, [235, 245, 255, 255]);
 }
 
-function drawHeader() {
-  drawText("TASKMARKET", WIDTH / 2, 54, {
-    scale: 8,
-    align: "center",
-    color: COLORS.title
-  });
-  drawText("END-TO-END FLOW", WIDTH / 2, 130, {
-    scale: 5,
-    align: "center",
-    color: COLORS.text
-  });
+function drawGlow(cx, cy, radius, color, maxAlpha) {
+  const [r, g, b] = hexToRgb(color);
+  const rr = radius * radius;
+  const x0 = Math.floor(cx - radius);
+  const x1 = Math.ceil(cx + radius);
+  const y0 = Math.floor(cy - radius);
+  const y1 = Math.ceil(cy + radius);
 
-  drawRoundedRect(1198, 40, 334, 74, 16, COLORS.badge, null, 0);
-  drawText("taskmarket.xyz", 1365, 64, {
-    scale: 4,
-    align: "center",
-    color: COLORS.white
-  });
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= rr) {
+        const t = 1 - d2 / rr;
+        setPixel(x, y, r, g, b, Math.round(maxAlpha * t));
+      }
+    }
+  }
 }
 
-function drawFlow() {
-  const cardW = 300;
-  const cardH = 220;
-  const y = 250;
-  const xs = [140, 480, 820, 1160];
-
-  drawCard({
-    x: xs[0],
-    y,
-    w: cardW,
-    h: cardH,
-    step: 1,
-    title: "REQUESTER POSTS TASK",
-    body: "+ ESCROWED USDC REWARD",
-    accent: COLORS.accent1
-  });
-
-  drawCard({
-    x: xs[1],
-    y,
-    w: cardW,
-    h: cardH,
-    step: 2,
-    title: "WORKER PICKS UP TASK",
-    body: "STARTS WORK",
-    accent: COLORS.accent2
-  });
-
-  drawCard({
-    x: xs[2],
-    y,
-    w: cardW,
-    h: cardH,
-    step: 3,
-    title: "WORKER SUBMITS COMPLETED WORK",
-    body: "DELIVERS RESULT",
-    accent: COLORS.accent3
-  });
-
-  drawCard({
-    x: xs[3],
-    y,
-    w: cardW,
-    h: cardH,
-    step: 4,
-    title: "REQUESTER ACCEPTS",
-    body: "USDC RELEASED TO WORKER",
-    accent: COLORS.accent4
-  });
-
-  drawArrow(xs[0] + cardW + 8, y + 110, xs[1] - 10, y + 110, COLORS.arrow, 6, 16);
-  drawArrow(xs[1] + cardW + 8, y + 110, xs[2] - 10, y + 110, COLORS.arrow, 6, 16);
-  drawArrow(xs[2] + cardW + 8, y + 110, xs[3] - 10, y + 110, COLORS.arrow, 6, 16);
-
-  const s5x = 280;
-  const s5y = 620;
-  const s5w = 1040;
-  const s5h = 220;
-
-  drawArrow(xs[3] + cardW / 2, y + cardH + 8, xs[3] + cardW / 2, s5y - 12, COLORS.arrow, 6, 18);
-
-  drawRoundedRect(s5x + 10, s5y + 12, s5w, s5h, 20, COLORS.shadow, null, 0);
-  drawRoundedRect(s5x, s5y, s5w, s5h, 20, COLORS.card, COLORS.border, 2);
-  drawRoundedRect(s5x, s5y, s5w, 18, 20, COLORS.accent5, null, 0);
-
-  drawFilledCircle(s5x + 52, s5y + 56, 22, COLORS.accent5);
-  drawCircleStroke(s5x + 52, s5y + 56, 22, COLORS.white, 2);
-  drawText("5", s5x + 52, s5y + 43, {
-    scale: 4,
-    align: "center",
-    color: COLORS.white
-  });
-
-  drawWrappedText("ALL PAYMENTS TRUSTLESS VIA x402 ON BASE", s5x + 90, s5y + 35, s5w - 120, {
-    scale: 4,
-    color: COLORS.title,
-    maxLines: 2
-  });
-
-  drawWrappedText("SETTLEMENT IS ONCHAIN AND NON-CUSTODIAL", s5x + 40, s5y + 122, s5w - 80, {
-    scale: 3,
-    color: COLORS.text,
-    align: "center"
-  });
-
-  drawText("REQUESTER  ->  TASKMARKET  ->  WORKER", WIDTH / 2, 900, {
-    scale: 3,
-    align: "center",
-    color: COLORS.text
-  });
+function drawBadge(cx, cy, text, bg, fg) {
+  const scale = 3;
+  const paddingX = 22;
+  const h = 44;
+  const w = measureText(text, scale) + paddingX * 2;
+  const x = Math.round(cx - w / 2);
+  const y = Math.round(cy - h / 2);
+  fillRoundedRect(x, y, w, h, 22, bg, 255);
+  drawText(text, cx, y + 11, scale, fg, "center");
 }
 
-function makeCrcTable() {
+function createPngBuffer(width, height, rgbaPixels) {
+  const rowLength = width * 4;
+  const raw = Buffer.alloc((rowLength + 1) * height);
+
+  for (let y = 0; y < height; y += 1) {
+    const rawRow = y * (rowLength + 1);
+    raw[rawRow] = 0;
+    rgbaPixels.copy(raw, rawRow + 1, y * rowLength, y * rowLength + rowLength);
+  }
+
+  const compressed = zlib.deflateSync(raw, { level: 9 });
+
+  const pngSig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  const chunks = [
+    makeChunk("IHDR", ihdr),
+    makeChunk("IDAT", compressed),
+    makeChunk("IEND", Buffer.alloc(0)),
+  ];
+
+  return Buffer.concat([pngSig, ...chunks]);
+}
+
+function makeChunk(type, data) {
+  const typeBuf = Buffer.from(type, "ascii");
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(data.length, 0);
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
+  return Buffer.concat([lenBuf, typeBuf, data, crcBuf]);
+}
+
+const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
+  for (let n = 0; n < 256; n += 1) {
     let c = n;
-    for (let k = 0; k < 8; k++) {
-      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    for (let k = 0; k < 8; k += 1) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
     }
     table[n] = c >>> 0;
   }
   return table;
-}
-
-const CRC_TABLE = makeCrcTable();
+})();
 
 function crc32(buf) {
   let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) {
+  for (let i = 0; i < buf.length; i += 1) {
     c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   }
   return (c ^ 0xffffffff) >>> 0;
 }
 
-function pngChunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length, 0);
-  const typeBuf = Buffer.from(type, "ascii");
-  const crc = Buffer.alloc(4);
-  const crcVal = crc32(Buffer.concat([typeBuf, data]));
-  crc.writeUInt32BE(crcVal >>> 0, 0);
-  return Buffer.concat([len, typeBuf, data, crc]);
-}
+function render() {
+  drawVerticalGradient("#F7FAFF", "#EEF2FF");
+  drawGlow(1300, 120, 420, "#C7D2FE", 70);
+  drawGlow(260, 880, 360, "#A5F3FC", 55);
 
-function encodePNG(width, height, rgba) {
-  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  drawText("TASKMARKET", WIDTH / 2, 46, 8, "#0F172A", "center");
+  drawText("END TO END FLOW", WIDTH / 2, 124, 6, "#334155", "center");
 
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  ihdr[10] = 0; // compression
-  ihdr[11] = 0; // filter
-  ihdr[12] = 0; // interlace
+  const card = { x: 120, y: 170, w: 1360, h: 700, r: 30 };
+  fillRoundedRect(card.x + 8, card.y + 12, card.w, card.h, card.r, "#94A3B8", 40);
+  fillRoundedRect(card.x, card.y, card.w, card.h, card.r, "#FFFFFF", 255);
 
-  const stride = width * 4;
-  const raw = Buffer.alloc((stride + 1) * height);
-  for (let y = 0; y < height; y++) {
-    const rawOffset = y * (stride + 1);
-    raw[rawOffset] = 0;
-    const srcOffset = y * stride;
-    for (let i = 0; i < stride; i++) {
-      raw[rawOffset + 1 + i] = rgba[srcOffset + i];
+  const stepTexts = [
+    "1. REQUESTER POSTS A TASK + ESCROWED USDC REWARD",
+    "2. WORKER PICKS UP THE TASK",
+    "3. WORKER SUBMITS COMPLETED WORK",
+    "4. REQUESTER ACCEPTS -> USDC RELEASED TO WORKER",
+    "5. ALL PAYMENTS TRUSTLESS VIA X402 ON BASE",
+  ];
+
+  const stepColors = ["#E0ECFF", "#EAF8EA", "#FFF3E6", "#F3E8FF", "#E6FFFA"];
+  const numberColors = ["#3B82F6", "#22C55E", "#F97316", "#A855F7", "#14B8A6"];
+
+  const box = { x: 320, w: 1080, h: 84 };
+  const startY = 260;
+  const gap = 112;
+  const numX = 250;
+
+  drawLine(numX, startY + 42, numX, startY + 42 + gap * 4, 6, "#CBD5E1", 255);
+
+  for (let i = 0; i < stepTexts.length; i += 1) {
+    const y = startY + i * gap;
+
+    fillRoundedRect(box.x + 4, y + 6, box.w, box.h, 20, "#94A3B8", 35);
+    fillRoundedRect(box.x, y, box.w, box.h, 20, stepColors[i], 255);
+
+    fillCircle(numX, y + box.h / 2, 29, "#FFFFFF", 255);
+    fillCircle(numX, y + box.h / 2, 24, numberColors[i], 255);
+    drawText(String(i + 1), numX, y + 29, 4, "#FFFFFF", "center");
+
+    drawWrappedCenteredText(stepTexts[i], box.x + box.w / 2, y, box.w - 60, 3, "#0F172A", box.h);
+
+    if (i < stepTexts.length - 1) {
+      const ay0 = y + box.h + 8;
+      const ay1 = y + gap - 8;
+      drawArrow(box.x + box.w / 2, ay0, box.x + box.w / 2, ay1, "#64748B");
     }
   }
 
-  const compressed = zlib.deflateSync(raw, { level: 9 });
+  drawBadge(560, 820, "TRUSTLESS PAYMENTS", "#E2E8F0", "#0F172A");
+  drawBadge(840, 820, "X402", "#DBEAFE", "#1D4ED8");
+  drawBadge(1030, 820, "BASE", "#DCFCE7", "#166534");
 
-  const chunks = [
-    pngChunk("IHDR", ihdr),
-    pngChunk("IDAT", compressed),
-    pngChunk("IEND", Buffer.alloc(0))
-  ];
-
-  return Buffer.concat([signature, ...chunks]);
+  drawText("TASKMARKET.XYZ", WIDTH / 2, 915, 6, "#0F172A", "center");
 }
 
-function render() {
-  drawBackground();
-  drawHeader();
-  drawFlow();
+function main() {
+  render();
+  const png = createPngBuffer(WIDTH, HEIGHT, pixels);
 
-  const png = encodePNG(WIDTH, HEIGHT, pixels);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, png);
+  const outPath = path.join(process.cwd(), "docs", "assets", "taskmarket-flow.png");
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, png);
 
-  process.stdout.write(`Generated ${outputPath} (${WIDTH}x${HEIGHT})\n`);
+  // eslint-disable-next-line no-console
+  console.log(`Generated ${outPath} (${WIDTH}x${HEIGHT})`);
 }
 
-render();
+main();
