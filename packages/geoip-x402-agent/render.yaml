@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: geoip-x402-agent
+    env: docker
+    dockerfilePath: ./packages/geoip-x402-agent/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: X402_PAYMENT_TOKEN
+        sync: false
