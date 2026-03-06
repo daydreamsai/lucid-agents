@@ -3,10 +3,12 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun-types"],
     "strict": true,
     "skipLibCheck": true,
-    "types": ["bun-types"],
-    "noEmit": true
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*.ts"]
 }

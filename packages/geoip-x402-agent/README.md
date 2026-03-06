@@ -1,77 +1,82 @@
-# IP Geolocation Lucid Agent (x402 payments)
+# GeoIP x402 Lucid Agent
 
-Bun + TypeScript Lucid Agent that resolves geolocation for any IP using ip-api.com free tier and enforces x402-style payment before lookup.
+Bun + TypeScript Lucid Agent that returns IP geolocation using ip-api.com and enforces x402-style payment before each lookup.
 
-Built via TaskMarket bounty on taskmarket.xyz.
+This was built via a TaskMarket bounty on https://taskmarket.xyz.
 
-## Route
+## Features
 
-`GET /geoip?ip=8.8.8.8`
+- Uses `@lucid-agents/http` and `@lucid-agents/payments`
+- `GET /geoip?ip=8.8.8.8`
+- Returns:
+  - `ip`
+  - `country`
+  - `city`
+  - `lat`
+  - `lon`
+  - `isp`
+- Enforces payment:
+  - no valid payment header -> `402 Payment Required`
+  - valid payment header -> `200 OK` with geolocation payload
 
-Successful response shape:
+## Local run
+
+```bash
+bun install
+cp .env.example .env
+bun run dev
+```
+
+## Environment variables
+
+- `PORT` (default: `3000`)
+- `X402_PRICE` (default: `0.0005`)
+- `X402_PAYMENT_HEADER` (default: `x-payment`)
+- `X402_DEV_TOKEN` (default: `dev-token-change-me`)
+- `IP_API_BASE` (default: `http://ip-api.com/json`)
+- `UPSTREAM_TIMEOUT_MS` (default: `5000`)
+
+## API
+
+### GET /geoip?ip=8.8.8.8
+
+Requires a valid payment header.
+
+Successful response:
 
 ```json
 {
   "ip": "8.8.8.8",
   "country": "United States",
   "city": "Mountain View",
-  "lat": 37.4229,
-  "lon": -122.085,
+  "lat": 37.386,
+  "lon": -122.0838,
   "isp": "Google LLC"
 }
 ```
 
-## Payment enforcement
-
-No payment header returns HTTP 402.
-Valid payment header returns HTTP 200 with geolocation payload.
-
-Accepted payment headers:
-- `x402-payment` (preferred)
-- `x-payment`
-- `payment`
-
-By default, set `X402_PAYMENT_TOKEN` and send the same value in `x402-payment`.
-
-## Local run
-
-```bash
-bun install
-bun run --cwd packages/geoip-x402-agent dev
-```
-
-## Production run
-
-```bash
-bun install --frozen-lockfile
-bun run --cwd packages/geoip-x402-agent start
-```
-
 ## Curl examples
 
-402 response:
-
 ```bash
-LIVE_ENDPOINT=<LIVE_ENDPOINT_URL>
-curl -i "$LIVE_ENDPOINT/geoip?ip=8.8.8.8"
+BASE_URL="http://localhost:3000"
+curl -i "$BASE_URL/geoip?ip=8.8.8.8"
 ```
 
-Successful paid response:
+Expected: `402 Payment Required`
 
 ```bash
-LIVE_ENDPOINT=<LIVE_ENDPOINT_URL>
-curl -i "$LIVE_ENDPOINT/geoip?ip=8.8.8.8" \
-  -H "x402-payment: $X402_PAYMENT_TOKEN"
+BASE_URL="http://localhost:3000"
+curl -i -H "x-payment: dev-token-change-me" "$BASE_URL/geoip?ip=8.8.8.8"
 ```
 
-## Deploy
+Expected: `200 OK` and geolocation JSON.
 
-This package includes Docker and platform config for Railway, Render, and Fly.
+## Deploy (Railway / Render / Fly.io)
 
-Required env vars:
-- `PORT` (platform usually injects this)
-- `X402_PAYMENT_TOKEN` (required in production)
+Use start command:
 
-## Repo
+```bash
+bun run start
+```
 
-`https://github.com/daydreamsai/lucid-agents`
+Set required environment variables in the platform dashboard (especially `X402_DEV_TOKEN` and `X402_PRICE`).
