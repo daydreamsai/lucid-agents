@@ -1,6 +1,6 @@
-# Core Examples Example
+# Core Example
 
-Example implementations for the `Core Examples` module of the Lucid Agents SDK.
+Example implementations for the `core` module of the Lucid Agents SDK.
 
 ---
 
