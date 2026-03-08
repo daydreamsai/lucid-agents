@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 import { z } from 'zod';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
@@ -23,10 +24,12 @@ export interface SupplierReliabilityConfig {
 }
 
 export async function createSupplierReliabilityAgent(config: SupplierReliabilityConfig) {
+  // Note: paymentsConfig is reserved for future payment validation and will be consumed
+  // by payment validation middleware in production
   const app = new Hono();
 
   // Middleware to check payment (mock implementation)
-  const requirePayment = async (c: any, next: any) => {
+  const requirePayment = async (c: Context, next: Next) => {
     const paymentHeader = c.req.header('X-Payment');
     
     if (!paymentHeader) {

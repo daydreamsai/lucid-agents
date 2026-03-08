@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { z } from 'zod';
 import {
   SupplierScoreRequestSchema,
   SupplierScoreResponseSchema,

@@ -16,7 +16,10 @@ export const SupplierScoreResponseSchema = z.object({
   supplier_score: z.number().min(0).max(1),
   confidence: z.number().min(0).max(1),
   freshness_ms: z.number().nonnegative(),
-  metadata: z.any().optional(),
+  metadata: z.object({
+    data_points: z.number().int().nonnegative(),
+    last_updated: z.string(),
+  }).optional(),
 });
 
 // Lead Time Forecast Endpoint

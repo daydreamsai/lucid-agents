@@ -16,7 +16,7 @@ export function forecastLeadTime(
   category: string | undefined,
   region: string,
   horizonDays: number
-) {
+): { lead_time_p50: number; lead_time_p95: number; drift_probability: number } {
   const baseLeadTime = 10 + (hashString(supplierId) % 20);
   const variability = 1 + (horizonDays / 30) * 0.5;
   
@@ -31,7 +31,7 @@ export function detectDisruptions(
   supplierId: string,
   region: string,
   riskTolerance: string
-) {
+): { disruption_probability: number; alert_reasons: string[]; severity: 'low' | 'medium' | 'high' | 'critical' } {
   const baseRisk = (hashString(`${supplierId}-${region}`) % 50) / 100;
   const threshold = riskTolerance === 'low' ? 0.1 : riskTolerance === 'high' ? 0.4 : 0.25;
   

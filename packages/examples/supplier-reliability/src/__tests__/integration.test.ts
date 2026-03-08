@@ -4,7 +4,7 @@ import type { Hono } from 'hono';
 
 describe('Integration Tests - Paid Endpoints', () => {
   let app: Hono;
-  let testServer: any;
+  let testServer: { port: number; fetch: typeof app.fetch };
 
   beforeAll(async () => {
     app = await createSupplierReliabilityAgent({
@@ -19,10 +19,6 @@ describe('Integration Tests - Paid Endpoints', () => {
       port: 3000,
       fetch: app.fetch.bind(app),
     };
-  });
-
-  afterAll(() => {
-    // Cleanup if needed
   });
 
   describe('GET /v1/suppliers/score', () => {
@@ -111,7 +107,7 @@ describe('Integration Tests - Paid Endpoints', () => {
       expect(body.freshness_ms).toBeGreaterThanOrEqual(0);
     });
 
-    it('should use default horizonDays when not provided', async () => {
+    it('should use default horizonDays (30) when not provided', async () => {
       const paymentHeader = createMockPaymentHeader();
       const req = new Request('http://localhost:3000/v1/suppliers/lead-time-forecast?supplierId=SUP-001&region=APAC', {
         headers: {
@@ -121,6 +117,11 @@ describe('Integration Tests - Paid Endpoints', () => {
       const res = await testServer.fetch(req);
       
       expect(res.status).toBe(200);
+      const body = await res.json();
+      // Verify response structure is valid (default horizonDays=30 was applied)
+      expect(body.lead_time_p50).toBeGreaterThanOrEqual(0);
+      expect(body.lead_time_p95).toBeGreaterThanOrEqual(body.lead_time_p50);
+      expect(body.drift_probability).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -152,7 +153,7 @@ describe('Integration Tests - Paid Endpoints', () => {
       expect(body.freshness_ms).toBeGreaterThanOrEqual(0);
     });
 
-    it('should use default riskTolerance when not provided', async () => {
+    it('should use default riskTolerance (medium) when not provided', async () => {
       const paymentHeader = createMockPaymentHeader();
       const req = new Request('http://localhost:3000/v1/suppliers/disruption-alerts?supplierId=SUP-001&region=APAC', {
         headers: {
@@ -162,6 +163,12 @@ describe('Integration Tests - Paid Endpoints', () => {
       const res = await testServer.fetch(req);
       
       expect(res.status).toBe(200);
+      const body = await res.json();
+      // Verify response structure is valid (default riskTolerance=medium was applied)
+      expect(body.disruption_probability).toBeGreaterThanOrEqual(0);
+      expect(body.disruption_probability).toBeLessThanOrEqual(1);
+      expect(Array.isArray(body.alert_reasons)).toBe(true);
+      expect(['low', 'medium', 'high', 'critical']).toContain(body.severity);
     });
   });
 
