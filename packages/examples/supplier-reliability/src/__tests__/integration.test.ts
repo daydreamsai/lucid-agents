@@ -166,7 +166,7 @@ describe('Integration Tests - Paid Endpoints', () => {
   });
 
   describe('Performance Tests', () => {
-    it('should respond within 500ms for cached path', async () => {
+    it('should respond within 500ms for supplier score endpoint', async () => {
       const paymentHeader = createMockPaymentHeader();
       const req = new Request('http://localhost:3000/v1/suppliers/score?supplierId=SUP-001&region=APAC', {
         headers: {
