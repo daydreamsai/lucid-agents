@@ -3,6 +3,13 @@ import type { Context, Next } from 'hono';
 import { z } from 'zod';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import {
+  HTTPFacilitatorClient,
+  type FacilitatorConfig,
+} from '@x402/core/server';
+import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { paymentMiddlewareFromConfig } from '@x402/hono';
+import type { RouteConfig } from '@x402/core/server';
+import {
   SupplierScoreRequestSchema,
   SupplierScoreResponseSchema,
   LeadTimeForecastRequestSchema,
@@ -24,47 +31,56 @@ export interface SupplierReliabilityConfig {
 }
 
 export async function createSupplierReliabilityAgent(config: SupplierReliabilityConfig) {
-  // Note: paymentsConfig is reserved for future payment validation and will be consumed
-  // by payment validation middleware in production
   const app = new Hono();
 
-  // Middleware to check payment (mock implementation)
+  // Set up payment middleware using real payment verifier from config
+  const price = '1000'; // Price in base units (e.g., 1000 = $0.001 USDC)
+  const network = config.paymentsConfig.network;
+  const payTo = (config.paymentsConfig as { payTo?: string }).payTo;
+
+  const facilitatorConfig: FacilitatorConfig = {
+    url: config.paymentsConfig.facilitatorUrl,
+    createAuthHeaders: config.paymentsConfig.facilitatorAuth
+      ? async () => ({
+          verify: { Authorization: `Bearer ${config.paymentsConfig.facilitatorAuth}` },
+        })
+      : undefined,
+  };
+
+  const facilitatorClient = new HTTPFacilitatorClient(facilitatorConfig);
+
+  const baseRoute: RouteConfig = {
+    accepts: {
+      scheme: 'exact',
+      payTo: payTo as `0x${string}`,
+      price,
+      network,
+    },
+    description: 'Supplier Reliability API endpoint',
+    mimeType: 'application/json',
+  };
+
+  const routes = {
+    'GET /v1/suppliers/score': baseRoute,
+    'GET /v1/suppliers/lead-time-forecast': baseRoute,
+    'GET /v1/suppliers/disruption-alerts': baseRoute,
+  };
+
+  const schemes = [
+    {
+      network: 'eip155:*',
+      server: new ExactEvmScheme(),
+    },
+  ];
+
+  const paymentMiddleware = paymentMiddlewareFromConfig(routes, facilitatorClient, schemes);
+
+  // Middleware to check payment using real verifier
   const requirePayment = async (c: Context, next: Next) => {
-    const paymentHeader = c.req.header('X-Payment');
-    
-    if (!paymentHeader) {
-      // Return 402 Payment Required
-      return c.json(
-        {
-          x402Version: 2,
-          error: 'Payment required',
-        },
-        402,
-        {
-          'PAYMENT-REQUIRED': 'true',
-        }
-      );
+    const result = await paymentMiddleware(c, next);
+    if (result instanceof Response) {
+      return result;
     }
-    
-    // Mock payment validation - in real implementation, validate with facilitator
-    try {
-      const decoded = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
-      if (!decoded.payload?.authorization?.to) {
-        throw new Error('Invalid payment header');
-      }
-    } catch (err) {
-      return c.json(
-        {
-          error: {
-            code: 'INVALID_PAYMENT',
-            message: 'Invalid payment header',
-          },
-        },
-        400
-      );
-    }
-    
-    await next();
   };
 
   // GET /v1/suppliers/score
@@ -100,7 +116,7 @@ export async function createSupplierReliabilityAgent(config: SupplierReliability
             error: {
               code: 'VALIDATION_ERROR',
               message: 'Invalid input parameters',
-              details: err.errors,
+              details: err.issues,
             },
           },
           400
@@ -126,7 +142,7 @@ export async function createSupplierReliabilityAgent(config: SupplierReliability
         supplierId: query.supplierId,
         category: query.category,
         region: query.region,
-        horizonDays: query.horizonDays ? parseInt(query.horizonDays) : undefined,
+        horizonDays: query.horizonDays,
       });
 
       const forecast = forecastLeadTime(
@@ -153,7 +169,7 @@ export async function createSupplierReliabilityAgent(config: SupplierReliability
             error: {
               code: 'VALIDATION_ERROR',
               message: 'Invalid input parameters',
-              details: err.errors,
+              details: err.issues,
             },
           },
           400
@@ -204,7 +220,7 @@ export async function createSupplierReliabilityAgent(config: SupplierReliability
             error: {
               code: 'VALIDATION_ERROR',
               message: 'Invalid input parameters',
-              details: err.errors,
+              details: err.issues,
             },
           },
           400

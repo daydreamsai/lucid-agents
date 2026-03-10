@@ -27,7 +27,7 @@ export const LeadTimeForecastRequestSchema = z.object({
   supplierId: z.string().min(1),
   category: z.string().optional(),
   region: RegionSchema,
-  horizonDays: z.number().int().min(1).max(365).default(30),
+  horizonDays: z.coerce.number().int().min(1).max(365).default(30),
 });
 
 export const LeadTimeForecastResponseSchema = z.object({
