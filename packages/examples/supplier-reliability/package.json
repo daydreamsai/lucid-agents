@@ -12,6 +12,9 @@
     "@lucid-agents/hono": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
+    "@x402/core": "workspace:*",
+    "@x402/evm": "workspace:*",
+    "@x402/hono": "workspace:*",
     "hono": "^4.7.11",
     "zod": "^3.24.1"
   },

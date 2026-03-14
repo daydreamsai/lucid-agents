@@ -16,7 +16,6 @@ import {
   LeadTimeForecastResponseSchema,
   DisruptionAlertsRequestSchema,
   DisruptionAlertsResponseSchema,
-  ErrorResponseSchema,
 } from './schemas';
 import {
   calculateSupplierScore,
@@ -38,11 +37,17 @@ export async function createSupplierReliabilityAgent(config: SupplierReliability
   const network = config.paymentsConfig.network;
   const payTo = (config.paymentsConfig as { payTo?: string }).payTo;
 
+  if (!payTo || typeof payTo !== 'string' || payTo.length === 0) {
+    throw new Error('Invalid paymentsConfig: payTo must be a non-empty string');
+  }
+
   const facilitatorConfig: FacilitatorConfig = {
     url: config.paymentsConfig.facilitatorUrl,
     createAuthHeaders: config.paymentsConfig.facilitatorAuth
       ? async () => ({
           verify: { Authorization: `Bearer ${config.paymentsConfig.facilitatorAuth}` },
+          settle: { Authorization: `Bearer ${config.paymentsConfig.facilitatorAuth}` },
+          supported: { Authorization: `Bearer ${config.paymentsConfig.facilitatorAuth}` },
         })
       : undefined,
   };
