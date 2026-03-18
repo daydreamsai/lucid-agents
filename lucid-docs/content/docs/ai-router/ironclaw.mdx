@@ -1,0 +1,115 @@
+---
+title: IronClaw
+description: Use x402 Router with IronClaw — a security-first Rust-based personal AI assistant.
+icon: Shield
+---
+
+[IronClaw](https://github.com/daydreamsai/ironclaw) is a Rust reimplementation of OpenClaw: a personal AI assistant with a WASM sandbox, credential protection, prompt injection defense, and a configurable LLM backend. Point `LLM_BACKEND` at the x402 Router to use permit-backed inference.
+
+<Cards>
+  <Card title="Rust native" description="Single binary, memory safe, native performance" />
+  <Card title="Security first" description="WASM sandbox, credential protection, prompt injection defense" />
+  <Card title="Self-expanding" description="Dynamic WASM tool building without restarts" />
+</Cards>
+
+## Prerequisites
+
+- Rust 1.85+
+- PostgreSQL 15+ with [pgvector](https://github.com/pgvector/pgvector) extension
+- NEAR AI account (configured via setup wizard)
+
+## Installation
+
+<Tabs items={["macOS / Linux", "Windows (PowerShell)", "Build from source"]}>
+  <Tab value="macOS / Linux">
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.sh | sh
+```
+
+  </Tab>
+  <Tab value="Windows (PowerShell)">
+
+```powershell
+irm https://github.com/nearai/ironclaw/releases/latest/download/ironclaw-installer.ps1 | iex
+```
+
+  </Tab>
+  <Tab value="Build from source">
+
+```bash
+git clone https://github.com/daydreamsai/ironclaw.git
+cd ironclaw
+cargo build --release
+```
+
+  </Tab>
+</Tabs>
+
+## Database setup
+
+```bash
+createdb ironclaw
+psql ironclaw -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+## Configure x402 Router
+
+Run the setup wizard, then set `LLM_BACKEND` to the x402 Router endpoint in `~/.ironclaw/.env`:
+
+```bash
+ironclaw onboard
+```
+
+```bash
+# ~/.ironclaw/.env
+LLM_BACKEND=https://ai.xgate.run/v1
+X402_PERMIT_CAP=5.00       # session spend cap in USDC
+X402_ROUTER_URL=https://ai.xgate.run/v1
+```
+
+Each request will require a valid `PAYMENT-SIGNATURE` permit. IronClaw injects permit headers at the request boundary — secrets are never exposed to WASM tool code.
+
+## Request flow
+
+```
+IronClaw → WASM Sandbox → x402 Router → Provider
+           (signs permit)    (verifies + streams)
+```
+
+## Security model
+
+IronClaw adds several layers on top of standard x402 permit flow:
+
+- **Credential injection** — secrets injected at the host boundary, never visible inside WASM
+- **Leak detection** — scans outbound requests and inbound responses for exfiltration attempts
+- **Endpoint allowlisting** — HTTP calls only to explicitly approved hosts
+- **Prompt injection defense** — pattern detection and content sanitization on all external content
+
+## Controls
+
+| Variable | Description |
+| -------- | ----------- |
+| `LLM_BACKEND` | LLM provider base URL (set to `https://ai.xgate.run/v1`) |
+| `X402_ROUTER_URL` | Router endpoint override |
+| `X402_PERMIT_CAP` | Session spend cap in USDC |
+
+## Usage
+
+```bash
+# Interactive REPL
+ironclaw
+
+# With debug logging
+RUST_LOG=ironclaw=debug ironclaw
+```
+
+## Data handling
+
+The router does not store prompts or responses. IronClaw stores all conversation data locally in your PostgreSQL database — no telemetry, no data sharing. Payload retention upstream is determined by your selected provider.
+
+## Resources
+
+- [IronClaw repository](https://github.com/daydreamsai/ironclaw)
+- [x402 Router overview](/docs/ai-router)

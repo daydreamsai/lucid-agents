@@ -88,10 +88,8 @@ const registration = generateAgentRegistration(identity, {
   image: 'https://my-agent.example.com/og.png',
   services: [
     {
-      id: 'a2a',
-      type: 'a2a',
-      serviceEndpoint:
-        'https://my-agent.example.com/.well-known/agent-card.json',
+      name: 'A2A',
+      endpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
     },
   ],
 });
@@ -432,10 +430,8 @@ const registration = generateAgentRegistration(identity, {
   image: 'https://my-agent.example.com/og.png',
   services: [
     {
-      id: 'a2a',
-      type: 'a2a',
-      serviceEndpoint:
-        'https://my-agent.example.com/.well-known/agent-card.json',
+      name: 'A2A',
+      endpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
     },
   ],
 });

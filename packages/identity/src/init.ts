@@ -85,7 +85,6 @@ function resolveRequiredChainId(
  * Options for creating agent identity with automatic registration.
  */
 export type AgentRegistrationOptions = {
-  type?: AgentRegistration['type'];
   name?: string;
   description?: string;
   image?: string;
@@ -562,33 +561,6 @@ function normalizeTwitterEndpoint(
   return handle ? `https://x.com/${handle}` : undefined;
 }
 
-function normalizeServiceInput(
-  service: AgentService
-): AgentService | undefined {
-  const name = sanitizeString(
-    service.name ?? service.type ?? service.id ?? undefined
-  );
-  const endpoint = sanitizeString(
-    service.endpoint ?? service.serviceEndpoint ?? undefined
-  );
-
-  if (!name || !endpoint) {
-    return undefined;
-  }
-
-  const normalized: AgentService = {
-    ...service,
-    name,
-    endpoint,
-  };
-
-  delete (normalized as { id?: string }).id;
-  delete (normalized as { type?: string }).type;
-  delete (normalized as { serviceEndpoint?: string }).serviceEndpoint;
-
-  return normalized;
-}
-
 function createService(
   name: string,
   endpoint: string,
@@ -716,9 +688,10 @@ function buildRegistrationServices(
   }
 
   for (const service of options?.services ?? []) {
-    const normalized = normalizeServiceInput(service);
-    if (!normalized) continue;
-    serviceMap.set(normalized.name.toLowerCase(), normalized);
+    const name = sanitizeString(service.name);
+    const endpoint = sanitizeString(service.endpoint);
+    if (!name || !endpoint) continue;
+    serviceMap.set(name.toLowerCase(), service);
   }
 
   const services = Array.from(serviceMap.values());
@@ -860,7 +833,7 @@ export function generateAgentRegistration(
   options?: AgentRegistrationOptions
 ) {
   const registration: AgentRegistration = {
-    type: options?.type ?? REGISTRATION_TYPE_V1,
+    type: REGISTRATION_TYPE_V1,
     name: options?.name || 'Agent',
     description: options?.description || 'An AI agent',
     domain: identity.domain,

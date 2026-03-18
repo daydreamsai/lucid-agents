@@ -555,9 +555,8 @@ const registration = generateAgentRegistration(identity, {
   image: "https://agent.example.com/og.png",
   services: [
     {
-      id: "a2a",
-      type: "a2a",
-      serviceEndpoint: "https://agent.example.com/.well-known/agent-card.json"
+      name: "A2A",
+      endpoint: "https://agent.example.com/.well-known/agent-card.json"
     }
   ]
 });
@@ -568,16 +567,15 @@ const registration = generateAgentRegistration(identity, {
 **Example ERC-8004 registration file format:**
 ```json
 {
-  "type": "agent",
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "My Agent",
   "description": "An intelligent assistant",
   "domain": "agent.example.com",
   "image": "https://agent.example.com/og.png",
   "services": [
     {
-      "id": "a2a",
-      "type": "a2a",
-      "serviceEndpoint": "https://agent.example.com/.well-known/agent-card.json"
+      "name": "A2A",
+      "endpoint": "https://agent.example.com/.well-known/agent-card.json"
     }
   ],
   "registrations": [

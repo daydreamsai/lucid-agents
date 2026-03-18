@@ -1,0 +1,5 @@
+#!/bin/sh
+# Entire CLI hooks
+# Pre-push hook: push session logs alongside user's push
+# $1 is the remote name (e.g., "origin")
+entire hooks git pre-push "$1" || true

@@ -1,5 +1,14 @@
 # @lucid-agents/express
 
+## 0.5.6
+
+### Patch Changes
+
+- Updated dependencies [9ad5dc8]
+  - @lucid-agents/types@1.7.0
+  - @lucid-agents/core@2.5.0
+  - @lucid-agents/payments@2.5.0
+
 ## 0.5.5
 
 ### Patch Changes

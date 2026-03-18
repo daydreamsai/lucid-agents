@@ -115,9 +115,8 @@ const registration = generateAgentRegistration(identity, {
   description: 'An intelligent assistant',
   services: [
     {
-      id: 'a2a',
-      type: 'a2a',
-      serviceEndpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
+      name: 'A2A',
+      endpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
     },
   ],
 });
@@ -159,7 +158,7 @@ type RegistrationEntry = {
 
 ```typescript
 type AgentRegistration = {
-  type: 'agent';
+  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
   name: string;
   description?: string;
   image?: string;
@@ -167,9 +166,9 @@ type AgentRegistration = {
   url?: string;
   owner?: string;
   services?: Array<{
-    id?: string;
-    type?: string;
-    serviceEndpoint: string;
+    name: string;
+    endpoint: string;
+    version?: string;
     description?: string;
   }>;
   registrations?: RegistrationEntry[];

@@ -1,0 +1,448 @@
+---
+title: Facilitator
+description: Production-ready x402 payment settlement service for EVM, Solana, and Starknet.
+icon: Server
+---
+
+The Daydreams Facilitator is a production-ready payment settlement service for the [x402 protocol](https://github.com/coinbase/x402). It acts as a trusted intermediary that verifies cryptographic payment signatures and settles transactions on-chain across EVM, Solana, and Starknet networks.
+
+<Callout type="warn">
+  The facilitator is currently in alpha. APIs may change without notice.
+</Callout>
+
+## Overview
+
+When an agent has paid endpoints, every request goes through three steps:
+
+1. **Verify** — the facilitator checks the payment signature and authorization
+2. **Settle** — executes the on-chain transfer (or accumulates a batched session)
+3. **Return** — the resource server delivers the response after settlement confirms
+
+You can use the hosted facilitator at `https://facilitator.daydreams.systems` or [self-host your own instance](#self-hosting).
+
+### Architecture
+
+```
+Client → Agent (resource server) → Facilitator → Blockchain
+                   ↑                    │
+              Framework middleware  ─────┘
+              (Elysia / Hono / Express)
+```
+
+## Supported networks
+
+| Network           | CAIP-2 Identifier                          | Schemes      |
+| ----------------- | ------------------------------------------ | ------------ |
+| Base Mainnet      | `eip155:8453`                              | exact, upto  |
+| Base Sepolia      | `eip155:84532`                             | exact, upto  |
+| Ethereum          | `eip155:1`                                 | exact, upto  |
+| Optimism          | `eip155:10`                                | exact, upto  |
+| Arbitrum          | `eip155:42161`                             | exact, upto  |
+| Polygon           | `eip155:137`                               | exact, upto  |
+| Starknet Mainnet  | `starknet:SN_MAIN`                         | exact        |
+| Starknet Sepolia  | `starknet:SN_SEPOLIA`                      | exact        |
+| Solana Devnet     | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`  | exact        |
+| Solana Mainnet    | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp`  | exact        |
+
+## Payment schemes
+
+### Exact
+
+Immediate on-chain settlement. Each payment request triggers a transfer and returns a transaction hash. Best for infrequent or high-value requests.
+
+```
+Client → POST /verify → signature check → VerifyResponse
+Client → POST /settle → on-chain transfer → SettleResponse { txHash }
+```
+
+### Upto
+
+Permit-based batched settlement. The client authorizes a spending cap upfront; individual requests accumulate against that cap. A background sweeper periodically settles the batch. Best for high-frequency, low-value requests.
+
+```
+Client → POST /verify → permit validation → session created/updated
+                ↓
+         requests accumulate pending spend
+                ↓
+         sweeper triggers → POST /settle (batch) → session reset
+```
+
+## Framework middleware
+
+Pre-built middleware for Elysia, Hono, and Express handles the full payment lifecycle: verifying payment headers, returning `402` responses when payment is missing, settling after successful requests, and optionally rendering a browser paywall.
+
+<Tabs items={["Elysia", "Hono", "Express"]}>
+  <Tab value="Elysia">
+
+```bash
+bun add @daydreamsai/facilitator @x402/paywall
+```
+
+```typescript
+import { Elysia } from "elysia";
+import { node } from "@elysiajs/node";
+import { HTTPFacilitatorClient } from "@x402/core/http";
+import { createPaywall, evmPaywall, svmPaywall } from "@x402/paywall";
+
+import { createElysiaPaidRoutes } from "@daydreamsai/facilitator/elysia";
+import { createResourceServer } from "@daydreamsai/facilitator/server";
+import { createUptoModule } from "@daydreamsai/facilitator/upto";
+
+const facilitatorClient = new HTTPFacilitatorClient({
+  url: process.env.FACILITATOR_URL ?? "https://facilitator.daydreams.systems",
+});
+const resourceServer = createResourceServer(facilitatorClient);
+const upto = createUptoModule({ facilitatorClient, autoSweeper: true });
+const paywallProvider = createPaywall()
+  .withNetwork(evmPaywall)
+  .withNetwork(svmPaywall)
+  .build();
+
+const app = new Elysia({ prefix: "/api", adapter: node() });
+
+createElysiaPaidRoutes(app, {
+  basePath: "/api",
+  middleware: {
+    resourceServer,
+    upto,
+    paywallProvider,
+    paywallConfig: { appName: "My Agent", testnet: true },
+  },
+}).get("/premium", () => ({ message: "premium content" }), {
+  payment: {
+    accepts: {
+      scheme: "exact",
+      network: "eip155:8453",
+      payTo: "0xYourAddress",
+      price: "$0.01",
+    },
+    description: "Premium agent response",
+    mimeType: "application/json",
+  },
+});
+
+app.listen(4022);
+```
+
+  </Tab>
+  <Tab value="Hono">
+
+```bash
+bun add @daydreamsai/facilitator @x402/paywall
+```
+
+```typescript
+import { Hono } from "hono";
+import { HTTPFacilitatorClient } from "@x402/core/http";
+import { createPaywall, evmPaywall, svmPaywall } from "@x402/paywall";
+
+import { createHonoPaidRoutes } from "@daydreamsai/facilitator/hono";
+import { createResourceServer } from "@daydreamsai/facilitator/server";
+import { createUptoModule } from "@daydreamsai/facilitator/upto";
+
+const facilitatorClient = new HTTPFacilitatorClient({
+  url: process.env.FACILITATOR_URL ?? "https://facilitator.daydreams.systems",
+});
+const resourceServer = createResourceServer(facilitatorClient);
+const upto = createUptoModule({ facilitatorClient, autoSweeper: true });
+const paywallProvider = createPaywall()
+  .withNetwork(evmPaywall)
+  .withNetwork(svmPaywall)
+  .build();
+
+const app = new Hono().basePath("/api");
+
+createHonoPaidRoutes(app, {
+  basePath: "/api",
+  middleware: {
+    resourceServer,
+    upto,
+    paywallProvider,
+    paywallConfig: { appName: "My Agent", testnet: true },
+  },
+}).get("/premium", (c) => c.json({ message: "premium content" }), {
+  payment: {
+    accepts: {
+      scheme: "exact",
+      network: "eip155:8453",
+      payTo: "0xYourAddress",
+      price: "$0.01",
+    },
+    description: "Premium agent response",
+    mimeType: "application/json",
+  },
+});
+
+export default { port: 4023, fetch: app.fetch };
+```
+
+  </Tab>
+  <Tab value="Express">
+
+```bash
+bun add @daydreamsai/facilitator @x402/paywall
+```
+
+```typescript
+import express from "express";
+import { HTTPFacilitatorClient } from "@x402/core/http";
+import { createPaywall, evmPaywall, svmPaywall } from "@x402/paywall";
+
+import { createExpressPaidRoutes } from "@daydreamsai/facilitator/express";
+import { createResourceServer } from "@daydreamsai/facilitator/server";
+import { createUptoModule } from "@daydreamsai/facilitator/upto";
+
+const facilitatorClient = new HTTPFacilitatorClient({
+  url: process.env.FACILITATOR_URL ?? "https://facilitator.daydreams.systems",
+});
+const resourceServer = createResourceServer(facilitatorClient);
+const upto = createUptoModule({ facilitatorClient, autoSweeper: true });
+const paywallProvider = createPaywall()
+  .withNetwork(evmPaywall)
+  .withNetwork(svmPaywall)
+  .build();
+
+const app = express();
+app.use(express.json());
+
+createExpressPaidRoutes(app, {
+  basePath: "/api",
+  middleware: {
+    resourceServer,
+    upto,
+    paywallProvider,
+    paywallConfig: { appName: "My Agent", testnet: true },
+  },
+}).get("/api/premium", (_req, res) => res.json({ message: "premium content" }), {
+  payment: {
+    accepts: {
+      scheme: "exact",
+      network: "eip155:8453",
+      payTo: "0xYourAddress",
+      price: "$0.01",
+    },
+    description: "Premium agent response",
+    mimeType: "application/json",
+  },
+});
+
+app.listen(4024);
+```
+
+  </Tab>
+</Tabs>
+
+### Payment route options
+
+Each route accepts a `payment` object describing its requirements:
+
+```typescript
+{
+  payment: {
+    accepts: {
+      scheme: "exact" | "upto",
+      network: "eip155:8453",     // CAIP-2 network identifier
+      payTo: "0x...",             // Recipient address
+      price: "$0.01"              // Shorthand USD amount, or detailed object:
+      // price: {
+      //   amount: "10000",
+      //   asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      //   extra: { name: "USD Coin", version: "2" }
+      // }
+    },
+    description: "What this endpoint provides",
+    mimeType: "application/json"
+  }
+}
+```
+
+### Middleware configuration
+
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| `resourceServer` | `x402ResourceServer` | Pre-configured resource server |
+| `upto` | `UptoModule` | Optional upto module for batched payments |
+| `paywallProvider` | `PaywallProvider` | Optional paywall HTML generator |
+| `paywallConfig` | `PaywallConfig` | Paywall display options |
+| `autoSettle` | `boolean` | Auto-settle after successful requests (default: `true`) |
+| `paymentHeaderAliases` | `string[]` | Alternative header names for payment data |
+
+### Browser paywall
+
+When a browser (`Accept: text/html`) hits a paid endpoint without payment, the middleware returns an interactive paywall page instead of a JSON error. Users can connect a wallet and pay directly in the browser.
+
+Install the paywall package and wire it into the middleware config as shown in the examples above. The `paywallConfig` object accepts:
+
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| `appName` | `string` | Application name shown in the paywall UI |
+| `testnet` | `boolean` | Display a testnet warning banner |
+
+## Resource tracking
+
+Resource tracking records request, verification, and settlement metadata for analytics and auditing. It's optional and best-effort — tracking errors never block requests.
+
+```typescript
+import {
+  createResourceTrackingModule,
+  InMemoryResourceTrackingStore,
+  PostgresResourceTrackingStore,
+} from "@daydreamsai/facilitator/tracking";
+import { createElysiaPaymentMiddleware } from "@daydreamsai/facilitator/elysia";
+
+// Development: in-memory
+const tracking = createResourceTrackingModule({
+  store: new InMemoryResourceTrackingStore(),
+  captureHeaders: ["x-request-id"],
+});
+
+// Production: Postgres
+// const tracking = createResourceTrackingModule({
+//   store: new PostgresResourceTrackingStore(pgClient),
+//   asyncTracking: true,
+//   onTrackingError: (err, id) => console.error(`tracking error ${id}`, err),
+// });
+
+app.use(
+  createElysiaPaymentMiddleware({
+    httpServer,
+    resourceTracking: tracking,
+  })
+);
+```
+
+### Querying tracked data
+
+```typescript
+const recent = await tracking.list({
+  filters: { paymentVerified: true },
+  limit: 50,
+});
+
+const stats = await tracking.getStats(
+  new Date(Date.now() - 24 * 60 * 60 * 1000), // last 24h
+  new Date()
+);
+```
+
+## Self-hosting
+
+### Quick start (from source)
+
+```bash
+git clone https://github.com/daydreamsai/facilitator
+cd facilitator
+bun install
+cp .env-local .env
+# edit .env with your credentials
+bun dev
+```
+
+Verify it's running:
+
+```bash
+curl http://localhost:8090/supported
+```
+
+### One-click Railway deploy
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/Egob9T?referralCode=6OVVY9)
+
+### Environment variables
+
+Choose one signer mode:
+
+<Tabs items={["CDP (recommended)", "Private Key"]}>
+  <Tab value="CDP (recommended)">
+
+```bash
+CDP_API_KEY_ID=your_key_id
+CDP_API_KEY_SECRET=your_key_secret
+CDP_WALLET_SECRET=your_wallet_secret
+CDP_ACCOUNT_NAME=facilitator
+```
+
+  </Tab>
+  <Tab value="Private Key">
+
+```bash
+EVM_PRIVATE_KEY=0x...        # hex-formatted EVM key
+SVM_PRIVATE_KEY=...          # Base58-formatted Solana key (optional)
+```
+
+  </Tab>
+</Tabs>
+
+Optional configuration:
+
+```bash
+EVM_NETWORKS=base,base-sepolia    # comma-separated (default: base,base-sepolia)
+ALCHEMY_API_KEY=...               # for better RPC reliability
+PORT=8090
+```
+
+### Docker
+
+```yaml
+# docker-compose.yml
+services:
+  facilitator:
+    build: .
+    environment:
+      - CDP_API_KEY_ID=${CDP_API_KEY_ID}
+      - CDP_API_KEY_SECRET=${CDP_API_KEY_SECRET}
+      - CDP_WALLET_SECRET=${CDP_WALLET_SECRET}
+      - PORT=8090
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/supported"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
+
+### Using as a library
+
+You can embed the facilitator logic directly into your application:
+
+```typescript
+import { createFacilitator } from "@daydreamsai/facilitator";
+import { createCdpEvmSigner } from "@daydreamsai/facilitator/signers/cdp";
+import { CdpClient } from "@coinbase/cdp-sdk";
+
+const cdp = new CdpClient();
+const account = await cdp.evm.getOrCreateAccount({ name: "facilitator" });
+
+const signer = createCdpEvmSigner({
+  cdpClient: cdp,
+  account,
+  network: "base",
+  rpcUrl: process.env.EVM_RPC_URL_BASE,
+});
+
+const facilitator = createFacilitator({
+  evmSigners: [
+    {
+      signer,
+      networks: "eip155:8453",
+      schemes: ["exact", "upto"],
+      upto: {
+        verifyBalanceCheck: true, // fail /verify early if payer is underfunded
+      },
+    },
+  ],
+});
+```
+
+## API reference
+
+| Method | Endpoint | Description |
+| ------ | -------- | ----------- |
+| `GET` | `/supported` | Returns available networks and payment schemes |
+| `POST` | `/verify` | Validates a payment signature |
+| `POST` | `/settle` | Executes the on-chain settlement |
+
+The facilitator URL defaults to `https://facilitator.daydreams.systems` in the Lucid Agents SDK. Point `FACILITATOR_URL` (or `PAYMENTS_FACILITATOR_URL`) to your own instance to use a self-hosted deployment.
+
+See the [Payments package](/docs/packages/payments) for how `@lucid-agents/payments` integrates with the facilitator.

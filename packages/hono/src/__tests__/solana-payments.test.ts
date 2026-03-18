@@ -167,10 +167,11 @@ describe('Hono Solana Payments', () => {
       .build();
     const { addEntrypoint } = await createAgentApp(agent);
 
-    // Should throw when adding entrypoint (validation happens during paywall setup)
+    // Should throw when adding a priced entrypoint (validation happens when price is present)
     expect(() => {
       addEntrypoint({
         key: 'test',
+        price: '1000',
         async handler() {
           return { output: { ok: true } };
         },
