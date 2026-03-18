@@ -105,6 +105,25 @@ SCOPES       # Comma-separated scopes fed into the runtime (default agents.read)
 Because the auth server is mocked, no real credentials are required—the
 `signChallenge` implementation simply echoes the challenge ID.
 
+## XMPT Local Messaging
+
+`xmpt/local-messaging.ts` runs two local agents and sends a thread-aware XMPT
+message end-to-end.
+
+Run the script with Bun:
+
+```bash
+bun run src/xmpt/local-messaging.ts
+```
+
+The script starts:
+
+- `alpha` on `http://localhost:8789`
+- `beta` on `http://localhost:8790`
+
+Then it sends `hello from alpha` via `runtime.xmpt.sendAndWait(...)` and prints
+the delivery metadata, task result, and `beta` message history.
+
 ## Payment Policy Enforcement
 
 Four-agent example demonstrating payment policy enforcement with realistic testnet-friendly prices:

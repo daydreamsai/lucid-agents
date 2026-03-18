@@ -1,0 +1,113 @@
+---
+title: XMPT Examples
+description: Inbox-first, thread-aware messaging between agents.
+icon: MessagesSquare
+---
+
+This example shows two local agents exchanging XMPT messages with `sendAndWait`, including thread history inspection.
+
+## Local messaging (two agents)
+
+**File:** `packages/examples/src/xmpt/local-messaging.ts`
+
+### What it demonstrates
+
+- adding XMPT to both sender and receiver agents
+- configuring an inbox handler that returns a reply
+- sending a message with explicit `threadId`
+- waiting for task completion with `sendAndWait`
+- listing local message history by thread
+
+### The code
+
+```typescript title="local-messaging.ts"
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { xmpt } from '@lucid-agents/xmpt';
+
+const alpha = await createAgent({
+  name: 'alpha',
+  version: '1.0.0',
+  description: 'XMPT sender',
+})
+  .use(a2a())
+  .use(http())
+  .use(xmpt())
+  .build();
+
+const beta = await createAgent({
+  name: 'beta',
+  version: '1.0.0',
+  description: 'XMPT receiver',
+})
+  .use(a2a())
+  .use(http())
+  .use(
+    xmpt({
+      inbox: {
+        handler: async ({ message }) => ({
+          content: {
+            text: `ack:${message.content.text ?? ''}`,
+          },
+        }),
+      },
+    })
+  )
+  .build();
+
+const alphaApp = await createAgentApp(alpha);
+const betaApp = await createAgentApp(beta);
+
+const alphaServer = Bun.serve({ port: 8789, fetch: alphaApp.app.fetch });
+const betaServer = Bun.serve({ port: 8790, fetch: betaApp.app.fetch });
+
+const result = await alpha.xmpt!.sendAndWait(
+  { url: 'http://localhost:8790' },
+  {
+    threadId: 'example-thread',
+    content: { text: 'hello from alpha' },
+  },
+  { timeoutMs: 5000 }
+);
+
+console.log(result.delivery);
+console.log(result.task.result?.output);
+
+const betaMessages = await beta.xmpt!.listMessages({
+  threadId: 'example-thread',
+});
+console.log(betaMessages);
+
+alphaServer.stop();
+betaServer.stop();
+```
+
+### Run it
+
+```bash
+bun run packages/examples/src/xmpt/local-messaging.ts
+```
+
+## Use case patterns
+
+### 1. Supervisor to specialist delegation
+
+Use `threadId` to keep all messages for one job in a single conversation.
+
+### 2. Agent handoffs
+
+Send one message per step as control moves between planner, executor, and validator agents.
+
+### 3. Async tool execution with reply
+
+Use `sendAndWait` to simplify async task completion and reply handling.
+
+### 4. Operational audit trails
+
+Store inbound and outbound message records for troubleshooting and observability.
+
+## Next step
+
+If you need lower-level protocol control (task listing, cancellation, capability checks), combine XMPT with direct A2A client calls from `/docs/examples/a2a`.

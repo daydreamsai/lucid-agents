@@ -12,6 +12,8 @@ import {
   DocsTitle,
 } from 'fumadocs-ui/layouts/docs/page';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
 import { baseOptions } from '@/lib/layout.shared';
 import { LLMCopyButton, ViewOptions } from '@/components/page-actions';
 
@@ -60,6 +62,10 @@ const clientLoader = browserCollections.docs.createClientLoader<DocsPageProps>({
           <MDX
             components={{
               ...defaultMdxComponents,
+              Tabs,
+              Tab,
+              Steps,
+              Step,
             }}
           />
         </DocsBody>

@@ -397,7 +397,7 @@ export function http(
             );
           }
 
-          const { skillId, message, contextId } = requestBody;
+          const { skillId, message, contextId, metadata } = requestBody;
 
           const taskEntrypoint = runtime.agent.getEntrypoint(skillId);
           if (!taskEntrypoint) {
@@ -490,6 +490,7 @@ export function http(
           invokeHandler(taskEntrypoint, rawInput, {
             signal: abortController.signal,
             headers: req.headers,
+            metadata,
             runId: taskId,
             runtime,
           })

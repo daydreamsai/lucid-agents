@@ -12,6 +12,7 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - **@lucid-agents/payments** - x402 payment utilities
 - **@lucid-agents/wallet** - Wallet SDK for agent and developer wallets
 - **@lucid-agents/a2a** - A2A Protocol client for agent-to-agent communication
+- **@lucid-agents/xmpt** - XMPT messaging extension for inbox and thread-aware messaging
 - **@lucid-agents/ap2** - AP2 (Agent Payments Protocol) extension
 - **@lucid-agents/hono** - Hono HTTP server adapter
 - **@lucid-agents/express** - Express HTTP server adapter
@@ -37,7 +38,7 @@ hono OR express OR tanstack (adapters)
     ↓ both use
 core (protocol-agnostic runtime)
     ↓ uses extensions
-http, identity, payments, wallet, a2a, ap2 (extensions)
+http, identity, payments, wallet, a2a, xmpt, ap2 (extensions)
 ```
 
 ### Extension System
@@ -49,6 +50,7 @@ The framework uses an extension-based architecture where features are added via 
 - **payments** (`@lucid-agents/payments`) - x402 payment verification and pricing
 - **identity** (`@lucid-agents/identity`) - ERC-8004 on-chain identity and trust
 - **a2a** (`@lucid-agents/a2a`) - Agent-to-agent communication protocol
+- **xmpt** (`@lucid-agents/xmpt`) - Message inbox + send/receive abstraction over A2A tasks
 - **ap2** (`@lucid-agents/ap2`) - Agent Payments Protocol extension
 
 ### Adapter System
@@ -339,6 +341,10 @@ type PaymentsRuntime = {
 │   │   │   ├── extension.ts     # A2A extension
 │   │   │   └── client.ts        # A2A client
 │   │   └── examples/
+│   │
+│   ├── xmpt/               # XMPT messaging extension
+│   │   └── src/
+│   │       └── extension.ts     # XMPT extension
 │   │
 │   ├── ap2/                # AP2 extension
 │   │   └── src/
@@ -885,6 +891,7 @@ When developing changes to packages and testing them in external projects (e.g.,
 **Workflow:**
 
 1. **Register packages globally** - In the lucid-agents monorepo, register the packages you want to link:
+
    ```bash
    cd lucid-agents/packages/types
    bun link
@@ -897,6 +904,7 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 2. **Update your test project's `package.json`** to use the `link:` protocol:
+
    ```json
    {
      "dependencies": {
@@ -908,12 +916,14 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 3. **Install dependencies** in your test project:
+
    ```bash
    cd my-test-agent
    bun install
    ```
 
 4. **Make changes** in the linked package:
+
    ```bash
    cd lucid-agents/packages/identity
    # Make your changes to source code
@@ -934,6 +944,7 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 **How it works:**
+
 - `bun link` registers a package globally by name
 - The `link:@package-name` protocol in package.json references the globally registered package
 - Any changes you make and build in the linked package are immediately available

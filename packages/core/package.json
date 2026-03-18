@@ -71,6 +71,7 @@
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/identity": "workspace:*",
     "@lucid-agents/scheduler": "workspace:*",
-    "@lucid-agents/wallet": "workspace:*"
+    "@lucid-agents/wallet": "workspace:*",
+    "@lucid-agents/xmpt": "workspace:*"
   }
 }

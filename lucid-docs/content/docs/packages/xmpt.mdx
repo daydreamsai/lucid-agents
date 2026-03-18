@@ -1,0 +1,157 @@
+---
+title: "@lucid-agents/xmpt"
+description: High-level inbox and thread-aware messaging over A2A tasks.
+icon: MessagesSquare
+---
+
+The XMPT extension provides a messaging abstraction on top of A2A:
+
+- inbox semantics with a default `xmpt-inbox` skill
+- normalized message envelopes (`id`, `threadId`, `content`, metadata)
+- `send`, `sendAndWait`, and `receive` APIs
+- local message observability (`onMessage`) and history (`listMessages`)
+- Agent Card discoverability tags (`xmpt`, `xmpt-inbox`)
+
+## When to use XMPT
+
+Use XMPT when you need conversation-style, thread-aware agent communication.
+
+Use plain A2A when you only need one-off skill invocation.
+
+| Need | Prefer |
+|------|--------|
+| Simple remote call to a known skill | `@lucid-agents/a2a` |
+| Inbox semantics + message envelopes | `@lucid-agents/xmpt` |
+| Thread IDs and message history at runtime | `@lucid-agents/xmpt` |
+| Fine-grained protocol-level control | `@lucid-agents/a2a` |
+
+## Installation
+
+```bash
+bun add @lucid-agents/xmpt
+```
+
+## Basic usage
+
+```typescript
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { xmpt } from '@lucid-agents/xmpt';
+
+const agent = await createAgent({
+  name: 'alpha',
+  version: '1.0.0',
+})
+  .use(a2a())
+  .use(http())
+  .use(
+    xmpt({
+      inbox: {
+        handler: async ({ message }) => ({
+          content: {
+            text: `ack:${message.content.text ?? ''}`,
+          },
+        }),
+      },
+    })
+  )
+  .build();
+```
+
+## Sending messages
+
+### Fire-and-continue
+
+```typescript
+const delivery = await agent.xmpt!.send(
+  { url: 'https://beta.example.com' },
+  {
+    threadId: 'trading-session-42',
+    content: { text: 'fetch latest order book snapshot' },
+  }
+);
+
+console.log(delivery.taskId, delivery.status, delivery.messageId);
+```
+
+### Send and wait for reply
+
+```typescript
+const result = await agent.xmpt!.sendAndWait(
+  { url: 'https://beta.example.com' },
+  {
+    threadId: 'trading-session-42',
+    content: { text: 'compute hedge ratio' },
+  },
+  { timeoutMs: 15_000 }
+);
+
+console.log(result.task.status);
+console.log(result.task.result?.output);
+```
+
+## Observability and local history
+
+```typescript
+const unsubscribe = agent.xmpt!.onMessage(message => {
+  console.log('Inbound message:', message.threadId, message.content.text);
+});
+
+const history = await agent.xmpt!.listMessages({
+  threadId: 'trading-session-42',
+});
+
+console.log(history.length);
+unsubscribe();
+```
+
+## Configuration
+
+```typescript
+xmpt({
+  inbox: {
+    key: 'trader-inbox',
+    handler: async ({ message }) => ({
+      content: { text: `received:${message.id}` },
+    }),
+  },
+  discovery: {
+    preferredSkillId: 'trader-inbox',
+  },
+  store: myStore,
+});
+```
+
+### Options
+
+- `inbox.key` - inbox entrypoint key (default: `xmpt-inbox`)
+- `inbox.handler` - optional handler for inbound messages
+- `discovery.preferredSkillId` - preferred remote inbox skill id
+- `store` - pluggable store with `append` and `list`
+
+## Runtime semantics
+
+- A2A delivery failures fail `send` and `sendAndWait`
+- store persistence failures are best-effort and do not fail delivery
+- `onMessage` subscriber failures are best-effort and do not fail delivery
+
+## Error handling
+
+XMPT throws `XMPTError` with stable codes:
+
+- `XMPT_PEER_UNREACHABLE`
+- `XMPT_INBOX_SKILL_MISSING`
+- `XMPT_INVALID_MESSAGE_PAYLOAD`
+- `XMPT_TIMEOUT`
+
+## Use cases
+
+- supervisor/worker orchestration with explicit thread IDs
+- facilitator agents routing tasks across specialist agents
+- cross-agent negotiation loops with reply semantics
+- local audit trails for inbound/outbound message flows
+
+## Related example
+
+- `/docs/examples/xmpt`
