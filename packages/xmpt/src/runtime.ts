@@ -247,7 +247,8 @@ export function createXMPTRuntime(
           runtime.a2a!.client,
           sent.card,
           sent.delivery.taskId,
-          optionsArg?.timeoutMs ?? 30000
+          optionsArg?.timeoutMs ?? 30000,
+          optionsArg?.fetch
         );
 
         if (

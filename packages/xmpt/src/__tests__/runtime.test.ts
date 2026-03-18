@@ -215,6 +215,74 @@ describe('createXMPTRuntime', () => {
     expect(result.task.result?.output?.content.text).toBe('ack:hello');
   });
 
+  it('sendAndWait() returns cancelled tasks instead of timing out', async () => {
+    const runtime = createMockRuntime({
+      getTask: mock(async () => ({
+        taskId: 'task-cancelled',
+        status: 'cancelled' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })),
+      sendMessage: mock(async () => ({
+        taskId: 'task-cancelled',
+        status: 'running' as const,
+      })),
+    });
+
+    const xmpt = createXMPTRuntime({ runtime });
+
+    const result = await xmpt.sendAndWait(
+      { card: peerCard },
+      {
+        threadId: 'thread-cancelled',
+        content: { text: 'hello' },
+      },
+      { timeoutMs: 20 }
+    );
+
+    expect(result.delivery.taskId).toBe('task-cancelled');
+    expect(result.task.status).toBe('cancelled');
+  });
+
+  it('sendAndWait() forwards fetch override to task polling', async () => {
+    const fetchOverride = mock(async () => new Response('ok'));
+    const getTask = mock(async () => ({
+      taskId: 'task-fetch',
+      status: 'completed' as const,
+      result: {
+        output: {
+          id: 'reply-fetch',
+          threadId: 'thread-fetch',
+          content: { text: 'ack:hello' },
+          createdAt: new Date().toISOString(),
+        },
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    const runtime = createMockRuntime({
+      getTask,
+      sendMessage: mock(async () => ({
+        taskId: 'task-fetch',
+        status: 'running' as const,
+      })),
+    });
+
+    const xmpt = createXMPTRuntime({ runtime });
+
+    const result = await xmpt.sendAndWait(
+      { card: peerCard },
+      {
+        threadId: 'thread-fetch',
+        content: { text: 'hello' },
+      },
+      { fetch: fetchOverride }
+    );
+
+    expect(result.task.status).toBe('completed');
+    expect(getTask).toHaveBeenCalledWith(peerCard, 'task-fetch', fetchOverride);
+  });
+
   it('send() succeeds even when store append fails after peer delivery', async () => {
     const sendMessage = mock(async () => ({
       taskId: 'task-store-failure',

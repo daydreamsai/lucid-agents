@@ -30,6 +30,7 @@ export async function invokeHandler(
   context: {
     signal: AbortSignal;
     headers: Headers;
+    metadata?: Record<string, unknown>;
     runId: string;
     runtime: AgentRuntime;
   }
@@ -47,6 +48,7 @@ export async function invokeHandler(
     input: resolvedInput,
     signal: context.signal,
     metadata: {
+      ...(context.metadata ?? {}),
       headers: context.headers,
     },
     runId: context.runId,
@@ -136,4 +138,3 @@ export async function invoke(
     );
   }
 }
-

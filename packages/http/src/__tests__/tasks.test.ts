@@ -243,6 +243,69 @@ describe('Task Operations', () => {
       const response = await handlers.tasks(request);
       expect(response.status).toBe(400);
     });
+
+    it('passes task metadata through to the handler context', async () => {
+      const { handlers, entrypoints } = makeTestHandlers();
+      let seenMetadata: Record<string, unknown> | undefined;
+
+      entrypoints.set('echo', {
+        key: 'echo',
+        description: 'Echo endpoint',
+        input: z.object({ text: z.string() }),
+        output: z.object({ text: z.string() }),
+        handler: async ctx => {
+          seenMetadata = ctx.metadata;
+          const input = ctx.input as { text: string };
+          return {
+            output: { text: input.text },
+            usage: { total_tokens: 0 },
+          };
+        },
+      });
+
+      const requestBody: SendMessageRequest = {
+        message: {
+          role: 'user',
+          content: { text: JSON.stringify({ text: 'hello' }) },
+        },
+        skillId: 'echo',
+        metadata: {
+          source: 'xmpt',
+          xmpt: {
+            messageId: 'msg-1',
+            threadId: 'thread-1',
+          },
+        },
+      };
+
+      const request = new Request('http://localhost/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const response = await handlers.tasks(request);
+      expect(response.status).toBe(200);
+
+      const data = (await response.json()) as {
+        taskId: string;
+        status: TaskStatus;
+      };
+      expect(data.status).toBe('running');
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(seenMetadata).toEqual(
+        expect.objectContaining({
+          source: 'xmpt',
+          xmpt: {
+            messageId: 'msg-1',
+            threadId: 'thread-1',
+          },
+          headers: expect.any(Headers),
+        })
+      );
+    });
   });
 
   describe('GET /tasks/{taskId} - Get Task Status', () => {
