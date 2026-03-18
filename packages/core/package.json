@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/core",
-  "version": "2.4.3",
+  "version": "2.5.0",
   "description": "Build typed agent HTTP apps",
   "repository": {
     "type": "git",
@@ -21,11 +21,6 @@
       "types": "./dist/utils.d.ts",
       "import": "./dist/utils.js",
       "default": "./dist/utils.js"
-    },
-    "./axllm": {
-      "types": "./dist/axllm/index.d.ts",
-      "import": "./dist/axllm/index.js",
-      "default": "./dist/axllm/index.js"
     },
     "./package.json": "./package.json"
   },

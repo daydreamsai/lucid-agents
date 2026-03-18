@@ -153,30 +153,26 @@ type Extension<T> = {
 | `onEntrypointAdded` | After `entrypoints.add()` | React to new entrypoints |
 | `onManifestBuild` | When building Agent Card | Enhance manifest with extension data |
 
-## LLM integration
+## Streaming entrypoints
 
-The core package includes AxLLM integration for building AI-powered agents:
+Streaming is handled by the HTTP runtime and your entrypoint implementation:
 
 ```typescript
-import { createAxLLMClient } from '@lucid-agents/core';
-
-const ai = createAxLLMClient({
-  provider: 'openai',
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Use in entrypoint handler
 addEntrypoint({
-  key: 'chat',
+  key: 'status-stream',
   streaming: true,
   async stream(ctx, emit) {
-    const stream = await ai.chat.stream({
-      messages: [{ role: 'user', content: ctx.input.message }],
+    await emit({
+      kind: 'delta',
+      delta: `Starting ${ctx.input.topic}\n`,
+      mime: 'text/plain',
     });
 
-    for await (const chunk of stream) {
-      await emit({ kind: 'delta', delta: chunk.delta, mime: 'text/plain' });
-    }
+    await emit({
+      kind: 'delta',
+      delta: 'Done.\n',
+      mime: 'text/plain',
+    });
 
     return { output: { completed: true } };
   },
@@ -191,10 +187,6 @@ export { createAgent, AgentBuilder } from '@lucid-agents/core';
 
 // Lower-level API
 export { AgentCore, createAgentCore } from '@lucid-agents/core';
-
-// LLM integration
-export { createAxLLMClient } from '@lucid-agents/core';
-export type { AxLLMClient, AxLLMClientOptions } from '@lucid-agents/core';
 
 // Utilities
 export { validateAgentMetadata } from '@lucid-agents/core';

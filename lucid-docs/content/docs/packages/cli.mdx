@@ -43,10 +43,9 @@ Pass options directly for CI/CD or scripted setups:
 ```bash
 bunx @lucid-agents/cli my-agent \
   --adapter=hono \
-  --template=axllm \
+  --template=identity \
   --AGENT_NAME="My AI Agent" \
   --AGENT_DESCRIPTION="AI-powered assistant" \
-  --OPENAI_API_KEY=sk-... \
   --non-interactive
 ```
 
@@ -72,7 +71,6 @@ Pass configuration as `--KEY=value`:
 bunx @lucid-agents/cli my-agent \
   --AGENT_NAME="My Agent" \
   --AGENT_DESCRIPTION="Description" \
-  --OPENAI_API_KEY=sk-... \
   --PAYMENTS_RECEIVABLE_ADDRESS=0x... \
   --NETWORK=ethereum \
   --DEFAULT_PRICE=1000
@@ -142,8 +140,6 @@ Choose a starting point for your agent:
 | Template | Description | Includes |
 |----------|-------------|----------|
 | `blank` | Minimal agent | Basic entrypoint |
-| `axllm` | LLM-powered agent | AxLLM integration, chat entrypoint |
-| `axllm-flow` | LLM with workflows | AxLLM + flow orchestration |
 | `identity` | On-chain identity | ERC-8004 identity setup |
 | `trading-data-agent` | Merchant example | Data provider with pricing |
 | `trading-recommendation-agent` | Shopper example | Agent that calls other agents |
@@ -162,33 +158,6 @@ addEntrypoint({
   input: z.object({ text: z.string() }),
   async handler({ input }) {
     return { output: { echoed: input.text } };
-  },
-});
-```
-
-### AxLLM template
-
-```bash
-bunx @lucid-agents/cli my-agent --template=axllm
-```
-
-LLM-powered agent with streaming chat:
-
-```typescript
-addEntrypoint({
-  key: 'chat',
-  input: z.object({ message: z.string() }),
-  streaming: true,
-  async stream(ctx, emit) {
-    const stream = await ai.chat.stream({
-      messages: [{ role: 'user', content: ctx.input.message }],
-    });
-
-    for await (const chunk of stream) {
-      await emit({ kind: 'delta', delta: chunk.delta, mime: 'text/plain' });
-    }
-
-    return { output: { completed: true } };
   },
 });
 ```
@@ -272,9 +241,6 @@ my-agent/
 # Agent metadata
 AGENT_NAME="My Agent"
 AGENT_DESCRIPTION="Description"
-
-# LLM provider (if using axllm template)
-OPENAI_API_KEY=
 
 # Payments (optional)
 PAYMENTS_RECEIVABLE_ADDRESS=

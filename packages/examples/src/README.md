@@ -3,29 +3,6 @@
 This directory contains runnable scripts that showcase different integration
 patterns for `@lucid-agents/core` and `@lucid-agents/hono`:
 
-## AxFlow + createAxLLMClient
-
-- Demonstrates how to instantiate an Ax LLM client with payments enabled and run
-  an AxFlow pipeline inside an agent entrypoint.
-- Provides a graceful fallback when the underlying Ax credentials are missing.
-
-Run the script with Bun:
-
-```bash
-bun run examples/ax-flow.ts
-```
-
-Environment variables consumed by the example:
-
-```
-OPENAI_API_KEY   # API key forwarded to @ax-llm/ax
-PRIVATE_KEY      # Wallet key used by x402 to sign requests
-PORT             # Optional; defaults to 3000
-```
-
-The agent exposes a single `/entrypoints/brainstorm/invoke` route that accepts a
-`topic` string and responds with a summary plus a few follow-up ideas.
-
 ## Full-Stack Agent Example
 
 This script contains a minimal, end-to-end showcase of everything

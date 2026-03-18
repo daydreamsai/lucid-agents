@@ -256,7 +256,7 @@ Step-by-step tutorials for common use cases.
 
 | Page                         | File                             | Priority | Description                                 |
 | ---------------------------- | -------------------------------- | -------- | ------------------------------------------- |
-| Build an LLM Agent           | `guides/llm-agent.mdx`           | P0       | Using AxLLM for AI-powered agents           |
+| Build an LLM Agent           | `guides/llm-agent.mdx`           | P0       | Using your preferred LLM provider in an agent |
 | Add Payments to Agent        | `guides/add-payments.mdx`        | P1       | Monetize your agent with x402               |
 | Agent Authentication         | `guides/authentication.mdx`      | P1       | Securing agent endpoints                    |
 | Deploy to Production         | `guides/deployment.mdx`          | P1       | Deploying agents (Cloudflare, Vercel, etc.) |

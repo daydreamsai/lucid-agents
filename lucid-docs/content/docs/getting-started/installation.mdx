@@ -27,8 +27,8 @@ bun create @lucid-agents/cli my-agent
 The CLI will prompt you to select:
 
 - **Adapter**: `hono`, `tanstack-ui`, `tanstack-headless`, `express`, or `next`
-- **Template**: `blank`, `axllm`, `axllm-flow`, `identity`, `trading-data-agent`, or `trading-recommendation-agent`
-- **Configuration**: Agent metadata, LLM keys, and optional payment details
+- **Template**: `blank`, `identity`, `trading-data-agent`, or `trading-recommendation-agent`
+- **Configuration**: Agent metadata, payment settings, and any template-specific options
 
 ### Non-interactive mode
 
@@ -37,10 +37,9 @@ For CI/CD or scripted setups, pass options directly:
 ```bash
 bunx @lucid-agents/cli my-agent \
   --adapter=hono \
-  --template=axllm \
+  --template=identity \
   --AGENT_NAME="My AI Agent" \
   --AGENT_DESCRIPTION="AI-powered assistant" \
-  --OPENAI_API_KEY=your_api_key_here \
   --PAYMENTS_RECEIVABLE_ADDRESS=0xYourAddress \
   --NETWORK=ethereum \
   --DEFAULT_PRICE=1000
@@ -140,9 +139,8 @@ Create a `.env` file in your project root. Required variables depend on which fe
 AGENT_NAME="My Agent"
 AGENT_DESCRIPTION="Description of what the agent does"
 
-# LLM provider (if using axllm template)
-OPENAI_API_KEY=sk-...
-# Or for other providers:
+# LLM provider (optional, if your agent uses one)
+# OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=...
 
 # Payments (optional)

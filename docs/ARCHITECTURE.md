@@ -364,7 +364,7 @@ Adapters integrate the core runtime with specific web frameworks.
 **Provides:**
 
 - Interactive project wizard
-- Template system (blank, axllm, identity, axllm-flow, trading-data-agent (merchant), trading-recommendation-agent (shopper))
+- Template system (blank, identity, trading-data-agent (merchant), trading-recommendation-agent (shopper))
 - Adapter selection (hono, tanstack-ui, tanstack-headless, express)
 - Merge system (combines adapter + template)
 
@@ -384,14 +384,16 @@ graph TB
     adapter -->|tanstack| ts_files[TanStack Base Files]
 
     template -->|blank| t_blank[Blank Template]
-    template -->|axllm| t_axllm[AxLLM Template]
     template -->|identity| t_identity[Identity Template]
+    template -->|trading-data-agent| t_data[Trading Data Template]
+    template -->|trading-recommendation-agent| t_reco[Trading Recommendation Template]
 
     hono_files --> merge[Merge System]
     ts_files --> merge
     t_blank --> merge
-    t_axllm --> merge
     t_identity --> merge
+    t_data --> merge
+    t_reco --> merge
 
     merge -->|4. Generates| project[Agent Project]
 

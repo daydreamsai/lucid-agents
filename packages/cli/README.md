@@ -37,6 +37,26 @@ Full-featured agent with on-chain identity and verifiable attestations.
 - Domain-bound agent attestations
 - Decentralized agent networks
 
+### Trading Data Agent (`trading-data-agent`)
+
+Merchant-style agent that exposes paid market data entrypoints.
+
+**Best for:**
+
+- Selling structured data over x402
+- A2A merchant examples
+- Testing monetized entrypoints
+
+### Trading Recommendation Agent (`trading-recommendation-agent`)
+
+Shopper-style agent that buys data from another agent and returns recommendations.
+
+**Best for:**
+
+- A2A composition examples
+- Paid downstream calls
+- Multi-agent workflows
+
 ## How It Works
 
 When you run the CLI:
@@ -156,8 +176,6 @@ bunx @lucid-agents/cli my-agent --network=base --non-interactive
 - For identity template: EVM private key is for identity registration, payment address can be Solana
 - Payment address can be shared across multiple agents
 
-````bash
-
 ### Non-Interactive Mode with Template Arguments
 
 Perfect for CI/CD, automation, or AI coding agents:
@@ -187,7 +205,7 @@ bunx @lucid-agents/cli@latest verified-agent \
   --CHAIN_ID="1" \
   --IDENTITY_AUTO_REGISTER="true"
 
-````
+```
 
 **How it works:**
 
@@ -222,21 +240,12 @@ PRIVATE_KEY=
 
 Additional variables for ERC-8004:
 
-````bash
+```bash
 AGENT_DOMAIN=agent.example.com
 IDENTITY_AUTO_REGISTER=true
 RPC_URL=https://eth.llamarpc.com
 CHAIN_ID=1
-
-### AxLLM Templates
-
-Additional variables for LLM:
-
-```bash
-OPENAI_API_KEY=sk-...
-AX_MODEL=gpt-4o
-AX_PROVIDER=openai
-````
+```
 
 ## Project Structure
 

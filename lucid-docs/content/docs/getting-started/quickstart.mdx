@@ -17,17 +17,16 @@ bunx @lucid-agents/cli my-agent
 Select the following options when prompted:
 
 1. **Adapter**: `hono` (lightweight HTTP server)
-2. **Template**: `axllm` (LLM-powered agent)
-3. **Configuration**: Enter your agent name and OpenAI API key
+2. **Template**: `blank` (minimal starter)
+3. **Configuration**: Enter your agent name and description
 
 Or use inline configuration:
 
 ```bash
 bunx @lucid-agents/cli my-agent \
   --adapter=hono \
-  --template=axllm \
-  --AGENT_NAME="My First Agent" \
-  --OPENAI_API_KEY=sk-your-key-here
+  --template=blank \
+  --AGENT_NAME="My First Agent"
 ```
 
 ## Start the development server
@@ -59,22 +58,12 @@ curl http://localhost:3000/entrypoints
 
 ### Invoke an entrypoint
 
-For the `axllm` template, invoke the chat entrypoint:
+For the `blank` template, invoke the echo entrypoint:
 
 ```bash
-curl -X POST http://localhost:3000/entrypoints/chat/invoke \
+curl -X POST http://localhost:3000/entrypoints/echo/invoke \
   -H "Content-Type: application/json" \
-  -d '{"input": {"message": "Hello! What can you help me with?"}}'
-```
-
-### Stream a response
-
-For streaming responses (Server-Sent Events):
-
-```bash
-curl -X POST http://localhost:3000/entrypoints/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"message": "Tell me a short story"}}'
+  -d '{"input": {"text": "Hello, Lucid Agents!"}}'
 ```
 
 ## Understanding the project structure
@@ -84,61 +73,33 @@ The CLI generates a project with this structure:
 ```
 my-agent/
 ├── src/
-│   └── index.ts        # Agent definition and entrypoints
+│   ├── agent.ts        # Agent definition and entrypoints
+│   └── index.ts        # HTTP server bootstrap
 ├── .env                # Environment variables
 ├── package.json
 └── tsconfig.json
 ```
 
-Open `src/index.ts` to see your agent definition:
+Open `src/agent.ts` to see your agent definition:
 
-```typescript title="src/index.ts"
+```typescript title="src/agent.ts"
 import { z } from 'zod';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { createAgentApp } from '@lucid-agents/hono';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 
-// Create the agent with metadata
 const agent = await createAgent({
-  name: 'My First Agent',
-  version: '1.0.0',
-  description: 'An AI-powered assistant',
+  name: process.env.AGENT_NAME ?? 'my-agent',
+  version: process.env.AGENT_VERSION ?? '0.1.0',
+  description: process.env.AGENT_DESCRIPTION,
 })
   .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
   .build();
 
-// Create the Hono app
-const { app, addEntrypoint } = await createAgentApp(agent);
-
-// Add an entrypoint
-addEntrypoint({
-  key: 'chat',
-  description: 'Chat with the AI assistant',
-  input: z.object({
-    message: z.string(),
-  }),
-  streaming: true,
-  async stream(ctx, emit) {
-    // Your LLM logic here
-    // emit() sends chunks to the client via SSE
-  },
-});
-
-// Export for Bun.serve
-export default {
-  port: Number(process.env.PORT ?? 3000),
-  fetch: app.fetch,
-};
-```
-
-## Add a simple entrypoint
-
-Let's add a non-streaming entrypoint. Add this after the existing entrypoint:
-
-```typescript title="src/index.ts"
-addEntrypoint({
+agent.entrypoints.add({
   key: 'echo',
-  description: 'Echoes back the input text',
+  description: 'Echo back a message',
   input: z.object({
     text: z.string(),
   }),
@@ -157,25 +118,46 @@ addEntrypoint({
 });
 ```
 
+## Add a streaming entrypoint
+
+You can add streaming behavior after the scaffold is up. Add this after the existing entrypoint:
+
+```typescript title="src/agent.ts"
+agent.entrypoints.add({
+  key: 'status-stream',
+  description: 'Streams a few status updates',
+  input: z.object({
+    topic: z.string(),
+  }),
+  output: z.object({
+    completed: z.boolean(),
+  }),
+  streaming: true,
+  async stream({ input }, emit) {
+    await emit({
+      kind: 'delta',
+      delta: `Starting work on ${input.topic}\n`,
+      mime: 'text/plain',
+    });
+    await emit({
+      kind: 'delta',
+      delta: 'Still working...\n',
+      mime: 'text/plain',
+    });
+    return { output: { completed: true } };
+  },
+});
+```
+
 Test it:
 
 ```bash
-curl -X POST http://localhost:3000/entrypoints/echo/invoke \
+curl -X POST http://localhost:3000/entrypoints/status-stream/stream \
   -H "Content-Type: application/json" \
-  -d '{"input": {"text": "Hello, Lucid Agents!"}}'
+  -d '{"input": {"topic": "a quick demo"}}'
 ```
 
-Response:
-
-```json
-{
-  "status": "completed",
-  "output": {
-    "echoed": "Hello, Lucid Agents!",
-    "timestamp": "2024-01-15T10:30:00.000Z"
-  }
-}
-```
+Response events will stream over Server-Sent Events, followed by the final result payload.
 
 ## What's next?
 
