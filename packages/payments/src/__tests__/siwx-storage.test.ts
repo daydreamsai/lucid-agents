@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, it, beforeEach, afterEach, afterAll } from 'bun:test';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -242,14 +242,26 @@ describe('SIWxStorage', () => {
   const describeWithDb = TEST_DB_URL ? describe : describe.skip;
 
   describeWithDb('PostgresSIWxStorage', () => {
+    let pgStorage: SIWxStorage & { close?: () => Promise<void> } | null = null;
+
     runStorageTests(
       'PostgresSIWxStorage',
       async () => {
-        const { createPostgresSIWxStorage } = await import(
-          '../siwx-postgres-storage'
-        );
-        return createPostgresSIWxStorage(TEST_DB_URL!);
+        if (!pgStorage) {
+          const { createPostgresSIWxStorage } = await import(
+            '../siwx-postgres-storage'
+          );
+          pgStorage = createPostgresSIWxStorage(TEST_DB_URL!) as SIWxStorage & { close?: () => Promise<void> };
+        }
+        return pgStorage;
       }
     );
+
+    afterAll(async () => {
+      if (pgStorage?.close) {
+        await pgStorage.close();
+        pgStorage = null;
+      }
+    });
   });
 });
