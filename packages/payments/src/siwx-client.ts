@@ -1,3 +1,5 @@
+import { buildSIWxMessage, type SIWxPayload } from './siwx-verify';
+
 export type SIWxSigner = {
   signMessage: (message: string) => Promise<string>;
   getAddress: () => Promise<string>;
@@ -112,7 +114,7 @@ export function wrapFetchWithSIWx(
     };
 
     // Sign the payload
-    const signature = await signer.signMessage(JSON.stringify(payload));
+    const signature = await signer.signMessage(buildSIWxMessage(payload as unknown as SIWxPayload));
     payload.signature = signature;
 
     // Retry with SIWX header

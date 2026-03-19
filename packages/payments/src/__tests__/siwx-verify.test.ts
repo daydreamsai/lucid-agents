@@ -263,6 +263,25 @@ describe('SIWX Verification', () => {
       expect(result.chainId).toBe('eip155:84532');
     });
 
+    it('should reject a concurrent replay (atomic nonce)', async () => {
+      const nonce = `concurrent-nonce-${Date.now()}`;
+      const payload1 = makePayload({ nonce });
+      const payload2 = makePayload({ nonce });
+
+      // Run both verifications concurrently
+      const [result1, result2] = await Promise.all([
+        verifySIWxPayload(payload1, makeOptions({ requireEntitlement: false })),
+        verifySIWxPayload(payload2, makeOptions({ requireEntitlement: false })),
+      ]);
+
+      // Exactly one should succeed and one should fail
+      const successes = [result1, result2].filter(r => r.success);
+      const failures = [result1, result2].filter(r => !r.success);
+      expect(successes.length).toBe(1);
+      expect(failures.length).toBe(1);
+      expect(failures[0].error).toBe('nonce_replayed');
+    });
+
     it('should record nonce after successful verification', async () => {
       const nonce = `unique-nonce-${Date.now()}`;
       const payload = makePayload({ nonce });

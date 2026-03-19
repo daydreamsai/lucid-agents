@@ -145,6 +145,36 @@ export class PostgresSIWxStorage implements SIWxStorage {
     }
   }
 
+  async consumeNonce(
+    nonce: string,
+    metadata?: { resource?: string; address?: string; expiresAt?: number }
+  ): Promise<'consumed' | 'already_used'> {
+    if (!this.schemaInitialized) {
+      await this.initSchema();
+    }
+
+    try {
+      const result = await this.pool.query(
+        `
+        INSERT INTO siwx_nonces (nonce, resource, address, used_at, expires_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (nonce) DO NOTHING
+        `,
+        [
+          nonce,
+          metadata?.resource ?? null,
+          metadata?.address ?? null,
+          Date.now(),
+          metadata?.expiresAt ?? null,
+        ]
+      );
+      return result.rowCount && result.rowCount > 0 ? 'consumed' : 'already_used';
+    } catch (error) {
+      console.error('[PostgresSIWxStorage] Error consuming nonce:', error);
+      throw error;
+    }
+  }
+
   async clear(): Promise<void> {
     if (!this.schemaInitialized) {
       await this.initSchema();

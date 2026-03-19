@@ -59,6 +59,22 @@ export class InMemorySIWxStorage implements SIWxStorage {
     return Promise.resolve();
   }
 
+  async consumeNonce(
+    nonce: string,
+    metadata?: { resource?: string; address?: string; expiresAt?: number }
+  ): Promise<'consumed' | 'already_used'> {
+    if (this.nonces.has(nonce)) {
+      return 'already_used';
+    }
+    this.nonces.set(nonce, {
+      resource: metadata?.resource,
+      address: metadata?.address,
+      usedAt: Date.now(),
+      expiresAt: metadata?.expiresAt,
+    });
+    return 'consumed';
+  }
+
   async clear(): Promise<void> {
     this.entitlements.clear();
     this.nonces.clear();

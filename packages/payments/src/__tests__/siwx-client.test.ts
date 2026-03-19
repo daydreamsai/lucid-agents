@@ -93,6 +93,17 @@ describe('SIWX Client', () => {
       const result = await parseSIWxExtension(response);
       expect(result).toBeUndefined();
     });
+
+    it('should NOT parse from body.siwx (non-standard location)', async () => {
+      const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
+      const response = new Response(
+        JSON.stringify({ siwx: ext }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } }
+      );
+      const result = await parseSIWxExtension(response);
+      // body.siwx is NOT a standard location - should not be parsed
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('buildSIWxHeaderValue', () => {
@@ -210,6 +221,46 @@ describe('SIWX Client', () => {
         '0x1234567890abcdef1234567890abcdef12345678'
       );
       expect(decoded.chainId).toBe('eip155:84532');
+    });
+
+    it('should sign the canonical SIWX message (not JSON.stringify)', async () => {
+      let signedMessage: string | undefined;
+      const capturingSigner: SIWxSigner = {
+        signMessage: async (message: string) => {
+          signedMessage = message;
+          return '0xsignature';
+        },
+        getAddress: async () => '0x1234567890abcdef1234567890abcdef12345678',
+        getChainId: async () => 'eip155:84532',
+      };
+
+      const ext = {
+        scheme: 'sign-in-with-x',
+        domain: 'test.com',
+        uri: 'http://test.com/api',
+        nonce: 'nonce1',
+        issuedAt: '2026-03-19T00:00:00.000Z',
+      };
+
+      let callCount = 0;
+      const baseFetch = async () => {
+        callCount++;
+        if (callCount === 1) {
+          return new Response(JSON.stringify({ error: { siwx: ext } }), { status: 402 });
+        }
+        return new Response('ok', { status: 200 });
+      };
+
+      const wrappedFetch = wrapFetchWithSIWx(baseFetch, capturingSigner);
+      await wrappedFetch('http://test.com/api');
+
+      expect(signedMessage).toBeDefined();
+      // The message should contain EIP-191 style lines, NOT be a JSON string
+      expect(signedMessage).toContain('test.com wants you to sign in with your account:');
+      expect(signedMessage).toContain('URI: http://test.com/api');
+      expect(signedMessage).toContain('Nonce: nonce1');
+      // It should NOT be JSON
+      expect(signedMessage!.startsWith('{')).toBe(false);
     });
 
     it('should compose with payment fetch (payment + SIWX)', async () => {

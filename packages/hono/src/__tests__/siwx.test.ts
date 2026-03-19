@@ -334,6 +334,11 @@ describe('SIWX Integration (Hono)', () => {
       expect(body.error.code).toBe('auth_required');
       expect(body.error.siwx).toBeDefined();
       expect(body.error.siwx.scheme).toBe('sign-in-with-x');
+      // Should include X-SIWX-EXTENSION header
+      const siwxHeader = res.headers.get('X-SIWX-EXTENSION');
+      expect(siwxHeader).toBeDefined();
+      const parsedHeader = JSON.parse(Buffer.from(siwxHeader!, 'base64').toString('utf-8'));
+      expect(parsedHeader.scheme).toBe('sign-in-with-x');
     });
 
     it('should grant access with valid SIWX on auth-only route', async () => {
@@ -469,6 +474,20 @@ describe('SIWX Integration (Hono)', () => {
       expect(res.status).toBe(401);
       const body = await res.json();
       expect(body.error.code).toBe('auth_failed');
+    });
+
+    it('should throw when authOnly route is mounted without enabled SIWX runtime', async () => {
+      const agent = await createAgent(meta)
+        .use(http())
+        // No payments extension at all
+        .addEntrypoint({
+          key: 'profile',
+          siwx: { authOnly: true },
+          handler: async () => ({ output: {} }),
+        })
+        .build();
+
+      await expect(createAgentApp(agent)).rejects.toThrow('authOnly');
     });
 
     it('should reject replayed nonce on auth-only route', async () => {

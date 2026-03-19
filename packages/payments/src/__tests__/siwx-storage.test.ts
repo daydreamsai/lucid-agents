@@ -158,6 +158,41 @@ function runStorageTests(
       });
     });
 
+    describe('consumeNonce', () => {
+      it('should return consumed on first call', async () => {
+        const result = await storage.consumeNonce('nonce-atomic-1');
+        expect(result).toBe('consumed');
+      });
+
+      it('should return already_used on second call', async () => {
+        await storage.consumeNonce('nonce-atomic-2');
+        const result = await storage.consumeNonce('nonce-atomic-2');
+        expect(result).toBe('already_used');
+      });
+
+      it('should store metadata on first consumption', async () => {
+        await storage.consumeNonce('nonce-atomic-3', {
+          resource: 'resource-1',
+          address: '0xAbC123def456',
+          expiresAt: Date.now() + 3600_000,
+        });
+        const hasUsed = await storage.hasUsedNonce('nonce-atomic-3');
+        expect(hasUsed).toBe(true);
+      });
+
+      it('should not overwrite metadata on duplicate consumption', async () => {
+        await storage.consumeNonce('nonce-atomic-4', {
+          resource: 'original-resource',
+          address: '0xOriginal',
+        });
+        const result = await storage.consumeNonce('nonce-atomic-4', {
+          resource: 'different-resource',
+          address: '0xDifferent',
+        });
+        expect(result).toBe('already_used');
+      });
+    });
+
     describe('clear', () => {
       it('should clear all entitlements and nonces', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');

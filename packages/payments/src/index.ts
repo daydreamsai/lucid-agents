@@ -91,6 +91,7 @@ export {
   verifySIWxPayload,
   buildSIWxExtensionDeclaration,
   buildSIWxMessage,
+  enrichResponseWithSIWxChallenge,
   type SIWxPayload,
   type SIWxVerifyResult,
   type SIWxVerifyOptions,

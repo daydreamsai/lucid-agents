@@ -168,15 +168,9 @@ export async function verifySIWxPayload(
     }
   }
 
-  // Check nonce replay
-  const nonceUsed = await options.storage.hasUsedNonce(payload.nonce);
-  if (nonceUsed) {
-    return { success: false, error: 'nonce_replayed' };
-  }
-
   const normalizedAddress = payload.address.toLowerCase();
 
-  // For paid-route reuse, check entitlement BEFORE recording the nonce
+  // For paid-route reuse, check entitlement BEFORE consuming the nonce
   if (options.requireEntitlement !== false) {
     const hasPaid = await options.storage.hasPaid(
       options.resourceUri,
@@ -187,14 +181,17 @@ export async function verifySIWxPayload(
     }
   }
 
-  // Record nonce only after all checks pass
-  await options.storage.recordNonce(payload.nonce, {
+  // Atomically consume nonce (prevents replay even under concurrent requests)
+  const nonceResult = await options.storage.consumeNonce(payload.nonce, {
     resource: options.resourceUri,
     address: payload.address,
     expiresAt: payload.expirationTime
       ? new Date(payload.expirationTime).getTime()
       : undefined,
   });
+  if (nonceResult === 'already_used') {
+    return { success: false, error: 'nonce_replayed' };
+  }
 
   if (options.requireEntitlement !== false) {
     return {
@@ -245,6 +242,48 @@ export function buildSIWxExtensionDeclaration(options: {
         }
       : {}),
     ...(options.statement ? { statement: options.statement } : {}),
+  };
+}
+
+/**
+ * Enrich a response object with SIWX challenge data.
+ * For 402 responses: adds to `extensions.siwx`
+ * For 401 responses: adds to `error.siwx`
+ * Both include the `X-SIWX-EXTENSION` header as base64-encoded JSON.
+ */
+export function enrichResponseWithSIWxChallenge(
+  body: Record<string, unknown>,
+  declaration: Record<string, unknown>,
+  statusCode: 401 | 402
+): { body: Record<string, unknown>; headers: Record<string, string> } {
+  const headerValue = Buffer.from(JSON.stringify(declaration)).toString('base64');
+  const headers: Record<string, string> = {
+    'X-SIWX-EXTENSION': headerValue,
+  };
+
+  if (statusCode === 402) {
+    return {
+      body: {
+        ...body,
+        extensions: {
+          ...(body.extensions as Record<string, unknown> ?? {}),
+          siwx: declaration,
+        },
+      },
+      headers,
+    };
+  }
+
+  // 401: put in error.siwx
+  return {
+    body: {
+      ...body,
+      error: {
+        ...(typeof body.error === 'object' && body.error !== null ? body.error : { code: 'auth_required', message: String(body.error ?? 'Authentication required') }),
+        siwx: declaration,
+      },
+    },
+    headers,
   };
 }
 

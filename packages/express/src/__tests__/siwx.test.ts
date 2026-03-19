@@ -172,6 +172,8 @@ describe('SIWX Integration (Express)', () => {
       expect(result.body.extensions.siwx.uri).toBe(
         'http://localhost/entrypoints/test/invoke'
       );
+      // Should include X-SIWX-EXTENSION header
+      expect(result.headers['x-siwx-extension']).toBeDefined();
     });
 
     it('should record entitlement after successful payment', async () => {
@@ -362,6 +364,31 @@ describe('SIWX Integration (Express)', () => {
 
       expect(result.status).toBe(401);
       expect(result.body.error.code).toBe('siwx_required');
+      // Should include SIWX declaration in error
+      expect(result.body.error.siwx).toBeDefined();
+      expect(result.body.error.siwx.scheme).toBe('sign-in-with-x');
+    });
+
+    it('should throw when authOnly route is mounted without SIWX runtime', () => {
+      const app = express();
+      const path = '/entrypoints/auth-test/invoke';
+
+      const entrypoint: EntrypointDef = {
+        key: 'auth-test',
+        siwx: { authOnly: true },
+      };
+
+      // No SIWX runtime at all
+      const runtime: Partial<AgentRuntime> = {};
+
+      expect(() => {
+        withSIWxAuthOnly({
+          app,
+          path,
+          entrypoint,
+          runtime: runtime as AgentRuntime,
+        });
+      }).toThrow('authOnly');
     });
 
     it('should grant access with valid SIWX on auth-only route', async () => {

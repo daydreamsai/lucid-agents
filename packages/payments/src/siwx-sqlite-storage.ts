@@ -109,6 +109,24 @@ export class SQLiteSIWxStorage implements SIWxStorage {
     return Promise.resolve();
   }
 
+  async consumeNonce(
+    nonce: string,
+    metadata?: { resource?: string; address?: string; expiresAt?: number }
+  ): Promise<'consumed' | 'already_used'> {
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO siwx_nonces (nonce, resource, address, used_at, expires_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      nonce,
+      metadata?.resource ?? null,
+      metadata?.address ?? null,
+      Date.now(),
+      metadata?.expiresAt ?? null
+    );
+    return result.changes > 0 ? 'consumed' : 'already_used';
+  }
+
   async clear(): Promise<void> {
     this.db.run('DELETE FROM siwx_entitlements');
     this.db.run('DELETE FROM siwx_nonces');

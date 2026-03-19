@@ -105,7 +105,19 @@ describe('SIWX Integration (TanStack)', () => {
         ...payments,
         siwx: { enabled: false },
       };
-      const runtime = createRuntime(noSiwxPayments);
+      // Use entrypoints without authOnly to avoid the authOnly+disabled-SIWX guard
+      const plainEntrypoints = [
+        { key: 'echo', description: 'Echo back', price: '2000', siwx: { enabled: true } },
+        { key: 'basic', description: 'Basic route', price: '500' },
+      ];
+      const runtime = {
+        payments: {
+          config: noSiwxPayments,
+          siwxStorage: undefined,
+          siwxConfig: noSiwxPayments.siwx,
+        },
+        entrypoints: { snapshot: () => plainEntrypoints },
+      } as const;
       let capturedSiwx: SIWxMiddlewareConfig | undefined;
 
       const middlewareFactory = ((
@@ -255,6 +267,34 @@ describe('SIWX Integration (TanStack)', () => {
     it('auth-only entrypoint is detected correctly', () => {
       const profileEp = entrypoints.find(ep => ep.key === 'profile')!;
       expect(profileEp.siwx?.authOnly).toBe(true);
+    });
+
+    it('should throw when authOnly route exists without SIWX runtime', () => {
+      const noSiwxPayments: PaymentsConfig = {
+        payTo: '0xabc1230000000000000000000000000000000000',
+        facilitatorUrl: 'https://facilitator.test',
+        network: 'eip155:84532',
+        // SIWX disabled
+        siwx: { enabled: false },
+      };
+      const authOnlyEntrypoints = [
+        { key: 'profile', siwx: { authOnly: true } },
+      ];
+      const runtime = {
+        payments: { config: noSiwxPayments },
+        entrypoints: { snapshot: () => authOnlyEntrypoints },
+      } as const;
+
+      const middlewareFactory = ((_routes: any, _f: any, _p: any, _s?: any) => {
+        return (() => Promise.resolve(new Response())) as unknown as TanStackRequestMiddleware;
+      }) as typeof paymentMiddleware;
+
+      expect(() => {
+        createTanStackPaywall({
+          runtime,
+          middlewareFactory,
+        });
+      }).toThrow('authOnly');
     });
 
     it('auth-only route registered with zero price', () => {

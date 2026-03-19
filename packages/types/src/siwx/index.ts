@@ -99,13 +99,18 @@ export interface SIWxStorage {
     address: string,
     chainId?: string
   ): Promise<void>;
-  /** Check if a nonce has been used (replay prevention) */
+  /** @deprecated Use `consumeNonce` for atomic nonce consumption instead. */
   hasUsedNonce(nonce: string): Promise<boolean>;
-  /** Record a used nonce */
+  /** @deprecated Use `consumeNonce` for atomic nonce consumption instead. */
   recordNonce(
     nonce: string,
     metadata?: { resource?: string; address?: string; expiresAt?: number }
   ): Promise<void>;
+  /** Atomically consume a nonce. Returns 'consumed' on first use, 'already_used' on replay. */
+  consumeNonce(
+    nonce: string,
+    metadata?: { resource?: string; address?: string; expiresAt?: number }
+  ): Promise<'consumed' | 'already_used'>;
   /** Clear all SIWX data (for testing) */
   clear(): Promise<void>;
 }

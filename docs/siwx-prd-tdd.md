@@ -1,680 +1,534 @@
-# PRD/TDD: Sign-In With X (SIWX) Integration
+# PRD/TDD: SIWX Hardening and Adapter Parity
 
-Status: Draft
-Owner: SDK (Payments + Types + HTTP + Adapters + CLI)
+Status: Implemented
+Owner: SDK
 Last Updated: 2026-03-19
+Scope: `@lucid-agents/types`, `@lucid-agents/payments`, `@lucid-agents/http`, `@lucid-agents/hono`, `@lucid-agents/express`, `@lucid-agents/tanstack`, Next adapter scaffolding
 
 ## Summary
 
-Integrate x402 Sign-In With X (SIWX) into the Lucid Agents monorepo so developers can:
+This document defines the remediation plan for the current Sign-In With X (SIWX) implementation. The branch already introduces the main primitives, but review found several correctness and security defects:
 
-1. Let returning wallets access previously paid resources without paying again.
-2. Optionally protect auth-only routes with wallet signatures.
-3. Use a first-class Lucid API instead of hand-wiring x402 extension declarations and verification hooks.
+1. The bundled SIWX client signs the wrong message format.
+2. Nonce replay protection is not atomic.
+3. `authOnly` routes can fail open when SIWX runtime state is missing.
+4. Express and TanStack verify SIWX but drop authenticated wallet context before handler execution.
+5. Hono emits a 402 SIWX challenge in a shape the official client does not parse.
+6. The new SIWX types violate the monorepo single-source-of-truth rule.
 
-This document covers both product requirements and the technical delivery plan.
+The goal of this work is not to expand SIWX scope. The goal is to make the existing SIWX feature set correct, secure, adapter-consistent, and releasable.
 
-## Background
+## Problem Statement
 
-SIWX is an x402 extension layered on top of `402 Payment Required` flows. A server declares the `sign-in-with-x` extension in protected responses. A client signs a CAIP-122-compatible message and retries with a `SIGN-IN-WITH-X` header. The server verifies the signed payload and grants access when the wallet is authorized for the resource.
+The current implementation creates a dangerous gap between declared behavior and actual runtime behavior:
 
-In practice, SIWX creates two product capabilities:
+- Production SIWX retries will fail cryptographic verification.
+- Replay prevention can be bypassed by concurrent requests.
+- A developer can declare `siwx: { authOnly: true }` and accidentally ship an unprotected route.
+- Some adapters grant access but never expose `ctx.auth` to user code.
+- Client-side SIWX retry works differently across adapters.
+- Public types are duplicated and partially hidden behind `unknown`, making adapter code rely on casts.
 
-1. Paid-resource reuse
-   A wallet that already paid for a resource can re-access it without re-paying.
-2. Wallet-auth-only access
-   A route can require wallet authentication even when no payment is required.
-
-## Problem
-
-The current Lucid payments stack supports x402 payments, route protection, payment tracking, and policy enforcement, but it does not provide SIWX primitives.
-
-The current gaps are:
-
-- The repo is pinned to `@x402/*` `2.2.0`, while the clean SIWX integration path relies on newer x402 server/client hooks.
-- Existing payment tracking stores aggregate policy data, not wallet-resource entitlements.
-- Entrypoints only model payment-oriented route protection (`price`, `network`) and do not model auth-only SIWX routes.
-- Handler context does not expose typed authenticated wallet identity.
-- Generated dashboard clients only handle payment-wrapped fetch and need a clean way to compose SIWX.
+This is too much surface area to treat as patch-level cleanup. We need a deliberate remediation plan with explicit invariants and a test-first delivery sequence.
 
 ## Goals
 
-- Add first-class SIWX support to the Lucid payments system.
-- Keep SIWX domain logic in `@lucid-agents/payments`.
-- Support all maintained adapters:
-  - `@lucid-agents/hono`
-  - `@lucid-agents/express`
-  - `@lucid-agents/tanstack`
-  - CLI-generated Next adapter
-- Provide a typed developer-facing configuration surface.
-- Persist entitlements and replay-protection data using Lucid-owned storage backends.
-- Expose authenticated wallet identity to handlers in a typed, documented way.
-- Deliver the implementation test-first with a clear TDD sequence.
+- Make SIWX cryptographic verification work in production.
+- Make replay protection atomic across all storage backends.
+- Make `authOnly` routes fail closed.
+- Guarantee that successful SIWX verification always reaches handler context.
+- Standardize SIWX challenge declaration across adapters.
+- Restore type ownership and public API clarity.
+- Ship the fixes with adapter-level parity tests and no hidden casts.
 
 ## Non-Goals
 
-- Building a full end-user account system.
-- Building OAuth-like sessions, cookies, or JWT login flows.
-- Supporting arbitrary auth extensions beyond SIWX in this initial effort.
-- Designing a generic auth framework before we need one.
-- Implementing SIWX for non-HTTP transports in the first release.
+- Adding new SIWX features beyond the current design.
+- Introducing a generic auth framework.
+- Adding session storage, JWTs, or cookies.
+- Designing entitlement hierarchies across related resources.
+- Expanding non-HTTP SIWX support.
 
-## Product Scope
+## Users
 
-### In Scope for Phase 1
+- SDK maintainers who need a safe release path for SIWX.
+- Agent developers who rely on `ctx.auth` and adapter parity.
+- Template users who expect generated clients and routes to work consistently.
+- Security reviewers who need replay protection and fail-closed route behavior.
 
-- SIWX for paid-route reuse.
-- Global SIWX configuration under the payments extension.
-- Per-entrypoint SIWX opt-in.
-- Persistent entitlement storage keyed by resource and wallet address.
-- Nonce tracking to prevent signature replay.
-- Typed handler auth context for verified SIWX requests.
-- Adapter integration across Hono, Express, TanStack, and Next.
-- Dashboard/runtime client composition for payment + SIWX fetch.
-- CLI template support where payments are scaffolded.
+## Product Requirements
 
-### In Scope for Phase 2
+### PR-1: Canonical signing and verification
 
-- Auth-only SIWX routes with no payment requirement.
-- Explicit handler ergonomics for wallet-gated business logic.
-- Optional smart wallet verification enhancements via `viem` verifier configuration.
+The SDK must use one canonical message format for SIWX signing and verification.
 
-### Explicitly Out of Scope for Initial Release
+Acceptance criteria:
 
-- Solving cross-resource entitlement hierarchies.
-- Delegated auth between wallets.
-- User profile management.
-- Revocation lists beyond nonce replay prevention.
+- The client signs the exact message string that the server verifies.
+- The canonical message builder lives in one place.
+- Tests cover both helper-generated payloads and real signature verification.
+- `skipSignatureVerification` remains test-only behavior and is not required for normal flows.
 
-## User Stories
+### PR-2: Atomic nonce consumption
 
-- As an agent developer, I can mark a paid entrypoint as SIWX-enabled so repeat access does not require repeat payment.
-- As an agent developer, I can optionally require wallet authentication for an entrypoint even if it is free.
-- As an agent developer, I can inspect the authenticated wallet inside my handler without parsing raw headers.
-- As an operator, I can choose SQLite, in-memory, or Postgres storage for SIWX state.
-- As a template user, I can scaffold an app that is ready for SIWX without hand-editing x402 internals.
+Replay protection must be atomic, not check-then-write.
 
-## Success Criteria
+Acceptance criteria:
 
-- A wallet that has paid for a protected resource can access that same resource again by presenting a valid SIWX proof.
-- SIWX configuration is consistent across adapters.
-- Entitlements survive restarts when persistent storage is configured.
-- Replay of a previously used nonce is rejected.
-- Developers can read authenticated wallet identity from handler context.
-- Tests cover happy path, replay prevention, invalid signatures, adapter behavior, and migration behavior.
+- The storage contract exposes one operation for nonce consumption.
+- A used nonce cannot be accepted twice, even under concurrent requests.
+- SQLite, Postgres, and in-memory backends all reject duplicate nonce consumption.
+- Verification code does not separately call `hasUsedNonce()` before writing.
 
-## Current State
+### PR-3: Fail-closed `authOnly` routing
 
-### Current Strengths
+Declaring `siwx: { authOnly: true }` must never create a public route by mistake.
 
-- Payments already own route-level payment configuration and runtime activation.
-- Adapters already centralize x402 paywall integration.
-- Payments already own persistent storage abstractions for SQLite, Postgres, and in-memory modes.
-- Incoming payment recording already happens after successful settlement in Hono and Express.
-- TanStack already uses `x402HTTPResourceServer` directly, which is close to the official SIWX hook model.
+Acceptance criteria:
 
-### Current Limitations
+- App construction throws or refuses route registration when `authOnly` is requested without usable SIWX runtime state.
+- This behavior is identical across Hono, Express, TanStack, and Next scaffolding.
+- There is no silent boolean return path that leaves the route mounted and unprotected.
 
-- Current payment tracking is aggregate-only and cannot answer `has wallet X paid for resource Y?`
-- Route registration skips unpaid routes, which blocks auth-only SIWX.
-- Current handler context only includes raw request headers under metadata.
-- Current client helpers are payment-aware but not SIWX-aware.
+### PR-4: Guaranteed handler auth propagation
 
-## Product Decisions
+Any request admitted via SIWX must deliver typed auth data to user handlers.
 
-This PRD locks the following decisions:
+Acceptance criteria:
 
-1. SIWX is owned by the payments domain, not by a new top-level auth package.
-2. Entitlement storage is a new storage surface, not a reinterpretation of aggregate payment tracker data.
-3. Typed handler auth context is required for release; raw-header-only access is not sufficient.
-4. Phase 1 prioritizes paid-route reuse before auth-only routes.
-5. The implementation will adopt newer x402 packages rather than recreating the entire SIWX protocol manually.
+- `ctx.auth` is populated for entitlement-based and auth-only access.
+- Express, Hono, TanStack, and Next all use the same shape.
+- No adapter relies on synthetic headers that the HTTP layer does not parse.
+- Streaming handlers receive the same auth context as invoke handlers.
 
-## Functional Requirements
+### PR-5: Standard challenge declaration
 
-### FR-1: Global SIWX configuration
+All adapters must emit the SIWX challenge in a single supported format.
 
-The payments extension must accept optional SIWX configuration.
+Acceptance criteria:
 
-Required capabilities:
+- `402` responses expose SIWX through `X-SIWX-EXTENSION` and `extensions.siwx`.
+- `401` auth failures use a predictable JSON structure and may also include the header when a retry is possible.
+- The Lucid SIWX client helper can parse challenge responses from every maintained adapter with no adapter-specific logic.
 
-- Enable or disable SIWX globally.
-- Configure a default SIWX statement.
-- Configure entitlement storage.
-- Configure verification options for EVM smart wallet support.
-- Configure default expiration behavior.
+### PR-6: Single source of truth types
 
-### FR-2: Per-entrypoint SIWX declaration
+SIWX public types must follow the root architecture rules.
 
-Entrypoints must be able to opt into SIWX independently.
+Acceptance criteria:
 
-Required modes:
+- `SIWxStorage` is defined once in `@lucid-agents/types`.
+- Payments imports and re-exports that type instead of redefining it.
+- `PaymentsRuntime` exposes concrete SIWX types instead of `unknown`.
+- Adapter code does not cast runtime SIWX fields back to a hidden type.
 
-- `enabled`: allow SIWX for returning paid access.
-- `authOnly`: require SIWX even when no payment is required.
+## Technical Decisions
 
-Per-entrypoint config must support:
+### TD-1: One canonical message builder
 
-- `statement`
-- optional override network or supported chains
-- optional enable/disable
+`buildSIWxMessage(payload)` in `@lucid-agents/payments` becomes the sole canonical builder.
 
-### FR-3: Protected response declaration
+Implementation rule:
 
-When an SIWX-enabled route returns `402 Payment Required`, the response must declare the `sign-in-with-x` extension with the correct metadata for that resource.
+- `wrapFetchWithSIWx()` must sign `buildSIWxMessage(payload)`.
+- Verification must continue using the same builder.
+- No code path may sign `JSON.stringify(payload)`.
 
-Required fields:
+### TD-2: Replace check-then-write nonce API
 
-- resource URI
-- domain
-- nonce
-- version
-- issuance timestamp
-- optional expiration
-- supported chains
-- schema
-
-### FR-4: Entitlement recording after settlement
-
-After a successful payment settlement on an SIWX-enabled route, the server must record that the payer wallet is entitled to the resource.
-
-Required behavior:
-
-- Only record entitlement on successful settlement.
-- Record entitlement by canonical resource key and normalized wallet address.
-- Preserve adapter consistency for the same route shape.
-
-### FR-5: Pre-payment SIWX access grant
-
-For SIWX-enabled routes, the server must inspect the `SIGN-IN-WITH-X` header before enforcing payment.
-
-Required behavior:
-
-- Validate payload shape.
-- Validate domain and resource URI.
-- Validate issued-at, expiration, and not-before semantics.
-- Verify signature for supported chains.
-- Reject replayed nonces when nonce tracking is enabled.
-- Grant access without payment when the wallet has entitlement for that resource.
-
-### FR-6: Auth-only SIWX routes
-
-Routes must be able to require SIWX without requiring payment.
-
-Required behavior:
-
-- A route can be protected even when `price` is absent.
-- A request without valid SIWX auth receives an auth-related error response.
-- A request with valid SIWX auth reaches the handler.
-
-### FR-7: Typed auth context in handlers
-
-Handlers must receive typed auth information for successful SIWX requests.
-
-Required fields:
-
-- auth scheme
-- wallet address
-- chain identifier
-- original SIWX payload
-- whether access was granted due to prior entitlement
-
-### FR-8: Storage backend support
-
-SIWX state must support:
-
-- SQLite
-- in-memory
-- Postgres
-
-The storage contract must support:
-
-- entitlement lookup
-- entitlement record write
-- nonce existence lookup
-- nonce record write
-- clear/reset for tests
-
-### FR-9: Adapter parity
-
-All maintained adapters must behave consistently for:
-
-- 402 responses with SIWX extension declaration
-- SIWX retry requests
-- payment settlement and entitlement recording
-- auth-only SIWX enforcement
-
-### FR-10: Client ergonomics
-
-Lucid-owned client helpers must be able to compose payment handling and SIWX handling.
-
-Required outcomes:
-
-- Dashboard-generated clients can reuse access via SIWX.
-- Runtime payment fetch helpers can optionally produce SIWX-aware fetch functions.
-- Developers do not need to hand-wire request/response hooks.
-
-## API and Type Design
-
-## Proposed Public API
-
-### Payments extension
+The storage interface must change from:
 
 ```ts
-payments({
-  config: paymentsFromEnv(),
-  siwx: {
-    enabled: true,
-    defaultStatement: 'Sign in to reuse your paid access.',
-    expirationSeconds: 300,
-    storage: {
-      type: 'sqlite',
-    },
-    verify: {
-      evmRpcUrl: process.env.SIWX_EVM_RPC_URL,
-    },
-  },
-});
+hasUsedNonce(nonce): Promise<boolean>
+recordNonce(nonce, metadata): Promise<void>
 ```
 
-### Entrypoint definition
+to:
 
 ```ts
-addEntrypoint({
-  key: 'report',
-  description: 'Paid report access with SIWX reuse',
-  price: '0.01',
-  siwx: {
-    enabled: true,
-    statement: 'Sign in to reuse your paid report access.',
-  },
-  handler: async ctx => {
-    return { output: { ok: true } };
-  },
-});
+consumeNonce(
+  nonce: string,
+  metadata?: { resource?: string; address?: string; expiresAt?: number }
+): Promise<'consumed' | 'already_used'>
 ```
 
-### Auth-only route
-
-```ts
-addEntrypoint({
-  key: 'profile',
-  description: 'Wallet-authenticated profile lookup',
-  siwx: {
-    authOnly: true,
-    network: 'eip155:8453',
-    statement: 'Sign in to view your profile.',
-  },
-  handler: async ctx => {
-    return {
-      output: {
-        wallet: ctx.auth?.address,
-      },
-    };
-  },
-});
-```
-
-### Handler context
-
-```ts
-type AgentAuthContext =
-  | {
-      scheme: 'siwx';
-      address: string;
-      chainId: string;
-      grantedBy: 'entitlement' | 'auth-only';
-      payload: Record<string, unknown>;
-    }
-  | undefined;
-```
-
-## Type Requirements
-
-- `EntrypointDef` must support a typed `siwx` field.
-- `AgentContext` must support a typed `auth` field.
-- `PaymentsConfig` must support an optional `siwx` block.
-- `PaymentsRuntime` must expose SIWX runtime state directly if needed by adapters.
-- Avoid duplicate "internal" and "public" SIWX runtime types.
-
-## Data Model
-
-## SIWX Entitlement Record
-
-Proposed record:
-
-```ts
-type SIWxEntitlementRecord = {
-  id?: number;
-  resource: string;
-  address: string;
-  chainId?: string | null;
-  paymentNetwork?: string | null;
-  paidAt: number;
-  lastUsedAt?: number | null;
-};
-```
-
-## SIWX Nonce Record
-
-```ts
-type SIWxNonceRecord = {
-  id?: number;
-  nonce: string;
-  resource?: string | null;
-  address?: string | null;
-  usedAt: number;
-  expiresAt?: number | null;
-};
-```
-
-## Storage Interface
-
-```ts
-interface SIWxStorage {
-  hasPaid(resource: string, address: string): Promise<boolean>;
-  recordPayment(resource: string, address: string, chainId?: string): Promise<void>;
-  hasUsedNonce(nonce: string): Promise<boolean>;
-  recordNonce(nonce: string, metadata?: { resource?: string; address?: string; expiresAt?: number }): Promise<void>;
-  clear(): Promise<void>;
-}
-```
-
-## Canonical Resource Key
-
-The server must canonicalize a resource key consistently across adapters.
-
-Initial rule:
+Implementation rule:
 
-- Use the full absolute request URL for entitlement matching.
+- `verifySIWxPayload()` calls `consumeNonce()` once, after payload validation and before granting access.
+- Duplicate nonce consumption must return `already_used`, not overwrite prior metadata.
+- Existing tests for `hasUsedNonce` / `recordNonce` should be migrated or narrowed to internal backend helpers if needed.
 
-Follow-up optimization is allowed later if we want configurable normalization, but the first release must use one deterministic rule everywhere.
+### TD-3: Runtime construction must fail closed
 
-## Architecture
+`authOnly` is a security declaration, not a best-effort hint.
 
-### Ownership
+Implementation rule:
 
-- `@lucid-agents/payments`
-  - SIWX config types
-  - storage interfaces and implementations
-  - runtime construction
-  - route declaration helpers
-  - signature verification helpers and verifier wiring
-- `@lucid-agents/types`
-  - public SIWX and auth types
-- `@lucid-agents/http`
-  - passes typed auth context into handlers
-- adapters
-  - call payments-owned SIWX helpers
-  - do not own protocol logic
-- `@lucid-agents/cli`
-  - template and env support
+- Route registration must validate SIWX availability before mounting auth-only handlers.
+- If a runtime lacks `siwxConfig.enabled` or usable storage, route registration throws with a clear error.
+- Adapters must not treat missing SIWX middleware as a non-fatal condition for auth-only routes.
 
-### x402 dependency strategy
+### TD-4: Adapters should pass auth directly, not through transport hacks
 
-The implementation should bump the x402 stack to a version that supports the official SIWX hooks and transport-level server APIs.
+The `@lucid-agents/http` package already accepts `options.auth` in `invoke()` and `stream()`. Adapters should call those APIs directly.
 
-Required packages:
+Implementation rule:
 
-- `@x402/core`
-- `@x402/fetch`
-- `@x402/hono`
-- `@x402/express`
-- `@x402/next`
-- `@x402/extensions`
+- Hono already follows the right pattern and becomes the reference implementation.
+- Express should stop serializing auth into `x-agent-auth-context`.
+- TanStack should stop widening its public handler type without actually threading auth through.
+- Next should follow the same direct `auth` passing pattern.
 
-### Adapter strategy
+### TD-5: Shared challenge builder and response contract
 
-#### TanStack
+The payments package owns the response shape for SIWX challenge emission.
 
-TanStack is the easiest first integration because it already constructs `x402ResourceServer` and `x402HTTPResourceServer` directly. We should register SIWX extension and request/settlement hooks there first.
+Implementation rule:
 
-#### Hono and Express
+- Add one helper that enriches a `402` or `401` response with:
+  - `X-SIWX-EXTENSION`
+  - `extensions.siwx` for payment challenges
+  - `error.siwx` when the client needs retry metadata on auth failures
+- Adapters must call the helper rather than constructing ad hoc response shapes.
 
-Hono and Express currently use config-based middleware helpers. They should be moved to a payments-owned builder that constructs a configured resource server and HTTP server directly, then hands that server to the adapter wrapper.
+### TD-6: Public API clarity
 
-#### Next
+The root `AGENTS.md` rules apply directly here.
 
-The generated Next adapter should follow the same model and use the direct HTTP-server wrapping path, not a config-only shortcut.
+Implementation rule:
 
-## Implementation Plan
+- `SIWxStorage` is defined in `@lucid-agents/types/siwx`.
+- `PaymentsRuntime.siwxStorage` is typed as `SIWxStorage`.
+- `PaymentsRuntime.siwxConfig` is typed as `SIWxConfig`.
+- Remove duplicate local interfaces and `unknown` placeholders.
 
-### Phase 0: Dependency and API preparation
+## Workstreams
 
-- Bump x402 packages.
-- Add `@x402/extensions`.
-- Add public SIWX types in `@lucid-agents/types`.
-- Add handler auth typing.
+### Workstream A: Type and runtime cleanup
 
-### Phase 1: Paid-route SIWX reuse
+Packages:
 
-- Add `payments.siwx` config.
-- Add `entrypoint.siwx.enabled`.
-- Add entitlement storage.
-- Add 402 extension declarations.
-- Add settlement-time entitlement recording.
-- Add request-time SIWX verification and entitlement check.
-- Add client helper composition.
+- `packages/types`
+- `packages/payments`
 
-### Phase 2: Auth-only routes
+Tasks:
 
-- Allow protected routes without `price`.
-- Add auth-only route response behavior.
-- Add end-to-end tests for free but authenticated entrypoints.
+- Remove duplicate `SIWxStorage` declaration from payments.
+- Export concrete SIWX types from `@lucid-agents/types`.
+- Update `PaymentsRuntime` to expose typed `siwxStorage` and `siwxConfig`.
+- Update payments runtime construction to use the shared types directly.
 
-### Phase 3: CLI and docs
+Exit criteria:
 
-- Add SIWX prompts or documented env keys to relevant templates.
-- Update payments docs and examples.
-- Add at least one example app using paid-route SIWX.
+- No adapter code needs a type cast for `siwxStorage`.
+- The SIWX type surface follows single-source-of-truth rules.
 
-## TDD Strategy
+### Workstream B: Cryptographic correctness
 
-The implementation must be test-first. Each layer below should be built in order.
+Packages:
 
-### Step 1: Types and storage tests
+- `packages/payments`
 
-Write failing tests for:
+Tasks:
 
-- SIWX storage interface contract.
-- SQLite storage `hasPaid` and `recordPayment`.
-- Postgres storage `hasPaid` and `recordPayment`.
-- In-memory storage behavior.
-- Nonce persistence and replay detection.
+- Change client signing to use `buildSIWxMessage()`.
+- Keep payload serialization only for the header body, not for the signed message.
+- Add end-to-end verification tests using an actual signer.
 
-Then implement storage.
+Exit criteria:
 
-### Step 2: Runtime configuration tests
+- A client-generated SIWX header verifies successfully when entitlement exists.
+- The same test fails if the message string is altered.
 
-Write failing tests for:
+### Workstream C: Atomic replay protection
 
-- payments runtime builds with SIWX disabled.
-- payments runtime builds with SIWX enabled.
-- invalid SIWX config throws at startup.
-- entrypoint SIWX opt-in merges correctly with global defaults.
+Packages:
 
-Then implement runtime config and validation.
+- `packages/payments`
 
-### Step 3: Route declaration tests
+Tasks:
 
-Write failing tests for:
+- Replace nonce API with atomic consumption.
+- Update SQLite and Postgres to rely on uniqueness constraints without overwrite semantics.
+- Update in-memory storage to reject duplicates deterministically.
+- Update verification flow to call the new method exactly once.
 
-- SIWX-enabled paid route emits x402 extension declaration.
-- auth-only SIWX route is registered even without `price`.
-- non-SIWX route does not emit SIWX extension declaration.
+Exit criteria:
 
-Then implement route-building changes.
+- Concurrent attempts to consume the same nonce produce one success and one replay rejection.
 
-### Step 4: Verification flow tests
+### Workstream D: Adapter auth propagation
 
-Write failing tests for:
+Packages:
 
-- valid SIWX header on entitled wallet grants access before payment.
-- valid SIWX header on non-entitled wallet does not bypass payment.
-- invalid signature is rejected.
-- mismatched resource URI is rejected.
-- expired SIWX payload is rejected.
-- replayed nonce is rejected.
+- `packages/express`
+- `packages/tanstack`
+- `packages/http`
+- Next scaffolding
 
-Then implement verification flow.
+Tasks:
 
-### Step 5: Settlement and entitlement tests
+- Express:
+  - Replace `runtime.handlers.invoke/stream` usage for entrypoints with direct calls to `invoke()` / `stream()` from `@lucid-agents/http`.
+  - Pass `req.siwxAuth` via `options.auth`.
+- TanStack:
+  - Update handler adapter contract so route handlers can receive `auth`.
+  - Ensure middleware context auth is passed into invoke/stream execution.
+- Next:
+  - Ensure route handlers accept auth from middleware and call invoke/stream with `options.auth`.
 
-Write failing tests for:
+Exit criteria:
 
-- successful paid request records entitlement.
-- failed settlement does not record entitlement.
-- only successful 2xx protected responses record entitlement.
-- canonical resource key is consistent for recording and lookup.
+- A handler can assert `ctx.auth.address` after SIWX success in each adapter.
+- Invoke and stream both receive auth.
 
-Then implement settlement hooks.
+### Workstream E: Fail-closed auth-only routing
 
-### Step 6: Handler context tests
+Packages:
 
-Write failing tests for:
+- `packages/express`
+- `packages/hono`
+- `packages/tanstack`
+- Next scaffolding
 
-- handler receives `ctx.auth` on successful SIWX grant.
-- handler does not receive `ctx.auth` on non-SIWX request.
-- auth-only route handler receives the authenticated wallet.
+Tasks:
 
-Then implement context plumbing.
+- Make auth-only route registration validate runtime SIWX prerequisites.
+- Throw early when auth-only is declared without a working SIWX runtime.
+- Cover route registration and request behavior separately.
 
-### Step 7: Adapter tests
+Exit criteria:
 
-Write failing tests for each adapter:
+- Misconfigured auth-only routes fail during app/runtime setup, not at request time and not by falling open.
 
-- unpaid paid-route returns 402 with SIWX extension declaration.
-- paid route records entitlement.
-- returning wallet with SIWX header bypasses payment.
-- auth-only route rejects missing SIWX.
-- auth-only route accepts valid SIWX.
+### Workstream F: Challenge contract parity
 
-Then implement adapter wiring.
+Packages:
 
-### Step 8: Client tests
+- `packages/payments`
+- `packages/hono`
+- `packages/express`
+- `packages/tanstack`
+- Next scaffolding
 
-Write failing tests for:
+Tasks:
 
-- dashboard fetch helper retries with SIWX on 402 with SIWX extension.
-- non-SIWX 402 falls back to normal payment behavior.
-- payment + SIWX composition works for invoke and stream.
+- Add a shared helper for SIWX challenge enrichment.
+- Convert Hono to use the shared response shape.
+- Normalize all adapters to include the same parseable fields.
+- Add client-helper tests against each adapter challenge shape.
 
-Then implement client helpers.
+Exit criteria:
 
-### Step 9: CLI and template tests
+- `wrapFetchWithSIWx()` recognizes challenge responses from every adapter.
 
-Write failing tests for:
+## TDD Plan
 
-- template generation includes SIWX config when requested.
-- env/config documentation is generated correctly.
-- non-interactive template arguments are supported.
+The sequence below is mandatory. Do not start implementation in a workstream until its failing tests exist.
 
-Then implement CLI support.
+### Phase 1: Type and API tests
+
+Add or update tests to fail on the current branch:
+
+- `packages/payments/src/__tests__/siwx-runtime.test.ts`
+  - `PaymentsRuntime.siwxStorage is strongly typed`
+  - `payments runtime uses shared SIWxStorage type`
+- `packages/types` tests if present, otherwise type-level compile checks through existing package tests
+  - `SIWxStorage has one canonical definition`
+
+Implementation follows only after the type expectations are captured.
+
+### Phase 2: Canonical signing tests
+
+Add failing tests in `packages/payments/src/__tests__/siwx-client.test.ts` and `packages/payments/src/__tests__/siwx-verify.test.ts`:
+
+- `wrapFetchWithSIWx signs the canonical SIWX message`
+- `client-generated SIWX payload verifies successfully with signature verification enabled`
+- `verification rejects a signature over JSON payload instead of canonical message`
+
+Implementation:
+
+- Update the client signer path.
+- Reuse the canonical builder in both client and server.
+
+### Phase 3: Atomic nonce tests
+
+Add failing tests in `packages/payments/src/__tests__/siwx-storage.test.ts` and `packages/payments/src/__tests__/siwx-verify.test.ts`:
+
+- `consumeNonce returns already_used on second call`
+- `sqlite backend does not overwrite an existing nonce`
+- `postgres backend does not overwrite an existing nonce`
+- `verifySIWxPayload rejects a concurrent replay`
+
+Implementation:
+
+- Change the storage interface.
+- Update backends and verification flow.
+
+### Phase 4: Fail-closed auth-only tests
+
+Add failing tests:
+
+- `packages/express/src/__tests__/siwx.test.ts`
+  - `createAgentApp throws when authOnly route is mounted without enabled SIWX runtime`
+- `packages/hono/src/__tests__/siwx.test.ts`
+  - `createAgentApp throws when authOnly route is mounted without enabled SIWX runtime`
+- `packages/tanstack/src/__tests__/siwx.test.ts`
+  - `createTanStackPaywall rejects authOnly route without SIWX runtime`
+
+Implementation:
+
+- Enforce route-registration validation.
+
+### Phase 5: Handler auth propagation tests
+
+Add failing end-to-end tests that assert `ctx.auth`, not just middleware state:
+
+- `packages/express/src/__tests__/siwx.test.ts`
+  - `invoke handler receives auth context on entitlement reuse`
+  - `stream handler receives auth context on authOnly route`
+- `packages/tanstack/src/__tests__/siwx.test.ts`
+  - `invoke handler receives auth context from middleware`
+  - `stream handler receives auth context from middleware`
+
+Implementation:
+
+- Refactor adapters to call `invoke()` / `stream()` directly with `options.auth`.
+
+### Phase 6: Challenge parity tests
+
+Add failing tests:
+
+- `packages/hono/src/__tests__/siwx.test.ts`
+  - `402 response exposes X-SIWX-EXTENSION`
+  - `402 response exposes extensions.siwx`
+- `packages/payments/src/__tests__/siwx-client.test.ts`
+  - `parseSIWxExtension parses Hono challenge`
+  - `wrapFetchWithSIWx retries against Hono-style 402`
+
+Implementation:
+
+- Add shared response enrichment helper.
+- Normalize Hono and verify the other adapters still pass.
+
+### Phase 7: Regression and parity sweep
+
+After all targeted fixes land, add or run parity tests that cover:
+
+- paid-route SIWX reuse
+- auth-only wallet access
+- invalid signature rejection
+- mismatched domain rejection
+- mismatched URI rejection
+- expired payload rejection
+- replay rejection
+- handler auth visibility
+- consistent 401 and 402 challenge shape
 
 ## Detailed Test Matrix
 
-### Unit Tests
+### Payments
 
-#### Payments package
+- `siwx-client.test.ts`
+  - canonical signing
+  - challenge parsing from header
+  - challenge parsing from `extensions.siwx`
+  - no retry when no challenge exists
+- `siwx-verify.test.ts`
+  - valid canonical signature
+  - invalid signature
+  - domain mismatch
+  - URI mismatch
+  - expired token
+  - not-before violation
+  - nonce replay
+- `siwx-storage.test.ts`
+  - atomic nonce consumption for all backends
+  - entitlement recording and lookup
+  - duplicate entitlement writes remain idempotent
 
-- SIWX config validation
-- SIWX storage adapters
-- resource canonicalization
-- nonce replay behavior
-- entitlement lookup behavior
-- verifier configuration behavior
+### Hono
 
-#### Types package
+- paid route emits standard parseable challenge
+- auth-only route rejects missing SIWX
+- handler sees `ctx.auth`
+- entitlement reuse bypasses payment
 
-- public type compile coverage for:
-  - `EntrypointDef.siwx`
-  - `AgentContext.auth`
-  - `PaymentsConfig.siwx`
+### Express
 
-#### HTTP package
+- auth-only route fails closed during app creation when SIWX is unavailable
+- handler sees `ctx.auth` for invoke
+- handler sees `ctx.auth` for stream
+- entitlement reuse bypasses payment and does not drop auth
 
-- `ctx.auth` propagation into handlers
-- invoke and stream parity
+### TanStack
 
-### Integration Tests
+- auth-only route fails closed during paywall/runtime setup
+- middleware-authenticated invoke reaches handler with auth
+- middleware-authenticated stream reaches handler with auth
+- challenge response is parseable by client helper
 
-#### Hono
+### Next
 
-- `402` response contains SIWX extension for enabled route
-- repeat access works after prior payment
-- invalid SIWX rejected
-- auth-only route enforced
+- scaffolded middleware emits standard challenge
+- scaffolded route handlers receive auth from middleware
+- client helper succeeds against scaffolded endpoints
 
-#### Express
+## Delivery Order
 
-- same matrix as Hono
+1. Type cleanup and public runtime typing.
+2. Canonical signing fix.
+3. Atomic nonce API and storage changes.
+4. Fail-closed auth-only validation.
+5. Express auth propagation.
+6. TanStack auth propagation.
+7. Shared challenge helper and Hono normalization.
+8. Next parity work.
+9. Final regression sweep and docs.
 
-#### TanStack
+This order minimizes churn. The adapter fixes should happen only after the core signing, nonce, and type contracts are stable.
 
-- same matrix as Hono
+## Migration Notes
 
-#### Next adapter
+- The nonce storage API change is breaking for any internal callers. Update all SIWX codepaths in one changeset.
+- Persistent SIWX nonce tables should keep the same schema where possible, but write semantics must change from overwrite to reject.
+- If Next parity cannot be completed in the same window, remove any release claim that Next already supports SIWX and explicitly gate it behind a follow-up milestone.
 
-- proxy or route wrapper emits SIWX declaration
-- repeat access works after prior payment
+## Documentation Requirements
 
-### Regression Tests
+Before merge, update:
 
-- Non-SIWX paid routes behave exactly as before.
-- Existing payment policies continue to function.
-- Solana payment paths remain intact.
-- Facilitator auth headers still apply.
+- SIWX examples to show `ctx.auth`
+- adapter docs to describe challenge format and auth propagation
+- payments docs to describe storage semantics and replay guarantees
+- release notes to call out the nonce API change
 
-## Acceptance Criteria
+## Release Criteria
 
-- SIWX can be enabled globally and per entrypoint.
-- SIWX-enabled paid routes emit proper extension declarations.
-- Successful payments create wallet-resource entitlements.
-- Returning entitled wallets can re-access resources via SIWX without re-payment.
-- Replay protection is enforced via nonce tracking.
-- Auth-only SIWX routes work without requiring `price`.
-- Handlers receive typed auth context.
-- Hono, Express, TanStack, and Next adapters behave consistently.
-- Generated client helpers support SIWX-aware fetch composition.
-- Unit, integration, and CLI tests cover the feature set.
+Do not merge until all of the following are true:
 
-## Rollout and Migration
-
-### Migration Rules
-
-- Existing agents with payments but no SIWX config remain unchanged.
-- SIWX is opt-in.
-- Existing payment tracker data is not repurposed as entitlement data.
-- Storage migrations for SQLite and Postgres must be additive.
-
-### Suggested Rollout
-
-1. Land dependency bump and SIWX storage/runtime types.
-2. Land TanStack integration and tests first.
-3. Land Hono and Express.
-4. Land Next adapter.
-5. Land client helper and CLI/template support.
-6. Publish docs and example.
-
-## Risks
-
-- x402 version bump may require adjacent compatibility fixes.
-- Smart wallet verification may require RPC-backed verifier configuration.
-- Resource canonicalization mistakes could create false entitlement misses.
-- Auth-only routes may expose edge cases in adapter route registration.
+- Every requirement in PR-1 through PR-6 has a corresponding passing test.
+- No adapter-specific SIWX casts remain.
+- `authOnly` misconfiguration fails during setup.
+- The same client helper works against Hono, Express, and TanStack.
+- Signature verification passes without `skipSignatureVerification`.
+- Replay tests demonstrate only one successful nonce consumption.
 
 ## Open Questions
 
-1. Should auth-only SIWX failures return `401`, `403`, or `402` with a SIWX-only declaration?
-2. Should entitlements be scoped by full URL, route path, or configurable canonical resource keys?
-3. Should entitlement records expire by default, or remain durable until explicitly cleared?
-4. Do we want a first-release CLI prompt for SIWX, or just documented manual config?
-5. Should streaming routes reuse the same entitlement as invoke routes, or be tracked independently by full resource URL?
+- Should Next parity be completed in this branch, or should SIWX support claims for Next be deferred?
+- Do we want one shared adapter-agnostic helper for `401` auth challenge responses, or only for `402` payment challenges?
+- Should entitlement keys remain the full absolute URL, or do we want explicit canonicalization before public release?
 
-## Recommended Answers to Open Questions
+## Proposed Outcome
 
-1. Auth-only SIWX should return `401` with a structured JSON auth error in the first release.
-2. Use full absolute URL for the first release to avoid hidden normalization behavior.
-3. Keep entitlements durable by default; expiration can be added later if needed.
-4. Start with documented manual config, then add CLI prompts once the API settles.
-5. Track invoke and stream independently because they are distinct resources today.
+After this work, SIWX is no longer an experimental cross-cutting patch. It becomes a coherent payments-owned feature with:
+
+- one canonical message format
+- one type definition per concept
+- atomic replay protection
+- fail-closed auth-only behavior
+- direct handler auth propagation
+- adapter-consistent challenge responses
+
+That is the minimum bar for shipping SIWX in the Lucid Agents SDK.

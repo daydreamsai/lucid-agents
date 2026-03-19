@@ -1,5 +1,5 @@
 import type { Network } from '../core/network';
-import type { SIWxConfig } from '../siwx';
+import type { SIWxConfig, SIWxStorage } from '../siwx';
 
 /**
  * Resource URL type for x402 facilitator endpoints
@@ -230,7 +230,7 @@ export type PaymentsRuntime = {
   /** Policy groups configured for this runtime */
   readonly policyGroups?: PaymentPolicyGroup[];
   /** SIWX storage instance (if SIWX is enabled) */
-  readonly siwxStorage?: unknown;
+  readonly siwxStorage?: SIWxStorage;
   /** SIWX configuration (if SIWX is enabled) */
   readonly siwxConfig?: SIWxConfig;
   /**

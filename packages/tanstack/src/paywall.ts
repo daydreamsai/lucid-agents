@@ -197,9 +197,20 @@ export function createTanStackPaywall({
 
   // Resolve SIWX config
   const resolvedSiwxStorage =
-    siwxStorage ?? (runtime.payments?.siwxStorage as SIWxStorage | undefined);
+    siwxStorage ?? runtime.payments?.siwxStorage;
   const resolvedSiwxConfig =
     siwxConfig ?? runtime.payments?.siwxConfig ?? activePayments.siwx;
+
+  // Validate fail-closed: authOnly entrypoints require SIWX runtime
+  const hasSiwxRuntime = resolvedSiwxStorage && resolvedSiwxConfig?.enabled;
+  for (const ep of entrypoints) {
+    if (ep.siwx?.authOnly && !hasSiwxRuntime) {
+      throw new Error(
+        `Entrypoint "${ep.key}" declares authOnly but SIWX runtime is not configured. ` +
+        `Enable SIWX in payments config or remove authOnly from this entrypoint.`
+      );
+    }
+  }
 
   const siwxMiddlewareConfig: SIWxMiddlewareConfig | undefined =
     resolvedSiwxStorage && resolvedSiwxConfig?.enabled

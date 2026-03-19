@@ -25,6 +25,7 @@ import {
   parseSIWxHeader,
   verifySIWxPayload,
   buildSIWxExtensionDeclaration,
+  enrichResponseWithSIWxChallenge,
   entrypointHasSIWx,
   type PaymentTracker,
   type SIWxStorage,
@@ -103,11 +104,17 @@ export function withSIWxAuthOnly({
   entrypoint: EntrypointDef;
   runtime?: AgentRuntime;
 }): boolean {
-  const siwxConfig = runtime?.payments?.siwxConfig;
-  const siwxStorage = runtime?.payments?.siwxStorage as SIWxStorage | undefined;
-
-  if (!siwxConfig?.enabled || !siwxStorage) return false;
   if (!entrypoint.siwx?.authOnly) return false;
+
+  const siwxConfig = runtime?.payments?.siwxConfig;
+  const siwxStorage = runtime?.payments?.siwxStorage;
+
+  if (!siwxConfig?.enabled || !siwxStorage) {
+    throw new Error(
+      `Entrypoint "${entrypoint.key}" declares authOnly but SIWX runtime is not configured. ` +
+      `Enable SIWX in payments config or remove authOnly from this entrypoint.`
+    );
+  }
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     const reqPath = req.path ?? req.url ?? '';
@@ -122,10 +129,21 @@ export function withSIWxAuthOnly({
 
     const siwxHeader = req.headers['sign-in-with-x'] as string | undefined;
     if (!siwxHeader) {
+      const domain = extractDomain(req);
+      const resourceUri = buildResourceUri(req, path);
+      const declaration = buildSIWxExtensionDeclaration({
+        resourceUri,
+        domain,
+        statement: entrypoint.siwx?.statement ?? siwxConfig?.defaultStatement,
+        expirationSeconds: siwxConfig?.expirationSeconds,
+      });
+      const headerValue = Buffer.from(JSON.stringify(declaration)).toString('base64');
+      res.setHeader('X-SIWX-EXTENSION', headerValue);
       return res.status(401).json({
         error: {
           code: 'siwx_required',
           message: 'SIWX authentication required',
+          siwx: declaration,
         },
       });
     }
@@ -246,7 +264,7 @@ export function withPayments({
 
   // Determine if SIWX is enabled for this entrypoint
   const siwxConfig = runtime?.payments?.siwxConfig;
-  const siwxStorage = runtime?.payments?.siwxStorage as SIWxStorage | undefined;
+  const siwxStorage = runtime?.payments?.siwxStorage;
   const siwxEnabled =
     siwxStorage && siwxConfig?.enabled && entrypointHasSIWx(entrypoint, siwxConfig);
 
@@ -400,33 +418,25 @@ export function withPayments({
       // Intercept 402 responses to add SIWX extension declaration
       if (siwxEnabled) {
         const originalJson = res.json.bind(res);
-        const originalSend = res.send.bind(res);
-        const originalEnd = res.end.bind(res);
 
-        const injectSIWxExtension = (body: any): any => {
+        res.json = function (body: any) {
           if (res.statusCode === 402 && body && typeof body === 'object') {
             const domain = extractDomain(req);
             const resourceUri = buildResourceUri(req, path);
-            const siwxExtension = buildSIWxExtensionDeclaration({
+            const declaration = buildSIWxExtensionDeclaration({
               resourceUri,
               domain,
               statement: entrypoint.siwx?.statement ?? siwxConfig?.defaultStatement,
               chainId: network,
               expirationSeconds: siwxConfig?.expirationSeconds,
             });
-            return {
-              ...body,
-              extensions: {
-                ...(body.extensions ?? {}),
-                siwx: siwxExtension,
-              },
-            };
+            const enriched = enrichResponseWithSIWxChallenge(body, declaration, 402);
+            for (const [key, value] of Object.entries(enriched.headers)) {
+              res.setHeader(key, value);
+            }
+            return originalJson(enriched.body);
           }
-          return body;
-        };
-
-        res.json = function (body: any) {
-          return originalJson(injectSIWxExtension(body));
+          return originalJson(body);
         } as any;
       }
 

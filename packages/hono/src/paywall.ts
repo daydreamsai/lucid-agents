@@ -26,6 +26,7 @@ import {
   parseSIWxHeader,
   verifySIWxPayload,
   buildSIWxExtensionDeclaration,
+  enrichResponseWithSIWxChallenge,
   entrypointHasSIWx,
   type PaymentTracker,
   type SIWxStorage,
@@ -124,18 +125,21 @@ function createSiwxMiddleware(
       // No SIWX header - check if auth-only route (requires wallet auth)
       if (entrypoint.siwx?.authOnly) {
         const requestUrl = new URL(c.req.url);
+        const declaration = buildSIWxExtensionDeclaration({
+          resourceUri: c.req.url,
+          domain: requestUrl.hostname,
+          statement:
+            entrypoint.siwx?.statement ?? siwxConfig.defaultStatement,
+          expirationSeconds: siwxConfig.expirationSeconds,
+        });
+        const headerValue = Buffer.from(JSON.stringify(declaration)).toString('base64');
+        c.header('X-SIWX-EXTENSION', headerValue);
         return c.json(
           {
             error: {
               code: 'auth_required',
               message: 'Wallet authentication required',
-              siwx: buildSIWxExtensionDeclaration({
-                resourceUri: c.req.url,
-                domain: requestUrl.hostname,
-                statement:
-                  entrypoint.siwx?.statement ?? siwxConfig.defaultStatement,
-                expirationSeconds: siwxConfig.expirationSeconds,
-              }),
+              siwx: declaration,
             },
           },
           401
@@ -230,7 +234,12 @@ export function withSiwxAuth({
     | undefined;
   const siwxConfig = runtime?.payments?.siwxConfig;
 
-  if (!siwxStorage || !siwxConfig) return false;
+  if (!siwxStorage || !siwxConfig) {
+    throw new Error(
+      `Entrypoint "${entrypoint.key}" declares authOnly but SIWX runtime is not configured. ` +
+      `Enable SIWX in payments config or remove authOnly from this entrypoint.`
+    );
+  }
 
   app.use(path, createSiwxMiddleware(entrypoint, siwxStorage, siwxConfig));
   return true;
@@ -369,14 +378,18 @@ export function withPayments({
         try {
           const body = await result.json();
           const requestUrl = new URL(c.req.url);
-          body.siwx = buildSIWxExtensionDeclaration({
+          const declaration = buildSIWxExtensionDeclaration({
             resourceUri: c.req.url,
             domain: requestUrl.hostname,
             statement:
               entrypoint.siwx?.statement ?? siwxConfig.defaultStatement,
             expirationSeconds: siwxConfig.expirationSeconds,
           });
-          return c.json(body, result.status as any);
+          const enriched = enrichResponseWithSIWxChallenge(body, declaration, 402);
+          for (const [key, value] of Object.entries(enriched.headers)) {
+            c.header(key, value);
+          }
+          return c.json(enriched.body, result.status as any);
         } catch {
           return result;
         }
