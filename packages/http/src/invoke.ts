@@ -5,6 +5,7 @@ import type {
   EntrypointDef,
   AgentContext,
 } from '@lucid-agents/types/core';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import { ZodValidationError } from '@lucid-agents/types/core';
 
 import { errorResponse, extractInput, jsonResponse, readJson } from './utils';
@@ -32,6 +33,7 @@ export async function invokeHandler(
     headers: Headers;
     runId: string;
     runtime: AgentRuntime;
+    auth?: AgentAuthContext;
   }
 ): Promise<InvokeResult> {
   if (!entrypoint.handler) {
@@ -51,6 +53,7 @@ export async function invokeHandler(
     },
     runId: context.runId,
     runtime: context.runtime,
+    auth: context.auth,
   };
 
   // Call handler
@@ -73,7 +76,8 @@ export async function invokeHandler(
 export async function invoke(
   req: Request,
   entrypointKey: string,
-  runtime: AgentRuntime
+  runtime: AgentRuntime,
+  options?: { auth?: AgentAuthContext }
 ): Promise<Response> {
   const entrypoint = runtime.agent.getEntrypoint(entrypointKey);
   if (!entrypoint) {
@@ -98,6 +102,7 @@ export async function invoke(
       headers: req.headers,
       runId,
       runtime,
+      auth: options?.auth,
     });
 
     return jsonResponse({

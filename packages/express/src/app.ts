@@ -14,8 +14,11 @@ import type {
   AgentRuntime,
   CreateAgentAppReturn,
 } from '@lucid-agents/types/core';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import { AgentBuilder } from '@lucid-agents/core';
-import { withPayments } from './paywall';
+import { invoke, stream } from '@lucid-agents/http';
+import { entrypointHasSIWx } from '@lucid-agents/payments';
+import { withPayments, withSIWxAuthOnly } from './paywall';
 import { withMpp } from './mpp-paywall';
 
 type NodeRequestInit = RequestInit & { duplex?: 'half' };
@@ -53,37 +56,59 @@ export async function createAgentApp(
     const invokePath = `/entrypoints/${entrypoint.key}/invoke` as const;
     const streamPath = `/entrypoints/${entrypoint.key}/stream` as const;
 
-    withPayments({
-      app,
-      path: invokePath,
-      entrypoint,
-      kind: 'invoke',
-      payments: runtime.payments?.config,
-      runtime,
-    });
+    // Check if this is an auth-only SIWX route (no price)
+    const isAuthOnly = entrypoint.siwx?.authOnly === true;
+
+    if (isAuthOnly) {
+      // Auth-only: register SIWX enforcement middleware (no payment)
+      withSIWxAuthOnly({ app, path: invokePath, entrypoint, runtime });
+      withSIWxAuthOnly({ app, path: streamPath, entrypoint, runtime });
+    } else {
+      // Paid route: register payment middleware (with optional SIWX reuse)
+      withPayments({
+        app,
+        path: invokePath,
+        entrypoint,
+        kind: 'invoke',
+        payments: runtime.payments?.config,
+        runtime,
+      });
+
+      withPayments({
+        app,
+        path: streamPath,
+        entrypoint,
+        kind: 'stream',
+        payments: runtime.payments?.config,
+        runtime,
+      });
+    }
 
     withMpp({ app, path: invokePath, entrypoint, kind: 'invoke', mpp: runtime.mpp });
 
-    app.post(
-      invokePath,
-      createRouteHandler(runtime.handlers.invoke, { key: entrypoint.key })
-    );
-
-    withPayments({
-      app,
-      path: streamPath,
-      entrypoint,
-      kind: 'stream',
-      payments: runtime.payments?.config,
-      runtime,
+    app.post(invokePath, async (req, res, next) => {
+      try {
+        const request = toWebRequest(req);
+        const auth = (req as any).siwxAuth as AgentAuthContext | undefined;
+        const response = await invoke(request, entrypoint.key, runtime, auth ? { auth } : undefined);
+        await sendResponse(res, response);
+      } catch (error) {
+        next(error);
+      }
     });
 
     withMpp({ app, path: streamPath, entrypoint, kind: 'stream', mpp: runtime.mpp });
 
-    app.post(
-      streamPath,
-      createRouteHandler(runtime.handlers.stream, { key: entrypoint.key })
-    );
+    app.post(streamPath, async (req, res, next) => {
+      try {
+        const request = toWebRequest(req);
+        const auth = (req as any).siwxAuth as AgentAuthContext | undefined;
+        const response = await stream(request, entrypoint.key, runtime, auth ? { auth } : undefined);
+        await sendResponse(res, response);
+      } catch (error) {
+        next(error);
+      }
+    });
   };
 
   app.get('/health', createRouteHandler(runtime.handlers.health));
@@ -178,6 +203,7 @@ function createRouteHandler(
     }
   };
 }
+
 
 function isEncryptedSocket(
   socket: ExpressRequest['socket']

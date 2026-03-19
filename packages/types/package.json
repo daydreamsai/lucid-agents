@@ -61,6 +61,11 @@
       "import": "./dist/mpp/index.js",
       "default": "./dist/mpp/index.js"
     },
+    "./siwx": {
+      "types": "./dist/siwx/index.d.ts",
+      "import": "./dist/siwx/index.js",
+      "default": "./dist/siwx/index.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,

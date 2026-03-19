@@ -1,4 +1,5 @@
 import type { Network } from '../core/network';
+import type { SIWxConfig } from '../siwx';
 
 /**
  * Resource URL type for x402 facilitator endpoints
@@ -175,6 +176,8 @@ export type PaymentsConfig = {
   policyGroups?: PaymentPolicyGroup[];
   /** Optional storage configuration (defaults to SQLite) */
   storage?: PaymentStorageConfig;
+  /** Optional SIWX (Sign-In With X) configuration */
+  siwx?: SIWxConfig;
 } & (StaticPaymentsDestination | StripePaymentsDestination);
 
 /**
@@ -226,6 +229,10 @@ export type PaymentsRuntime = {
   readonly rateLimiter?: unknown; // RateLimiter instance (type exported from payments package)
   /** Policy groups configured for this runtime */
   readonly policyGroups?: PaymentPolicyGroup[];
+  /** SIWX storage instance (if SIWX is enabled) */
+  readonly siwxStorage?: unknown;
+  /** SIWX configuration (if SIWX is enabled) */
+  readonly siwxConfig?: SIWxConfig;
   /**
    * Get fetch function with payment support.
    * Returns a fetch function that automatically includes x402 payment headers.

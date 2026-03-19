@@ -5,7 +5,9 @@ import type {
   CreateAgentAppReturn,
   AgentRuntime,
 } from '@lucid-agents/types/core';
-import { withPayments } from './paywall';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
+import { invoke, stream } from '@lucid-agents/http';
+import { withPayments, withSiwxAuth } from './paywall';
 import { withMpp } from './mpp-paywall';
 
 export type CreateAgentAppOptions = {
@@ -40,7 +42,7 @@ export async function createAgentApp(
     const invokePath = `/entrypoints/${entrypoint.key}/invoke` as const;
     const streamPath = `/entrypoints/${entrypoint.key}/stream` as const;
 
-    withPayments({
+    const paymentsRegistered = withPayments({
       app,
       path: invokePath,
       entrypoint,
@@ -49,18 +51,26 @@ export async function createAgentApp(
       runtime,
     });
 
+    // For auth-only entrypoints without a price, register SIWX middleware
+    if (!paymentsRegistered) {
+      withSiwxAuth({ app, path: invokePath, entrypoint, runtime });
+    }
+
     withMpp({ app, path: invokePath, entrypoint, kind: 'invoke', mpp: runtime.mpp });
 
-    app.post(invokePath, c =>
-      runtime.handlers.invoke(c.req.raw, { key: entrypoint.key })
-    );
+    app.post(invokePath, c => {
+      const auth = (c as any).get('siwxAuth') as
+        | AgentAuthContext
+        | undefined;
+      return invoke(c.req.raw, entrypoint.key, runtime, auth ? { auth } : undefined);
+    });
 
     // Always register stream route for API consistency, even if entrypoint.stream is undefined.
     // The runtime handler will return 400 "stream_not_supported" if streaming isn't configured.
     // This ensures clients get a proper error (400) rather than "route not found" (404).
     // Benefits: AI agents can optimistically try streaming without querying the manifest first,
     // then fall back to invoke on 400. This reduces round-trips and simplifies client logic.
-    withPayments({
+    const streamPaymentsRegistered = withPayments({
       app,
       path: streamPath,
       entrypoint,
@@ -69,11 +79,18 @@ export async function createAgentApp(
       runtime,
     });
 
+    if (!streamPaymentsRegistered) {
+      withSiwxAuth({ app, path: streamPath, entrypoint, runtime });
+    }
+
     withMpp({ app, path: streamPath, entrypoint, kind: 'stream', mpp: runtime.mpp });
 
-    app.post(streamPath, c =>
-      runtime.handlers.stream(c.req.raw, { key: entrypoint.key })
-    );
+    app.post(streamPath, c => {
+      const auth = (c as any).get('siwxAuth') as
+        | AgentAuthContext
+        | undefined;
+      return stream(c.req.raw, entrypoint.key, runtime, auth ? { auth } : undefined);
+    });
   };
 
   app.get('/health', c => runtime.handlers.health(c.req.raw));

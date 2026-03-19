@@ -8,6 +8,7 @@ export {
   resolvePaymentRequirement,
   paymentRequiredResponse,
   createPaymentsRuntime,
+  entrypointHasSIWx,
 } from './payments';
 export {
   createRuntimePaymentContext,
@@ -72,3 +73,32 @@ export {
   type PolicyEvaluationResult,
 } from './policy';
 export { wrapBaseFetchWithPolicy } from './policy-wrapper';
+export type { SIWxStorage } from './siwx-storage';
+export {
+  createInMemorySIWxStorage,
+  type InMemorySIWxStorage,
+} from './siwx-in-memory-storage';
+export {
+  createSQLiteSIWxStorage,
+  type SQLiteSIWxStorage,
+} from './siwx-sqlite-storage';
+export {
+  createPostgresSIWxStorage,
+  type PostgresSIWxStorage,
+} from './siwx-postgres-storage';
+export {
+  parseSIWxHeader,
+  verifySIWxPayload,
+  buildSIWxExtensionDeclaration,
+  type SIWxPayload,
+  type SIWxVerifyResult,
+  type SIWxVerifyOptions,
+} from './siwx-verify';
+export {
+  wrapFetchWithSIWx,
+  parseSIWxExtension,
+  buildSIWxHeaderValue,
+  hasSIWxExtension,
+  type SIWxSigner,
+  type SIWxClientConfig,
+} from './siwx-client';

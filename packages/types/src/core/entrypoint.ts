@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { EntrypointPrice } from '../payments';
 import type { StreamPushEnvelope, StreamResult } from '../http';
+import type { SIWxEntrypointConfig } from '../siwx';
 import type { AgentContext, Usage } from './context';
 
 /**
@@ -55,6 +56,7 @@ export type EntrypointDef<
   handler?: EntrypointHandler<TInput, TOutput>;
   stream?: EntrypointStreamHandler<TInput>;
   metadata?: Record<string, unknown>;
+  siwx?: SIWxEntrypointConfig;
 };
 
 /**

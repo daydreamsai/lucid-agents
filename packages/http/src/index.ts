@@ -1,8 +1,9 @@
 export { http } from './extension';
 export type { HttpExtensionOptions } from '@lucid-agents/types/http';
 export type { AgentHttpHandlers } from '@lucid-agents/types/http';
-export { invokeHandler } from './invoke';
+export { invoke, invokeHandler } from './invoke';
 export type { InvokeResult } from './invoke';
+export { stream } from './stream';
 
 export {
   createSSEStream,

@@ -4,6 +4,8 @@ import {
   resolvePrice,
   resolvePayTo,
   validatePaymentsConfig,
+  entrypointHasSIWx,
+  buildSIWxExtensionDeclaration,
 } from '@lucid-agents/payments';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
@@ -25,9 +27,18 @@ export type CreateNextPaywallOptions = {
   paywall?: PaywallConfig;
 };
 
+export type SIWxRouteConfig = {
+  /** The entrypoint key */
+  entrypointKey: string;
+  /** The SIWX extension declaration to include in 402 responses */
+  extensionFactory: (requestUrl: string) => Record<string, unknown>;
+};
+
 export type NextPaywallConfig = {
   middleware?: ReturnType<typeof paymentMiddleware>;
   matcher: string[];
+  /** SIWX-enabled routes, keyed by path pattern */
+  siwxRoutes?: Map<string, SIWxRouteConfig>;
 };
 
 type EntrypointPaymentKind = 'invoke' | 'stream';
@@ -192,8 +203,42 @@ export function createNextPaywall({
     paywall
   );
 
+  // Build SIWX route map for entrypoints that have SIWX enabled
+  const siwxRoutes = new Map<string, SIWxRouteConfig>();
+  const siwxConfig = activePayments.siwx;
+
+  for (const entrypoint of entrypoints) {
+    if (!entrypointHasSIWx(entrypoint, siwxConfig)) continue;
+
+    const kinds: EntrypointPaymentKind[] = ['invoke'];
+    if (entrypoint.stream) kinds.push('stream');
+
+    for (const kind of kinds) {
+      const path = `${normalizedBasePath}/entrypoints/${entrypoint.key}/${kind}`;
+      siwxRoutes.set(path, {
+        entrypointKey: entrypoint.key,
+        extensionFactory: (requestUrl: string) => {
+          let hostname: string;
+          try {
+            hostname = new URL(requestUrl).hostname;
+          } catch {
+            hostname = 'localhost';
+          }
+          return buildSIWxExtensionDeclaration({
+            resourceUri: requestUrl,
+            domain: hostname,
+            statement:
+              entrypoint.siwx?.statement ?? siwxConfig?.defaultStatement,
+            expirationSeconds: siwxConfig?.expirationSeconds,
+          });
+        },
+      });
+    }
+  }
+
   return {
     middleware,
     matcher: buildMatcher(normalizedBasePath),
+    ...(siwxRoutes.size > 0 ? { siwxRoutes } : {}),
   };
 }

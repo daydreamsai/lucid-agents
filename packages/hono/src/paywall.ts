@@ -11,6 +11,8 @@ import {
 } from '@x402/core/server';
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { SIWxConfig } from '@lucid-agents/types/siwx';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import {
   createFacilitatorAuthHeaders,
   resolvePrice,
@@ -21,7 +23,12 @@ import {
   extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,
+  parseSIWxHeader,
+  verifySIWxPayload,
+  buildSIWxExtensionDeclaration,
+  entrypointHasSIWx,
   type PaymentTracker,
+  type SIWxStorage,
 } from '@lucid-agents/payments';
 
 type PaymentMiddlewareFactory = typeof paymentMiddlewareFromConfig;
@@ -101,6 +108,132 @@ function addFacilitatorAuth(
   };
 }
 
+/**
+ * Creates a SIWX middleware that checks the SIGN-IN-WITH-X header
+ * and verifies wallet authentication before the payment middleware.
+ */
+function createSiwxMiddleware(
+  entrypoint: EntrypointDef,
+  siwxStorage: SIWxStorage,
+  siwxConfig: SIWxConfig
+) {
+  return async (c: Context, next: () => Promise<void>) => {
+    const siwxHeader = c.req.header('SIGN-IN-WITH-X');
+
+    if (!siwxHeader) {
+      // No SIWX header - check if auth-only route (requires wallet auth)
+      if (entrypoint.siwx?.authOnly) {
+        const requestUrl = new URL(c.req.url);
+        return c.json(
+          {
+            error: {
+              code: 'auth_required',
+              message: 'Wallet authentication required',
+              siwx: buildSIWxExtensionDeclaration({
+                resourceUri: c.req.url,
+                domain: requestUrl.hostname,
+                statement:
+                  entrypoint.siwx?.statement ?? siwxConfig.defaultStatement,
+                expirationSeconds: siwxConfig.expirationSeconds,
+              }),
+            },
+          },
+          401
+        );
+      }
+      await next();
+      return;
+    }
+
+    // Parse and verify SIWX header
+    const payload = parseSIWxHeader(siwxHeader);
+    if (!payload) {
+      // Invalid header - for auth-only return 401, otherwise let payment middleware handle
+      if (entrypoint.siwx?.authOnly) {
+        return c.json(
+          {
+            error: {
+              code: 'auth_failed',
+              message: 'Invalid SIWX header',
+            },
+          },
+          401
+        );
+      }
+      await next();
+      return;
+    }
+
+    const isAuthOnly = entrypoint.siwx?.authOnly === true;
+    const requestUrl = new URL(c.req.url);
+    const result = await verifySIWxPayload(payload, {
+      storage: siwxStorage,
+      resourceUri: c.req.url,
+      domain: requestUrl.hostname,
+      requireEntitlement: !isAuthOnly,
+    });
+
+    if (result.success) {
+      // Set auth context for the handler
+      (c as any).set('siwxAuth', {
+        scheme: 'siwx' as const,
+        address: result.address!,
+        chainId: result.chainId!,
+        grantedBy: result.grantedBy!,
+        payload: result.payload as unknown as Record<string, unknown>,
+      } satisfies AgentAuthContext);
+
+      // Skip payment middleware - go straight to handler
+      await next();
+      return;
+    }
+
+    // Verification failed
+    if (isAuthOnly) {
+      return c.json(
+        {
+          error: {
+            code: 'auth_failed',
+            message: result.error ?? 'SIWX verification failed',
+          },
+        },
+        401
+      );
+    }
+
+    // For paid routes, let request continue to payment middleware
+    await next();
+  };
+}
+
+/**
+ * Registers SIWX-only middleware for auth-only entrypoints (no payment required).
+ * Returns true if middleware was registered.
+ */
+export function withSiwxAuth({
+  app,
+  path,
+  entrypoint,
+  runtime,
+}: {
+  app: Hono;
+  path: string;
+  entrypoint: EntrypointDef;
+  runtime?: AgentRuntime;
+}): boolean {
+  if (!entrypoint.siwx?.authOnly) return false;
+
+  const siwxStorage = runtime?.payments?.siwxStorage as
+    | SIWxStorage
+    | undefined;
+  const siwxConfig = runtime?.payments?.siwxConfig;
+
+  if (!siwxStorage || !siwxConfig) return false;
+
+  app.use(path, createSiwxMiddleware(entrypoint, siwxStorage, siwxConfig));
+  return true;
+}
+
 export function withPayments({
   app,
   path,
@@ -162,6 +295,18 @@ export function withPayments({
     | PaymentTracker
     | undefined;
 
+  // Check if SIWX is enabled for this entrypoint
+  const hasSiwx = entrypointHasSIWx(entrypoint, payments.siwx);
+  const siwxStorage = runtime?.payments?.siwxStorage as
+    | SIWxStorage
+    | undefined;
+  const siwxConfig = runtime?.payments?.siwxConfig;
+
+  // Register SIWX middleware BEFORE the payment middleware
+  if (hasSiwx && siwxStorage && siwxConfig) {
+    app.use(path, createSiwxMiddleware(entrypoint, siwxStorage, siwxConfig));
+  }
+
   if (policyGroups && policyGroups.length > 0) {
     app.use(path, async (c, next) => {
       const senderDomain = extractSenderDomain(
@@ -204,6 +349,12 @@ export function withPayments({
   );
 
   app.use(path, async (c, next) => {
+    // If SIWX already authenticated this request, skip payment middleware
+    if ((c as any).get('siwxAuth')) {
+      await next();
+      return;
+    }
+
     const paymentHeader = c.req.header('PAYMENT');
     const contextForPayment =
       paymentHeader && !c.req.header('X-PAYMENT')
@@ -211,11 +362,32 @@ export function withPayments({
         : c;
     const result = await baseMiddleware(contextForPayment, next);
     if (result instanceof Response) {
+      // If returning a 402 and SIWX is enabled, add SIWX extension declaration
+      if (hasSiwx && siwxStorage && siwxConfig) {
+        try {
+          const body = await result.json();
+          const requestUrl = new URL(c.req.url);
+          body.siwx = buildSIWxExtensionDeclaration({
+            resourceUri: c.req.url,
+            domain: requestUrl.hostname,
+            statement:
+              entrypoint.siwx?.statement ?? siwxConfig.defaultStatement,
+            expirationSeconds: siwxConfig.expirationSeconds,
+          });
+          return c.json(body, result.status as any);
+        } catch {
+          return result;
+        }
+      }
       return result;
     }
   });
 
-  if (policyGroups && policyGroups.length > 0 && paymentTracker) {
+  // Post-settlement middleware: record payment tracking + SIWX entitlements
+  if (
+    (policyGroups && policyGroups.length > 0 && paymentTracker) ||
+    (hasSiwx && siwxStorage)
+  ) {
     app.use(path, async (c, next) => {
       await next();
 
@@ -230,20 +402,39 @@ export function withPayments({
           const paymentAmount = parsePriceAmount(price);
 
           if (payerAddress && paymentAmount !== undefined) {
-            for (const group of policyGroups) {
-              if (group.incomingLimits) {
-                const limitInfo = findMostSpecificIncomingLimit(
-                  group.incomingLimits,
-                  payerAddress,
-                  senderDomain,
-                  c.req.url
-                );
-                const scope = limitInfo?.scope ?? 'global';
+            // Record payment tracking for policy groups
+            if (policyGroups && paymentTracker) {
+              for (const group of policyGroups) {
+                if (group.incomingLimits) {
+                  const limitInfo = findMostSpecificIncomingLimit(
+                    group.incomingLimits,
+                    payerAddress,
+                    senderDomain,
+                    c.req.url
+                  );
+                  const scope = limitInfo?.scope ?? 'global';
 
-                await paymentTracker.recordIncoming(
-                  group.name,
-                  scope,
-                  paymentAmount
+                  await paymentTracker.recordIncoming(
+                    group.name,
+                    scope,
+                    paymentAmount
+                  );
+                }
+              }
+            }
+
+            // Record SIWX entitlement after successful payment
+            if (hasSiwx && siwxStorage && payerAddress) {
+              try {
+                await siwxStorage.recordPayment(
+                  c.req.url,
+                  payerAddress,
+                  network
+                );
+              } catch (err) {
+                console.error(
+                  '[paywall] Error recording SIWX entitlement:',
+                  err
                 );
               }
             }

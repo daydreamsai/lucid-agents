@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { AgentRuntime } from './runtime';
+import type { AgentAuthContext } from '../siwx';
 
 /**
  * Usage metrics for agent execution.
@@ -21,6 +22,7 @@ export type AgentContext = {
   metadata?: Record<string, unknown>;
   runId?: string;
   runtime?: AgentRuntime;
+  auth?: AgentAuthContext;
 };
 
 /**

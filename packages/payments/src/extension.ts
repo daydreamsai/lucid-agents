@@ -62,7 +62,7 @@ export function payments(options?: {
         !paymentsRuntime.isActive &&
         paymentsRuntime.config
       ) {
-        if (entrypointHasExplicitPrice(entrypoint)) {
+        if (entrypointHasExplicitPrice(entrypoint) || entrypoint.siwx?.authOnly) {
           paymentsRuntime.activate(entrypoint);
         }
       }

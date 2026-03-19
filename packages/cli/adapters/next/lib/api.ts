@@ -44,8 +44,42 @@ export async function getManifest() {
 let paymentModulePromise: Promise<typeof import('x402-fetch') | null> | null =
   null;
 
-async function resolveFetcher(signer?: any) {
-  if (!signer) return fetch;
+let siwxModulePromise: Promise<
+  typeof import('@lucid-agents/payments') | null
+> | null = null;
+
+type SIWxSignerOption = {
+  signMessage: (message: string) => Promise<string>;
+  getAddress: () => Promise<string>;
+  getChainId: () => Promise<string>;
+};
+
+async function resolveFetcher(signer?: any, siwxSigner?: SIWxSignerOption) {
+  let baseFetcher: (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ) => Promise<Response> = fetch;
+
+  // Wrap with SIWX first so it gets tried before payment
+  if (siwxSigner) {
+    if (!siwxModulePromise) {
+      siwxModulePromise = import('@lucid-agents/payments')
+        .then(mod => mod)
+        .catch(error => {
+          console.warn(
+            '@lucid-agents/payments could not be loaded for SIWX, skipping',
+            error
+          );
+          return null;
+        });
+    }
+    const siwxMod = await siwxModulePromise;
+    if (siwxMod) {
+      baseFetcher = siwxMod.wrapFetchWithSIWx(baseFetcher, siwxSigner);
+    }
+  }
+
+  if (!signer) return baseFetcher;
 
   if (!paymentModulePromise) {
     paymentModulePromise = import('x402-fetch')
@@ -60,23 +94,26 @@ async function resolveFetcher(signer?: any) {
   }
 
   const mod = await paymentModulePromise;
-  if (!mod) return fetch;
-  return mod.wrapFetchWithPayment(fetch, signer);
+  if (!mod) return baseFetcher;
+  return mod.wrapFetchWithPayment(baseFetcher, signer);
 }
 
 export async function invokeEntrypoint({
   key,
   input,
   signer,
+  siwxSigner,
 }: {
   key: string;
   input: unknown;
   signer?: any;
+  siwxSigner?: SIWxSignerOption;
 }) {
   return invokeEntrypointWithBody({
     key,
     body: { input },
     signer,
+    siwxSigner,
   });
 }
 
@@ -90,16 +127,19 @@ export async function streamEntrypoint({
   key,
   input,
   signer,
+  siwxSigner,
   ...callbacks
 }: {
   key: string;
   input: unknown;
   signer?: any;
+  siwxSigner?: SIWxSignerOption;
 } & StreamCallbacks): Promise<{ cancel: () => void }> {
   return streamEntrypointWithBody({
     key,
     body: { input },
     signer,
+    siwxSigner,
     ...callbacks,
   });
 }
@@ -108,12 +148,14 @@ export async function invokeEntrypointWithBody({
   key,
   body,
   signer,
+  siwxSigner,
 }: {
   key: string;
   body: unknown;
   signer?: any;
+  siwxSigner?: SIWxSignerOption;
 }) {
-  const fetcher = await resolveFetcher(signer);
+  const fetcher = await resolveFetcher(signer, siwxSigner);
 
   const response = await fetcher(`/api/agent/entrypoints/${key}/invoke`, {
     method: 'POST',
@@ -138,13 +180,15 @@ export async function streamEntrypointWithBody({
   key,
   body,
   signer,
+  siwxSigner,
   ...callbacks
 }: {
   key: string;
   body: unknown;
   signer?: any;
+  siwxSigner?: SIWxSignerOption;
 } & StreamCallbacks): Promise<{ cancel: () => void }> {
-  const fetcher = await resolveFetcher(signer);
+  const fetcher = await resolveFetcher(signer, siwxSigner);
 
   const controller = new AbortController();
 

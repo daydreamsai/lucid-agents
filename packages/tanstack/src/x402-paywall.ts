@@ -13,6 +13,15 @@ import {
   type HTTPAdapter,
   type HTTPProcessResult,
 } from '@x402/core/server';
+import type { SIWxStorage } from '@lucid-agents/payments';
+import type { SIWxConfig, AgentAuthContext } from '@lucid-agents/types/siwx';
+import {
+  parseSIWxHeader,
+  verifySIWxPayload,
+  buildSIWxExtensionDeclaration,
+  entrypointHasSIWx,
+} from '@lucid-agents/payments';
+import type { EntrypointDef } from '@lucid-agents/types/core';
 
 type RoutesConfigResolver =
   | RoutesConfig
@@ -20,6 +29,13 @@ type RoutesConfigResolver =
 
 type AnyRequestServerOptions = RequestServerOptions<any, any>;
 type AnyRequestServerResult = RequestServerResult<any, any, any>;
+
+export type SIWxMiddlewareConfig = {
+  siwxStorage?: SIWxStorage;
+  siwxConfig?: SIWxConfig;
+  entrypoints?: EntrypointDef[];
+  basePath?: string;
+};
 
 class TanStackAdapter implements HTTPAdapter {
   private request: Request;
@@ -77,9 +93,75 @@ class TanStackAdapter implements HTTPAdapter {
   }
 }
 
+/**
+ * Resolve the entrypoint key from a request pathname.
+ * Expected format: {basePath}/entrypoints/{key}/{invoke|stream}
+ */
+function resolveEntrypointFromPath(
+  pathname: string,
+  entrypoints: EntrypointDef[],
+  basePath: string
+): EntrypointDef | undefined {
+  const prefix = `${basePath}/entrypoints/`;
+  if (!pathname.startsWith(prefix)) return undefined;
+  const rest = pathname.slice(prefix.length);
+  const slashIdx = rest.indexOf('/');
+  const key = slashIdx >= 0 ? rest.slice(0, slashIdx) : rest;
+  return entrypoints.find((ep) => ep.key === key);
+}
+
+/**
+ * Try to verify a SIWX header against storage and return auth context if valid.
+ */
+async function trySIWxVerification(
+  request: Request,
+  siwxStorage: SIWxStorage,
+  siwxConfig: SIWxConfig,
+  entrypoint: EntrypointDef,
+  resourceUri: string
+): Promise<{ auth: AgentAuthContext } | { error: string } | null> {
+  const siwxHeader =
+    request.headers.get('SIGN-IN-WITH-X') ??
+    request.headers.get('X-SIGN-IN-WITH-X');
+
+  if (!siwxHeader) return null;
+
+  const payload = parseSIWxHeader(siwxHeader);
+  if (!payload) {
+    return { error: 'invalid_siwx_header' };
+  }
+
+  const url = new URL(request.url);
+  const domain = url.hostname;
+
+  const isAuthOnly = entrypoint.siwx?.authOnly === true;
+
+  const verifyResult = await verifySIWxPayload(payload, {
+    storage: siwxStorage,
+    resourceUri,
+    domain,
+    requireEntitlement: !isAuthOnly,
+  });
+
+  if (!verifyResult.success) {
+    return { error: verifyResult.error ?? 'siwx_verification_failed' };
+  }
+
+  return {
+    auth: {
+      scheme: 'siwx',
+      address: verifyResult.address!,
+      chainId: verifyResult.chainId!,
+      grantedBy: verifyResult.grantedBy!,
+      payload: payload as unknown as Record<string, unknown>,
+    },
+  };
+}
+
 function createPaymentHandler(
   httpServer: x402HTTPResourceServer,
-  paywallConfig?: PaywallConfig
+  paywallConfig?: PaywallConfig,
+  siwxCfg?: SIWxMiddlewareConfig
 ) {
   return async function handleRequest(
     options: AnyRequestServerOptions
@@ -92,6 +174,92 @@ function createPaymentHandler(
       context,
       response,
     });
+
+    // --- SIWX pre-payment check ---
+    if (siwxCfg?.siwxStorage && siwxCfg?.siwxConfig?.enabled && siwxCfg.entrypoints) {
+      const basePath = siwxCfg.basePath ?? '/api/agent';
+      const entrypoint = resolveEntrypointFromPath(pathname, siwxCfg.entrypoints, basePath);
+
+      if (entrypoint && entrypointHasSIWx(entrypoint, siwxCfg.siwxConfig)) {
+        const resourceUri = new URL(pathname, request.url).href;
+
+        const siwxResult = await trySIWxVerification(
+          request,
+          siwxCfg.siwxStorage,
+          siwxCfg.siwxConfig,
+          entrypoint,
+          resourceUri
+        );
+
+        if (siwxResult && 'auth' in siwxResult) {
+          // SIWX verified - bypass payment, pass through with auth context
+          const nextResult = await next();
+          const enriched = new Response(nextResult.response.body, nextResult.response);
+          enriched.headers.set('X-SIWX-Granted-By', siwxResult.auth.grantedBy);
+          enriched.headers.set('X-SIWX-Address', siwxResult.auth.address);
+          return {
+            ...nextResult,
+            response: enriched,
+            context: {
+              ...context,
+              siwxAuth: siwxResult.auth,
+            },
+          };
+        }
+
+        // If SIWX header was present but invalid on auth-only route, reject
+        if (siwxResult && 'error' in siwxResult && entrypoint.siwx?.authOnly) {
+          return respond(
+            new Response(
+              JSON.stringify({
+                error: {
+                  code: 'siwx_auth_failed',
+                  message: siwxResult.error,
+                },
+              }),
+              {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' },
+              }
+            )
+          );
+        }
+
+        // Auth-only route with no SIWX header => reject with 401
+        if (entrypoint.siwx?.authOnly && !siwxResult) {
+          const url = new URL(request.url);
+          const declaration = buildSIWxExtensionDeclaration({
+            resourceUri,
+            domain: url.hostname,
+            statement:
+              entrypoint.siwx?.statement ?? siwxCfg.siwxConfig.defaultStatement,
+            chainId: entrypoint.siwx?.network ?? entrypoint.network,
+            expirationSeconds: siwxCfg.siwxConfig.expirationSeconds,
+          });
+
+          return respond(
+            new Response(
+              JSON.stringify({
+                error: {
+                  code: 'siwx_required',
+                  message: 'Wallet authentication required',
+                  siwx: declaration,
+                },
+              }),
+              {
+                status: 401,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-SIWX-EXTENSION': Buffer.from(
+                    JSON.stringify(declaration)
+                  ).toString('base64'),
+                },
+              }
+            )
+          );
+        }
+      }
+    }
 
     const adapter = new TanStackAdapter(request, pathname);
     const httpContext = {
@@ -110,6 +278,34 @@ function createPaymentHandler(
     if (result.type === 'payment-error') {
       const { status, headers, body, isHtml } = result.response;
       const responseHeaders = new Headers(headers);
+
+      // If 402 and SIWX is enabled, append SIWX extension declaration
+      if (
+        status === 402 &&
+        siwxCfg?.siwxStorage &&
+        siwxCfg?.siwxConfig?.enabled &&
+        siwxCfg.entrypoints
+      ) {
+        const basePath = siwxCfg.basePath ?? '/api/agent';
+        const entrypoint = resolveEntrypointFromPath(pathname, siwxCfg.entrypoints, basePath);
+        if (entrypoint && entrypointHasSIWx(entrypoint, siwxCfg.siwxConfig)) {
+          const resourceUri = new URL(pathname, request.url).href;
+          const url = new URL(request.url);
+          const declaration = buildSIWxExtensionDeclaration({
+            resourceUri,
+            domain: url.hostname,
+            statement:
+              entrypoint.siwx?.statement ?? siwxCfg.siwxConfig.defaultStatement,
+            chainId: entrypoint.siwx?.network ?? entrypoint.network,
+            expirationSeconds: siwxCfg.siwxConfig.expirationSeconds,
+          });
+          responseHeaders.set(
+            'X-SIWX-EXTENSION',
+            Buffer.from(JSON.stringify(declaration)).toString('base64')
+          );
+        }
+      }
+
       if (isHtml) {
         responseHeaders.set('Content-Type', 'text/html');
         return respond(new Response(body as string, { status, headers: responseHeaders }));
@@ -133,6 +329,41 @@ function createPaymentHandler(
       for (const [key, value] of Object.entries(settlementResult.headers)) {
         enriched.headers.set(key, value);
       }
+
+      // --- Post-settlement entitlement recording ---
+      if (
+        siwxCfg?.siwxStorage &&
+        siwxCfg?.siwxConfig?.enabled &&
+        siwxCfg.entrypoints
+      ) {
+        const basePath = siwxCfg.basePath ?? '/api/agent';
+        const entrypoint = resolveEntrypointFromPath(pathname, siwxCfg.entrypoints, basePath);
+        if (entrypoint && entrypointHasSIWx(entrypoint, siwxCfg.siwxConfig)) {
+          const resourceUri = new URL(pathname, request.url).href;
+          const payerAddress =
+            typeof paymentPayload === 'object' && paymentPayload !== null
+              ? (paymentPayload as Record<string, unknown>).from ??
+                (paymentPayload as Record<string, unknown>).payer
+              : undefined;
+
+          if (typeof payerAddress === 'string' && payerAddress) {
+            try {
+              const chainId =
+                entrypoint.siwx?.network ??
+                entrypoint.network ??
+                undefined;
+              await siwxCfg.siwxStorage.recordPayment(
+                resourceUri,
+                payerAddress.toLowerCase(),
+                chainId
+              );
+            } catch {
+              // Entitlement recording failure should not block the response
+            }
+          }
+        }
+      }
+
       return {
         ...nextResult,
         response: enriched,
@@ -157,7 +388,8 @@ function createPaymentHandler(
 export function paymentMiddleware(
   routes: RoutesConfigResolver,
   facilitator?: FacilitatorConfig,
-  paywall?: PaywallConfig
+  paywall?: PaywallConfig,
+  siwx?: SIWxMiddlewareConfig
 ) {
   let resolvedRoutes: RoutesConfig | null = null;
   let routesPromise: Promise<RoutesConfig> | null = null;
@@ -197,7 +429,7 @@ export function paymentMiddleware(
 
   const middlewareHandler = async (options: AnyRequestServerOptions): Promise<AnyRequestServerResult> => {
     const server = await getHttpServer();
-    const handler = createPaymentHandler(server, paywall);
+    const handler = createPaymentHandler(server, paywall, siwx);
     return handler(options);
   };
 

@@ -1,2 +1,2 @@
 export { createAgentApp, type CreateAgentAppOptions } from './app';
-export { withPayments, type WithPaymentsParams } from './paywall';
+export { withPayments, withSiwxAuth, type WithPaymentsParams } from './paywall';

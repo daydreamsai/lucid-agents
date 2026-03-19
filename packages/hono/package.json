@@ -34,6 +34,7 @@
   "dependencies": {
     "@lucid-agents/ap2": "workspace:*",
     "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "hono": "catalog:",
@@ -43,7 +44,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@lucid-agents/http": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"

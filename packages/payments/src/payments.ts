@@ -22,6 +22,11 @@ import { createPostgresPaymentStorage } from './postgres-payment-storage';
 import type { PaymentStorage } from './payment-storage';
 import { encodePaymentRequiredHeader } from './utils';
 import { resolvePayTo } from './payto-resolver';
+import { createInMemorySIWxStorage } from './siwx-in-memory-storage';
+import { createSQLiteSIWxStorage } from './siwx-sqlite-storage';
+import { createPostgresSIWxStorage } from './siwx-postgres-storage';
+import type { SIWxStorage } from './siwx-storage';
+import type { SIWxConfig, SIWxStorageConfig } from '@lucid-agents/types/siwx';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -92,8 +97,8 @@ export function resolveActivePayments(
     return currentActivePayments;
   }
 
-  // If entrypoint has no explicit price, don't activate payments
-  if (!entrypointHasExplicitPrice(entrypoint)) {
+  // If entrypoint has no explicit price and no SIWX auth-only, don't activate payments
+  if (!entrypointHasExplicitPrice(entrypoint) && !entrypoint.siwx?.authOnly) {
     return undefined;
   }
 
@@ -228,6 +233,46 @@ function createStorageFromConfig(
   }
 }
 
+/**
+ * Checks if an entrypoint has SIWX enabled (either explicitly or via global config).
+ */
+export function entrypointHasSIWx(
+  entrypoint: EntrypointDef,
+  globalSiwx?: { enabled: boolean }
+): boolean {
+  if (entrypoint.siwx?.authOnly) return true;
+  if (entrypoint.siwx?.enabled === false) return false;
+  if (entrypoint.siwx?.enabled) return true;
+  // If global is enabled and entrypoint has a price, SIWX is available
+  if (globalSiwx?.enabled && entrypointHasExplicitPrice(entrypoint))
+    return true;
+  return false;
+}
+
+/**
+ * Creates SIWX storage based on configuration.
+ * Defaults to in-memory if no storage config is provided.
+ */
+function createSIWxStorageFromConfig(
+  storageConfig?: SIWxStorageConfig
+): SIWxStorage {
+  if (!storageConfig) {
+    return createInMemorySIWxStorage();
+  }
+  switch (storageConfig.type) {
+    case 'in-memory':
+      return createInMemorySIWxStorage();
+    case 'postgres':
+      if (!storageConfig.postgres?.connectionString) {
+        throw new Error('SIWX Postgres storage requires connectionString');
+      }
+      return createPostgresSIWxStorage(storageConfig.postgres.connectionString);
+    case 'sqlite':
+    default:
+      return createSQLiteSIWxStorage(storageConfig.sqlite?.dbPath);
+  }
+}
+
 export function createPaymentsRuntime(
   paymentsOption: PaymentsConfig | false | undefined,
   agentId?: string,
@@ -262,6 +307,20 @@ export function createPaymentsRuntime(
     );
   }
 
+  // Create SIWX storage if enabled
+  let siwxStorage: SIWxStorage | undefined;
+  const siwxConfig = config.siwx;
+
+  if (siwxConfig?.enabled) {
+    try {
+      siwxStorage = createSIWxStorageFromConfig(siwxConfig.storage);
+    } catch (error) {
+      throw new Error(
+        `Failed to initialize SIWX storage: ${(error as Error).message}`
+      );
+    }
+  }
+
   if (policyGroups && policyGroups.length > 0) {
     const needsRateLimiter = policyGroups.some(
       group => group.rateLimits !== undefined
@@ -288,6 +347,12 @@ export function createPaymentsRuntime(
     get policyGroups() {
       return policyGroups;
     },
+    get siwxStorage() {
+      return siwxStorage;
+    },
+    get siwxConfig() {
+      return siwxConfig;
+    },
     requirements(entrypoint: EntrypointDef, kind: 'invoke' | 'stream') {
       return evaluatePaymentRequirement(
         entrypoint,
@@ -298,7 +363,7 @@ export function createPaymentsRuntime(
     activate(entrypoint: EntrypointDef) {
       if (isActive || !config) return;
 
-      if (entrypointHasExplicitPrice(entrypoint)) {
+      if (entrypointHasExplicitPrice(entrypoint) || entrypoint.siwx?.authOnly) {
         isActive = true;
       }
     },

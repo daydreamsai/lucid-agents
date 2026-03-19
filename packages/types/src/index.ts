@@ -8,5 +8,6 @@ export * from './http';
 export * from './identity';
 export * from './payments';
 export * from './scheduler';
+export * from './siwx';
 export * from './wallets';
 export * from './mpp';

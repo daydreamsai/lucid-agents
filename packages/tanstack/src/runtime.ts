@@ -1,4 +1,5 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 
 export type TanStackRequestHandler = (ctx: {
   request: Request;
@@ -7,6 +8,7 @@ export type TanStackRequestHandler = (ctx: {
 export type TanStackRouteHandler<P extends Record<string, string>> = (ctx: {
   request: Request;
   params: P;
+  auth?: AgentAuthContext;
 }) => Promise<Response>;
 
 export type TanStackHandlers = {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AgentRuntime } from '@lucid-agents/types/core';
+import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import type {
   StreamEnvelope,
   StreamPushEnvelope,
@@ -19,7 +20,8 @@ import { parseInput } from './validation';
 export async function stream(
   req: Request,
   entrypointKey: string,
-  runtime: AgentRuntime
+  runtime: AgentRuntime,
+  options?: { auth?: AgentAuthContext }
 ): Promise<Response> {
   const entrypoint = runtime.agent.getEntrypoint(entrypointKey);
   if (!entrypoint) {
@@ -87,6 +89,7 @@ export async function stream(
         },
         runId,
         runtime,
+        auth: options?.auth,
       };
 
       // Call stream handler

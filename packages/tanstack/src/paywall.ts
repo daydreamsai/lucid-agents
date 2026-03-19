@@ -1,10 +1,13 @@
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { SIWxConfig } from '@lucid-agents/types/siwx';
+import type { SIWxStorage } from '@lucid-agents/payments';
 import {
   createFacilitatorAuthHeaders,
   resolvePrice,
   resolvePayTo,
   validatePaymentsConfig,
+  entrypointHasSIWx,
 } from '@lucid-agents/payments';
 import type {
   FacilitatorConfig,
@@ -14,12 +17,17 @@ import type {
 import {
   paymentMiddleware,
   type TanStackRequestMiddleware,
+  type SIWxMiddlewareConfig,
 } from './x402-paywall';
 
 const DEFAULT_SCHEME = 'exact';
 
 type RuntimeLike = {
-  payments?: { config: PaymentsConfig };
+  payments?: {
+    config: PaymentsConfig;
+    siwxStorage?: SIWxStorage;
+    siwxConfig?: SIWxConfig;
+  };
   entrypoints: { snapshot: () => EntrypointDef[] };
 };
 
@@ -34,6 +42,10 @@ export type CreateTanStackPaywallOptions = {
   facilitator?: FacilitatorConfig;
   paywall?: PaywallConfig;
   middlewareFactory?: PaymentMiddlewareFactory;
+  /** Override SIWX storage (defaults to runtime.payments.siwxStorage) */
+  siwxStorage?: SIWxStorage;
+  /** Override SIWX config (defaults to runtime.payments.siwxConfig) */
+  siwxConfig?: SIWxConfig;
 };
 
 export type TanStackPaywall = {
@@ -54,6 +66,7 @@ type BuildRoutesParams = {
   payments: PaymentsConfig;
   basePath: string;
   kind: EntrypointPaymentKind;
+  siwxConfig?: SIWxConfig;
 };
 
 function addFacilitatorAuth(
@@ -80,6 +93,7 @@ function buildEntrypointRoutes({
   payments,
   basePath,
   kind,
+  siwxConfig,
 }: BuildRoutesParams): Record<string, RouteConfig> {
   const routes: Record<string, RouteConfig> = {};
   const payTo = resolvePayTo(payments);
@@ -90,9 +104,16 @@ function buildEntrypointRoutes({
     const network = entrypoint.network ?? payments.network;
     const price = resolvePrice(entrypoint, payments, kind);
 
-    validatePaymentsConfig(payments, network, entrypoint.key);
+    // For auth-only SIWX routes, we still need to register the route
+    // even without a price (they won't have payment requirements)
+    const isAuthOnly = entrypoint.siwx?.authOnly === true;
 
-    if (!network || !price) continue;
+    if (!isAuthOnly) {
+      validatePaymentsConfig(payments, network, entrypoint.key);
+      if (!network || !price) continue;
+    } else if (!network) {
+      continue;
+    }
 
     const description =
       entrypoint.description ??
@@ -100,12 +121,30 @@ function buildEntrypointRoutes({
 
     const path = `${basePath}/entrypoints/${entrypoint.key}/${kind}`;
 
+    if (isAuthOnly && !price) {
+      // Auth-only routes without a price: register with a zero/no-payment route
+      // The SIWX middleware handles access control
+      const authRoute: RouteConfig = {
+        accepts: {
+          scheme: DEFAULT_SCHEME,
+          payTo: payTo as any,
+          price: '0',
+          network: network!,
+        },
+        description,
+        mimeType: kind === 'stream' ? 'text/event-stream' : 'application/json',
+      };
+      routes[`POST ${path}`] = authRoute;
+      routes[`GET ${path}`] = authRoute;
+      continue;
+    }
+
     const postRoute: RouteConfig = {
       accepts: {
         scheme: DEFAULT_SCHEME,
         payTo: payTo as any,
-        price,
-        network,
+        price: price!,
+        network: network!,
       },
       description,
       mimeType: kind === 'stream' ? 'text/event-stream' : 'application/json',
@@ -115,8 +154,8 @@ function buildEntrypointRoutes({
       accepts: {
         scheme: DEFAULT_SCHEME,
         payTo: payTo as any,
-        price,
-        network,
+        price: price!,
+        network: network!,
       },
       description,
       mimeType: 'application/json',
@@ -136,6 +175,8 @@ export function createTanStackPaywall({
   facilitator,
   paywall,
   middlewareFactory = paymentMiddleware,
+  siwxStorage,
+  siwxConfig,
 }: CreateTanStackPaywallOptions): TanStackPaywall {
   const activePayments = payments ?? runtime.payments?.config;
 
@@ -154,11 +195,28 @@ export function createTanStackPaywall({
     activePayments.facilitatorAuth
   );
 
+  // Resolve SIWX config
+  const resolvedSiwxStorage =
+    siwxStorage ?? (runtime.payments?.siwxStorage as SIWxStorage | undefined);
+  const resolvedSiwxConfig =
+    siwxConfig ?? runtime.payments?.siwxConfig ?? activePayments.siwx;
+
+  const siwxMiddlewareConfig: SIWxMiddlewareConfig | undefined =
+    resolvedSiwxStorage && resolvedSiwxConfig?.enabled
+      ? {
+          siwxStorage: resolvedSiwxStorage,
+          siwxConfig: resolvedSiwxConfig,
+          entrypoints,
+          basePath: normalizedBasePath,
+        }
+      : undefined;
+
   const invokeRoutes = buildEntrypointRoutes({
     entrypoints,
     payments: activePayments,
     basePath: normalizedBasePath,
     kind: 'invoke',
+    siwxConfig: resolvedSiwxConfig,
   });
 
   const streamRoutes = buildEntrypointRoutes({
@@ -166,16 +224,17 @@ export function createTanStackPaywall({
     payments: activePayments,
     basePath: normalizedBasePath,
     kind: 'stream',
+    siwxConfig: resolvedSiwxConfig,
   });
 
   const invoke =
     Object.keys(invokeRoutes).length > 0
-      ? middlewareFactory(invokeRoutes, resolvedFacilitator, paywall)
+      ? middlewareFactory(invokeRoutes, resolvedFacilitator, paywall, siwxMiddlewareConfig)
       : undefined;
 
   const stream =
     Object.keys(streamRoutes).length > 0
-      ? middlewareFactory(streamRoutes, resolvedFacilitator, paywall)
+      ? middlewareFactory(streamRoutes, resolvedFacilitator, paywall, siwxMiddlewareConfig)
       : undefined;
 
   return { invoke, stream };
