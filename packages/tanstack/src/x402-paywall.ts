@@ -201,7 +201,7 @@ function createPaymentHandler(
             ...nextResult,
             response: enriched,
             context: {
-              ...context,
+              ...(context as Record<string, unknown>),
               siwxAuth: siwxResult.auth,
             },
           };
