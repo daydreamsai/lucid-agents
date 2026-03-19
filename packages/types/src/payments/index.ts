@@ -175,6 +175,10 @@ export type PaymentsConfig = {
   policyGroups?: PaymentPolicyGroup[];
   /** Optional storage configuration (defaults to SQLite) */
   storage?: PaymentStorageConfig;
+  /** Optional Circle Gateway facilitator identifier (e.g., 'circle-gateway') */
+  facilitator?: string;
+  /** Optional Circle Gateway chain name (e.g., 'base', 'base-sepolia') */
+  circleGatewayChain?: string;
 } & (StaticPaymentsDestination | StripePaymentsDestination);
 
 /**
