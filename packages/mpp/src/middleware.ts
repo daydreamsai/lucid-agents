@@ -50,13 +50,17 @@ export function evaluateMppPayment(
 }
 
 /**
- * Validate an MPP credential from the Payment header.
- * Returns the decoded credential or null if invalid.
+ * Decode the MPP Payment header into its component fields.
  *
- * NOTE: In production, credential validation should be handled by the
- * mppx server SDK. This is a lightweight check for presence.
+ * **WARNING**: This is a **decode-only** helper. It performs NO cryptographic
+ * verification, signature checking, or payment confirmation. Do NOT use this
+ * as the sole payment gate. In production, credential validation MUST be
+ * handled by the mppx server SDK or an equivalent verification layer.
+ *
+ * @returns The decoded challenge ID and payload, or `null` if the header is
+ *          missing or malformed.
  */
-export function extractMppCredential(
+export function decodePaymentHeader(
   request: Request
 ): { challengeId: string; payload: Record<string, unknown> } | null {
   const paymentHeader = request.headers.get('Payment');
@@ -78,6 +82,12 @@ export function extractMppCredential(
     return null;
   }
 }
+
+/**
+ * @deprecated Renamed to {@link decodePaymentHeader}. This alias will be
+ * removed in a future major version.
+ */
+export const extractMppCredential = decodePaymentHeader;
 
 /**
  * Create a Payment-Receipt header value.

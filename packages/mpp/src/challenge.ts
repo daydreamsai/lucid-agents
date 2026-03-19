@@ -26,26 +26,37 @@ function generateChallengeId(): string {
 }
 
 /**
+ * Escape a string for safe embedding inside a quoted HTTP header parameter.
+ * Prevents header injection via unescaped quotes or CRLF sequences.
+ */
+function escapeHeaderValue(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, '');
+}
+
+/**
  * Format a single WWW-Authenticate challenge value.
  * Per MPP spec: Payment id="...", method="...", intent="...", amount="...", ...
  */
 function formatChallengeValue(params: ChallengeParams): string {
   const parts = [
-    `id="${params.id}"`,
-    `method="${params.method}"`,
-    `intent="${params.intent}"`,
-    `amount="${params.amount}"`,
-    `currency="${params.currency}"`,
+    `id="${escapeHeaderValue(params.id)}"`,
+    `method="${escapeHeaderValue(params.method)}"`,
+    `intent="${escapeHeaderValue(params.intent)}"`,
+    `amount="${escapeHeaderValue(params.amount)}"`,
+    `currency="${escapeHeaderValue(params.currency)}"`,
   ];
 
   if (params.description) {
-    parts.push(`description="${params.description}"`);
+    parts.push(`description="${escapeHeaderValue(params.description)}"`);
   }
   if (params.expires) {
-    parts.push(`expires="${params.expires}"`);
+    parts.push(`expires="${escapeHeaderValue(params.expires)}"`);
   }
   if (params.digest) {
-    parts.push(`digest="${params.digest}"`);
+    parts.push(`digest="${escapeHeaderValue(params.digest)}"`);
   }
 
   return `Payment ${parts.join(', ')}`;

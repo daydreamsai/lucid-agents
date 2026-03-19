@@ -34,6 +34,7 @@ export { buildManifestWithMpp } from './manifest';
 // Middleware helpers
 export {
   evaluateMppPayment,
+  decodePaymentHeader,
   extractMppCredential,
   createReceiptHeader,
   type MppChargeOptions,

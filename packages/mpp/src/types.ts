@@ -45,8 +45,10 @@ export type TempoClientConfig = {
  * Stripe method configuration (server-side).
  */
 export type StripeServerConfig = {
-  /** Stripe SDK client instance */
-  client: any;
+  /** Stripe SDK client instance (pass this if you already have one) */
+  client?: any;
+  /** Stripe secret key (used to create client lazily if client not provided) */
+  secretKey?: string;
   /** Internal network identifier */
   networkId?: string;
   /** Supported card payment method types */

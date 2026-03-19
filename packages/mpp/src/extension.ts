@@ -87,6 +87,18 @@ function createMppRuntime(config: MppConfig): MppRuntime {
       // Dynamically import mppx client to avoid hard dependency at build time
       try {
         const { Mppx } = await import('mppx/client');
+
+        // Validate that we're not accidentally passing server configs
+        for (const m of clientConfig.methods) {
+          const cfg = m.config as Record<string, unknown>;
+          if ('recipient' in cfg || 'nodeUrl' in cfg || 'macaroon' in cfg) {
+            console.warn(
+              `[lucid-agents/mpp] Method "${m.name}" config contains server-side fields. ` +
+              'Use client-side method builders (e.g., tempo.client()) for getMppFetch.'
+            );
+          }
+        }
+
         const mppxClient = Mppx.create({
           methods: clientConfig.methods.map(m => {
             // Return the raw config - mppx expects its own method objects
@@ -145,7 +157,16 @@ export function mpp(
   return {
     name: 'mpp',
     build(ctx: BuildContext): { mpp?: MppRuntime } {
-      if (options?.config === false || !options?.config) {
+      if (options?.config === false) {
+        return {};
+      }
+
+      if (!options?.config) {
+        console.warn(
+          '[lucid-agents/mpp] mpp() extension registered without config. ' +
+          'Paid entrypoints will NOT enforce payment. ' +
+          'Pass config or use mppFromEnv(), or pass false to explicitly disable.'
+        );
         return {};
       }
 

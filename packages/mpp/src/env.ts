@@ -66,11 +66,7 @@ export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
             break;
           }
 
-          const config: StripeServerConfig = {
-            client: null, // Will be initialized lazily
-          };
-
-          methods.push({ name: 'stripe', config });
+          methods.push({ name: 'stripe', config: { secretKey } as StripeServerConfig });
           break;
         }
         default: {
@@ -99,6 +95,6 @@ export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
     currency,
     defaultIntent,
     challengeExpirySeconds,
-    ...overrides,
+    ...(overrides?.session ? { session: overrides.session } : {}),
   };
 }
