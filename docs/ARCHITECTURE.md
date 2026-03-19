@@ -376,7 +376,7 @@ Adapters integrate the core runtime with specific web frameworks.
 graph TB
     dev[Developer]
 
-    dev -->|1. Runs| cli[cli CLI]
+    dev -->|1. Runs| cli[@lucid-agents/cli]
     cli -->|2. Selects| adapter{Choose Adapter}
     cli -->|3. Selects| template{Choose Template}
 

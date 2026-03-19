@@ -106,8 +106,8 @@ const catalogVersions = {
   hono: '4.10.1',
   typescript: '^5.9.2',
   tsup: '^8.5.0',
-  '@x402/fetch': '^2.2.0',
-  '@x402/core': '^2.2.0',
+  '@x402/fetch': 'catalog:',
+  '@x402/core': 'catalog:',
 };
 
 packages.forEach(pkg => {
@@ -228,8 +228,8 @@ const catalogVersions = {
   'hono': '4.10.1',
   'typescript': '^5.9.2',
   'tsup': '^8.5.0',
-  '@x402/fetch': '^2.2.0',
-  '@x402/core': '^2.2.0',
+  '@x402/fetch': 'catalog:',
+  '@x402/core': 'catalog:',
 };
 
 packages.forEach(pkg => {

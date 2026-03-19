@@ -30,7 +30,7 @@ The `src/lib/agent.ts` file contains placeholders that are replaced during gener
 This base layer is automatically used when running:
 
 ```bash
-cli my-agent --adapter=hono
+bunx @lucid-agents/cli my-agent --adapter=hono
 ```
 
 The CLI will:
