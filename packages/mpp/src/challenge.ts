@@ -33,7 +33,10 @@ function escapeHeaderValue(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
-    .replace(/[\r\n]/g, '');
+    .replace(/[\r\n]/g, '')
+    // Strip non-ASCII characters (HTTP headers require ASCII-only values)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[^\x20-\x7E]/g, '');
 }
 
 /**

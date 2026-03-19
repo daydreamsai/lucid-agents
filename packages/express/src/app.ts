@@ -16,6 +16,7 @@ import type {
 } from '@lucid-agents/types/core';
 import { AgentBuilder } from '@lucid-agents/core';
 import { withPayments } from './paywall';
+import { withMpp } from './mpp-paywall';
 
 type NodeRequestInit = RequestInit & { duplex?: 'half' };
 
@@ -61,6 +62,8 @@ export async function createAgentApp(
       runtime,
     });
 
+    withMpp({ app, path: invokePath, entrypoint, kind: 'invoke', mpp: runtime.mpp });
+
     app.post(
       invokePath,
       createRouteHandler(runtime.handlers.invoke, { key: entrypoint.key })
@@ -74,6 +77,8 @@ export async function createAgentApp(
       payments: runtime.payments?.config,
       runtime,
     });
+
+    withMpp({ app, path: streamPath, entrypoint, kind: 'stream', mpp: runtime.mpp });
 
     app.post(
       streamPath,

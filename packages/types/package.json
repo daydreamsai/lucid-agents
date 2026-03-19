@@ -56,6 +56,11 @@
       "import": "./dist/wallets/index.js",
       "default": "./dist/wallets/index.js"
     },
+    "./mpp": {
+      "types": "./dist/mpp/index.d.ts",
+      "import": "./dist/mpp/index.js",
+      "default": "./dist/mpp/index.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
