@@ -5,7 +5,7 @@ This agent provides mock trading data via priced entrypoints. Other agents can b
 ### Quick Start
 
 ```sh
-bunx @lucid-agents/create-agent-kit data-agent --template=trading-data-agent --adapter=hono
+bunx @lucid-agents/cli data-agent --template=trading-data-agent --adapter=hono
 cd data-agent
 # Set PAYMENTS_RECEIVABLE_ADDRESS in .env
 bun run dev

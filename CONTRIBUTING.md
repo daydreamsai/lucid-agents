@@ -44,12 +44,29 @@ The repository is organized as a monorepo with multiple packages:
 ```
 lucid-agents/
 ├── packages/
-│   ├── agent-kit/              # Core agent runtime
-│   ├── agent-kit-identity/     # ERC-8004 identity toolkit
-│   └── create-agent-kit/       # CLI scaffolding tool
-├── scripts/                    # Build and release scripts
-├── package.json                # Root package configuration
-└── readme.md                   # Main documentation
+│   ├── core/                  # Core agent runtime
+│   ├── types/                 # Shared type definitions
+│   ├── http/                  # HTTP extension
+│   ├── payments/              # x402 payment utilities
+│   ├── identity/              # ERC-8004 identity toolkit
+│   ├── wallet/                # Wallet SDK
+│   ├── a2a/                   # Agent-to-agent protocol
+│   ├── ap2/                   # Agent Payments Protocol
+│   ├── scheduler/             # Task scheduling
+│   ├── analytics/             # Payment analytics
+│   ├── hono/                  # Hono adapter
+│   ├── express/               # Express adapter
+│   ├── tanstack/              # TanStack adapter
+│   ├── cli/                   # CLI scaffolding tool
+│   ├── api-sdk/               # Auto-generated OpenAPI client
+│   ├── examples/              # Example implementations
+│   ├── eslint-config/         # Shared ESLint config
+│   └── prettier-config/       # Shared Prettier config
+├── lucid-docs/                # Documentation site
+├── scripts/                   # Build and release scripts
+├── platform/                  # Docker dev infrastructure
+├── docs/                      # Architecture docs
+└── package.json               # Root workspace config
 ```
 
 Each package has its own:
@@ -71,7 +88,7 @@ bun run build:packages
 Build a specific package:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun run build
 ```
 
@@ -80,7 +97,7 @@ bun run build
 Most packages support watch mode for development:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun run dev
 ```
 
@@ -89,12 +106,12 @@ bun run dev
 Packages include example files demonstrating usage:
 
 ```bash
-# Run an example from agent-kit
-cd packages/agent-kit
+# Run an example from core
+cd packages/core
 bun run examples/full-agent.ts
 
-# Run an example from agent-kit-identity
-cd packages/agent-kit-identity
+# Run an example from identity
+cd packages/identity
 bun run examples/quick-start.ts
 ```
 
@@ -158,7 +175,7 @@ When working on a specific package:
 
 1. **Navigate to the package directory**
    ```bash
-   cd packages/agent-kit
+   cd packages/core
    ```
 
 2. **Make your changes** in `src/`
@@ -186,7 +203,7 @@ bun test
 Run tests for a specific package:
 
 ```bash
-cd packages/agent-kit
+cd packages/core
 bun test
 ```
 

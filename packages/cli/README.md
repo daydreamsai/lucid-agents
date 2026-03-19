@@ -83,7 +83,7 @@ When you select an adapter, the CLI copies the corresponding runtime framework f
 **Available Adapters:**
 
 - `hono` - Traditional HTTP server with Hono framework
-- `express` - Node-style HTTP server built on Express with `@lucid-agents/agent-kit-express`
+- `express` - Node-style HTTP server built on Express with `@lucid-agents/express`
 - `tanstack-ui` - TanStack Start with full UI dashboard (wallet integration, entrypoint testing, schema forms)
 - `tanstack-headless` - TanStack Start API-only (no UI components)
 - `next` – Next.js App Router shell with x402-next middleware and the dashboard UI

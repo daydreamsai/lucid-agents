@@ -1,6 +1,6 @@
 ## {{AGENT_NAME}}
 
-This project was scaffolded with `create-agent-kit` and includes **ERC-8004 identity registration** built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core) and [`@lucid-agents/identity`](https://www.npmjs.com/package/@lucid-agents/identity).
+This project was scaffolded with `@lucid-agents/cli` and includes **ERC-8004 identity registration** built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core) and [`@lucid-agents/identity`](https://www.npmjs.com/package/@lucid-agents/identity).
 
 ### Features
 
@@ -123,6 +123,6 @@ await validationClient.validationRequest({
 
 ### Learn more
 
-- [Agent Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/core/README.md)
+- [Core Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/core/README.md)
 - [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/identity/README.md)
 - [ERC-8004 Specification](https://eips.ethereum.org/EIPS/eip-8004)

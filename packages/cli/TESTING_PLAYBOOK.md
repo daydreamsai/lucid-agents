@@ -106,9 +106,8 @@ const catalogVersions = {
   hono: '4.10.1',
   typescript: '^5.9.2',
   tsup: '^8.5.0',
-  '@ax-llm/ax': '^14.0.31',
-  'x402-fetch': 'latest',
-  x402: '^0.7.1',
+  '@x402/fetch': '^2.2.0',
+  '@x402/core': '^2.2.0',
 };
 
 packages.forEach(pkg => {
@@ -229,9 +228,8 @@ const catalogVersions = {
   'hono': '4.10.1',
   'typescript': '^5.9.2',
   'tsup': '^8.5.0',
-  '@ax-llm/ax': '^14.0.31',
-  'x402-fetch': 'latest',
-  'x402': '^0.7.1',
+  '@x402/fetch': '^2.2.0',
+  '@x402/core': '^2.2.0',
 };
 
 packages.forEach(pkg => {
@@ -272,16 +270,16 @@ To test different adapters, generate projects with different `--adapter` flags:
 
 ```bash
 # Hono
-bunx @lucid-agents/create-agent-kit test-hono --adapter=hono --template=identity
+bunx @lucid-agents/cli test-hono --adapter=hono --template=identity
 
 # Express
-bunx @lucid-agents/create-agent-kit test-express --adapter=express --template=identity
+bunx @lucid-agents/cli test-express --adapter=express --template=identity
 
 # TanStack UI
-bunx @lucid-agents/create-agent-kit test-tanstack-ui --adapter=tanstack-ui --template=identity
+bunx @lucid-agents/cli test-tanstack-ui --adapter=tanstack-ui --template=identity
 
 # TanStack Headless
-bunx @lucid-agents/create-agent-kit test-tanstack-headless --adapter=tanstack-headless --template=identity
+bunx @lucid-agents/cli test-tanstack-headless --adapter=tanstack-headless --template=identity
 ```
 
 Then follow the same process for each.

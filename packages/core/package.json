@@ -44,7 +44,7 @@
   "dependencies": {
     "zod": "catalog:",
     "hono": "catalog:",
-    "@lucid-dreams/agent-auth": "latest",
+    "@lucid-dreams/agent-auth": "^0.2.24",
     "@lucid-dreams/client": "latest",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/a2a": "workspace:*",

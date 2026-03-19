@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
-    "@ax-llm/ax": "^14.0.37",
     "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/analytics": "workspace:*",
     "@lucid-agents/ap2": "workspace:*",
@@ -27,7 +26,7 @@
     "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
-    "@lucid-dreams/agent-auth": "latest",
+    "@lucid-dreams/agent-auth": "^0.2.24",
     "thirdweb": "^5.113.0",
     "viem": "catalog:",
     "@x402/core": "catalog:",

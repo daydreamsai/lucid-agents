@@ -1,4 +1,4 @@
-# @lucid/agent-kit
+# @lucid-agents/core
 
 A tiny helper to build agent HTTP apps with Hono:
 
@@ -13,16 +13,16 @@ A tiny helper to build agent HTTP apps with Hono:
 This package is part of the monorepo. From other workspaces, import:
 
 ```ts
-import { createAgentApp, paymentsFromEnv } from '@lucid/agent-kit';
-import type { EntrypointDef, AgentMeta } from '@lucid/agent-kit/types';
-import type { AP2Config } from '@lucid/agent-kit/types';
+import { createAgentApp, paymentsFromEnv } from '@lucid-agents/core';
+import type { EntrypointDef, AgentMeta } from '@lucid-agents/types';
+import type { AP2Config } from '@lucid-agents/types';
 ```
 
 Subpath exports are available:
 
-- `@lucid/agent-kit` — main API
-- `@lucid/agent-kit/types` — public types
-- `@lucid/agent-kit/utils` — helpers (e.g., `toJsonSchemaOrUndefined`, `paymentsFromEnv`)
+- `@lucid-agents/core` — main API
+- `@lucid-agents/types` — public types
+- `@lucid-agents/core/utils` — helpers (e.g., `toJsonSchemaOrUndefined`, `paymentsFromEnv`)
 
 ## Quick Start
 
@@ -143,7 +143,7 @@ The configuration is shared across the package. For example, the payments helper
 will reuse the values you passed to `createAgentApp`:
 
 ```ts
-import { paymentsFromEnv } from '@lucid/agent-kit';
+import { paymentsFromEnv } from '@lucid-agents/core';
 
 const payments = paymentsFromEnv(); // returns the config you supplied earlier
 ```
@@ -408,14 +408,14 @@ See `examples/full-agent.ts` for a complete agent example, or use the `trading-d
 
 ### ERC-8004 Identity Helpers (Prototype)
 
-Pull in `createIdentityRegistryClient` from `@lucid/agent-kit/erc8004` to read/write the registry with whichever viem/ethers client you already use:
+Pull in `createIdentityRegistryClient` from `@lucid-agents/identity/erc8004` to read/write the registry with whichever viem/ethers client you already use:
 
 ```ts
 import {
   createIdentityRegistryClient,
   signAgentDomainProof,
-} from '@lucid/agent-kit/erc8004';
-import type { TrustConfig } from '@lucid/agent-kit/types';
+} from '@lucid-agents/identity/erc8004';
+import type { TrustConfig } from '@lucid-agents/types';
 
 const identity = createIdentityRegistryClient({
   address: '0xRegistry',
@@ -460,7 +460,7 @@ import type {
   PaymentsConfig,
   Usage,
   Manifest,
-} from '@lucid/agent-kit/types';
+} from '@lucid-agents/types';
 ```
 
 Key shapes:

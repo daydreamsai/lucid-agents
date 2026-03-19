@@ -70,7 +70,7 @@ Adapter Router (Hono, Express, or TanStack)
     ↓
 x402 Paywall Middleware (if configured)
     ↓
-Runtime Handler (agent-kit core)
+Runtime Handler (core)
     ↓
 Entrypoint Handler
     ↓
@@ -407,7 +407,7 @@ bun run release
 
 ```bash
 # Work in a specific package
-cd packages/agent-kit
+cd packages/core
 
 # Build this package
 bun run build
@@ -601,7 +601,7 @@ bunx @lucid-agents/cli my-agent \
 
 ### Template Structure
 
-Each template in `packages/create-agent-kit/templates/` contains:
+Each template in `packages/cli/templates/` contains:
 
 ```
 template-name/
@@ -634,21 +634,21 @@ template-name/
 
 ### How to Modify an Existing Template
 
-1. Edit files in `packages/create-agent-kit/templates/[template-name]/`
+1. Edit files in `packages/cli/templates/[template-name]/`
 2. Update `template.json` if adding wizard prompts
 3. Update `template.schema.json` to document new arguments
 4. Update `AGENTS.md` with examples of new features
 5. Test:
    ```bash
-   cd packages/create-agent-kit
+   cd packages/cli
    bun run build
    cd ../..
-   bunx ./packages/create-agent-kit/dist/index.js test-agent --template=[template-name]
+   bunx ./packages/cli/dist/index.js test-agent --template=[template-name]
    ```
 
 ### How to Create a New Template
 
-1. Create directory: `packages/create-agent-kit/templates/my-template/`
+1. Create directory: `packages/cli/templates/my-template/`
 2. Add required files:
    ```bash
    mkdir -p src
@@ -706,16 +706,16 @@ bun test src/__tests__/specific.test.ts  # Specific test
 Example-based testing in `examples/` directories:
 
 ```bash
-cd packages/agent-kit/examples
+cd packages/core/examples
 bun run client.ts           # Test against running agent
 ```
 
-### Testing create-agent-kit
+### Testing cli
 
 ```bash
 # Test template generation
 cd /tmp
-bunx /path/to/lucid-agents/packages/create-agent-kit/dist/index.js test-agent --template=blank
+bunx /path/to/lucid-agents/packages/cli/dist/index.js test-agent --template=blank
 cd test-agent
 bun install
 bun run dev
@@ -852,26 +852,26 @@ type Parsed = z.infer<typeof schema>;
 
 ## How Packages Interact
 
-### agent-kit → agent-kit-identity
+### core → identity
 
 ```typescript
-// agent-kit imports identity types
-import type { TrustConfig } from '@lucid-agents/agent-kit-identity';
+// core imports identity types
+import type { TrustConfig } from '@lucid-agents/identity';
 
-// agent-kit accepts trust config
+// core accepts trust config
 createAgentApp(meta, {
-  trust: trustConfig, // From agent-kit-identity
+  trust: trustConfig, // From identity
 });
 ```
 
-### create-agent-kit → agent-kit + agent-kit-identity
+### cli → core + identity
 
 Templates reference both packages:
 
 ```typescript
 // In generated agent.ts
-import { createAgentApp } from '@lucid-agents/agent-kit';
-import { createAgentIdentity } from '@lucid-agents/agent-kit-identity';
+import { createAgentApp } from '@lucid-agents/core';
+import { createAgentIdentity } from '@lucid-agents/identity';
 ```
 
 The CLI doesn't directly import these; it scaffolds code that uses them.
@@ -940,9 +940,9 @@ When developing changes to packages and testing them in external projects (e.g.,
 - No need to publish to npm or reinstall dependencies
 - Perfect for rapid iteration and testing
 
-### Adding a New Feature to agent-kit
+### Adding a New Feature to core
 
-1. Create implementation in `packages/agent-kit/src/feature.ts`
+1. Create implementation in `packages/core/src/feature.ts`
 2. Add types to `types.ts` or inline
 3. Export from `index.ts`
 4. Add tests in `__tests__/feature.test.ts`
@@ -960,8 +960,8 @@ When developing changes to packages and testing them in external projects (e.g.,
 
 ### Modifying the CLI
 
-1. Edit `packages/create-agent-kit/src/index.ts`
-2. Build: `cd packages/create-agent-kit && bun run build`
+1. Edit `packages/cli/src/index.ts`
+2. Build: `cd packages/cli && bun run build`
 3. Test locally: `bunx ./dist/index.js test-agent`
 4. Update help text and README
 5. Create changeset
@@ -974,7 +974,7 @@ Ensure:
 
 1. All packages are built: `bun run build:packages`
 2. Dependencies are installed: `bun install`
-3. Using correct import paths (e.g., `@lucid-agents/agent-kit/types`)
+3. Using correct import paths (e.g., `@lucid-agents/core/types`)
 
 ### TypeScript errors in templates
 
@@ -1004,39 +1004,39 @@ Check:
 
 ## Key Files and Their Purposes
 
-### packages/agent-kit/src/http/runtime.ts
+### packages/core/src/http/runtime.ts
 
 Core HTTP runtime that adapters wrap. Handles manifest building, entrypoint registry, streaming helpers, and payment evaluation.
 
-### packages/agent-kit-hono/src/app.ts
+### packages/hono/src/app.ts
 
 Hono-specific `createAgentApp()` implementation. Wires Fetch handlers to Hono routes and installs the x402 middleware.
 
-### packages/agent-kit-express/src/app.ts
+### packages/express/src/app.ts
 
 Express-specific `createAgentApp()` implementation. Bridges Node requests/responses to the Fetch-based runtime and installs the x402 Express middleware.
 
-### packages/agent-kit/src/manifest.ts
+### packages/core/src/manifest.ts
 
 Generates AgentCard and manifest JSON. Includes A2A skills, payments metadata, trust registrations.
 
-### packages/agent-kit/src/paywall.ts
+### packages/core/src/paywall.ts
 
 x402 payment middleware. Checks payment headers, validates with facilitator, enforces pricing.
 
-### packages/agent-kit/src/types.ts
+### packages/core/src/types.ts
 
 Core type definitions: `EntrypointDef`, `AgentContext`, `AgentMeta`, `PaymentsConfig`, etc.
 
-### packages/agent-kit-identity/src/init.ts
+### packages/identity/src/init.ts
 
 Main `createAgentIdentity()` function. Bootstraps ERC-8004 identity, handles auto-registration.
 
-### packages/agent-kit-identity/src/registries/
+### packages/identity/src/registries/
 
 Registry client implementations for Identity, Reputation, and Validation registries.
 
-### packages/create-agent-kit/src/index.ts
+### packages/cli/src/index.ts
 
 CLI implementation. Handles argument parsing, wizard prompts, template copying, file transformation.
 

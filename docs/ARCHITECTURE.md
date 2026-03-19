@@ -190,7 +190,7 @@ Extensions add optional capabilities. They are independent and don't depend on e
 - Payment configuration and validation
 - Multi-network support (EVM and Solana)
 
-**Dependencies:** `x402`, `x402-fetch`, `zod`
+**Dependencies:** `@x402/core`, `@x402/fetch`, `zod`
 
 ---
 
@@ -376,7 +376,7 @@ Adapters integrate the core runtime with specific web frameworks.
 graph TB
     dev[Developer]
 
-    dev -->|1. Runs| cli[create-agent-kit CLI]
+    dev -->|1. Runs| cli[cli CLI]
     cli -->|2. Selects| adapter{Choose Adapter}
     cli -->|3. Selects| template{Choose Template}
 
@@ -397,7 +397,7 @@ graph TB
 
     merge -->|4. Generates| project[Agent Project]
 
-    project -->|5. Uses| runtime[agent-kit + adapters]
+    project -->|5. Uses| runtime[core + adapters]
     runtime -->|6. Optionally uses| extensions[Extensions<br/>payments, identity]
 
     style dev fill:#fff
@@ -416,7 +416,7 @@ sequenceDiagram
     participant Client
     participant Adapter as Framework Adapter
     participant Paywall as x402 Middleware
-    participant Runtime as agent-kit Runtime
+    participant Runtime as core Runtime
     participant Core as AgentCore
     participant Handler as User Handler
 
