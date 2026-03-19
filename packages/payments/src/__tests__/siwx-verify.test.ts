@@ -3,10 +3,12 @@ import {
   parseSIWxHeader,
   verifySIWxPayload,
   buildSIWxExtensionDeclaration,
+  buildSIWxMessage,
 } from '../siwx-verify';
 import type { SIWxPayload, SIWxVerifyOptions } from '../siwx-verify';
 import { createInMemorySIWxStorage } from '../siwx-in-memory-storage';
 import type { SIWxStorage } from '../siwx-storage';
+import { privateKeyToAccount } from 'viem/accounts';
 
 describe('SIWX Verification', () => {
   let storage: SIWxStorage;
@@ -37,6 +39,7 @@ describe('SIWX Verification', () => {
       storage,
       resourceUri,
       domain,
+      skipSignatureVerification: true,
       ...overrides,
     };
   }
@@ -92,6 +95,26 @@ describe('SIWX Verification', () => {
       );
       expect(result3.success).toBe(false);
       expect(result3.error).toBe('missing_required_fields');
+    });
+
+    it('should reject payload with missing issuedAt', async () => {
+      const payload = makePayload({ issuedAt: '' });
+      const result = await verifySIWxPayload(
+        payload,
+        makeOptions({ requireEntitlement: false })
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('missing_required_fields');
+    });
+
+    it('should reject payload with missing version', async () => {
+      const payload = makePayload({ version: '' });
+      const result = await verifySIWxPayload(
+        payload,
+        makeOptions({ requireEntitlement: false })
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('missing_required_fields');
     });
 
     it('should reject domain mismatch', async () => {
@@ -167,6 +190,7 @@ describe('SIWX Verification', () => {
         resourceUri,
         domain,
         requireEntitlement: true,
+        skipSignatureVerification: true,
       });
       expect(result.success).toBe(true);
       expect(result.grantedBy).toBe('entitlement');
@@ -184,9 +208,42 @@ describe('SIWX Verification', () => {
         resourceUri,
         domain,
         requireEntitlement: true,
+        skipSignatureVerification: true,
       });
       expect(result.success).toBe(false);
       expect(result.error).toBe('no_entitlement');
+    });
+
+    it('should not burn nonce when entitlement check fails', async () => {
+      const nonce = `nonce-entitlement-check-${Date.now()}`;
+      const payload = makePayload({ nonce });
+
+      // First call: no entitlement, should fail without burning nonce
+      const result1 = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        requireEntitlement: true,
+        skipSignatureVerification: true,
+      });
+      expect(result1.success).toBe(false);
+      expect(result1.error).toBe('no_entitlement');
+
+      // Nonce should NOT be consumed
+      const nonceUsed = await storage.hasUsedNonce(nonce);
+      expect(nonceUsed).toBe(false);
+
+      // Now grant entitlement and retry with same nonce — should succeed
+      await storage.recordPayment(resourceUri, payload.address);
+      const result2 = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        requireEntitlement: true,
+        skipSignatureVerification: true,
+      });
+      expect(result2.success).toBe(true);
+      expect(result2.grantedBy).toBe('entitlement');
     });
 
     it('should grant auth-only access without entitlement check', async () => {
@@ -196,6 +253,7 @@ describe('SIWX Verification', () => {
         resourceUri,
         domain,
         requireEntitlement: false,
+        skipSignatureVerification: true,
       });
       expect(result.success).toBe(true);
       expect(result.grantedBy).toBe('auth-only');
@@ -222,6 +280,120 @@ describe('SIWX Verification', () => {
       // Nonce should now be recorded
       const usedAfter = await storage.hasUsedNonce(nonce);
       expect(usedAfter).toBe(true);
+    });
+  });
+
+  describe('signature verification', () => {
+    // Use a known private key for deterministic test signing
+    const testPrivateKey =
+      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const;
+    const account = privateKeyToAccount(testPrivateKey);
+
+    it('should reject payload with missing signature', async () => {
+      const payload = makePayload({
+        address: account.address,
+      });
+      // No signature field
+      const result = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        skipSignatureVerification: false,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('missing_signature');
+    });
+
+    it('should reject payload with invalid signature', async () => {
+      const payload = makePayload({
+        address: account.address,
+        signature: '0xdeadbeef',
+      });
+      const result = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        requireEntitlement: false,
+        skipSignatureVerification: false,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('invalid_signature');
+    });
+
+    it('should accept payload with valid EIP-191 signature', async () => {
+      const payload = makePayload({
+        address: account.address,
+      });
+
+      // Sign the canonical message
+      const message = buildSIWxMessage(payload);
+      const signature = await account.signMessage({ message });
+      payload.signature = signature;
+
+      const result = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        requireEntitlement: false,
+        skipSignatureVerification: false,
+      });
+      expect(result.success).toBe(true);
+      expect(result.grantedBy).toBe('auth-only');
+      expect(result.address).toBe(account.address.toLowerCase());
+    });
+
+    it('should reject signature from wrong address', async () => {
+      const otherKey =
+        '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as const;
+      const otherAccount = privateKeyToAccount(otherKey);
+
+      const payload = makePayload({
+        address: account.address, // claims to be account
+      });
+
+      // But signed by otherAccount
+      const message = buildSIWxMessage(payload);
+      const signature = await otherAccount.signMessage({ message });
+      payload.signature = signature;
+
+      const result = await verifySIWxPayload(payload, {
+        storage,
+        resourceUri,
+        domain,
+        requireEntitlement: false,
+        skipSignatureVerification: false,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('invalid_signature');
+    });
+  });
+
+  describe('buildSIWxMessage', () => {
+    it('should produce a CAIP-122 compliant message', () => {
+      const payload = makePayload({
+        statement: 'Sign in to reuse access.',
+        nonce: 'abc123',
+        issuedAt: '2026-03-19T00:00:00.000Z',
+      });
+      const message = buildSIWxMessage(payload);
+      expect(message).toContain(
+        'agent.example.com wants you to sign in with your account:'
+      );
+      expect(message).toContain(payload.address);
+      expect(message).toContain('Sign in to reuse access.');
+      expect(message).toContain(`URI: ${resourceUri}`);
+      expect(message).toContain('Version: 1');
+      expect(message).toContain('Chain ID: eip155:84532');
+      expect(message).toContain('Nonce: abc123');
+      expect(message).toContain('Issued At: 2026-03-19T00:00:00.000Z');
+    });
+
+    it('should omit optional fields when not present', () => {
+      const payload = makePayload();
+      const message = buildSIWxMessage(payload);
+      expect(message).not.toContain('Expiration Time:');
+      expect(message).not.toContain('Not Before:');
+      expect(message).not.toContain('Resources:');
     });
   });
 

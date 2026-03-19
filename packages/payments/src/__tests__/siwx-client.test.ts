@@ -9,17 +9,28 @@ import type { SIWxSigner } from '../siwx-client';
 
 describe('SIWX Client', () => {
   describe('hasSIWxExtension', () => {
-    it('should return true when X-SIWX-EXTENSION header is present', () => {
+    it('should return true when X-SIWX-EXTENSION header is present', async () => {
       const response = new Response('{}', {
         status: 402,
         headers: { 'X-SIWX-EXTENSION': 'some-value' },
       });
-      expect(hasSIWxExtension(response)).toBe(true);
+      expect(await hasSIWxExtension(response)).toBe(true);
     });
 
-    it('should return false when no SIWX header is present', () => {
-      const response = new Response('{}', { status: 402 });
-      expect(hasSIWxExtension(response)).toBe(false);
+    it('should return true when SIWX extension is in response body', async () => {
+      const response = new Response(
+        JSON.stringify({ error: { siwx: { scheme: 'sign-in-with-x' } } }),
+        { status: 402, headers: { 'Content-Type': 'application/json' } }
+      );
+      expect(await hasSIWxExtension(response)).toBe(true);
+    });
+
+    it('should return false when no SIWX extension is present', async () => {
+      const response = new Response(
+        JSON.stringify({ error: 'payment_required' }),
+        { status: 402 }
+      );
+      expect(await hasSIWxExtension(response)).toBe(false);
     });
   });
 

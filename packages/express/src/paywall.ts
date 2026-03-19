@@ -148,6 +148,7 @@ export function withSIWxAuthOnly({
       resourceUri,
       domain,
       requireEntitlement: false,
+      skipSignatureVerification: siwxConfig.verify?.skipSignatureVerification,
     })
       .then(result => {
         if (!result.success) {
@@ -288,6 +289,7 @@ export function withPayments({
         resourceUri,
         domain,
         requireEntitlement: true,
+        skipSignatureVerification: siwxConfig?.verify?.skipSignatureVerification,
       })
         .then(result => {
           if (!result.success) {

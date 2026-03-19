@@ -141,6 +141,7 @@ async function trySIWxVerification(
     resourceUri,
     domain,
     requireEntitlement: !isAuthOnly,
+    skipSignatureVerification: siwxConfig.verify?.skipSignatureVerification,
   });
 
   if (!verifyResult.success) {

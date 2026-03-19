@@ -171,6 +171,8 @@ function createSiwxMiddleware(
       resourceUri: c.req.url,
       domain: requestUrl.hostname,
       requireEntitlement: !isAuthOnly,
+      skipSignatureVerification:
+        siwxConfig.verify?.skipSignatureVerification,
     });
 
     if (result.success) {

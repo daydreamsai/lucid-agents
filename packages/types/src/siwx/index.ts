@@ -47,6 +47,8 @@ export type SIWxStorageConfig = {
 export type SIWxVerifyConfig = {
   /** RPC URL for EVM smart wallet verification */
   evmRpcUrl?: string;
+  /** Skip cryptographic signature verification (for testing only — NOT for production) */
+  skipSignatureVerification?: boolean;
 };
 
 /**

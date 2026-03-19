@@ -26,6 +26,7 @@ describe('SIWX Integration (TanStack)', () => {
       defaultStatement: 'Sign in to reuse access.',
       expirationSeconds: 3600,
       storage: { type: 'in-memory' },
+      verify: { skipSignatureVerification: true },
     },
   };
 

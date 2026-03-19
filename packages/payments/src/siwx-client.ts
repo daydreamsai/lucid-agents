@@ -10,12 +10,21 @@ export type SIWxClientConfig = {
 
 /**
  * Check if a 402 response includes a SIWX extension declaration.
+ * Checks both the X-SIWX-EXTENSION header and the response body.
+ * Note: this clones the response to read the body, so the original remains consumable.
  */
-export function hasSIWxExtension(response: Response): boolean {
+export async function hasSIWxExtension(response: Response): Promise<boolean> {
   const siwxHeader = response.headers.get('X-SIWX-EXTENSION');
   if (siwxHeader) return true;
 
-  // Header-only check; body must be checked via parseSIWxExtension
+  try {
+    const body = await response.clone().json();
+    if (body?.error?.siwx) return true;
+    if (body?.extensions?.siwx) return true;
+  } catch {
+    // not JSON
+  }
+
   return false;
 }
 

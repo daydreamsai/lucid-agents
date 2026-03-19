@@ -1,3 +1,4 @@
+import { verifyMessage } from 'viem';
 import type { SIWxStorage } from './siwx-storage';
 
 export type SIWxPayload = {
@@ -11,6 +12,7 @@ export type SIWxPayload = {
   expirationTime?: string;
   notBefore?: string;
   statement?: string;
+  signature?: string;
   resources?: string[];
 };
 
@@ -28,6 +30,8 @@ export type SIWxVerifyOptions = {
   resourceUri: string;
   domain: string;
   requireEntitlement?: boolean; // true for paid-route reuse, false for auth-only
+  /** Skip cryptographic signature verification (for testing only) */
+  skipSignatureVerification?: boolean;
 };
 
 /**
@@ -47,9 +51,62 @@ export function parseSIWxHeader(
 }
 
 /**
+ * Build the canonical EIP-191 message string from a SIWX payload.
+ * This follows the CAIP-122 / EIP-4361 (Sign-In with Ethereum) message format.
+ */
+export function buildSIWxMessage(payload: SIWxPayload): string {
+  const lines: string[] = [];
+  lines.push(`${payload.domain} wants you to sign in with your account:`);
+  lines.push(payload.address);
+  lines.push('');
+  if (payload.statement) {
+    lines.push(payload.statement);
+    lines.push('');
+  }
+  lines.push(`URI: ${payload.uri}`);
+  lines.push(`Version: ${payload.version}`);
+  lines.push(`Chain ID: ${payload.chainId}`);
+  lines.push(`Nonce: ${payload.nonce}`);
+  lines.push(`Issued At: ${payload.issuedAt}`);
+  if (payload.expirationTime) {
+    lines.push(`Expiration Time: ${payload.expirationTime}`);
+  }
+  if (payload.notBefore) {
+    lines.push(`Not Before: ${payload.notBefore}`);
+  }
+  if (payload.resources && payload.resources.length > 0) {
+    lines.push('Resources:');
+    for (const resource of payload.resources) {
+      lines.push(`- ${resource}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+/**
+ * Verify the cryptographic signature of a SIWX payload using EIP-191.
+ * Returns true if the signature was created by the address in the payload.
+ */
+async function verifySignature(payload: SIWxPayload): Promise<boolean> {
+  if (!payload.signature) return false;
+
+  try {
+    const message = buildSIWxMessage(payload);
+    const isValid = await verifyMessage({
+      address: payload.address as `0x${string}`,
+      message,
+      signature: payload.signature as `0x${string}`,
+    });
+    return isValid;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Verify a SIWX payload against storage and constraints.
- * Does NOT verify the cryptographic signature (that requires chain-specific logic).
- * This handles: payload shape, domain/URI matching, timing, nonce replay, entitlement check.
+ * Validates: payload shape, domain/URI matching, timing, cryptographic signature,
+ * nonce replay, and entitlement check.
  */
 export async function verifySIWxPayload(
   payload: SIWxPayload,
@@ -61,7 +118,9 @@ export async function verifySIWxPayload(
     !payload.chainId ||
     !payload.nonce ||
     !payload.uri ||
-    !payload.domain
+    !payload.domain ||
+    !payload.issuedAt ||
+    !payload.version
   ) {
     return { success: false, error: 'missing_required_fields' };
   }
@@ -79,11 +138,9 @@ export async function verifySIWxPayload(
   // Validate timing
   const now = Date.now();
 
-  if (payload.issuedAt) {
-    const issuedAt = new Date(payload.issuedAt).getTime();
-    if (isNaN(issuedAt)) {
-      return { success: false, error: 'invalid_issued_at' };
-    }
+  const issuedAt = new Date(payload.issuedAt).getTime();
+  if (isNaN(issuedAt)) {
+    return { success: false, error: 'invalid_issued_at' };
   }
 
   if (payload.expirationTime) {
@@ -100,24 +157,26 @@ export async function verifySIWxPayload(
     }
   }
 
+  // Verify cryptographic signature (EIP-191)
+  if (!options.skipSignatureVerification) {
+    if (!payload.signature) {
+      return { success: false, error: 'missing_signature' };
+    }
+    const sigValid = await verifySignature(payload);
+    if (!sigValid) {
+      return { success: false, error: 'invalid_signature' };
+    }
+  }
+
   // Check nonce replay
   const nonceUsed = await options.storage.hasUsedNonce(payload.nonce);
   if (nonceUsed) {
     return { success: false, error: 'nonce_replayed' };
   }
 
-  // Record nonce
-  await options.storage.recordNonce(payload.nonce, {
-    resource: options.resourceUri,
-    address: payload.address,
-    expiresAt: payload.expirationTime
-      ? new Date(payload.expirationTime).getTime()
-      : undefined,
-  });
-
   const normalizedAddress = payload.address.toLowerCase();
 
-  // For paid-route reuse, check entitlement
+  // For paid-route reuse, check entitlement BEFORE recording the nonce
   if (options.requireEntitlement !== false) {
     const hasPaid = await options.storage.hasPaid(
       options.resourceUri,
@@ -126,6 +185,18 @@ export async function verifySIWxPayload(
     if (!hasPaid) {
       return { success: false, error: 'no_entitlement' };
     }
+  }
+
+  // Record nonce only after all checks pass
+  await options.storage.recordNonce(payload.nonce, {
+    resource: options.resourceUri,
+    address: payload.address,
+    expiresAt: payload.expirationTime
+      ? new Date(payload.expirationTime).getTime()
+      : undefined,
+  });
+
+  if (options.requireEntitlement !== false) {
     return {
       success: true,
       address: normalizedAddress,
@@ -135,7 +206,7 @@ export async function verifySIWxPayload(
     };
   }
 
-  // Auth-only mode - just verify the signature is valid (no entitlement needed)
+  // Auth-only mode
   return {
     success: true,
     address: normalizedAddress,

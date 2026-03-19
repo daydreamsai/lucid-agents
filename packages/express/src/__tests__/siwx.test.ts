@@ -126,7 +126,7 @@ describe('SIWX Integration (Express)', () => {
     it('should return 402 with SIWX extension for unpaid request', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();
@@ -177,7 +177,7 @@ describe('SIWX Integration (Express)', () => {
     it('should record entitlement after successful payment', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();
@@ -231,7 +231,7 @@ describe('SIWX Integration (Express)', () => {
     it('should grant access via SIWX for entitled wallet', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();
@@ -288,7 +288,7 @@ describe('SIWX Integration (Express)', () => {
     it('should reject invalid SIWX header', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();
@@ -341,7 +341,7 @@ describe('SIWX Integration (Express)', () => {
           isActive: true,
           requirements: () => [],
           siwxStorage,
-          siwxConfig: { enabled: true },
+          siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
         } as unknown as PaymentsRuntime,
       };
 
@@ -380,7 +380,7 @@ describe('SIWX Integration (Express)', () => {
           isActive: true,
           requirements: () => [],
           siwxStorage,
-          siwxConfig: { enabled: true },
+          siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
         } as unknown as PaymentsRuntime,
       };
 
@@ -418,7 +418,7 @@ describe('SIWX Integration (Express)', () => {
     it('should provide req.siwxAuth on SIWX-authenticated request', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();
@@ -471,7 +471,7 @@ describe('SIWX Integration (Express)', () => {
     it('should not provide req.siwxAuth on non-SIWX request', async () => {
       const { entrypoint, runtime, payments } = createTestRuntime({
         siwxStorage,
-        siwxConfig: { enabled: true },
+        siwxConfig: { enabled: true, verify: { skipSignatureVerification: true } },
       });
 
       const app = express();

@@ -90,6 +90,7 @@ export {
   parseSIWxHeader,
   verifySIWxPayload,
   buildSIWxExtensionDeclaration,
+  buildSIWxMessage,
   type SIWxPayload,
   type SIWxVerifyResult,
   type SIWxVerifyOptions,

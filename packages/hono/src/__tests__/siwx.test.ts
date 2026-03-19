@@ -99,6 +99,7 @@ describe('SIWX Integration (Hono)', () => {
                 defaultStatement: 'Sign to access',
                 expirationSeconds: 3600,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -140,6 +141,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -191,6 +193,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -231,6 +234,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -301,6 +305,7 @@ describe('SIWX Integration (Hono)', () => {
                 defaultStatement: 'Authenticate your wallet',
                 expirationSeconds: 3600,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -343,6 +348,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -388,6 +394,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -429,6 +436,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -475,6 +483,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -578,6 +587,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
@@ -634,6 +644,7 @@ describe('SIWX Integration (Hono)', () => {
               siwx: {
                 enabled: true,
                 storage: { type: 'in-memory' },
+                verify: { skipSignatureVerification: true },
               },
             },
           })
