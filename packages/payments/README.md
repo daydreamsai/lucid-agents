@@ -275,6 +275,105 @@ const agent = await createAgent({ ... })
 
 See `packages/examples/src/payments/payment-policies.json.example` for a complete policy configuration example.
 
+## Sign-In With X (SIWX)
+
+SIWX lets returning wallets access previously-paid resources without paying again. It can also protect auth-only routes that require a wallet signature but no payment.
+
+### Configuration
+
+Enable SIWX in your payments config:
+
+```typescript
+.use(payments({
+  config: {
+    ...paymentsFromEnv(),
+    siwx: {
+      enabled: true,
+      defaultStatement: 'Sign in to reuse access.',
+      expirationSeconds: 3600,
+      storage: { type: 'in-memory' }, // or 'sqlite' or 'postgres'
+      verify: {
+        // skipSignatureVerification: true // testing only!
+      },
+    },
+  },
+}))
+```
+
+### Auth-Only Routes
+
+Protect routes that require wallet authentication but no payment:
+
+```typescript
+addEntrypoint({
+  key: 'profile',
+  siwx: { authOnly: true },
+  async handler({ auth }) {
+    // auth.address - wallet address
+    // auth.chainId - chain ID
+    // auth.grantedBy - 'auth-only'
+    return { output: { address: auth?.address } };
+  },
+});
+```
+
+### Paid Routes with SIWX Reuse
+
+When SIWX is enabled on a paid route, returning wallets can reuse a previous payment entitlement:
+
+```typescript
+addEntrypoint({
+  key: 'report',
+  price: '0.01',
+  siwx: { enabled: true },
+  async handler({ auth }) {
+    // auth.grantedBy is 'entitlement' when reusing a previous payment
+    return { output: { data: 'secret' } };
+  },
+});
+```
+
+### Storage Semantics
+
+SIWX uses the same storage backend options as the payments package (in-memory, SQLite, Postgres). Key behaviors:
+
+- **Atomic nonce consumption** -- `consumeNonce()` prevents replay even under concurrent requests. A nonce can only be used once.
+- **Entitlement recording** -- Entitlements are recorded after successful payment, allowing the wallet to skip payment on subsequent requests.
+- **Shared backend** -- SIWX storage shares the same backend configuration as payment storage.
+
+### Security Guarantees
+
+- **Fail-closed auth-only** -- Misconfigured auth-only routes (e.g., missing SIWX config) throw at startup rather than silently allowing unauthenticated access.
+- **Canonical EIP-191 message signing** -- Messages follow a canonical format to prevent signature malleability.
+- **Atomic nonce replay prevention** -- Nonces are consumed atomically; concurrent requests with the same nonce will not both succeed.
+
+### Client-Side SIWX
+
+Wrap your x402 fetch with SIWX to automatically handle challenges and reuse entitlements:
+
+```typescript
+import { wrapFetchWithSIWx, createX402Fetch, accountFromPrivateKey } from '@lucid-agents/payments';
+
+const account = accountFromPrivateKey(process.env.PRIVATE_KEY as `0x${string}`);
+const x402Fetch = createX402Fetch({ account });
+
+// Wrap x402 fetch with SIWX for automatic entitlement reuse
+const siwxFetch = wrapFetchWithSIWx(x402Fetch, {
+  signMessage: (msg) => account.signMessage({ message: msg }),
+  getAddress: async () => account.address,
+  getChainId: async () => 'eip155:84532',
+});
+```
+
+### Challenge Format
+
+When SIWX is enabled, the server communicates challenges through response extensions:
+
+- **402 Payment Required** -- The response body includes `extensions.siwx` with the SIWX challenge, and the `X-SIWX-EXTENSION` header is set.
+- **401 Unauthorized** (auth-only routes) -- The response body includes `error.siwx` with the SIWX challenge, and the `X-SIWX-EXTENSION` header is set.
+
+The client-side `wrapFetchWithSIWx` handles both cases automatically.
+
 ## API Reference
 
 ### PaymentTracker

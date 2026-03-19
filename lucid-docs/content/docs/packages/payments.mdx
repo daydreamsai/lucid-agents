@@ -339,6 +339,52 @@ const { data, error } = await client.POST(
 
 See [Calling Paid Endpoints](/docs/examples/calling-paid-endpoints) for a complete example with error handling.
 
+## Sign-In With X (SIWX)
+
+SIWX lets returning wallets skip payment for previously-paid resources and protects auth-only routes with wallet signatures.
+
+### Configuration
+
+```typescript
+.use(payments({
+  config: {
+    ...paymentsFromEnv(),
+    siwx: {
+      enabled: true,
+      defaultStatement: 'Sign in to reuse access.',
+      expirationSeconds: 3600,
+      storage: { type: 'in-memory' },
+    },
+  },
+}))
+```
+
+### Auth-only route
+
+Routes that require wallet authentication but no payment:
+
+```typescript
+addEntrypoint({
+  key: 'profile',
+  siwx: { authOnly: true },
+  async handler({ auth }) {
+    // auth.address  - wallet address
+    // auth.chainId  - chain ID
+    // auth.grantedBy - 'auth-only'
+    return { output: { address: auth?.address } };
+  },
+});
+```
+
+### Challenge format
+
+SIWX challenges are communicated through response extensions:
+
+- **402 Payment Required** -- Response body includes `extensions.siwx` and the `X-SIWX-EXTENSION` header is set. The client signs the challenge and retries.
+- **401 Unauthorized** (auth-only) -- Response body includes `error.siwx` and the `X-SIWX-EXTENSION` header is set.
+
+The client-side `wrapFetchWithSIWx` helper handles both cases automatically. See the [payments package README](/docs/packages/payments) for full configuration and client-side setup.
+
 ## Manifest integration
 
 Payment information is included in the Agent Card:

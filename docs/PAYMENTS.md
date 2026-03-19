@@ -662,6 +662,19 @@ if (response?.status === 403) {
 - Check that `spendingTracker` exists: `agent.payments?.spendingTracker`
 - Verify payments are being recorded after successful responses
 
+## Sign-In With X (SIWX)
+
+SIWX extends the payments system with two capabilities:
+
+- **Entitlement reuse** -- Returning wallets that have already paid for a resource can re-access it by signing a challenge message instead of paying again.
+- **Auth-only routes** -- Routes that require wallet authentication but no payment. Useful for profile pages, dashboards, or any endpoint where identity matters but payment does not.
+
+For full configuration, storage options, client-side setup, and security details, see the [payments package README](../packages/payments/README.md#sign-in-with-x-siwx).
+
+### Nonce API Migration
+
+The SIWX nonce storage API uses `consumeNonce()` as an atomic operation that checks and records a nonce in a single step. This replaces the previous two-step pattern of `hasUsedNonce()` followed by `recordNonce()`, eliminating race conditions under concurrent requests.
+
 ## See Also
 
 - [Wallets Documentation](./WALLETS.md) - Wallet configuration for payments
