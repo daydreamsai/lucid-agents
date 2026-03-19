@@ -721,6 +721,13 @@ bun install
 bun run dev
 ```
 
+## PR Completion Checklist
+
+A pull request is not considered complete unless it includes:
+
+- **E2E example smoke test** - If the PR adds or modifies SDK surface area (new extensions, entrypoints, or config patterns), add a corresponding smoke test in `packages/examples/src/__tests__/smoke.test.ts`. Smoke tests verify that agents build, servers boot, agent cards are valid, and entrypoints respond correctly — all without external services. Run `bun test packages/examples/src/__tests__/` to confirm.
+- **Documentation** - Update relevant documentation: `AGENTS.md` for architecture/patterns, package-level `README.md` files for usage, and inline JSDoc for public APIs. If you add a new package or extension, add it to the directory structure and dependency diagram sections.
+
 ## Release Process with Changesets
 
 ### Creating a Changeset
