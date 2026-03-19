@@ -8,7 +8,7 @@ import express, {
 import { Readable } from 'node:stream';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { TLSSocket } from 'node:tls';
-import { z } from 'zod';
+
 import type { EntrypointDef } from '@lucid-agents/core';
 import type {
   AgentRuntime,
@@ -120,12 +120,7 @@ export async function createAgentApp(
     });
   }
 
-  const addEntrypoint = <
-    TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
-    TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
-  >(
-    def: EntrypointDef<TInput, TOutput>
-  ): void => {
+  const addEntrypoint = (def: EntrypointDef): void => {
     runtime.entrypoints.add(def);
     const entrypoint = runtime.entrypoints
       .snapshot()
