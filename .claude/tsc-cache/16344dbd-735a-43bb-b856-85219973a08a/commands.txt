@@ -1,2 +1,0 @@
-packages/tanstack:build:cd /Users/os/conductor/workspaces/lucid-agents/kigali/packages/tanstack && npm run build
-packages/tanstack:tsc:cd /Users/os/conductor/workspaces/lucid-agents/kigali/packages/tanstack && npx tsc --noEmit
