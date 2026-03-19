@@ -8,6 +8,7 @@
     "---Payments---",
     "calling-paid-endpoints",
     "stripe-destination-mode",
+    "mpp-paid-service",
     "payment-policies",
     "scheduler",
     "---Trust---",
