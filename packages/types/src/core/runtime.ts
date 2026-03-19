@@ -7,6 +7,7 @@ import type { AP2Runtime } from '../ap2';
 import type { EntrypointsRuntime } from './entrypoint';
 import type { AnalyticsRuntime } from '../analytics';
 import type { SchedulerRuntime } from '../scheduler';
+import type { MppRuntime } from '../mpp';
 import type { AgentCore } from './agent';
 
 /**
@@ -23,6 +24,7 @@ export type AgentRuntime = {
   agent: AgentCore;
   wallets?: WalletsRuntime;
   payments?: PaymentsRuntime;
+  mpp?: MppRuntime;
   analytics?: AnalyticsRuntime;
   a2a?: A2ARuntime;
   ap2?: AP2Runtime;

@@ -22,6 +22,7 @@
     "@lucid-agents/hono": "workspace:*",
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/mpp": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/types": "workspace:*",

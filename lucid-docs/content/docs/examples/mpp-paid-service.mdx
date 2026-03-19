@@ -1,0 +1,215 @@
+---
+title: MPP Paid Service
+description: Build a paid agent with multi-method payments using the Machine Payments Protocol.
+icon: Banknote
+---
+
+This example builds an agent with free and paid entrypoints using the MPP extension. It demonstrates flat pricing, per-mode pricing (invoke vs stream), and entrypoint-level payment method overrides.
+
+## Prerequisites
+
+```bash
+bun add @lucid-agents/core @lucid-agents/http @lucid-agents/hono @lucid-agents/mpp
+```
+
+Set environment variables:
+
+```bash
+# Tempo stablecoin method
+MPP_TEMPO_CURRENCY=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # USDC on Base
+MPP_TEMPO_RECIPIENT=0xYourAddress...
+```
+
+## Full example
+
+```typescript title="mpp-paid-service.ts"
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { mpp, tempo } from '@lucid-agents/mpp';
+import { z } from 'zod';
+
+// 1. Create agent with MPP extension
+const agent = await createAgent({
+  name: 'mpp-paid-service',
+  version: '1.0.0',
+  description: 'Paid service agent using Machine Payments Protocol',
+})
+  .use(http())
+  .use(
+    mpp({
+      config: {
+        methods: [
+          tempo.server({
+            currency:
+              process.env.MPP_TEMPO_CURRENCY ??
+              '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+            recipient:
+              process.env.MPP_TEMPO_RECIPIENT ??
+              '0xYourAddress...',
+          }),
+        ],
+        currency: 'usd',
+        defaultIntent: 'charge',
+      },
+    })
+  )
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(agent);
+
+// 2. Free entrypoint (no price = no payment required)
+addEntrypoint({
+  key: 'health',
+  description: 'Health check (free)',
+  input: z.object({}),
+  output: z.object({ status: z.string(), timestamp: z.string() }),
+  handler: async () => ({
+    output: { status: 'ok', timestamp: new Date().toISOString() },
+  }),
+});
+
+// 3. Paid entrypoint — flat price ($0.01 per call)
+addEntrypoint({
+  key: 'summarize',
+  description: 'Summarize text — $0.01 per call',
+  price: '0.01',
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    wordCount: z.number(),
+    charCount: z.number(),
+    preview: z.string(),
+  }),
+  handler: async ({ input }) => {
+    const words = input.text.trim().split(/\s+/).filter(Boolean);
+    return {
+      output: {
+        wordCount: words.length,
+        charCount: input.text.length,
+        preview:
+          input.text.length > 100
+            ? `${input.text.slice(0, 100)}...`
+            : input.text,
+      },
+    };
+  },
+});
+
+// 4. Per-mode pricing ($0.05 invoke, $0.02 stream)
+addEntrypoint({
+  key: 'analyze',
+  description: 'Analyze text — $0.05 invoke, $0.02 stream',
+  price: { invoke: '0.05', stream: '0.02' },
+  streaming: true,
+  input: z.object({ text: z.string() }),
+  output: z.object({
+    frequencies: z.record(z.string(), z.number()),
+    totalWords: z.number(),
+  }),
+  handler: async ({ input }) => {
+    const words = input.text.toLowerCase().split(/\s+/).filter(Boolean);
+    const freq: Record<string, number> = {};
+    for (const word of words) {
+      freq[word] = (freq[word] ?? 0) + 1;
+    }
+    return { output: { frequencies: freq, totalWords: words.length } };
+  },
+  stream: async ({ input }, emit) => {
+    const words = input.text.toLowerCase().split(/\s+/).filter(Boolean);
+    const freq: Record<string, number> = {};
+    for (const word of words) {
+      freq[word] = (freq[word] ?? 0) + 1;
+      await emit({
+        kind: 'delta',
+        delta: JSON.stringify({ word, count: freq[word] }),
+        mime: 'application/json',
+      });
+    }
+    return { output: { frequencies: freq, totalWords: words.length } };
+  },
+});
+
+// 5. Entrypoint with metadata overrides
+addEntrypoint({
+  key: 'premium-generate',
+  description: 'Premium generation — $1.00, accepts tempo or stripe',
+  price: '1.00',
+  metadata: {
+    mpp: {
+      intent: 'charge',
+      description: 'Premium AI content generation',
+      methods: ['tempo', 'stripe'],
+    },
+  },
+  input: z.object({
+    topic: z.string(),
+    style: z.enum(['formal', 'casual', 'technical']).optional(),
+  }),
+  output: z.object({ content: z.string(), style: z.string() }),
+  handler: async ({ input }) => ({
+    output: {
+      content: `Generated ${input.style ?? 'casual'} content about: ${input.topic}`,
+      style: input.style ?? 'casual',
+    },
+  }),
+});
+
+export default app;
+```
+
+## What happens at runtime
+
+1. **Free entrypoints** (`health`) — served without payment checks.
+2. **Priced entrypoints** (`summarize`, `analyze`, `premium-generate`) — the MPP extension automatically returns a `402 Payment Required` response with `WWW-Authenticate: Payment` headers when no valid payment credential is present.
+3. **Per-mode pricing** (`analyze`) — invoke and stream have independent prices. A `402` challenge includes the correct amount for the requested mode.
+4. **Metadata overrides** (`premium-generate`) — restricts accepted methods to `tempo` and `stripe` and adds a human-readable description to the challenge.
+
+## Using environment config
+
+For simpler setup, use `mppFromEnv()` instead of manual config:
+
+```typescript
+import { mpp, mppFromEnv } from '@lucid-agents/mpp';
+
+const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
+  .use(http())
+  .use(mpp({ config: mppFromEnv() }))
+  .build();
+```
+
+This reads `MPP_METHOD`, `MPP_TEMPO_CURRENCY`, `MPP_TEMPO_RECIPIENT`, etc. from the environment.
+
+## Calling paid endpoints
+
+From a client, use `getMppFetch` to get a payment-enabled fetch wrapper:
+
+```typescript
+import { tempo } from '@lucid-agents/mpp';
+import { privateKeyToAccount } from 'viem/accounts';
+
+const mppFetch = await agent.mpp.getMppFetch({
+  methods: [
+    tempo.client({
+      account: privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`),
+      chainId: 8453,
+    }),
+  ],
+});
+
+const response = await mppFetch(
+  'http://localhost:3000/entrypoints/summarize/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { text: 'Hello world' } }),
+  }
+);
+
+console.log(await response.json());
+```
+
+## Related
+
+- [MPP Package Reference](/docs/packages/mpp) - Full API documentation
+- [Payments Extension](/docs/packages/payments) - x402 payment alternative
+- [Calling Paid Endpoints](/docs/examples/calling-paid-endpoints) - x402 client example

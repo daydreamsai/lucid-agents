@@ -1,0 +1,463 @@
+---
+title: '@lucid-agents/mpp'
+description: Machine Payments Protocol (MPP) for multi-method agent payments via HTTP 402.
+icon: Banknote
+---
+
+The MPP extension adds [Machine Payments Protocol](https://mpp.dev) support, enabling agents to accept payments through multiple rails — Tempo (stablecoins), Stripe (cards), Lightning (Bitcoin), or custom methods — using standard HTTP 402 challenges.
+
+## How it differs from x402
+
+| Feature | `@lucid-agents/payments` (x402) | `@lucid-agents/mpp` |
+|---------|--------------------------------|---------------------|
+| Protocol | x402 | MPP (Machine Payments Protocol) |
+| Payment rails | USDC on EVM/Solana | Tempo, Stripe, Lightning, custom |
+| Challenge format | `X-Payment-Details` header | `WWW-Authenticate: Payment` (RFC 7235) |
+| Streaming payments | Not supported | Session-based streaming with deposits |
+| Multiple methods | Single method per agent | Multiple methods per agent |
+
+Both extensions can coexist on the same agent — the manifest merges payment methods from each.
+
+## Installation
+
+```bash
+bun add @lucid-agents/mpp
+```
+
+## Basic usage
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { mpp, tempo } from '@lucid-agents/mpp';
+
+const agent = await createAgent({
+  name: 'my-agent',
+  version: '1.0.0',
+})
+  .use(http())
+  .use(
+    mpp({
+      config: {
+        methods: [
+          tempo.server({
+            currency: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+            recipient: '0xYourAddress...',
+          }),
+        ],
+        currency: 'usd',
+        defaultIntent: 'charge',
+      },
+    })
+  )
+  .build();
+```
+
+## Configuration
+
+### Environment variables
+
+```bash
+# Payment method(s) — comma-separated for multiple
+MPP_METHOD=tempo
+
+# Defaults
+MPP_CURRENCY=usd
+MPP_DEFAULT_INTENT=charge
+MPP_CHALLENGE_EXPIRY=300
+
+# Tempo-specific
+MPP_TEMPO_CURRENCY=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+MPP_TEMPO_RECIPIENT=0xYourAddress...
+MPP_TEMPO_CHAIN_ID=8453
+
+# Stripe-specific
+MPP_STRIPE_SECRET_KEY=sk_live_...
+# or STRIPE_SECRET_KEY=sk_live_...
+```
+
+### mppFromEnv()
+
+Loads configuration from environment variables with optional overrides:
+
+```typescript
+import { mppFromEnv } from '@lucid-agents/mpp';
+
+const config = mppFromEnv();
+// or with overrides:
+const config = mppFromEnv({ currency: 'eur' });
+```
+
+### MppConfig
+
+```typescript
+type MppConfig = {
+  methods: MppServerMethod[];
+  currency?: string;                // Default: 'usd'
+  defaultIntent?: MppPaymentIntent; // Default: 'charge'
+  session?: MppSessionConfig;       // For streaming payments
+  challengeExpirySeconds?: number;  // Default: 300
+};
+```
+
+## Payment methods
+
+MPP supports multiple payment rails through builder functions with `server()` and `client()` variants.
+
+### Tempo (stablecoins)
+
+On-chain stablecoin payments via Tempo network:
+
+```typescript
+import { tempo } from '@lucid-agents/mpp';
+
+// Server-side (agent receiving payments)
+tempo.server({
+  currency: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+  recipient: '0xYourAddress...',
+  chainId: 8453,    // Optional: Base mainnet
+  sse: true,        // Optional: enable streaming events
+});
+
+// Client-side (caller making payments)
+import { privateKeyToAccount } from 'viem/accounts';
+
+tempo.client({
+  account: privateKeyToAccount('0x...'),
+  maxDeposit: '1000',
+  chainId: 8453,
+});
+```
+
+### Stripe (cards)
+
+Traditional card payments via Stripe:
+
+```typescript
+import { stripe } from '@lucid-agents/mpp';
+
+// Server-side
+stripe.server({
+  secretKey: process.env.STRIPE_SECRET_KEY!,
+});
+
+// Client-side
+stripe.client({
+  publishableKey: process.env.STRIPE_PUBLISHABLE_KEY!,
+});
+```
+
+### Lightning (Bitcoin)
+
+Bitcoin payments via Lightning Network:
+
+```typescript
+import { lightning } from '@lucid-agents/mpp';
+
+// Server-side
+lightning.server({
+  nodeUrl: 'lnd.example.com:10009',
+  macaroon: 'AQAAAAAA...',
+});
+
+// Client-side
+lightning.client({
+  wallet: myLightningWallet,
+});
+```
+
+### Custom methods
+
+Add any payment rail:
+
+```typescript
+import { custom } from '@lucid-agents/mpp';
+
+custom.server('paypal', {
+  apiKey: process.env.PAYPAL_API_KEY!,
+  webhookUrl: 'https://example.com/webhooks/paypal',
+});
+```
+
+## Pricing entrypoints
+
+Add pricing to entrypoints — the MPP extension automatically enforces payment:
+
+```typescript
+// Flat price
+addEntrypoint({
+  key: 'summarize',
+  description: 'Summarize text',
+  price: '0.01',
+  input: z.object({ text: z.string() }),
+  output: z.object({ summary: z.string() }),
+  handler: async ({ input }) => ({
+    output: { summary: `Summary of: ${input.text}` },
+  }),
+});
+
+// Per-mode pricing (invoke vs stream)
+addEntrypoint({
+  key: 'analyze',
+  description: 'Analyze text',
+  price: { invoke: '0.05', stream: '0.02' },
+  streaming: true,
+  input: z.object({ text: z.string() }),
+  output: z.object({ result: z.string() }),
+  handler: async ({ input }) => ({
+    output: { result: 'analysis...' },
+  }),
+  stream: async ({ input }, emit) => {
+    await emit({ kind: 'delta', delta: 'streaming...', mime: 'text/plain' });
+    return { output: { result: 'done' } };
+  },
+});
+```
+
+### Entrypoint-level overrides
+
+Override MPP behavior per entrypoint via metadata:
+
+```typescript
+addEntrypoint({
+  key: 'premium-generate',
+  price: '1.00',
+  metadata: {
+    mpp: {
+      intent: 'charge',
+      description: 'Premium AI content generation',
+      methods: ['tempo', 'stripe'], // Restrict to specific methods
+    },
+  },
+  // ...
+});
+```
+
+## Payment flow
+
+The MPP protocol uses standard HTTP 402 with `WWW-Authenticate` challenges:
+
+```
+Client                          Server
+  |                               |
+  |  POST /entrypoints/foo/invoke |
+  |------------------------------→|
+  |                               |
+  |  402 Payment Required         |
+  |  WWW-Authenticate: Payment    |
+  |    id="...", method="tempo",  |
+  |    amount="0.01", ...         |
+  |←------------------------------|
+  |                               |
+  |  (submit payment off-band)    |
+  |                               |
+  |  POST /entrypoints/foo/invoke |
+  |  Payment: credential="..."    |
+  |------------------------------→|
+  |                               |
+  |  200 OK                       |
+  |  Payment-Receipt: ...         |
+  |  {output: ...}                |
+  |←------------------------------|
+```
+
+## API reference
+
+### mpp(options)
+
+Creates the MPP extension:
+
+```typescript
+function mpp(options?: {
+  config?: MppConfig | false;
+}): Extension<{ mpp?: MppRuntime }>;
+```
+
+Pass `false` to explicitly disable. Omitting config logs a warning — paid entrypoints will not enforce payment.
+
+### MppRuntime
+
+When configured, `agent.mpp` provides:
+
+```typescript
+type MppRuntime = {
+  readonly config: MppConfig;
+  readonly isActive: boolean;
+  requirements(
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ): MppPaymentRequirement;
+  activate(entrypoint: EntrypointDef): void;
+  resolvePrice(
+    entrypoint: EntrypointDef,
+    which: 'invoke' | 'stream'
+  ): string | null;
+  getMppFetch(
+    clientConfig: MppClientConfig
+  ): Promise<typeof fetch | null>;
+};
+```
+
+### Middleware helpers
+
+```typescript
+// Evaluate if payment is required — returns 402 Response or null
+evaluateMppPayment(
+  entrypoint: EntrypointDef,
+  kind: 'invoke' | 'stream',
+  mppRuntime: MppRuntime | undefined
+): Response | null;
+
+// Decode Payment header (decode-only, NOT verification)
+decodePaymentHeader(request: Request): {
+  challengeId: string;
+  payload: Record<string, unknown>;
+} | null;
+
+// Create receipt header value
+createReceiptHeader(receipt: {
+  challengeId: string;
+  status: 'settled' | 'pending';
+  amount?: string;
+  method?: string;
+}): string;
+```
+
+<Callout type="warn">
+`decodePaymentHeader` only decodes the base64 `Payment` header. It does **not** verify signatures, check challenge validity, or prevent replay attacks. In production, always verify credentials through the mppx server SDK before granting access.
+</Callout>
+
+### Challenge helpers
+
+```typescript
+// Build a 402 response with WWW-Authenticate headers
+buildChallengeResponse(options: {
+  amount: string;
+  currency: string;
+  intent: MppPaymentIntent; // 'charge' | 'session'
+  methods: MppPaymentMethod[];
+  description?: string;
+  expirySeconds?: number;
+}): Response;
+
+// Resolve price from entrypoint definition
+resolveEntrypointPrice(
+  entrypoint: EntrypointDef,
+  kind: 'invoke' | 'stream'
+): string | null;
+```
+
+## Client-side payments
+
+Use `getMppFetch` from the runtime to create a payment-enabled fetch wrapper:
+
+```typescript
+import { tempo } from '@lucid-agents/mpp';
+import { privateKeyToAccount } from 'viem/accounts';
+
+// Get payment-enabled fetch from runtime
+const mppFetch = await agent.mpp.getMppFetch({
+  methods: [
+    tempo.client({
+      account: privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`),
+      chainId: 8453,
+    }),
+  ],
+});
+
+// Automatically handles 402 challenges
+const response = await mppFetch(
+  'https://agent.example.com/entrypoints/summarize/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { text: 'Hello world' } }),
+  }
+);
+```
+
+## Manifest integration
+
+MPP payment methods are included in the Agent Card alongside any existing x402 payments:
+
+```json
+{
+  "name": "my-agent",
+  "payments": [
+    {
+      "method": "mpp",
+      "network": "mpp",
+      "extensions": {
+        "mpp": {
+          "method": "tempo",
+          "intent": "charge",
+          "currency": "usd"
+        }
+      }
+    }
+  ],
+  "skills": [
+    {
+      "id": "summarize",
+      "pricing": {
+        "invoke": "0.01"
+      }
+    }
+  ]
+}
+```
+
+## Exports
+
+```typescript
+// Extension
+export { mpp } from '@lucid-agents/mpp';
+
+// Method builders
+export { tempo, stripe, lightning, custom } from '@lucid-agents/mpp';
+
+// Configuration
+export { mppFromEnv } from '@lucid-agents/mpp';
+
+// Middleware helpers
+export {
+  evaluateMppPayment,
+  decodePaymentHeader,
+  createReceiptHeader,
+} from '@lucid-agents/mpp';
+
+// Challenge helpers
+export {
+  buildChallengeResponse,
+  resolveEntrypointPrice,
+  resolveEntrypointMppConfig,
+} from '@lucid-agents/mpp';
+
+// Manifest
+export { buildManifestWithMpp } from '@lucid-agents/mpp';
+
+// Types
+export type {
+  MppConfig,
+  MppRuntime,
+  MppServerMethod,
+  MppClientMethod,
+  MppClientConfig,
+  MppPaymentRequirement,
+  MppPaymentIntent,
+  MppPaymentMethod,
+  EntrypointMppConfig,
+  TempoServerConfig,
+  TempoClientConfig,
+  StripeServerConfig,
+  StripeClientConfig,
+  LightningServerConfig,
+  LightningClientConfig,
+} from '@lucid-agents/mpp';
+```
+
+## Related
+
+- [Payments Extension](/docs/packages/payments) - x402 payment protocol (USDC-only)
+- [MPP Paid Service Example](/docs/examples/mpp-paid-service) - Complete working example
+- [Machine Payments Protocol](https://mpp.dev) - MPP specification
