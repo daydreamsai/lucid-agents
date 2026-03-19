@@ -57,10 +57,10 @@ export type Manifest = {
  * Payment method configuration for x402 protocol.
  */
 export type PaymentMethod = {
-  method: 'x402';
+  method: 'x402' | 'mpp' | (string & {});
   /** Static destination address when known at manifest generation time. */
   payee?: `0x${string}` | SolanaAddress;
-  network: Network;
+  network: Network | string;
   endpoint?: Resource;
   priceModel?: { default?: string };
   extensions?: { [vendor: string]: unknown };
