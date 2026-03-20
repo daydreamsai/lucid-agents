@@ -39,8 +39,8 @@ export function registerEntrypoints(addEntrypoint: AddEntrypoint): void {
       
       // Mock result: 5% chance of being sanctioned, 10% chance of being a PEP
       const isSanctioned = (Math.abs(hash) % 100) < 5;
-      const isPEP = (Math.abs(hash * 2) % 100) < 10;
-      const matchConfidence = isSanctioned || isPEP ? ((Math.abs(hash * 3) % 20) + 80) / 100 : 0;
+      const isPEP = !isSanctioned && ((Math.abs(hash) % 10) === 0);
+      const matchConfidence = isSanctioned || isPEP ? ((Math.abs(hash) % 20) + 80) / 100 : 0;
 
       return {
         output: {
