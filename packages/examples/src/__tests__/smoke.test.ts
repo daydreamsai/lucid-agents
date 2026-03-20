@@ -13,8 +13,8 @@ import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { mpp, tempo } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
-import { wallets } from '@lucid-agents/wallet';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
+import { wallets } from '@lucid-agents/wallet';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
@@ -233,7 +233,7 @@ describe('Example Smoke Tests', () => {
       const {
         app: workerApp,
         addEntrypoint: addWorkerEp,
-        runtime: workerRuntime,
+        runtime: _workerRuntime,
       } = await createAgentApp(workerAgent);
 
       addWorkerEp({
