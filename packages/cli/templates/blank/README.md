@@ -1,6 +1,6 @@
 ## {{AGENT_NAME}}
 
-This project was scaffolded with `create-agent-kit` and ships with a ready-to-run agent app built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core).
+This project was scaffolded with `@lucid-agents/cli` and ships with a ready-to-run agent app built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core).
 
 ### Quick start
 

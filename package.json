@@ -8,7 +8,6 @@
     "catalog": {
       "zod": "^4.1.12",
       "typescript": "^5.9.2",
-      "@ax-llm/ax": "^14.0.31",
       "hono": "4.10.1",
       "express": "^4.19.2",
       "viem": "^2.41.2",
@@ -43,7 +42,6 @@
   "dependencies": {
     "@types/bun": "^1.2.21",
     "@types/node": "^24.3.1",
-    "@types/three": "^0.180.0",
     "tsup": "catalog:",
     "typescript": "catalog:"
   },

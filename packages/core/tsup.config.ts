@@ -19,9 +19,9 @@ export default definePackageConfig({
     '@lucid-agents/payments',
     'hono',
     'viem',
-    'x402',
-    'x402-fetch',
-    'x402-hono',
+    '@x402/core',
+    '@x402/fetch',
+    '@x402/hono',
     'zod',
   ],
 });

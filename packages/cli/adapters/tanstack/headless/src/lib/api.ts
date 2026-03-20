@@ -41,18 +41,18 @@ export async function getManifest() {
   return response.json();
 }
 
-let paymentModulePromise: Promise<typeof import('x402-fetch') | null> | null =
+let paymentModulePromise: Promise<typeof import('@x402/fetch') | null> | null =
   null;
 
 async function resolveFetcher(signer?: any) {
   if (!signer) return fetch;
 
   if (!paymentModulePromise) {
-    paymentModulePromise = import('x402-fetch')
+    paymentModulePromise = import('@x402/fetch')
       .then(mod => mod)
       .catch(error => {
         console.warn(
-          'x402-fetch could not be loaded, falling back to plain fetch',
+          '@x402/fetch could not be loaded, falling back to plain fetch',
           error
         );
         return null;

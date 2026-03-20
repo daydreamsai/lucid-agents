@@ -95,7 +95,7 @@ export type AgentCard = {
   protocolVersion?: string;
   name: string;
   description?: string;
-  /** DEPRECATED: Use supportedInterfaces instead */
+  /** @deprecated Use supportedInterfaces instead. */
   url?: string;
   /** Ordered list of supported interfaces (first is preferred) */
   supportedInterfaces?: AgentInterface[];

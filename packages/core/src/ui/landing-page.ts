@@ -901,9 +901,9 @@ export const renderLandingPage = ({
           </section>
 
           <section class="example-section">
-            <h2>Client Example: x402-fetch</h2>
+            <h2>Client Example: @x402/fetch</h2>
             <p>
-              Use the <code>x402-fetch</code> helpers to wrap a standard
+              Use the <code>@x402/fetch</code> helpers to wrap a standard
               <code>fetch</code> call and automatically attach payments. This
               script loads configuration from <code>.env</code>, pays the
               facilitator, and logs both the response body and the decoded
