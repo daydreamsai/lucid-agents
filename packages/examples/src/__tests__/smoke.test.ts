@@ -62,7 +62,9 @@ async function fetchCard(app: {
     name: string;
     version: string;
     skills: Array<{ id: string; [k: string]: unknown }>;
-    capabilities?: { extensions?: Array<{ uri?: string; [k: string]: unknown }> };
+    capabilities?: {
+      extensions?: Array<{ uri?: string; [k: string]: unknown }>;
+    };
     [k: string]: unknown;
   };
 }
@@ -375,11 +377,7 @@ describe('Example Smoke Tests', () => {
         { text: 'hello from client' }
       );
 
-      const task = await waitForTask(
-        clientA2A.client,
-        facilitatorCard,
-        taskId
-      );
+      const task = await waitForTask(clientA2A.client, facilitatorCard, taskId);
       expect(task.status).toBe('completed');
       const output = task.result?.output as { text: string } | undefined;
       expect(output?.text).toBe('Echo: hello from client');
@@ -451,7 +449,9 @@ describe('Example Smoke Tests', () => {
 
           const windowMs = input.windowHours * 60 * 60 * 1000;
           const summary = await getSummary(
-            runtime.analytics.paymentTracker as Parameters<typeof getSummary>[0],
+            runtime.analytics.paymentTracker as Parameters<
+              typeof getSummary
+            >[0],
             windowMs
           );
 
