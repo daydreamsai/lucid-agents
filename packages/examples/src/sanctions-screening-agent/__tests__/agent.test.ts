@@ -1,33 +1,17 @@
 import { describe, expect, it } from 'bun:test';
+import { createSanctionsScreeningAgent } from '../agent';
 
-import { createKitchenSinkAgent } from '../agent';
+describe('createSanctionsScreeningAgent', () => {
+  it('should have the correct extensions loaded', async () => {
+    const agent = await createSanctionsScreeningAgent();
 
-describe('createKitchenSinkAgent', () => {
-  it('always-wired extensions (a2a, analytics, payments, scheduler, ap2)', async () => {
-    const agent = await createKitchenSinkAgent();
-
-    expect(agent.a2a).toBeDefined();
-    expect(agent.analytics).toBeDefined();
+    // Required extensions for a paid data agent
     expect(agent.payments).toBeDefined();
-    expect(agent.scheduler).toBeDefined();
+    expect(agent.analytics).toBeDefined();
     expect(agent.ap2).toBeDefined();
-  });
 
-  it('does not include wallet/identity when env vars are absent', async () => {
-    const saved = {
-      type: process.env.AGENT_WALLET_TYPE,
-      key: process.env.AGENT_WALLET_PRIVATE_KEY,
-    };
-    delete process.env.AGENT_WALLET_TYPE;
-    delete process.env.AGENT_WALLET_PRIVATE_KEY;
-
-    try {
-      const agent = await createKitchenSinkAgent();
-      expect(agent.wallets).toBeUndefined();
-      expect(agent.identity).toBeUndefined();
-    } finally {
-      if (saved.type) process.env.AGENT_WALLET_TYPE = saved.type;
-      if (saved.key) process.env.AGENT_WALLET_PRIVATE_KEY = saved.key;
-    }
+    // These extensions are not used in this example
+    expect(agent.a2a).toBeUndefined();
+    expect(agent.scheduler).toBeUndefined();
   });
 });

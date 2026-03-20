@@ -624,4 +624,59 @@ describe('Example Smoke Tests', () => {
       expect(card.version).toBe('1.0.0');
     });
   });
+
+  // =========================================================================
+  // 7. sanctions-screening-agent
+  // =========================================================================
+  describe('sanctions-screening-agent', () => {
+    let app: { fetch: (req: Request) => Response | Promise<Response> };
+
+    beforeAll(async () => {
+      const agent = await createAgent({
+        name: 'sanctions-screening-agent',
+        version: '1.0.0',
+      })
+        .use(http())
+        .use(payments({ config: { payTo: '0x0000000000000000000000000000000000000001', network: 'eip155:84532', facilitatorUrl: 'https://facilitator.example.com' } }))
+        .build();
+
+      const agentApp = await createAgentApp(agent);
+      
+      agentApp.addEntrypoint({
+        key: 'screen',
+        description: 'Screens an entity against sanctions and PEP lists.',
+        price: '300',
+        input: z.object({ name: z.string().optional(), address: z.string().optional() }),
+        output: z.object({ isSanctioned: z.boolean(), isPEP: z.boolean(), matchConfidence: z.number(), listsChecked: z.array(z.string()) }),
+        async handler({ input }) {
+          const { name, address } = input;
+          const entity = name || address;
+          if (!entity) {
+            throw new Error('At least one of `name` or `address` must be provided.');
+          }
+          let hash = 0;
+          for (let i = 0; i < entity.length; i++) {
+            hash = (hash << 5) - hash + entity.charCodeAt(i);
+            hash |= 0;
+          }
+          const isSanctioned = (Math.abs(hash) % 100) < 5;
+          const isPEP = (Math.abs(hash * 2) % 100) < 10;
+          const matchConfidence = isSanctioned || isPEP ? ((Math.abs(hash * 3) % 20) + 80) / 100 : 0;
+          return { output: { isSanctioned, isPEP, matchConfidence, listsChecked: ['OFAC', 'UN', 'EU'] } };
+        },
+      });
+
+      app = agentApp.app;
+    });
+
+    it('agent card is valid', async () => {
+      const card = await fetchCard(app);
+      expect(card.name).toBe('sanctions-screening-agent');
+    });
+
+    it('screen entrypoint returns 402 without payment', async () => {
+      const res = await invoke(app, 'screen', { name: 'John Doe' });
+      expect(res.status).toBe(402);
+    });
+  });
 });

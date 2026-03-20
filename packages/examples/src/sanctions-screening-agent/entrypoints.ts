@@ -25,7 +25,10 @@ export function registerEntrypoints(addEntrypoint: AddEntrypoint): void {
     price: '300', // $0.0003 USDC
     async handler({ input }) {
       const { name, address } = input;
-      const entity = name || address || '';
+      const entity = name || address;
+      if (!entity) {
+        throw new Error('At least one of `name` or `address` must be provided.');
+      }
       
       // Deterministic scoring based on entity hash
       let hash = 0;
