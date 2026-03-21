@@ -11,6 +11,7 @@
     "http",
     "payments",
     "mpp",
+    "catalog",
     "facilitator",
     "identity",
     "a2a",
