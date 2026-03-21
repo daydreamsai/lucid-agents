@@ -1,5 +1,19 @@
 # @lucid-agents/core
 
+## 3.0.0
+
+### Major Changes
+
+- d81ab5d: Remove the AxLLM templates and AxLLM helper APIs from the CLI, core, and payments packages.
+
+  This also removes the deprecated `@lucid-agents/core/axllm` subpath export and the `createX402LLM` / `x402LLM` helpers from `@lucid-agents/payments`.
+
+### Patch Changes
+
+- Updated dependencies [d81ab5d]
+  - @lucid-agents/payments@3.0.0
+  - @lucid-agents/a2a@0.6.2
+
 ## 2.5.0
 
 ### Patch Changes
