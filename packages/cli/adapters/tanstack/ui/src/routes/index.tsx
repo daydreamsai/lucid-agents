@@ -258,7 +258,7 @@ const StatusChip = ({ state }: { state: HealthState }) => {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide',
+        'inline-flex items-center gap-1.5 border px-3 py-1 text-xs font-semibold uppercase tracking-wide font-mono',
         className
       )}
     >
@@ -596,347 +596,280 @@ function HomePage() {
     '// Ensure WALLET_CONNECT_PROJECT_ID is configured to use WalletConnect.',
   ].join('\n');
 
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-12">
-        <section className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/20">
-                <span className="text-2xl">🤖</span>
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
-                  {meta?.name ?? 'Lucid Agent'}
-                </h1>
-                <p className="text-sm text-zinc-500">
-                  v{meta?.version ?? '0.0.0'}
-                </p>
-              </div>
-            </div>
-            <p className="max-w-2xl text-base text-zinc-400 leading-relaxed">
-              {meta?.description ??
-                'Monitor agent health, review entrypoints, and interact with invoke and streaming flows.'}
+    <div className="min-h-screen bg-zinc-950 font-mono text-zinc-300">
+      <div className="mx-auto max-w-[960px] w-full px-6 flex flex-col min-h-screen">
+
+        {/* ── Header ── */}
+        <header className="flex items-center justify-between py-8 border-b border-zinc-800">
+          <div className="flex items-center gap-4">
+            <h1 className="text-sm font-semibold tracking-[0.2em] uppercase text-zinc-100">
+              {meta?.name ?? 'agent'}<span className="text-emerald-500">.</span>
+            </h1>
+            <span className="text-xs text-zinc-600">
+              v{meta?.version ?? '0.0.0'}
+            </span>
+            <StatusChip state={healthState} />
+          </div>
+          <div className="flex items-center gap-6">
+            <WalletSummary className="text-xs" />
+          </div>
+        </header>
+
+        {/* ── Description ── */}
+        {meta?.description && (
+          <div className="py-6 border-b border-zinc-800">
+            <p className="text-sm text-zinc-500 max-w-[480px] leading-relaxed">
+              {meta.description}
             </p>
           </div>
-          <WalletSummary className="max-w-xl" />
-        </section>
+        )}
 
-        <section className="grid gap-6 lg:grid-cols-3">
-          <div className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800">
-                  <span className="text-lg">💚</span>
-                </div>
-                <h2 className="text-base font-semibold text-zinc-100">
-                  Health
-                </h2>
-              </div>
-              <StatusChip state={healthState} />
-            </div>
-            <dl className="mt-6 space-y-3 text-sm">
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Status</dt>
-                <dd className="font-medium text-zinc-100">
-                  {healthData?.status ??
-                    (healthState === 'healthy' ? 'ok' : 'unknown')}
-                </dd>
-              </div>
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Last Checked</dt>
-                <dd className="text-zinc-300">
-                  {healthData?.timestamp ?? 'Just now'}
-                </dd>
-              </div>
-            </dl>
+        {/* ── Stats Row ── */}
+        <div className="grid grid-cols-4 border-b border-zinc-800">
+          <div className="py-5 pr-4">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">entrypoints</div>
+            <div className="text-sm font-medium text-zinc-100">{entrypointCount}</div>
+          </div>
+          <div className="py-5 px-4 border-l border-zinc-800">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">network</div>
+            <div className="text-sm text-zinc-300">{networkInfo.label}</div>
+          </div>
+          <div className="py-5 px-4 border-l border-zinc-800">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">default price</div>
+            <div className="text-sm font-medium text-emerald-500">{payments?.defaultPrice ?? 'Free'}</div>
+          </div>
+          <div className="py-5 pl-4 border-l border-zinc-800">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">pay to</div>
+            <div className="text-xs text-emerald-500 truncate">{payments?.payTo ?? '--'}</div>
+          </div>
+        </div>
+
+        {/* ── Entrypoints Table ── */}
+        <section className="flex-1">
+          <div className="grid grid-cols-[1fr_120px_100px] py-4 border-b border-zinc-800 text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+            <span>entrypoint</span>
+            <span className="text-right">price</span>
+            <span className="text-right">type</span>
           </div>
 
-          <div className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-lg">📊</span>
-              </div>
-              <h2 className="text-base font-semibold text-zinc-100">
-                Configuration
-              </h2>
-            </div>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Entrypoints</dt>
-                <dd className="font-medium text-zinc-100">{entrypointCount}</dd>
-              </div>
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Network</dt>
-                <dd className="text-zinc-300">{networkInfo.label}</dd>
-              </div>
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Default Price</dt>
-                <dd className="font-medium text-emerald-400">
-                  {payments?.defaultPrice ?? 'Free'}
-                </dd>
-              </div>
-            </dl>
-          </div>
+          {cards?.map((card, index) => {
+            const state = getEntryState(card.key);
+            const isExpanded = expandedEntry === card.key;
 
-          <div className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-lg">💰</span>
-              </div>
-              <h2 className="text-base font-semibold text-zinc-100">Payment</h2>
-            </div>
-            <dl className="space-y-3 text-sm">
-              <div className="flex flex-col gap-1">
-                <dt className="text-zinc-400">Recipient</dt>
-                <dd className="truncate font-mono text-xs text-emerald-400 bg-zinc-800/50 px-2 py-1 rounded">
-                  {payments?.payTo ?? '—'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        <section className="space-y-6">
-          <header className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-sm">⚡</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-100">
-                  {entrypointCount} {entrypointLabel}
-                </h2>
-                <p className="text-sm text-zinc-500">
-                  Configure payloads and test your agent endpoints
-                </p>
-              </div>
-            </div>
-          </header>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            {cards?.map(card => {
-              const state = getEntryState(card.key);
-              return (
-                <article
-                  key={card.key}
-                  className="group flex flex-col gap-6 rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 shadow-xl shadow-black/20 backdrop-blur-sm transition hover:border-zinc-700 hover:shadow-2xl hover:shadow-black/30"
+            return (
+              <div key={card.key} className="border-b border-zinc-800">
+                {/* ── Row ── */}
+                <div
+                  className="grid grid-cols-[1fr_120px_100px] items-center cursor-pointer transition-colors hover:bg-emerald-500/[0.04]"
+                  onClick={() => setExpandedEntry(isExpanded ? null : card.key)}
                 >
-                  <header className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-xl font-bold text-zinc-50 truncate">
-                          {card.key}
-                        </h3>
-                        <span
-                          className={cn(
-                            'inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
-                            card.streaming
-                              ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400'
-                              : 'border-blue-500/50 bg-blue-500/10 text-blue-400'
-                          )}
-                        >
-                          {card.streaming ? 'Stream' : 'Invoke'}
+                  <div className="flex items-center gap-3 py-5">
+                    <span className="text-[10px] text-zinc-600 w-5 flex-shrink-0">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-sm font-medium text-zinc-100">{card.key}</span>
+                    <span className="text-[11px] text-zinc-600 hidden md:inline">{card.description}</span>
+                  </div>
+                  <div className="text-[13px] font-medium text-emerald-500 text-right tabular-nums">
+                    {card.priceLabel}
+                  </div>
+                  <div className="text-right pr-1">
+                    <span className={cn(
+                      'text-[10px] uppercase tracking-wider font-semibold',
+                      card.streaming ? 'text-emerald-500' : 'text-blue-400'
+                    )}>
+                      {card.streaming ? 'stream' : 'invoke'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* ── Expanded Detail ── */}
+                {isExpanded && (
+                  <div className="border-t border-zinc-800/50 bg-zinc-900/30 px-8 py-6 space-y-5">
+
+                    {/* Paths */}
+                    <div className="space-y-2 text-xs">
+                      <div className="flex gap-4">
+                        <span className="text-zinc-600 w-20 flex-shrink-0">invoke</span>
+                        <code className="text-zinc-400">{card.invokePath}</code>
+                      </div>
+                      {card.streamPath && (
+                        <div className="flex gap-4">
+                          <span className="text-zinc-600 w-20 flex-shrink-0">stream</span>
+                          <code className="text-zinc-400">{card.streamPath}</code>
+                        </div>
+                      )}
+                      <div className="flex gap-4">
+                        <span className="text-zinc-600 w-20 flex-shrink-0">network</span>
+                        <span className="text-zinc-400">
+                          {getNetworkInfo(card.networkId ?? payments?.network ?? undefined).label}
                         </span>
                       </div>
-                      <p className="text-sm text-zinc-400 leading-relaxed">
-                        {card.description}
-                      </p>
                     </div>
-                  </header>
 
-                  <div className="grid gap-3 rounded-lg border border-zinc-800/50 bg-zinc-950/50 p-4 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500">Pricing</span>
-                      <span className="font-medium text-emerald-400">
-                        {card.priceLabel}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500">Network</span>
-                      <span className="text-zinc-300">
-                        {
-                          getNetworkInfo(
-                            card.networkId ?? payments?.network ?? undefined
-                          ).label
-                        }
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-zinc-500">Invoke Path</span>
-                      <code className="text-[10px] text-zinc-400 bg-zinc-900/50 px-2 py-1 rounded">
-                        {card.invokePath}
-                      </code>
-                    </div>
-                    {card.streamPath && (
-                      <div className="flex flex-col gap-1">
-                        <span className="text-zinc-500">Stream Path</span>
-                        <code className="text-[10px] text-zinc-400 bg-zinc-900/50 px-2 py-1 rounded">
-                          {card.streamPath}
-                        </code>
+                    {/* Schema Form */}
+                    <SchemaForm
+                      schema={card.inputSchema as any}
+                      value={state.payload}
+                      onChange={value =>
+                        updateEntryState(card.key, { payload: value })
+                      }
+                    />
+
+                    {/* Output Schema */}
+                    {card.outputSchema && card.outputSchema.properties && (
+                      <details className="group">
+                        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300 transition">
+                          <span className="inline-block group-open:rotate-90 transition-transform mr-1">
+                            &rarr;
+                          </span>
+                          output schema
+                        </summary>
+                        <div className="mt-2 border border-zinc-800 bg-black/30 p-3">
+                          <dl className="space-y-1 text-xs">
+                            {Object.entries(card.outputSchema.properties).map(
+                              ([name, schema]: [string, any]) => (
+                                <div key={name} className="flex gap-2">
+                                  <dt className="font-medium text-zinc-300 min-w-[100px]">
+                                    {name}:
+                                  </dt>
+                                  <dd className="text-zinc-500">
+                                    {schema.type}
+                                    {schema.description && ` -- ${schema.description}`}
+                                  </dd>
+                                </div>
+                              )
+                            )}
+                          </dl>
+                        </div>
+                      </details>
+                    )}
+
+                    {/* Error */}
+                    {state.error && (
+                      <div className="border border-rose-500/40 bg-rose-500/5 p-3 text-sm text-rose-300">
+                        {state.error}
                       </div>
                     )}
-                  </div>
 
-                  <SchemaForm
-                    schema={card.inputSchema as any}
-                    value={state.payload}
-                    onChange={value =>
-                      updateEntryState(card.key, { payload: value })
-                    }
-                  />
-
-                  {card.outputSchema && card.outputSchema.properties && (
-                    <details className="group">
-                      <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200 transition">
-                        <span className="inline-block group-open:rotate-90 transition-transform mr-1">
-                          ▶
-                        </span>
-                        Expected Output Schema
-                      </summary>
-                      <div className="mt-2 rounded-lg border border-zinc-800 bg-black/30 p-3">
-                        <dl className="space-y-2 text-xs">
-                          {Object.entries(card.outputSchema.properties).map(
-                            ([name, schema]: [string, any]) => (
-                              <div key={name} className="flex gap-2">
-                                <dt className="font-medium text-zinc-300 min-w-[100px]">
-                                  {name}:
-                                </dt>
-                                <dd className="text-zinc-400">
-                                  {schema.type}
-                                  {schema.description &&
-                                    ` - ${schema.description}`}
-                                </dd>
-                              </div>
-                            )
-                          )}
-                        </dl>
-                      </div>
-                    </details>
-                  )}
-
-                  {state.error && (
-                    <div className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3">
-                      <span className="text-rose-400">⚠</span>
-                      <p className="flex-1 text-sm text-rose-300">
-                        {state.error}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={() =>
-                        handleInvoke(card, getEntryState(card.key).payload)
-                      }
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:from-emerald-600 hover:to-emerald-700 hover:shadow-xl hover:shadow-emerald-500/30 active:scale-95"
-                    >
-                      <span>▶</span>
-                      Invoke
-                    </button>
-                    {card.streaming && (
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap items-center gap-3">
                       <button
                         onClick={() =>
-                          handleStream(card, getEntryState(card.key).payload)
+                          handleInvoke(card, getEntryState(card.key).payload)
                         }
-                        disabled={state.streamingStatus === 'streaming'}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-400 transition hover:border-emerald-500 hover:bg-emerald-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex items-center gap-2 border border-emerald-500 bg-emerald-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 transition hover:bg-emerald-500/20"
                       >
-                        <span>⚡</span>
-                        {state.streamingStatus === 'streaming'
-                          ? 'Streaming...'
-                          : 'Start Stream'}
+                        invoke
                       </button>
-                    )}
-                    {card.streaming &&
-                      state.streamingStatus === 'streaming' && (
+                      {card.streaming && (
                         <button
-                          onClick={() => {
-                            streamCancelRef.current[card.key]?.();
-                            updateEntryState(card.key, {
-                              streamingStatus: 'idle',
-                            });
-                          }}
-                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-500/50 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-400 transition hover:border-rose-500 hover:bg-rose-500/20 active:scale-95"
+                          onClick={() =>
+                            handleStream(card, getEntryState(card.key).payload)
+                          }
+                          disabled={state.streamingStatus === 'streaming'}
+                          className="inline-flex items-center gap-2 border border-zinc-700 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <span>⬛</span>
-                          Stop
+                          {state.streamingStatus === 'streaming'
+                            ? 'streaming...'
+                            : 'stream'}
                         </button>
                       )}
-                    <button
-                      onClick={() => copyCurl(card.invokeCurl)}
-                      className="ml-auto inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-2.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100"
-                    >
-                      {curlCopied ? '✓ Copied!' : '📋 Copy cURL'}
-                    </button>
-                  </div>
+                      {card.streaming &&
+                        state.streamingStatus === 'streaming' && (
+                          <button
+                            onClick={() => {
+                              streamCancelRef.current[card.key]?.();
+                              updateEntryState(card.key, {
+                                streamingStatus: 'idle',
+                              });
+                            }}
+                            className="inline-flex items-center gap-2 border border-rose-500/50 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-rose-400 transition hover:border-rose-500 hover:bg-rose-500/10"
+                          >
+                            stop
+                          </button>
+                        )}
+                      <button
+                        onClick={() => copyCurl(card.invokeCurl)}
+                        className="ml-auto border border-zinc-800 px-3 py-2 text-[11px] text-zinc-500 transition hover:border-zinc-600 hover:text-zinc-300"
+                      >
+                        {curlCopied ? '✓ copied' : 'copy curl'}
+                      </button>
+                    </div>
 
-                  <section className="space-y-4 rounded-xl border border-zinc-800/50 bg-zinc-950/50 p-4">
-                    <header className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                          Response
+                    {/* cURL preview */}
+                    <details className="group">
+                      <summary className="cursor-pointer text-xs text-zinc-600 hover:text-zinc-400 transition">
+                        <span className="inline-block group-open:rotate-90 transition-transform mr-1">
+                          &rarr;
                         </span>
-                        {Boolean(state.result) && (
-                          <span className="flex h-2 w-2 items-center justify-center">
-                            <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        curl command
+                      </summary>
+                      <pre className="mt-2 border border-zinc-800 bg-black/40 p-3 text-[11px] text-zinc-400 overflow-x-auto whitespace-pre">
+                        {card.invokeCurl}
+                      </pre>
+                      {card.streamCurl && (
+                        <pre className="mt-1 border border-zinc-800 bg-black/40 p-3 text-[11px] text-zinc-400 overflow-x-auto whitespace-pre">
+                          {card.streamCurl}
+                        </pre>
+                      )}
+                    </details>
+
+                    {/* Response */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+                          response
+                        </span>
+                        {state.paymentUsed && (
+                          <span className="border border-emerald-500/50 bg-emerald-500/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-500">
+                            paid
                           </span>
                         )}
                       </div>
-                      {state.paymentUsed && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400">
-                          <span>💰</span>
-                          Paid
-                        </span>
-                      )}
-                    </header>
-                    <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-zinc-800/50 bg-zinc-900/50 p-3 font-mono text-xs leading-relaxed text-zinc-300">
-                      {formatResult(state.result) || (
-                        <span className="text-zinc-600">
-                          Click "Invoke" to see the response here...
-                        </span>
-                      )}
-                    </pre>
+                      <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words border border-zinc-800 bg-black/40 p-3 font-mono text-xs leading-relaxed text-zinc-300">
+                        {formatResult(state.result) || (
+                          <span className="text-zinc-700">
+                            -- invoke to see response --
+                          </span>
+                        )}
+                      </pre>
+                    </div>
 
+                    {/* Stream Events */}
                     {card.streaming && (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                              Stream Events
-                            </span>
-                            {state.streamingStatus === 'streaming' && (
-                              <span className="flex h-2 w-2 items-center justify-center">
-                                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                              </span>
-                            )}
-                          </div>
+                          <span className="text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+                            stream events
+                          </span>
                           <span
                             className={cn(
-                              'text-xs font-medium',
+                              'text-xs font-medium font-mono',
                               state.streamingStatus === 'streaming'
-                                ? 'text-emerald-400'
-                                : 'text-zinc-500'
+                                ? 'text-emerald-500'
+                                : 'text-zinc-700'
                             )}
                           >
                             {state.streamingStatus === 'streaming'
-                              ? '● Live'
-                              : '○ Idle'}
+                              ? '● live'
+                              : '○ idle'}
                           </span>
                         </div>
-                        <div className="max-h-32 overflow-y-auto rounded-lg border border-zinc-800/50 bg-zinc-900/50 p-3">
+                        <div className="max-h-32 overflow-y-auto border border-zinc-800 bg-black/40 p-3">
                           {state.streamingEvents.length === 0 ? (
-                            <p className="text-xs text-zinc-600">
-                              Click "Start Stream" to see live events here...
+                            <p className="text-xs text-zinc-700">
+                              -- stream to see events --
                             </p>
                           ) : (
-                            <ul className="space-y-2">
-                              {state.streamingEvents.map((event, index) => (
+                            <ul className="space-y-1">
+                              {state.streamingEvents.map((event, idx) => (
                                 <li
-                                  key={`${card.key}-event-${index}`}
-                                  className="animate-fadeIn rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs text-zinc-200"
+                                  key={`${card.key}-event-${idx}`}
+                                  className="border-l-2 border-emerald-500/30 pl-3 py-1 text-xs text-zinc-300"
                                 >
                                   {event}
                                 </li>
@@ -946,49 +879,31 @@ function HomePage() {
                         </div>
                         {state.streamingStatus === 'error' &&
                           state.streamingError && (
-                            <div className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2">
-                              <span className="text-rose-400">⚠</span>
-                              <p className="flex-1 text-xs text-rose-300">
-                                {state.streamingError}
-                              </p>
+                            <div className="border border-rose-500/40 bg-rose-500/5 p-2 text-xs text-rose-300">
+                              {state.streamingError}
                             </div>
                           )}
                       </div>
                     )}
-                  </section>
-                </article>
-              );
-            })}
-          </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-              <span className="text-sm">📄</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-100">
-                Agent Manifest
-              </h2>
-              <p className="text-sm text-zinc-500">
-                Complete agent specification served from{' '}
-                <code className="text-xs text-emerald-400">
-                  {MANIFEST_PATH}
-                </code>
-              </p>
-            </div>
-          </div>
-
-          <details className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 backdrop-blur-sm transition hover:border-zinc-700">
-            <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-medium text-zinc-300 hover:text-zinc-100">
+        {/* ── Manifest ── */}
+        <section className="border-t border-zinc-800 py-6">
+          <details className="group">
+            <summary className="flex cursor-pointer items-center justify-between text-xs text-zinc-500 hover:text-zinc-300 transition">
               <div className="flex items-center gap-2">
                 <span className="inline-block transition-transform group-open:rotate-90">
-                  ▶
+                  &rarr;
                 </span>
-                <span>View Full Manifest JSON</span>
+                <span>manifest</span>
+                <code className="text-emerald-500 text-[10px]">{MANIFEST_PATH}</code>
                 {manifestState === 'loading' && (
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+                  <span className="text-zinc-600 animate-pulse">loading...</span>
                 )}
               </div>
               <button
@@ -997,18 +912,15 @@ function HomePage() {
                   e.stopPropagation();
                   copyManifest(manifestText);
                 }}
-                className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100"
+                className="border border-zinc-800 px-3 py-1 text-[11px] text-zinc-600 transition hover:border-zinc-600 hover:text-zinc-300"
               >
-                {manifestCopied ? '✓ Copied!' : 'Copy JSON'}
+                {manifestCopied ? '✓ copied' : 'copy'}
               </button>
             </summary>
-            <div className="border-t border-zinc-800/50 p-6">
-              <pre className="max-h-[500px] overflow-auto rounded-lg border border-zinc-800/50 bg-zinc-950/80 p-4 font-mono text-xs leading-relaxed text-zinc-300 shadow-inner">
+            <div className="mt-3">
+              <pre className="max-h-[500px] overflow-auto border border-zinc-800 bg-black/40 p-4 font-mono text-xs leading-relaxed text-zinc-400">
                 {manifestState === 'loading' ? (
-                  <div className="flex items-center gap-2 text-zinc-500">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-                    Loading manifest…
-                  </div>
+                  <span className="text-zinc-600 animate-pulse">loading manifest...</span>
                 ) : (
                   manifestText
                 )}
@@ -1017,52 +929,42 @@ function HomePage() {
           </details>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-              <span className="text-sm">💻</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-100">
-                Code Examples
-              </h2>
-              <p className="text-sm text-zinc-500">
-                Integration snippets for your applications
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <article className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-              <header className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-100">
-                    WalletConnect
-                  </span>
-                  <span className="rounded-full border border-blue-500/50 bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
-                    AppKit
-                  </span>
-                </div>
-                <button
-                  onClick={() => copyAppKitSnippet(appKitSnippet)}
-                  className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  {appKitSnippetCopied ? '✓ Copied!' : 'Copy'}
-                </button>
-              </header>
-              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-zinc-800/50 bg-zinc-950/80 p-4 font-mono text-xs leading-relaxed text-zinc-300 shadow-inner">
+        {/* ── Code Examples ── */}
+        <section className="border-t border-zinc-800 py-6">
+          <details className="group">
+            <summary className="flex cursor-pointer items-center justify-between text-xs text-zinc-500 hover:text-zinc-300 transition">
+              <div className="flex items-center gap-2">
+                <span className="inline-block transition-transform group-open:rotate-90">
+                  &rarr;
+                </span>
+                <span>walletconnect integration</span>
+                <span className="border border-blue-500/30 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-blue-400">appkit</span>
+              </div>
+              <button
+                onClick={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copyAppKitSnippet(appKitSnippet);
+                }}
+                className="border border-zinc-800 px-3 py-1 text-[11px] text-zinc-600 transition hover:border-zinc-600 hover:text-zinc-300"
+              >
+                {appKitSnippetCopied ? '✓ copied' : 'copy'}
+              </button>
+            </summary>
+            <div className="mt-3">
+              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap border border-zinc-800 bg-black/40 p-4 font-mono text-xs leading-relaxed text-zinc-400">
                 {appKitSnippet}
               </pre>
-            </article>
-          </div>
+            </div>
+          </details>
         </section>
 
-        <footer className="mt-12 border-t border-zinc-800/50 pt-8 pb-4">
-          <div className="flex items-center justify-between text-xs text-zinc-600">
-            <p>Powered by Lucid Agents Framework</p>
-            <p>Built with TanStack Start</p>
-          </div>
+        {/* ── Footer ── */}
+        <footer className="py-6 border-t border-zinc-800 flex justify-between items-center text-[11px] text-zinc-700">
+          <span>{networkInfo.label}</span>
+          <span>lucid-agents</span>
         </footer>
+
       </div>
     </div>
   );

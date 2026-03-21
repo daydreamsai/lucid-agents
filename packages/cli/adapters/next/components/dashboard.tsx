@@ -143,145 +143,134 @@ export default function Dashboard({
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-12">
-        <section className="flex flex-col gap-8 rounded-3xl border border-zinc-800/80 bg-zinc-900/40 p-8 backdrop-blur-xl lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/20">
-                  <span className="text-2xl">🤖</span>
-                </div>
-                <div>
-                  <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-zinc-50 to-zinc-400 bg-clip-text text-transparent">
-                    {initialData.meta?.name ?? 'Lucid Agent'}
-                  </h1>
-                  <p className="text-sm text-zinc-500">
-                    v{initialData.meta?.version ?? '0.0.0'}
-                  </p>
-                </div>
-              </div>
-              <p className="max-w-2xl text-base text-zinc-400 leading-relaxed">
-                {initialData.meta?.description ??
-                  'Monitor agent health, review entrypoints, and interact with invoke and streaming flows.'}
-              </p>
-            </div>
-            <WalletSummary className="max-w-xl" />
+    <div className="min-h-screen bg-zinc-950 font-mono text-zinc-200 antialiased">
+      <div className="mx-auto max-w-[960px] w-full px-6 flex flex-col min-h-screen">
+
+        {/* ── Header ── */}
+        <header className="flex items-center justify-between py-8 border-b border-zinc-900">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold tracking-[0.2em] uppercase text-zinc-200">
+              {initialData.meta?.name ?? 'Lucid Agent'}
+            </span>
+            <span className="text-emerald-500">.</span>
+            <span className="text-xs text-zinc-600">
+              v{initialData.meta?.version ?? '0.0.0'}
+            </span>
           </div>
-          <HealthCard
-            className="w-full max-w-md"
-            initialHealth={initialHealth}
-          />
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-lg">📊</span>
-              </div>
-              <h2 className="text-base font-semibold text-zinc-100">
-                Configuration
-              </h2>
-            </div>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Entrypoints</dt>
-                <dd className="font-medium text-zinc-100">{entrypointCount}</dd>
-              </div>
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Network</dt>
-                <dd className="text-zinc-300">{networkInfo.label}</dd>
-              </div>
-              <div className="flex justify-between items-center">
-                <dt className="text-zinc-400">Default Price</dt>
-                <dd className="font-medium text-emerald-400">
-                  {initialData.payments?.defaultPrice ?? 'Free'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="group rounded-2xl border border-zinc-800/80 bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 p-6 backdrop-blur-sm transition hover:border-zinc-700">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-lg">💰</span>
-              </div>
-              <h2 className="text-base font-semibold text-zinc-100">Payment</h2>
-            </div>
-            <dl className="space-y-3 text-sm">
-              <div className="flex flex-col gap-1">
-                <dt className="text-zinc-400">Recipient</dt>
-                <dd className="truncate font-mono text-xs text-emerald-400 bg-zinc-800/50 px-2 py-1 rounded">
-                  {initialData.payments?.payTo ?? '—'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
-
-        <section className="space-y-6">
-          <header className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-                <span className="text-sm">⚡</span>
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-100">
-                  {entrypointCount} {entrypointLabel}
-                </h2>
-                <p className="text-sm text-zinc-500">
-                  Configure payloads and test your agent endpoints
-                </p>
-              </div>
-            </div>
-          </header>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            {cards.map(card => (
-              <EntrypointCard
-                key={card.key}
-                card={card}
-                payments={initialData.payments ?? undefined}
-              />
-            ))}
-          </div>
-        </section>
-
-        <ManifestViewer
-          initialManifest={manifestText}
-          manifestPath={MANIFEST_PATH}
-        />
-
-        <section className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-              <span className="text-sm">💻</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-zinc-100">
-                Code Examples
-              </h2>
-              <p className="text-sm text-zinc-500">
-                Integration snippets for your applications
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <SnippetCard
-              snippet={appKitSnippet}
-              title="WalletConnect"
-              badge="AppKit"
+          <div className="flex items-center gap-6">
+            <HealthCard
+              className="!rounded-none !border-0 !bg-transparent !p-0 !shadow-none !backdrop-blur-none"
+              initialHealth={initialHealth}
             />
+            <WalletSummary className="!rounded-none !border-0 !bg-transparent !p-0 max-w-none" />
+          </div>
+        </header>
+
+        {/* ── Hero ── */}
+        <section className="py-16 border-b border-zinc-900">
+          <h1 className="font-sans text-4xl sm:text-5xl font-bold tracking-tight leading-tight text-zinc-100 mb-4">
+            {initialData.meta?.description ?? 'Agent commerce infrastructure'}
+          </h1>
+          <p className="text-sm text-zinc-500 max-w-lg leading-relaxed">
+            {entrypointCount} {entrypointLabel.toLowerCase()} available.{' '}
+            {initialData.payments?.defaultPrice
+              ? `Default price: ${initialData.payments.defaultPrice}.`
+              : 'Free tier.'}{' '}
+            Network: {networkInfo.label}.
+          </p>
+          {initialData.payments?.payTo && (
+            <div
+              className="mt-6 inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-900 text-xs text-zinc-500 cursor-pointer transition-colors hover:border-zinc-800 hover:text-zinc-300"
+              title="Payment recipient"
+            >
+              <span className="text-zinc-600">payTo</span>
+              <span className="font-mono text-emerald-500 truncate max-w-[320px]">
+                {initialData.payments.payTo}
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* ── Entrypoints Table ── */}
+        <section className="flex-1">
+          <div className="grid grid-cols-[1fr_120px_100px] py-4 border-b border-zinc-900 text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+            <span>entrypoint</span>
+            <span className="text-right">price</span>
+            <span className="text-right">type</span>
+          </div>
+
+          {cards.map((card, index) => (
+            <details key={card.key} className="group border-b border-zinc-900">
+              <summary className="grid grid-cols-[1fr_120px_100px] items-center cursor-pointer transition-colors hover:bg-emerald-500/[0.04] hover:border-zinc-800">
+                <div className="flex items-center gap-3 py-5">
+                  <span className="text-[10px] text-zinc-700 w-5 shrink-0 tabular-nums">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span className="text-sm font-medium text-zinc-200">
+                    {card.key}
+                  </span>
+                  <span className="text-[11px] text-zinc-600 hidden md:inline">
+                    {card.description}
+                  </span>
+                </div>
+                <div className="text-[13px] font-medium text-right text-emerald-500 tabular-nums">
+                  {card.priceLabel}
+                </div>
+                <div className="text-right pr-1 flex items-center justify-end gap-2">
+                  {card.streaming && (
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-600 border border-zinc-800 px-1.5 py-0.5">
+                      stream
+                    </span>
+                  )}
+                  <span className="text-sm text-zinc-700 transition-colors group-hover:text-emerald-500 inline-block transition-transform group-hover:translate-x-0.5">
+                    &rarr;
+                  </span>
+                </div>
+              </summary>
+
+              {/* ── Expanded entrypoint card ── */}
+              <div className="border-t border-zinc-900 bg-zinc-950 p-0">
+                <EntrypointCard
+                  card={card}
+                  payments={initialData.payments ?? undefined}
+                />
+              </div>
+            </details>
+          ))}
+        </section>
+
+        {/* ── Manifest ── */}
+        <div className="py-12 border-t border-zinc-900">
+          <ManifestViewer
+            initialManifest={manifestText}
+            manifestPath={MANIFEST_PATH}
+          />
+        </div>
+
+        {/* ── Code Examples ── */}
+        <section className="py-12 border-t border-zinc-900">
+          <div className="mb-5 text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+            integration
+          </div>
+          <div className="grid gap-px bg-zinc-900 border border-zinc-900">
+            <div className="bg-zinc-950">
+              <SnippetCard
+                snippet={appKitSnippet}
+                title="WalletConnect"
+                badge="AppKit"
+              />
+            </div>
           </div>
         </section>
 
-        <footer className="mt-12 border-t border-zinc-800/50 pt-8 pb-4">
-          <div className="flex items-center justify-between text-xs text-zinc-600">
-            <p>Powered by Lucid Agents Framework</p>
-            <p>Built with Next.js</p>
-          </div>
+        {/* ── Footer ── */}
+        <footer className="py-6 border-t border-zinc-900 flex justify-between items-center text-[11px] text-zinc-700">
+          <span>
+            Powered by Lucid Agents Framework
+          </span>
+          <span>
+            {networkInfo.label}
+          </span>
         </footer>
       </div>
     </div>

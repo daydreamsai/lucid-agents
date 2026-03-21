@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lucid</title>
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── Design Tokens ── */
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1a1a1a;
+      --border-hover: #2a2a2a;
+      --text: #e5e5e5;
+      --text-muted: #666666;
+      --text-dim: #444444;
+      --accent: #22c55e;
+      --accent-dim: rgba(34, 197, 94, 0.08);
+      --protocol-x402: #22c55e;
+      --protocol-a2a: #3b82f6;
+      --protocol-8004: #8b5cf6;
+      --protocol-siwx: #f59e0b;
+      --protocol-mpp: #ec4899;
+      --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    }
+
+    /* ── Base ── */
+    html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Layout Shell ── */
+    .shell {
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 32px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .logo .dot {
+      color: var(--accent);
+    }
+
+    nav {
+      display: flex;
+      gap: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    nav a:hover { color: var(--text); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 80px 0 64px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .hero p {
+      font-size: 14px;
+      color: var(--text-muted);
+      max-width: 480px;
+      line-height: 1.6;
+    }
+
+    /* ── Table ── */
+    .table-section {
+      flex: 1;
+    }
+
+    .table-header {
+      display: grid;
+      grid-template-columns: 1fr 120px 100px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+    }
+
+    .table-header span:last-child {
+      text-align: right;
+    }
+
+    .table-header span:nth-child(2) {
+      text-align: right;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 120px 100px;
+      align-items: center;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s ease;
+      cursor: pointer;
+    }
+
+    .row:hover {
+      background: var(--accent-dim);
+      border-color: var(--border-hover);
+    }
+
+    .row-inner {
+      display: contents;
+    }
+
+    .row-name {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .row-name .idx {
+      font-size: 10px;
+      color: var(--text-dim);
+      width: 20px;
+      flex-shrink: 0;
+    }
+
+    .row-name .title {
+      color: var(--text);
+    }
+
+    .row-name .desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+      display: none;
+    }
+
+    .row-price {
+      font-size: 13px;
+      font-weight: 500;
+      text-align: right;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .row-action {
+      text-align: right;
+      padding-right: 4px;
+    }
+
+    .row-action .arrow {
+      font-size: 14px;
+      color: var(--text-dim);
+      transition: color 0.15s ease, transform 0.15s ease;
+      display: inline-block;
+    }
+
+    .row:hover .arrow {
+      color: var(--accent);
+      transform: translateX(2px);
+    }
+
+    /* ── Protocols ── */
+    .protocols {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    .protocols-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+    }
+
+    .protocol-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .protocol {
+      background: var(--bg);
+      padding: 20px;
+      transition: background 0.15s ease;
+    }
+
+    .protocol:hover {
+      background: var(--surface);
+    }
+
+    .protocol-name {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .protocol-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .protocol-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 24px 0;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    footer a { color: var(--text-muted); }
+    footer a:hover { color: var(--text); }
+
+    /* ── Status Indicator ── */
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ── CLI ── */
+    .cli {
+      margin-top: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: border-color 0.15s ease;
+    }
+
+    .cli:hover { border-color: var(--border-hover); color: var(--text); }
+    .cli .prompt { color: var(--text-dim); }
+
+    /* ── Mobile ── */
+    @media (max-width: 640px) {
+      .hero { padding: 48px 0 40px; }
+      .table-header { grid-template-columns: 1fr 80px 40px; }
+      .row { grid-template-columns: 1fr 80px 40px; }
+      .row-name .desc { display: none; }
+      .protocol-grid { grid-template-columns: 1fr 1fr; }
+      nav { gap: 16px; }
+    }
+
+    @media (min-width: 768px) {
+      .row-name .desc { display: inline; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">lucid<span class="dot">.</span></div>
+      <nav>
+        <a href="/docs/getting-started/quickstart">docs</a>
+        <a href="https://github.com/daydreamsai/lucid-agents" target="_blank">github</a>
+        <div class="status">
+          <span class="status-dot"></span>
+          mainnet
+        </div>
+      </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Agent commerce<br>infrastructure</h1>
+      <p>Route to paid AI agents. Pay per request. Open protocols.</p>
+      <div class="cli" onclick="navigator.clipboard.writeText('bunx @lucid-agents/cli my-agent')" title="Copy to clipboard">
+        <span class="prompt">$</span> bunx @lucid-agents/cli my-agent
+      </div>
+    </section>
+
+    <!-- Games Table -->
+    <section class="table-section">
+      <div class="table-header">
+        <span>game</span>
+        <span>price</span>
+        <span></span>
+      </div>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">01</span>
+            <span class="title">sentiment</span>
+            <span class="desc">text analysis & scoring</span>
+          </div>
+          <div class="row-price">$0.01</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">02</span>
+            <span class="title">code-review</span>
+            <span class="desc">automated code analysis</span>
+          </div>
+          <div class="row-price">$0.05</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">03</span>
+            <span class="title">market-feed</span>
+            <span class="desc">real-time data streams</span>
+          </div>
+          <div class="row-price">$0.10</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">04</span>
+            <span class="title">image-gen</span>
+            <span class="desc">ai image generation</span>
+          </div>
+          <div class="row-price">$0.15</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">05</span>
+            <span class="title">scheduler</span>
+            <span class="desc">autonomous task orchestration</span>
+          </div>
+          <div class="row-price">$0.03</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+
+      <a href="/docs/examples" class="row">
+        <div class="row-inner">
+          <div class="row-name">
+            <span class="idx">06</span>
+            <span class="title">a2a-broker</span>
+            <span class="desc">agent-to-agent marketplace</span>
+          </div>
+          <div class="row-price">$0.02</div>
+          <div class="row-action"><span class="arrow">&rarr;</span></div>
+        </div>
+      </a>
+    </section>
+
+    <!-- Protocols -->
+    <section class="protocols">
+      <div class="protocols-label">supporting protocols</div>
+      <div class="protocol-grid">
+        <a href="/docs/packages/payments" class="protocol">
+          <div class="protocol-name">
+            <span class="protocol-dot" style="background: var(--protocol-x402)"></span>
+            x402
+          </div>
+          <div class="protocol-desc">HTTP-native payments. USDC on Base & Solana.</div>
+        </a>
+        <a href="/docs/packages/a2a" class="protocol">
+          <div class="protocol-name">
+            <span class="protocol-dot" style="background: var(--protocol-a2a)"></span>
+            A2A
+          </div>
+          <div class="protocol-desc">Agent discovery & invocation protocol.</div>
+        </a>
+        <a href="/docs/packages/identity" class="protocol">
+          <div class="protocol-name">
+            <span class="protocol-dot" style="background: var(--protocol-8004)"></span>
+            ERC-8004
+          </div>
+          <div class="protocol-desc">On-chain identity & domain verification.</div>
+        </a>
+        <a href="/docs/getting-started/introduction" class="protocol">
+          <div class="protocol-name">
+            <span class="protocol-dot" style="background: var(--protocol-siwx)"></span>
+            SIWX
+          </div>
+          <div class="protocol-desc">Sign-In With X. Cross-chain auth.</div>
+        </a>
+        <a href="/docs/packages/mpp" class="protocol">
+          <div class="protocol-name">
+            <span class="protocol-dot" style="background: var(--protocol-mpp)"></span>
+            MPP
+          </div>
+          <div class="protocol-desc">Machine Payments Protocol.</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <span>MIT &middot; <a href="https://github.com/daydreamsai/lucid-agents">daydreamsai/lucid-agents</a></span>
+      <span>Base &middot; Ethereum &middot; Solana</span>
+    </footer>
+
+  </div>
+</body>
+</html>
