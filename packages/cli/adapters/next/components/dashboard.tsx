@@ -222,7 +222,7 @@ export default function Dashboard({
                       stream
                     </span>
                   )}
-                  <span className="text-sm text-zinc-700 transition-colors group-hover:text-emerald-500 inline-block transition-transform group-hover:translate-x-0.5">
+                  <span className="text-sm text-zinc-700 transition-all group-hover:text-emerald-500 inline-block group-hover:translate-x-0.5">
                     &rarr;
                   </span>
                 </div>

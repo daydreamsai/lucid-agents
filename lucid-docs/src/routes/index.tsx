@@ -28,34 +28,6 @@ function Home() {
     <HomeLayout {...baseOptions()}>
       <div className="w-full max-w-[960px] mx-auto px-6 flex flex-col flex-1 font-mono">
 
-        {/* Header */}
-        <header className="flex items-center justify-between py-8 border-b border-fd-border">
-          <div className="text-sm font-semibold tracking-[0.2em] uppercase text-fd-foreground">
-            lucid<span className="text-emerald-500">.</span>
-          </div>
-          <nav className="flex items-center gap-4 sm:gap-6 text-xs text-fd-muted-foreground">
-            <Link
-              to="/docs/$"
-              params={{ _splat: 'getting-started/quickstart' }}
-              className="hover:text-fd-foreground transition-colors"
-            >
-              docs
-            </Link>
-            <a
-              href="https://github.com/daydreamsai/lucid-agents"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-fd-foreground transition-colors"
-            >
-              github
-            </a>
-            <div className="flex items-center gap-1.5 text-[11px] text-fd-muted-foreground">
-              <span className="w-[5px] h-[5px] rounded-full bg-emerald-500 animate-pulse" />
-              mainnet
-            </div>
-          </nav>
-        </header>
-
         {/* Hero */}
         <section className="py-16 sm:py-20 border-b border-fd-border">
           <h1 className="font-sans text-[clamp(32px,5vw,48px)] font-bold tracking-tight leading-[1.1] mb-4">

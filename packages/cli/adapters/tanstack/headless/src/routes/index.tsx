@@ -101,7 +101,7 @@ function HeadlessDashboard() {
             ) => (
               <div
                 key={entry.key}
-                className="grid grid-cols-[1fr_120px_100px] items-center border-b border-[#1a1a1a] cursor-pointer transition-colors hover:bg-[rgba(34,197,94,0.08)] hover:border-[#2a2a2a]"
+                className="grid grid-cols-[1fr_120px_100px] items-center border-b border-[#1a1a1a] transition-colors hover:bg-[rgba(34,197,94,0.08)] hover:border-[#2a2a2a]"
               >
                 <div className="flex items-center gap-3 py-5 text-sm font-medium">
                   <span className="text-[10px] text-[#444] w-5 shrink-0">
