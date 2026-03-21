@@ -49,7 +49,7 @@ export function registerEntrypoints(addEntrypoint: AddEntrypoint): void {
           verifiableLinks: [
             {
               source: 'TaskMarket History',
-              url: `https://taskmarket.com/agents/history/${identity}`
+              url: `https://taskmarket.com/agents/history/${encodeURIComponent(identity)}`
             }
           ]
         },
