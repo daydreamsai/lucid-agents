@@ -407,7 +407,7 @@ describe('create-agent-kit CLI', () => {
     );
 
     await expect(readdir(componentsDir)).rejects.toThrow();
-    expect(indexRoute).toContain('TanStack runtime without a UI shell');
+    expect(indexRoute).toContain('HeadlessDashboard');
   });
 
   it('prompts for a project name when not provided and prompt is available', async () => {
