@@ -1,5 +1,14 @@
 # @lucid-agents/identity
 
+## 3.0.0
+
+### Patch Changes
+
+- Version bump only to stay aligned with the fixed core release group.
+- Updated dependencies:
+  - @lucid-agents/types@1.8.0
+  - @lucid-agents/wallet@0.6.3
+
 ## 2.5.0
 
 ### Minor Changes
@@ -46,6 +55,7 @@
   The `type` field is now automatically set to the correct value and cannot be overridden.
 
   ## Code changes
+
   - Removed `normalizeServiceInput()` function that converted legacy fields to canonical fields
   - Removed `AgentRegistrationOptions.type` field (type is now always set to ERC-8004 URL)
   - Simplified service validation to require canonical fields
@@ -54,6 +64,7 @@
   ## Why this change?
 
   The dual-format support added unnecessary complexity without clear benefit. A clean break ensures:
+
   - Simpler, more maintainable code
   - Clearer API documentation
   - No confusion about which format to use
@@ -122,12 +133,14 @@
 - 23a7254: ERC-8004 Identity Registry updates and ABI alignment:
 
   **New Features**
+
   - Agent wallet management (`getAgentWallet`, `setAgentWallet`, `unsetAgentWallet`) with EIP-712 signing
   - `unsetAgentWallet(agentId)` now calls dedicated on-chain function directly (no signature required)
   - `isAuthorizedOrOwner(spender, agentId)` read function to check authorization
   - Optional validation request bodies that are hashed
 
   **API Changes**
+
   - Identity manifest renamed from "metadata" to "registration" and now includes registry identifier
   - Reputation feedback uses integer `value` + `valueDecimals` format
   - Validation request/response payloads and identifiers updated
@@ -135,6 +148,7 @@
   - `registryAddress` required when building trust config from identity records
 
   **Documentation**
+
   - Examples, guides, tests, and changelogs updated to registration-centric workflow
   - New reputation/validation formats documented
 
@@ -161,6 +175,7 @@
 - 4bd3ac2: Switch default network from Base Sepolia to Ethereum Mainnet
 
   CHANGES:
+
   - Default payment network changed from `base-sepolia` to `ethereum` across all CLI templates and adapters
   - Added Ethereum Mainnet ERC-8004 contract addresses:
     - Identity Registry: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
@@ -192,17 +207,20 @@
 - d088313: ERC-8004 January 2026 Specification Update
 
   BREAKING CHANGES:
+
   - Reputation Registry `giveFeedback()`: Removed `feedbackAuth`, `expiry`, `indexLimit` parameters. Added optional `endpoint` parameter (defaults to empty string if not provided). Tags are now `string` instead of `bytes32` or `Hex`.
   - Identity Registry: `tokenURI` renamed to `agentURI` throughout. `register()` now takes `agentURI` instead of `tokenURI`. `tokenURI()` function still exists for ERC-721 compatibility but should be treated as `agentURI` conceptually.
   - Validation Registry: Deprecated and removed from default client creation. Under active development, will be updated in follow-up spec update later this year. **Breaking changes**: Function names changed (`createRequest` → `validationRequest`, `submitResponse` → `validationResponse`). Tag types changed from `bytes32`/`Hex` to `string` in `getSummary()`, `getValidationStatus()`, and `validationResponse()`.
   - Contract Addresses: Only ETH Sepolia is deployed with new Jan 2026 addresses. Other chains are commented out until new contracts are deployed.
 
   NEW FEATURES:
+
   - Added `setAgentURI()` function to IdentityRegistryClient for updating agent URIs after registration
   - Added `getVersion()` function to all registry clients (Identity, Reputation, Validation) for checking contract versions
   - Added validation to block reserved `agentWallet` metadata key in `setMetadata()` with clear error message
 
   IMPROVEMENTS:
+
   - Updated `getAllFeedback()` to handle new `feedbackIndexes` return value from contract
   - Updated all feedback tag types from `bytes32`/`Hex` to `string` for better usability
   - Improved type safety with correct return types for all registry functions
@@ -262,6 +280,7 @@
 ### Patch Changes
 
 - 8b1afb7: Fix circular dependencies and inline type imports
+
   - **HTTP package**: Removed circular dependencies on `@lucid-agents/core` and `@lucid-agents/payments` by exposing `resolvePrice` on PaymentsRuntime instead of importing from payments package
   - **Payments package**: Added `resolvePrice` method to PaymentsRuntime for use by extensions
   - **Types package**: Fixed inline type imports within types package (payments, a2a) and added `resolvePrice` to PaymentsRuntime type
@@ -336,6 +355,7 @@
   ### Type Exports
 
   Types reorganized into domain-specific sub-packages. Import directly from `@lucid-agents/types/{domain}`:
+
   - `@lucid-agents/types/core` - Core runtime types
   - `@lucid-agents/types/http` - HTTP-related types
   - `@lucid-agents/types/payments` - Payment configuration types
@@ -354,6 +374,7 @@
   ```
 
   ## Improvements
+
   - **New Examples Package (`@lucid-agents/examples`)**: Added comprehensive examples package that serves as critical infrastructure for maintaining developer experience quality
     - Provides continuous type checking to ensure developer-facing interfaces remain stable
     - Validates developer experience consistency when pushing SDK changes
@@ -368,6 +389,7 @@
   ## A2A Protocol Improvements
 
   ### Agent Discovery
+
   - **Multiple URL Fallback**: `fetchAgentCard()` now tries multiple well-known paths for better compatibility:
     - Base URL (if absolute)
     - `/.well-known/agent-card.json` (A2A spec recommended)
@@ -384,6 +406,7 @@
     - All discovery functions consolidated in `card.ts`
 
   ### Type Improvements
+
   - **Clear Separation**:
     - `fetchAgentCard()` returns `AgentCard` (capabilities only, no entrypoints)
     - `buildAgentCard()` returns `AgentCardWithEntrypoints` (for our own manifest)
@@ -392,6 +415,7 @@
     - They only need skill ID and URL, not entrypoint schemas
 
   ### A2A Spec Compliance
+
   - **Added Missing Fields**:
     - `protocolVersion` (default: "1.0")
     - `supportedInterfaces` (replaces deprecated `url` field)
@@ -404,6 +428,7 @@
   - **Updated `buildAgentCard()`**: Now includes `protocolVersion` and `supportedInterfaces`
 
   ### Example Updates
+
   - Updated A2A example to demonstrate real-world discovery flow:
     1. Fetch agent card from URL
     2. Check capabilities
@@ -411,6 +436,7 @@
     4. Find and call a skill
 
   ## Bug Fixes
+
   - Fixed incorrect `https://` protocol in Bun server log messages (changed to `http://`)
   - Fixed `facilitatorUrl` type mismatch in payments configuration (now uses proper `Resource` type with URL validation)
   - Fixed `RegistrationEntry` type in tests (added missing `agentAddress` field)
@@ -428,6 +454,7 @@
 - 2ce3a85: Refactor to protocol-agnostic extension-based architecture with HTTP as separate package
 
   **Breaking Changes:**
+
   - **Extension-based API**: Removed `createAgentRuntime()` and `createAgentHttpRuntime()` - replaced with extension-based API using `createAgent().use().build()`
   - **HTTP as separate package**: HTTP extension moved to separate `@lucid-agents/http` package
   - **Protocol-agnostic core**: `AgentCore` no longer has `invoke()`, `stream()`, or `resolveManifest()` methods - these are HTTP-specific and moved to `@lucid-agents/http`
@@ -474,6 +501,7 @@
   ```
 
   **Migration Guide:**
+
   1. **Replace app creation:**
      - Old: `createAgentRuntime(meta, options)`
      - New: `await createAgent(meta).use(extensions).build()`
@@ -491,6 +519,7 @@
      - Old: `agent.resolveManifest(origin, basePath)`
      - New: `agent.manifest.build(origin)`
   6. **Remove core invoke/stream calls:**
+
      - Old: `agent.invoke(key, input, ctx)`
      - New: Use HTTP handlers (via `runtime.handlers.invoke`) or import `invokeHandler` from `@lucid-agents/http` for direct calls:
 
@@ -541,6 +570,7 @@
   Implements A2A Protocol task-based operations alongside existing direct invocation. Tasks enable long-running operations, status tracking, and multi-turn conversations.
 
   **New HTTP Endpoints:**
+
   - `POST /tasks` - Create task (returns `{ taskId, status: 'running' }` immediately)
   - `GET /tasks` - List tasks with filtering (contextId, status, pagination)
   - `GET /tasks/{taskId}` - Get task status and result
@@ -548,6 +578,7 @@
   - `GET /tasks/{taskId}/subscribe` - SSE stream for task updates
 
   **New A2A Client Methods:**
+
   - `sendMessage(card, skillId, input, fetch?, options?)` - Creates task and returns taskId immediately (supports contextId for multi-turn conversations)
   - `getTask(card, taskId)` - Retrieves task status and result
   - `listTasks(card, filters?)` - Lists tasks with optional filtering by contextId, status, and pagination
@@ -557,6 +588,7 @@
   - `waitForTask(client, card, taskId)` - Utility to poll for task completion
 
   **Task Lifecycle:**
+
   1. Client creates task via `POST /tasks` → receives `{ taskId, status: 'running' }`
   2. Task executes asynchronously (handler runs in background)
   3. Task status updates automatically: `running` → `completed`/`failed`/`cancelled`
@@ -564,30 +596,36 @@
   5. When complete, task contains `result: { output, usage, model }` or `error: { code, message }`
 
   **Multi-Turn Conversations:**
+
   - Tasks support `contextId` parameter for grouping related tasks in a conversation
   - Use `listTasks(card, { contextId })` to retrieve all tasks in a conversation
   - Enables building conversational agents that maintain context across multiple interactions
 
   **Task Management:**
+
   - `listTasks()` supports filtering by `contextId`, `status` (single or array), and pagination (`limit`, `offset`)
   - `cancelTask()` allows cancelling running tasks, updating status to `cancelled` and aborting handler execution
   - Tasks include `AbortController` for proper cancellation handling
 
   **Backward Compatible:**
+
   - Direct invocation (`/entrypoints/{key}/invoke`) remains fully supported
   - Existing code using `client.invoke()` continues to work
   - Both approaches can be used side-by-side
 
   **Task Storage:**
+
   - In-memory `Map<taskId, TaskEntry>` in core runtime (combines Task and AbortController)
   - Tasks persist for agent lifetime (no automatic expiration)
   - Each task entry includes task data and AbortController for cancellation support
 
   **Adapters:**
+
   - Hono: Task routes registered automatically
   - TanStack (headless & ui): Task route files created
 
   ### A2A Client Support (`@lucid-agents/a2a`)
+
   - **New `@lucid-agents/a2a` package** - Complete A2A protocol implementation
   - **Agent Card Building** - `buildAgentCard()` creates base A2A-compliant Agent Cards
   - **Agent Card Fetching** - `fetchAgentCard()` retrieves Agent Cards from `/.well-known/agent-card.json`
@@ -597,31 +635,37 @@
   - **Skill Discovery** - `findSkill()` and `parseAgentCard()` utilities for working with Agent Cards
 
   ### AP2 Extension Package (`@lucid-agents/ap2`)
+
   - **New `@lucid-agents/ap2` package** - Separated AP2 (Agent Payments Protocol) into its own extension
   - **AP2 Runtime** - `createAP2Runtime()` for managing AP2 configuration
   - **Agent Card Enhancement** - `createAgentCardWithAP2()` adds AP2 extension metadata to Agent Cards
   - **Auto-enablement** - Automatically enables merchant role when payments are configured
 
   ### Agent Card Immutable Composition
+
   - **Immutable Enhancement Functions** - `createAgentCardWithPayments()`, `createAgentCardWithIdentity()`, `createAgentCardWithAP2()`
   - **Composition Pattern** - Agent Cards are built by composing base A2A card with protocol-specific enhancements
   - **Separation of Concerns** - Each protocol (A2A, payments, identity, AP2) owns its Agent Card metadata
 
   ### Runtime Access in Handlers
+
   - **Runtime Context** - `AgentContext` now includes `runtime` property for accessing A2A client, payments, wallets, etc.
   - **A2A Client Access** - Handlers can call other agents via `ctx.runtime?.a2a?.client.invoke()`
 
   ### Trading Agent Templates (`@lucid-agents/cli`)
+
   - **New `trading-data-agent` template** - Merchant agent providing mock trading data
   - **New `trading-recommendation-agent` template** - Shopper agent that buys data and provides trading signals
   - **A2A Composition Example** - Demonstrates agent-to-agent communication with payments
 
   ### Type System Improvements (`@lucid-agents/types`)
+
   - **A2A Types** - New `@lucid-agents/types/a2a` sub-package with A2A-specific types
   - **AP2 Types** - New `@lucid-agents/types/ap2` sub-package with AP2-specific types
   - **Shared FetchFunction** - `FetchFunction` type moved to `@lucid-agents/types/core` for cross-package use
 
   ### Build System Standardization
+
   - **Standardized `tsconfig.build.json`** - All packages now use build-specific TypeScript configuration
   - **Fixed Build Order** - Added `@lucid-agents/a2a` and `@lucid-agents/ap2` to build sequence
   - **External Dependencies** - All workspace dependencies properly marked as external in tsup configs
@@ -631,6 +675,7 @@
   **New Example: `packages/a2a/examples/full-integration.ts`** demonstrates the **facilitating agent pattern**, a core A2A use case where an agent acts as both client and server.
 
   The example shows a three-agent composition:
+
   - **Agent 1 (Worker)**: Does the actual work (echo, process, stream)
   - **Agent 2 (Facilitator)**: Acts as both server and client
     - **Server**: Receives calls from Agent 3
@@ -642,6 +687,7 @@
   This demonstrates that agents can orchestrate other agents, enabling complex agent compositions and supply chains. The facilitating agent pattern is essential for building agent ecosystems where agents work together to accomplish tasks.
 
   The example demonstrates:
+
   - Task-based operations (sendMessage, waitForTask)
   - Multi-turn conversations with contextId tracking
   - Listing tasks filtered by contextId
@@ -706,11 +752,13 @@
   ### Removed Re-exports
 
   All re-exports have been removed from package `index.ts` files. Import directly from source packages:
+
   - A2A utilities: `@lucid-agents/a2a`
   - AP2 utilities: `@lucid-agents/ap2`
   - Types: `@lucid-agents/types/*`
 
   ## Migration Guide
+
   1. **Replace `buildManifest()` calls** - Use `runtime.manifest.build()` or compose enhancement functions
   2. **Update type imports** - Import A2A types from `@lucid-agents/types/a2a` instead of `@lucid-agents/core`
   3. **Use A2A client** - Access via `ctx.runtime?.a2a?.client` in handlers
@@ -733,6 +781,7 @@
   ## New Features
 
   ### Wallet Package (`@lucid-agents/wallet`)
+
   - New `@lucid-agents/wallet` package providing wallet connectors and signing infrastructure
   - **Local Wallet Connector** (`LocalEoaWalletConnector`) - Supports private key-based signing, message signing, typed data signing (EIP-712), and transaction signing for contract interactions
   - **Server Orchestrator Wallet Connector** (`ServerOrchestratorWalletConnector`) - Remote wallet signing via server orchestrator API with bearer token authentication
@@ -741,6 +790,7 @@
   - **Private Key Signer** (`createPrivateKeySigner`) - Wraps viem's `privateKeyToAccount` for consistent interface with full support for message, typed data, and transaction signing
 
   ### Type System Consolidation
+
   - Consolidated all shared types into `@lucid-agents/types` package
   - Organized types by domain: `core/`, `payments/`, `wallets/`, `identity/`
   - Moved types from individual packages (`core`, `wallet`, `payments`, `identity`) to shared types package
@@ -800,12 +850,14 @@
   ## Improvements
 
   ### Architecture & Build System
+
   - **Eliminated Circular Dependencies** - Moved all shared types to `@lucid-agents/types` package, removed runtime dependencies between `core`, `payments`, and `identity`
   - **Fixed Build Order** - Corrected topological sort: `types` → `wallet` → `payments` → `identity` → `core` → adapters
   - **Added Build Commands** - `build:clean` command and `just build-all-clean` for fresh builds
   - **AP2 Constants** - `AP2_EXTENSION_URI` kept in core (runtime constant), type uses string literal to avoid type-only import issues
 
   ### Code Quality
+
   - **Removed `stableJsonStringify`** - Completely removed complex stringification logic, simplified challenge message resolution
   - **Removed `ChallengeNormalizationOptions`** - Removed unused interface, simplified `normalizeChallenge()` signature
   - **Import/Export Cleanup** - Removed `.js` extensions from TypeScript source imports, removed unnecessary type re-exports
@@ -817,18 +869,21 @@
   ### Type System
 
   **Comprehensive Type Moves:**
+
   - **From `@lucid-agents/core` to `@lucid-agents/types/core`**: `AgentRuntime`, `AgentCard`, `AgentCardWithEntrypoints`, `Manifest`, `PaymentMethod`, `AgentCapabilities`, `AP2Config`, `AP2Role`, `AP2ExtensionDescriptor`, `AP2ExtensionParams`, `AgentMeta`, `AgentContext`, `Usage`, `EntrypointDef`, `AgentKitConfig`
   - **From `@lucid-agents/wallet` to `@lucid-agents/types/wallets`**: `WalletConnector`, `ChallengeSigner`, `WalletMetadata`, `LocalEoaSigner`, `TypedDataPayload`, `AgentChallenge`, `AgentChallengeResponse`, `AgentWalletHandle`, `AgentWalletKind`, `AgentWalletConfig`, `DeveloperWalletConfig`, `WalletsConfig`, `LocalWalletOptions`, and related types
   - **From `@lucid-agents/payments` to `@lucid-agents/types/payments`**: `PaymentRequirement`, `RuntimePaymentRequirement`, `PaymentsConfig`, `EntrypointPrice`, `SolanaAddress`, `PaymentsRuntime` (now includes `activate` method in public API)
   - **From `@lucid-agents/identity` to `@lucid-agents/types/identity`**: `TrustConfig`, `RegistrationEntry`, `TrustModel`
 
   **Type Alignment:**
+
   - `TypedDataPayload`: Changed `primary_type` → `primaryType`, `typed_data` → `typedData` (camelCase to match viem)
   - `ChallengeSigner`: Made `payload` and `scopes` optional to match `AgentChallenge`
   - `LocalEoaSigner`: Added `signTransaction` method for contract writes
   - `AP2ExtensionDescriptor`: Uses string literal instead of `typeof AP2_EXTENSION_URI`
 
   ## Bug Fixes
+
   - Fixed circular dependency between `core` and `payments`/`identity`
   - Fixed build order causing build failures
   - Fixed transaction signing for local wallets (enables identity registration)
@@ -842,6 +897,7 @@
   ## Migration Guide
 
   See PR description for detailed migration steps covering:
+
   1. Configuration shape changes (`wallet` → `wallets`)
   2. Type import updates (direct imports from `@lucid-agents/types`)
   3. TypedData API changes (snake_case → camelCase)
@@ -864,6 +920,7 @@
 - 8a3ed70: Simplify package names and introduce types package
 
   **Package Renames:**
+
   - `@lucid-agents/agent-kit` → `@lucid-agents/core`
   - `@lucid-agents/agent-kit-identity` → `@lucid-agents/identity`
   - `@lucid-agents/agent-kit-payments` → `@lucid-agents/payments`
@@ -872,9 +929,11 @@
   - `@lucid-agents/create-agent-kit` → `@lucid-agents/cli`
 
   **New Package:**
+
   - `@lucid-agents/types` - Shared type definitions with zero circular dependencies
 
   **Architecture Improvements:**
+
   - Zero circular dependencies (pure DAG via types package)
   - Explicit type contracts - all shared types in @lucid-agents/types
   - Better IDE support and type inference
@@ -914,6 +973,7 @@
   **TypeScript Configuration:**
 
   All published packages now:
+
   - Extend a shared base TypeScript configuration for consistency
   - Include `type-check` script for CI validation
   - Use simplified type-check command (`tsc -p tsconfig.json --noEmit`)
@@ -939,30 +999,35 @@
   ## Critical Bug Fixes
 
   ### Security Fix: Removed Hardcoded Payment Wallet Address
+
   - **CRITICAL**: Payment configuration defaults were previously hardcoded to a specific wallet address
   - All payment config fields (`facilitatorUrl`, `payTo`, `network`) are now `undefined` by default
   - This forces explicit configuration and prevents payments from being sent to incorrect wallets
   - Payment-related types are now properly optional: `payTo?: `0x${string}``
 
   ### Stream Endpoint HTTP Semantics
+
   - Stream endpoints are now always registered for all entrypoints
   - Returns proper `400 Bad Request` when streaming is not supported (instead of `404 Not Found`)
   - Improves API consistency and allows clients to optimistically try streaming without manifest lookups
   - Better HTTP semantics: 404 = route doesn't exist, 400 = operation not supported
 
   ### Config Scoping Fix
+
   - Removed redundant `payments` property from `createAgentApp` return value
   - Removed module-level global `activeInstanceConfig` to prevent state pollution
   - Single source of truth: use `config.payments` directly
   - Fixes issues with multiple agent instances in same process
 
   ### Additional Fixes
+
   - Fixed `ResponseInit` TypeScript linter error by using `ConstructorParameters<typeof Response>[1]`
   - Removed all emojis from codebase (added to coding standards)
   - Fixed 3 failing unit tests from previous refactor
   - Updated test assertions for new API patterns
 
   ## Breaking Changes
+
   - **Template System**: Templates now use `.template` file extensions to avoid TypeScript compilation errors during development
   - **Adapter Architecture**: Agent creation now requires selecting an adapter (Hono or TanStack Start)
   - **Payment Config API**: Payment defaults are now `undefined` instead of having fallback values (explicit configuration required)
@@ -971,12 +1036,14 @@
   ## New Features
 
   ### Multi-Adapter Support
+
   - **Hono Adapter** (`@lucid-agents/hono`): Traditional HTTP server adapter
   - **TanStack Start Adapter** (`@lucid-agents/tanstack`): Full-stack React framework adapter with:
     - Headless mode (API only)
     - UI mode (full dashboard with wallet integration)
 
   ### Template System
+
   - Templates now support multiple adapters
   - Template files use `.template` extension and are processed during scaffolding
   - Support for adapter-specific code injection via placeholders:
@@ -986,11 +1053,13 @@
     - `{{ADAPTER_ID}}`
 
   ### Improved Validation
+
   - Added validation for identity feature configuration
   - Added payment validation in TanStack adapter
   - Better type safety in route handlers (e.g., params.key validation)
 
   ### CLI Improvements
+
   - `--adapter` flag to select runtime framework (hono, tanstack-ui, tanstack-headless)
   - Better error messages for adapter compatibility
   - Clear error suggestions when invalid adapter specified
@@ -998,6 +1067,7 @@
   ## Package Changes
 
   ### @lucid-agents/cli
+
   - Adapter selection system with support for multiple runtime frameworks
   - Template processing with `.template` file handling
   - Adapter-specific file layering system
@@ -1005,25 +1075,30 @@
   - Non-interactive mode improvements
 
   ### @lucid-agents/core
+
   - Split into adapter-specific packages
   - Core functionality moved to `@lucid-agents/agent-core`
   - Improved type definitions
 
   ### @lucid-agents/hono (NEW)
+
   - Hono-specific runtime implementation
   - Maintains backward compatibility with existing Hono-based agents
 
   ### @lucid-agents/tanstack (NEW)
+
   - TanStack Start runtime implementation
   - File-based routing support
   - Payment middleware integration
   - UI and headless variants
 
   ### @lucid-agents/identity
+
   - Improved validation
   - Better integration with template system
 
   ### @lucid-agents/agent-core (NEW)
+
   - Shared core functionality across adapters
   - Type definitions and utilities
 
@@ -1073,6 +1148,7 @@
   ### AGENTS.md Documentation
 
   Added comprehensive AGENTS.md files following the agents.md industry standard (20,000+ projects):
+
   - Template-specific guides for blank, axllm, axllm-flow, and identity templates
   - Root-level monorepo guide with architecture overview and API reference
   - Example-driven with copy-paste-ready code samples
@@ -1083,12 +1159,14 @@
   Added machine-readable JSON Schema files (`template.schema.json`) for each template documenting all configuration arguments, types, and defaults.
 
   ### Improvements
+
   - Fixed boolean handling in environment setup (boolean false now correctly outputs "false" not empty string)
   - Converted IDENTITY_AUTO_REGISTER to confirm-type prompt for better UX
   - Added 11 new comprehensive test cases (21 total, all passing)
   - Updated CLI help text and README with non-interactive examples
 
   ### Bug Fixes
+
   - Fixed release bot workflow to use proper dependency sanitization script
   - Ensures published npm packages have resolved workspace and catalog dependencies
 
@@ -1119,6 +1197,7 @@
 - Complete ERC-8004 v1.0 Implementation
 
   **Added full support for all three ERC-8004 registries:**
+
   - Identity Registry (fixed existing implementation)
   - Reputation Registry (new - peer feedback system)
   - Validation Registry (new - work validation)
@@ -1128,6 +1207,7 @@
   **Breaking Changes:**
 
   **Fixed core issues:**
+
   - Replaced incorrect ABI with actual ERC-8004 v1.0 contracts
   - Fixed import paths preventing signature generation
   - Uses real contract functions instead of non-existent ones
@@ -1135,6 +1215,7 @@
   - Auto-adds `0x` prefix to private keys
 
   **Refactored to Viem actions:**
+
   - Replaced duck-typed `signer.signMessage()` with proper Viem actions
   - New `src/utils/signatures.ts` with type-safe signing helpers
   - Supports EIP-191, EIP-712, and ERC-1271
@@ -1151,6 +1232,7 @@
   ```
 
   **Added:**
+
   - `createReputationRegistryClient()` - feedback submission, queries, stats
   - `createValidationRegistryClient()` - validation requests, responses, queries
   - Automatic signature generation for feedback authorization
@@ -1165,12 +1247,14 @@
   - `examples/test-clients.ts` - demonstrates all three clients
 
   **Changed:**
+
   - Renamed `identity.ts` → `registries/identity.ts`
   - Split `utils.ts` → `utils/address.ts`, `utils/domain.ts`, `utils/signatures.ts`
   - `createAgentIdentity()` now returns `clients` with all three registries
   - Status messages show when signatures are included
 
   **Removed:**
+
   - `fallback` parameter
   - `identity.synthetic` property
   - Duck-typed `MessageSignerLike` union
@@ -1191,6 +1275,7 @@
   ```
 
   **Contract addresses (CREATE2 - same on all chains):**
+
   - Identity: `0x7177a6867296406881E20d6647232314736Dd09A`
   - Reputation: `0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322`
   - Validation: `0x662b40A526cb4017d947e71eAF6753BF3eeE66d8`

@@ -1,5 +1,11 @@
 # @lucid-agents/api-sdk
 
+## 3.0.0
+
+### Patch Changes
+
+- Version bump only to stay aligned with the fixed core release group.
+
 ## 2.5.0
 
 ## 2.4.3

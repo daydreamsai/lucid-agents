@@ -1,5 +1,16 @@
 # @lucid-agents/http
 
+## 1.11.0
+
+### Minor Changes
+
+- Add Sign-In With X support across payments, transport helpers, and server adapters so agents can verify wallet-authenticated requests, reuse paid entitlements, and pass authenticated wallet context through to handlers.
+
+### Patch Changes
+
+- Updated dependencies:
+  - @lucid-agents/types@1.8.0
+
 ## 1.10.2
 
 ### Patch Changes
@@ -59,6 +70,7 @@
   ## New Features
 
   ### Postgres Storage Backend for Payments
+
   - Added `PostgresPaymentStorage` class for persistent payment storage
   - Supports connection pooling and automatic schema initialization
   - Ideal for serverless deployments and multi-instance setups
@@ -66,12 +78,14 @@
   - CI integration with Postgres test database
 
   ### Multi-Agent Support
+
   - Added optional `agentId` parameter to payments extension for multi-agent isolation
   - Multiple agents can now share the same Postgres database with complete payment isolation
   - Backward compatible - existing single-agent deployments continue to work unchanged
   - Database queries automatically filter by `agentId` when provided
 
   ### API Structure Refinements
+
   - Added `agentId` parameter to `payments()` extension factory
   - Added `storageFactory` parameter for custom storage implementations
   - Refined extension runtime types for stricter type safety:
@@ -99,6 +113,7 @@
 ### Patch Changes
 
 - 8b1afb7: Fix circular dependencies and inline type imports
+
   - **HTTP package**: Removed circular dependencies on `@lucid-agents/core` and `@lucid-agents/payments` by exposing `resolvePrice` on PaymentsRuntime instead of importing from payments package
   - **Payments package**: Added `resolvePrice` method to PaymentsRuntime for use by extensions
   - **Types package**: Fixed inline type imports within types package (payments, a2a) and added `resolvePrice` to PaymentsRuntime type
@@ -174,6 +189,7 @@
   ### Type Exports
 
   Types reorganized into domain-specific sub-packages. Import directly from `@lucid-agents/types/{domain}`:
+
   - `@lucid-agents/types/core` - Core runtime types
   - `@lucid-agents/types/http` - HTTP-related types
   - `@lucid-agents/types/payments` - Payment configuration types
@@ -192,6 +208,7 @@
   ```
 
   ## Improvements
+
   - **New Examples Package (`@lucid-agents/examples`)**: Added comprehensive examples package that serves as critical infrastructure for maintaining developer experience quality
     - Provides continuous type checking to ensure developer-facing interfaces remain stable
     - Validates developer experience consistency when pushing SDK changes
@@ -206,6 +223,7 @@
   ## A2A Protocol Improvements
 
   ### Agent Discovery
+
   - **Multiple URL Fallback**: `fetchAgentCard()` now tries multiple well-known paths for better compatibility:
     - Base URL (if absolute)
     - `/.well-known/agent-card.json` (A2A spec recommended)
@@ -222,6 +240,7 @@
     - All discovery functions consolidated in `card.ts`
 
   ### Type Improvements
+
   - **Clear Separation**:
     - `fetchAgentCard()` returns `AgentCard` (capabilities only, no entrypoints)
     - `buildAgentCard()` returns `AgentCardWithEntrypoints` (for our own manifest)
@@ -230,6 +249,7 @@
     - They only need skill ID and URL, not entrypoint schemas
 
   ### A2A Spec Compliance
+
   - **Added Missing Fields**:
     - `protocolVersion` (default: "1.0")
     - `supportedInterfaces` (replaces deprecated `url` field)
@@ -242,6 +262,7 @@
   - **Updated `buildAgentCard()`**: Now includes `protocolVersion` and `supportedInterfaces`
 
   ### Example Updates
+
   - Updated A2A example to demonstrate real-world discovery flow:
     1. Fetch agent card from URL
     2. Check capabilities
@@ -249,6 +270,7 @@
     4. Find and call a skill
 
   ## Bug Fixes
+
   - Fixed incorrect `https://` protocol in Bun server log messages (changed to `http://`)
   - Fixed `facilitatorUrl` type mismatch in payments configuration (now uses proper `Resource` type with URL validation)
   - Fixed `RegistrationEntry` type in tests (added missing `agentAddress` field)
@@ -267,6 +289,7 @@
 - 2ce3a85: Refactor to protocol-agnostic extension-based architecture with HTTP as separate package
 
   **Breaking Changes:**
+
   - **Extension-based API**: Removed `createAgentRuntime()` and `createAgentHttpRuntime()` - replaced with extension-based API using `createAgent().use().build()`
   - **HTTP as separate package**: HTTP extension moved to separate `@lucid-agents/http` package
   - **Protocol-agnostic core**: `AgentCore` no longer has `invoke()`, `stream()`, or `resolveManifest()` methods - these are HTTP-specific and moved to `@lucid-agents/http`
@@ -313,6 +336,7 @@
   ```
 
   **Migration Guide:**
+
   1. **Replace app creation:**
      - Old: `createAgentRuntime(meta, options)`
      - New: `await createAgent(meta).use(extensions).build()`
@@ -330,6 +354,7 @@
      - Old: `agent.resolveManifest(origin, basePath)`
      - New: `agent.manifest.build(origin)`
   6. **Remove core invoke/stream calls:**
+
      - Old: `agent.invoke(key, input, ctx)`
      - New: Use HTTP handlers (via `runtime.handlers.invoke`) or import `invokeHandler` from `@lucid-agents/http` for direct calls:
 
