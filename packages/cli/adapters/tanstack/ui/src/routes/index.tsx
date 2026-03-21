@@ -601,12 +601,12 @@ function HomePage() {
   return (
     <div className="min-h-screen bg-zinc-950 font-mono text-zinc-300">
       <div className="mx-auto max-w-[960px] w-full px-6 flex flex-col min-h-screen">
-
         {/* ── Header ── */}
         <header className="flex items-center justify-between py-8 border-b border-zinc-800">
           <div className="flex items-center gap-4">
             <h1 className="text-sm font-semibold tracking-[0.2em] uppercase text-zinc-100">
-              {meta?.name ?? 'agent'}<span className="text-emerald-500">.</span>
+              {meta?.name ?? 'agent'}
+              <span className="text-emerald-500">.</span>
             </h1>
             <span className="text-xs text-zinc-600">
               v{meta?.version ?? '0.0.0'}
@@ -630,20 +630,34 @@ function HomePage() {
         {/* ── Stats Row ── */}
         <div className="grid grid-cols-4 border-b border-zinc-800">
           <div className="py-5 pr-4">
-            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">entrypoints</div>
-            <div className="text-sm font-medium text-zinc-100">{entrypointCount}</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">
+              entrypoints
+            </div>
+            <div className="text-sm font-medium text-zinc-100">
+              {entrypointCount}
+            </div>
           </div>
           <div className="py-5 px-4 border-l border-zinc-800">
-            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">network</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">
+              network
+            </div>
             <div className="text-sm text-zinc-300">{networkInfo.label}</div>
           </div>
           <div className="py-5 px-4 border-l border-zinc-800">
-            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">default price</div>
-            <div className="text-sm font-medium text-emerald-500">{payments?.defaultPrice ?? 'Free'}</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">
+              default price
+            </div>
+            <div className="text-sm font-medium text-emerald-500">
+              {payments?.defaultPrice ?? 'Free'}
+            </div>
           </div>
           <div className="py-5 pl-4 border-l border-zinc-800">
-            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">pay to</div>
-            <div className="text-xs text-emerald-500 truncate">{payments?.payTo ?? '--'}</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] text-zinc-600 mb-1">
+              pay to
+            </div>
+            <div className="text-xs text-emerald-500 truncate">
+              {payments?.payTo ?? '--'}
+            </div>
           </div>
         </div>
 
@@ -670,17 +684,23 @@ function HomePage() {
                     <span className="text-[10px] text-zinc-600 w-5 flex-shrink-0">
                       {String(index + 1).padStart(2, '0')}
                     </span>
-                    <span className="text-sm font-medium text-zinc-100">{card.key}</span>
-                    <span className="text-[11px] text-zinc-600 hidden md:inline">{card.description}</span>
+                    <span className="text-sm font-medium text-zinc-100">
+                      {card.key}
+                    </span>
+                    <span className="text-[11px] text-zinc-600 hidden md:inline">
+                      {card.description}
+                    </span>
                   </div>
                   <div className="text-[13px] font-medium text-emerald-500 text-right tabular-nums">
                     {card.priceLabel}
                   </div>
                   <div className="text-right pr-1">
-                    <span className={cn(
-                      'text-[10px] uppercase tracking-wider font-semibold',
-                      card.streaming ? 'text-emerald-500' : 'text-blue-400'
-                    )}>
+                    <span
+                      className={cn(
+                        'text-[10px] uppercase tracking-wider font-semibold',
+                        card.streaming ? 'text-emerald-500' : 'text-blue-400'
+                      )}
+                    >
                       {card.streaming ? 'stream' : 'invoke'}
                     </span>
                   </div>
@@ -689,23 +709,34 @@ function HomePage() {
                 {/* ── Expanded Detail ── */}
                 {isExpanded && (
                   <div className="border-t border-zinc-800/50 bg-zinc-900/30 px-8 py-6 space-y-5">
-
                     {/* Paths */}
                     <div className="space-y-2 text-xs">
                       <div className="flex gap-4">
-                        <span className="text-zinc-600 w-20 flex-shrink-0">invoke</span>
+                        <span className="text-zinc-600 w-20 flex-shrink-0">
+                          invoke
+                        </span>
                         <code className="text-zinc-400">{card.invokePath}</code>
                       </div>
                       {card.streamPath && (
                         <div className="flex gap-4">
-                          <span className="text-zinc-600 w-20 flex-shrink-0">stream</span>
-                          <code className="text-zinc-400">{card.streamPath}</code>
+                          <span className="text-zinc-600 w-20 flex-shrink-0">
+                            stream
+                          </span>
+                          <code className="text-zinc-400">
+                            {card.streamPath}
+                          </code>
                         </div>
                       )}
                       <div className="flex gap-4">
-                        <span className="text-zinc-600 w-20 flex-shrink-0">network</span>
+                        <span className="text-zinc-600 w-20 flex-shrink-0">
+                          network
+                        </span>
                         <span className="text-zinc-400">
-                          {getNetworkInfo(card.networkId ?? payments?.network ?? undefined).label}
+                          {
+                            getNetworkInfo(
+                              card.networkId ?? payments?.network ?? undefined
+                            ).label
+                          }
                         </span>
                       </div>
                     </div>
@@ -738,7 +769,8 @@ function HomePage() {
                                   </dt>
                                   <dd className="text-zinc-500">
                                     {schema.type}
-                                    {schema.description && ` -- ${schema.description}`}
+                                    {schema.description &&
+                                      ` -- ${schema.description}`}
                                   </dd>
                                 </div>
                               )
@@ -901,9 +933,13 @@ function HomePage() {
                   &rarr;
                 </span>
                 <span>manifest</span>
-                <code className="text-emerald-500 text-[10px]">{MANIFEST_PATH}</code>
+                <code className="text-emerald-500 text-[10px]">
+                  {MANIFEST_PATH}
+                </code>
                 {manifestState === 'loading' && (
-                  <span className="text-zinc-600 animate-pulse">loading...</span>
+                  <span className="text-zinc-600 animate-pulse">
+                    loading...
+                  </span>
                 )}
               </div>
               <button
@@ -920,7 +956,9 @@ function HomePage() {
             <div className="mt-3">
               <pre className="max-h-[500px] overflow-auto border border-zinc-800 bg-black/40 p-4 font-mono text-xs leading-relaxed text-zinc-400">
                 {manifestState === 'loading' ? (
-                  <span className="text-zinc-600 animate-pulse">loading manifest...</span>
+                  <span className="text-zinc-600 animate-pulse">
+                    loading manifest...
+                  </span>
                 ) : (
                   manifestText
                 )}
@@ -938,7 +976,9 @@ function HomePage() {
                   &rarr;
                 </span>
                 <span>walletconnect integration</span>
-                <span className="border border-blue-500/30 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-blue-400">appkit</span>
+                <span className="border border-blue-500/30 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-blue-400">
+                  appkit
+                </span>
               </div>
               <button
                 onClick={e => {
@@ -964,7 +1004,6 @@ function HomePage() {
           <span>{networkInfo.label}</span>
           <span>lucid-agents</span>
         </footer>
-
       </div>
     </div>
   );

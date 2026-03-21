@@ -48,7 +48,6 @@ function HeadlessDashboard() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#e5e5e5] font-mono antialiased flex flex-col">
       <div className="max-w-[960px] w-full mx-auto px-6 flex-1 flex flex-col">
-
         {/* Header */}
         <header className="flex items-center justify-between py-8 border-b border-[#1a1a1a]">
           <div className="text-sm font-semibold uppercase tracking-[0.2em]">
@@ -145,9 +144,11 @@ function HeadlessDashboard() {
             {loaderData.entrypoints.length} entrypoint
             {loaderData.entrypoints.length !== 1 ? 's' : ''}
             {' \u00B7 '}
-            {loaderData.entrypoints.filter(
-              (e: { streaming: boolean }) => e.streaming
-            ).length}{' '}
+            {
+              loaderData.entrypoints.filter(
+                (e: { streaming: boolean }) => e.streaming
+              ).length
+            }{' '}
             streaming
           </span>
         </footer>

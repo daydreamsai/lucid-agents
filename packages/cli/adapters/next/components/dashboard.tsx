@@ -145,7 +145,6 @@ export default function Dashboard({
   return (
     <div className="min-h-screen bg-zinc-950 font-mono text-zinc-200 antialiased">
       <div className="mx-auto max-w-[960px] w-full px-6 flex flex-col min-h-screen">
-
         {/* ── Header ── */}
         <header className="flex items-center justify-between py-8 border-b border-zinc-900">
           <div className="flex items-center gap-2">
@@ -265,12 +264,8 @@ export default function Dashboard({
 
         {/* ── Footer ── */}
         <footer className="py-6 border-t border-zinc-900 flex justify-between items-center text-[11px] text-zinc-700">
-          <span>
-            Powered by Lucid Agents Framework
-          </span>
-          <span>
-            {networkInfo.label}
-          </span>
+          <span>Powered by Lucid Agents Framework</span>
+          <span>{networkInfo.label}</span>
         </footer>
       </div>
     </div>
