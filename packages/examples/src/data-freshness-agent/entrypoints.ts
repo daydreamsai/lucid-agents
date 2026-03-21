@@ -25,33 +25,34 @@ export function registerEntrypoints(addEntrypoint: AddEntrypoint): void {
     async handler({ input }) {
       const { url } = input;
       
-      // Deterministic scoring based on URL hash
-      let hash = 0;
-      for (let i = 0; i < url.length; i++) {
-        hash = (hash << 5) - hash + url.charCodeAt(i);
-        hash |= 0; 
-      }
-      
-      const stalenessMs = Math.abs(hash) % 3600000; // Up to 1 hour old
-      const confidence = ((Math.abs(hash * 2) % 30) + 70) / 100; // 0.70 - 1.00
+      try {
+        const response = await fetch(url, { method: 'HEAD' });
+        const headers = response.headers;
+        const now = Date.now();
 
-      let slaStatus: 'fresh' | 'stale' | 'unknown';
-      if (stalenessMs < 60000) {
-        slaStatus = 'fresh';
-      } else if (stalenessMs < 1800000) {
-        slaStatus = 'stale';
-      } else {
-        slaStatus = 'unknown';
-      }
+        const lastModified = headers.get('last-modified');
+        if (lastModified) {
+          const stalenessMs = now - new Date(lastModified).getTime();
+          const slaStatus = stalenessMs < 3600000 ? 'fresh' : 'stale'; // 1 hour threshold
+          return { output: { url, slaStatus, stalenessMs, confidence: 0.9 } };
+        }
 
-      return {
-        output: {
-          url,
-          slaStatus,
-          stalenessMs,
-          confidence,
-        },
-      };
+        const cacheControl = headers.get('cache-control');
+        if (cacheControl) {
+          const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+          if (maxAgeMatch) {
+            const maxAgeSec = parseInt(maxAgeMatch[1], 10);
+            const age = parseInt(headers.get('age') || '0', 10);
+            const stalenessMs = age * 1000;
+            const slaStatus = age < maxAgeSec ? 'fresh' : 'stale';
+            return { output: { url, slaStatus, stalenessMs, confidence: 0.8 } };
+          }
+        }
+        
+        return { output: { url, slaStatus: 'unknown', stalenessMs: -1, confidence: 0.5 } };
+      } catch (error) {
+        return { output: { url, slaStatus: 'unknown', stalenessMs: -1, confidence: 0.1 } };
+      }
     },
   });
 }
