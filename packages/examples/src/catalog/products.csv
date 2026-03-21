@@ -1,0 +1,6 @@
+key,name,description,price,network,meta_tier,meta_category,meta_rateLimit
+ocr,OCR Scan,Extract text from images using OCR,0.50,,standard,vision,200
+embed,Text Embedding,Generate vector embeddings for text,0.02,,basic,ml,2000
+classify,Text Classifier,Classify text into categories,0.10,,basic,nlp,500
+rag-query,RAG Query,Retrieval-augmented generation query,1.00,,premium,search,100
+sol-verify,Solana Verify,Verify Solana transaction signatures,0.05,solana:devnet,standard,blockchain,1000

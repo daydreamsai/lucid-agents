@@ -1,0 +1,106 @@
+# AI Service Product Catalog
+#
+# Each product becomes an entrypoint route on the agent.
+# Prices are in USD. Payment is enforced via MPP (HTTP 402).
+#
+# Supported fields:
+#   key         - unique route identifier (required)
+#   name        - display name (required)
+#   description - human-readable description
+#   price       - flat string ("1.00") or { invoke, stream } object
+#   network     - CAIP-2 network identifier
+#   metadata    - arbitrary key-value pairs
+
+products:
+  # ── Free tier ────────────────────────────────────────────────────
+  - key: health
+    name: Health Check
+    description: Free health check endpoint
+    metadata:
+      tier: free
+      category: system
+
+  # ── Basic tier ($0.01 - $0.10) ──────────────────────────────────
+  - key: text-stats
+    name: Text Statistics
+    description: Word count, character count, and reading time estimate
+    price: "0.01"
+    metadata:
+      tier: basic
+      category: text
+      rateLimit: 1000
+
+  - key: sentiment
+    name: Sentiment Analysis
+    description: Analyze text sentiment (positive, negative, neutral)
+    price: "0.05"
+    metadata:
+      tier: basic
+      category: nlp
+      rateLimit: 500
+
+  - key: translate
+    name: Quick Translate
+    description: Translate short text between languages
+    price: "0.10"
+    metadata:
+      tier: basic
+      category: nlp
+      rateLimit: 200
+
+  # ── Standard tier ($0.25 - $1.00) ──────────────────────────────
+  - key: summarize
+    name: Text Summarizer
+    description: Summarize long-form content into key points
+    price:
+      invoke: "0.50"
+      stream: "0.10"
+    metadata:
+      tier: standard
+      category: text
+
+  - key: code-review
+    name: Code Review
+    description: Automated code review with suggestions
+    price: "1.00"
+    metadata:
+      tier: standard
+      category: code
+      rateLimit: 100
+
+  # ── Premium tier ($2.00 - $5.00) ────────────────────────────────
+  - key: image-describe
+    name: Image Description
+    description: Generate detailed descriptions of images
+    price: "2.00"
+    metadata:
+      tier: premium
+      category: vision
+
+  - key: document-extract
+    name: Document Extraction
+    description: Extract structured data from PDFs and documents
+    price: "3.00"
+    metadata:
+      tier: premium
+      category: extraction
+
+  - key: generate-report
+    name: Report Generator
+    description: Generate comprehensive analysis reports
+    price:
+      invoke: "5.00"
+      stream: "1.00"
+    metadata:
+      tier: premium
+      category: analysis
+
+  # ── Cross-chain product ─────────────────────────────────────────
+  - key: solana-nft-metadata
+    name: Solana NFT Metadata
+    description: Fetch and analyze Solana NFT metadata
+    price: "0.25"
+    network: "solana:devnet"
+    metadata:
+      tier: standard
+      category: blockchain
