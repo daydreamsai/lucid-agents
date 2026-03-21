@@ -1,8 +1,8 @@
+import { catalog, type CatalogItem } from '@lucid-agents/catalog';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { mpp, tempo } from '@lucid-agents/mpp';
-import { catalog, type CatalogItem } from '@lucid-agents/catalog';
 import { join } from 'path';
 
 /**
@@ -82,7 +82,8 @@ const agent = await createAgent({
 // ─── Access Catalog at Runtime ───────────────────────────────────
 // The catalog runtime exposes parsed items for introspection.
 
-const items = (agent as any).catalog?.items ?? [];
+const items: CatalogItem[] =
+  (agent as unknown as { catalog?: { items: CatalogItem[] } }).catalog?.items ?? [];
 console.log(`\nLoaded ${items.length} products from catalog\n`);
 
 // ─── Create Hono App ─────────────────────────────────────────────
