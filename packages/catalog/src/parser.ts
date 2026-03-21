@@ -34,9 +34,9 @@ export function parseCatalogYaml(content: string): CatalogItem[] {
   return items;
 }
 
-export async function parseCatalogCsv(
+export function parseCatalogCsv(
   content: string,
-): Promise<CatalogItem[]> {
+): CatalogItem[] {
   const records = csvParse(content, {
     columns: true,
     skip_empty_lines: true,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { CatalogItem, HandlerFactory } from './types';
 
 export type GenerateOptions = {
@@ -15,10 +16,10 @@ const defaultInputSchema = z.object({
 export function generateEntrypoints(
   items: CatalogItem[],
   options?: GenerateOptions,
-): any[] {
+): EntrypointDef[] {
   const { keyPrefix, network, handlerFactory, inputSchema } = options ?? {};
 
-  return items.map((item) => {
+  return items.map((item): EntrypointDef => {
     const key = keyPrefix ? `${keyPrefix}${item.key}` : item.key;
     const entrypointNetwork = item.network ?? network;
 
@@ -27,20 +28,17 @@ export function generateEntrypoints(
       catalogItem: item,
     };
 
-    const entrypoint: Record<string, unknown> = {
+    const entrypoint: EntrypointDef = {
       key,
       description: item.description,
-      price: item.price,
+      price: item.price as EntrypointDef['price'],
       input: inputSchema ?? defaultInputSchema,
       metadata,
+      ...(entrypointNetwork ? { network: entrypointNetwork as EntrypointDef['network'] } : {}),
     };
 
-    if (entrypointNetwork) {
-      entrypoint.network = entrypointNetwork;
-    }
-
     if (handlerFactory) {
-      entrypoint.handler = handlerFactory(item);
+      entrypoint.handler = handlerFactory(item) as EntrypointDef['handler'];
     }
 
     return entrypoint;

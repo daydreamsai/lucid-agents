@@ -73,7 +73,7 @@ describe('CatalogItemSchema', () => {
       key: 'net-item',
       name: 'Network Product',
       price: '1.00',
-      network: 'base-sepolia',
+      network: 'eip155:84532',
     };
     const result = CatalogItemSchema.safeParse(item);
     expect(result.success).toBe(true);
@@ -138,10 +138,10 @@ products:
   - key: solana-product
     name: Solana Product
     price: "1.00"
-    network: solana-devnet
+    network: solana:devnet
 `;
     const items = parseCatalogYaml(yamlContent);
-    expect(items[0].network).toBe('solana-devnet');
+    expect(items[0].network).toBe('solana:devnet');
   });
 
   it('supports flat array format (no products wrapper)', () => {
@@ -172,49 +172,49 @@ products:
 });
 
 describe('parseCatalogCsv', () => {
-  it('parses a simple CSV catalog', async () => {
+  it('parses a simple CSV catalog', () => {
     const csvContent = `key,name,description,price
 widget-a,Widget A,A fine widget,1.00
 widget-b,Widget B,Another widget,2.50`;
-    const items = await parseCatalogCsv(csvContent);
+    const items = parseCatalogCsv(csvContent);
     expect(items).toHaveLength(2);
     expect(items[0].key).toBe('widget-a');
     expect(items[0].name).toBe('Widget A');
     expect(items[0].price).toBe('1.00');
   });
 
-  it('handles quoted fields with commas', async () => {
+  it('handles quoted fields with commas', () => {
     const csvContent = `key,name,description,price
 api-1,"Advanced API","AI-powered, real-time data",3.00`;
-    const items = await parseCatalogCsv(csvContent);
+    const items = parseCatalogCsv(csvContent);
     expect(items[0].description).toBe('AI-powered, real-time data');
   });
 
-  it('handles empty price as free', async () => {
+  it('handles empty price as free', () => {
     const csvContent = `key,name,description,price
 free-item,Free Item,No cost,`;
-    const items = await parseCatalogCsv(csvContent);
+    const items = parseCatalogCsv(csvContent);
     expect(items[0].price).toBeUndefined();
   });
 
-  it('parses CSV with network column', async () => {
+  it('parses CSV with network column', () => {
     const csvContent = `key,name,description,price,network
-sol-item,Sol Item,On Solana,1.00,solana-devnet`;
-    const items = await parseCatalogCsv(csvContent);
-    expect(items[0].network).toBe('solana-devnet');
+sol-item,Sol Item,On Solana,1.00,solana:devnet`;
+    const items = parseCatalogCsv(csvContent);
+    expect(items[0].network).toBe('solana:devnet');
   });
 
-  it('parses CSV with metadata columns (prefixed with meta_)', async () => {
+  it('parses CSV with metadata columns (prefixed with meta_)', () => {
     const csvContent = `key,name,description,price,meta_category,meta_tier
 premium,Premium,Top tier,10.00,ai,premium`;
-    const items = await parseCatalogCsv(csvContent);
+    const items = parseCatalogCsv(csvContent);
     expect(items[0].metadata).toEqual({ category: 'ai', tier: 'premium' });
   });
 
-  it('throws on CSV missing key column', async () => {
+  it('throws on CSV missing key column', () => {
     const csvContent = `name,description,price
 Widget,A widget,1.00`;
-    await expect(parseCatalogCsv(csvContent)).rejects.toThrow();
+    expect(() => parseCatalogCsv(csvContent)).toThrow();
   });
 });
 
@@ -281,17 +281,17 @@ describe('generateEntrypoints', () => {
   });
 
   it('applies network override to all entrypoints', () => {
-    const entrypoints = generateEntrypoints(sampleItems, { network: 'base-sepolia' });
-    expect(entrypoints[0].network).toBe('base-sepolia');
-    expect(entrypoints[1].network).toBe('base-sepolia');
+    const entrypoints = generateEntrypoints(sampleItems, { network: 'eip155:84532' });
+    expect(entrypoints[0].network).toBe('eip155:84532');
+    expect(entrypoints[1].network).toBe('eip155:84532');
   });
 
   it('item-level network overrides global network', () => {
     const items: CatalogItem[] = [
-      { key: 'item', name: 'Item', price: '1.00', network: 'solana-devnet' },
+      { key: 'item', name: 'Item', price: '1.00', network: 'solana:devnet' },
     ];
-    const entrypoints = generateEntrypoints(items, { network: 'base-sepolia' });
-    expect(entrypoints[0].network).toBe('solana-devnet');
+    const entrypoints = generateEntrypoints(items, { network: 'eip155:84532' });
+    expect(entrypoints[0].network).toBe('solana:devnet');
   });
 
   it('sets default input schema with product key', () => {
@@ -385,14 +385,17 @@ products:
     expect(added[1].key).toBe('beta');
   });
 
-  it('loads CSV files', async () => {
+  it('loads CSV files and populates catalog.items', async () => {
     const csvPath = join(tmpDir, 'products.csv');
     writeFileSync(csvPath, `key,name,description,price
 item-1,Item 1,First item,1.00
 item-2,Item 2,Second item,2.00`);
     const ext = catalog({ file: csvPath });
-    // CSV loading is async, happens in onBuild
-    ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    const result = ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+
+    // CSV is now parsed synchronously — catalog.items should be populated immediately
+    expect(result.catalog!.items).toHaveLength(2);
+    expect(result.catalog!.items[0].key).toBe('item-1');
 
     const added: any[] = [];
     const mockRuntime = {
