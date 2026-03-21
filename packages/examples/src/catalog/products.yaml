@@ -24,7 +24,7 @@ products:
   - key: text-stats
     name: Text Statistics
     description: Word count, character count, and reading time estimate
-    price: "0.01"
+    price: '0.01'
     metadata:
       tier: basic
       category: text
@@ -33,7 +33,7 @@ products:
   - key: sentiment
     name: Sentiment Analysis
     description: Analyze text sentiment (positive, negative, neutral)
-    price: "0.05"
+    price: '0.05'
     metadata:
       tier: basic
       category: nlp
@@ -42,7 +42,7 @@ products:
   - key: translate
     name: Quick Translate
     description: Translate short text between languages
-    price: "0.10"
+    price: '0.10'
     metadata:
       tier: basic
       category: nlp
@@ -53,8 +53,8 @@ products:
     name: Text Summarizer
     description: Summarize long-form content into key points
     price:
-      invoke: "0.50"
-      stream: "0.10"
+      invoke: '0.50'
+      stream: '0.10'
     metadata:
       tier: standard
       category: text
@@ -62,7 +62,7 @@ products:
   - key: code-review
     name: Code Review
     description: Automated code review with suggestions
-    price: "1.00"
+    price: '1.00'
     metadata:
       tier: standard
       category: code
@@ -72,7 +72,7 @@ products:
   - key: image-describe
     name: Image Description
     description: Generate detailed descriptions of images
-    price: "2.00"
+    price: '2.00'
     metadata:
       tier: premium
       category: vision
@@ -80,7 +80,7 @@ products:
   - key: document-extract
     name: Document Extraction
     description: Extract structured data from PDFs and documents
-    price: "3.00"
+    price: '3.00'
     metadata:
       tier: premium
       category: extraction
@@ -89,8 +89,8 @@ products:
     name: Report Generator
     description: Generate comprehensive analysis reports
     price:
-      invoke: "5.00"
-      stream: "1.00"
+      invoke: '5.00'
+      stream: '1.00'
     metadata:
       tier: premium
       category: analysis
@@ -99,8 +99,8 @@ products:
   - key: solana-nft-metadata
     name: Solana NFT Metadata
     description: Fetch and analyze Solana NFT metadata
-    price: "0.25"
-    network: "solana:devnet"
+    price: '0.25'
+    network: 'solana:devnet'
     metadata:
       tier: standard
       category: blockchain

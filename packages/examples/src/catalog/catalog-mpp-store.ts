@@ -83,7 +83,8 @@ const agent = await createAgent({
 // The catalog runtime exposes parsed items for introspection.
 
 const items: CatalogItem[] =
-  (agent as unknown as { catalog?: { items: CatalogItem[] } }).catalog?.items ?? [];
+  (agent as unknown as { catalog?: { items: CatalogItem[] } }).catalog?.items ??
+  [];
 console.log(`\nLoaded ${items.length} products from catalog\n`);
 
 // ─── Create Hono App ─────────────────────────────────────────────
