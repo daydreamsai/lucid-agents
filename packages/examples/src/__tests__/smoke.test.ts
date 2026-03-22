@@ -17,6 +17,9 @@ import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import { wallets } from '@lucid-agents/wallet';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
+import { createSanctionsScreeningAgent } from '../sanctions-screening-agent/agent';
+import { registerEntrypoints as registerSanctionsEntrypoints } from '../sanctions-screening-agent/entrypoints';
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -622,6 +625,30 @@ describe('Example Smoke Tests', () => {
       const card = await fetchCard(agentApp.app);
       expect(card.name).toBe('policy-agent');
       expect(card.version).toBe('1.0.0');
+    });
+  });
+
+  // =========================================================================
+  // 7. sanctions-screening-agent
+  // =========================================================================
+  describe('sanctions-screening-agent', () => {
+    let app: { fetch: (req: Request) => Response | Promise<Response> };
+
+    beforeAll(async () => {
+      const agent = await createSanctionsScreeningAgent();
+      const agentApp = await createAgentApp(agent);
+      registerSanctionsEntrypoints(agentApp.addEntrypoint);
+      app = agentApp.app;
+    });
+
+    it('agent card is valid', async () => {
+      const card = await fetchCard(app);
+      expect(card.name).toBe('sanctions-screening-agent');
+    });
+
+    it('screen entrypoint returns 402 without payment', async () => {
+      const res = await invoke(app, 'screen', { name: 'John Doe' });
+      expect(res.status).toBe(402);
     });
   });
 });
