@@ -22,7 +22,7 @@ describe('screen entrypoint', () => {
     app = agentApp.app;
   });
 
-  let app: ReturnType<typeof createAgentApp>['app'];
+  let app: Awaited<ReturnType<typeof createAgentApp>>['app'];
 
   // Helper to match the deterministic hash logic in the entrypoint
   function getDeterministicResult(entity: string) {
