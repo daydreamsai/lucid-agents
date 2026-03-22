@@ -3,6 +3,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  describeNpmAccessFailure,
+  describeNpmPublishFailure,
+  getPackageScope,
+  partitionPublishArgs,
+} from "./changeset-publish-utils";
+
 type DependencyBlocks =
   | "dependencies"
   | "devDependencies"
@@ -25,6 +32,11 @@ type PackageInfo = {
 type Backup = {
   path: string;
   contents: string;
+};
+
+type ExecResult = {
+  code: number;
+  output: string;
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -168,7 +180,76 @@ function restoreBackups(backups: Backup[]) {
   }
 }
 
+async function verifyNpmPublishAccess() {
+  if (process.env.LUCID_SKIP_NPM_PUBLISH_PREFLIGHT === "1") {
+    console.log("Skipping npm publish preflight via LUCID_SKIP_NPM_PUBLISH_PREFLIGHT=1");
+    return;
+  }
+
+  const publicPackages = packages
+    .filter((pkg) => !pkg.manifest.private && pkg.manifest.name)
+    .sort((a, b) => (a.manifest.name ?? "").localeCompare(b.manifest.name ?? ""));
+  const scopes = new Set<string>();
+
+  for (const pkg of publicPackages) {
+    const scope = pkg.manifest.name ? getPackageScope(pkg.manifest.name) : undefined;
+    if (scope) scopes.add(scope);
+  }
+
+  if (!scopes.size) return;
+
+  const auth = await exec(["npm", "whoami"], { allowFailure: true });
+  if (auth.code !== 0) {
+    const scope = scopes.values().next().value ?? "the configured npm scope";
+    const message =
+      describeNpmAccessFailure({ output: auth.output, scope }) ??
+      `npm publish preflight failed before publishing ${scope} packages.`;
+    throw new Error(message);
+  }
+
+  for (const scope of scopes) {
+    const probe = await findPublishedPackageForScope(publicPackages, scope);
+    if (!probe) {
+      console.warn(
+        `Skipping npm collaborator preflight for ${scope}: no existing published package found to probe.`
+      );
+      continue;
+    }
+
+    const access = await exec(
+      ["npm", "access", "list", "collaborators", probe, "--json"],
+      { allowFailure: true }
+    );
+    if (access.code !== 0) {
+      const message =
+        describeNpmAccessFailure({
+          output: access.output,
+          packageName: probe,
+          scope,
+        }) ??
+        `npm publish preflight failed while checking collaborator access for ${probe}.`;
+      throw new Error(message);
+    }
+  }
+}
+
+async function findPublishedPackageForScope(
+  candidates: PackageInfo[],
+  scope: string
+): Promise<string | undefined> {
+  for (const pkg of candidates) {
+    const name = pkg.manifest.name;
+    if (!name || getPackageScope(name) !== scope) continue;
+    const view = await exec(["npm", "view", name, "version", "--json"], {
+      allowFailure: true,
+    });
+    if (view.code === 0) return name;
+  }
+  return undefined;
+}
+
 async function runPublish() {
+  const parsedArgs = partitionPublishArgs(process.argv.slice(2));
   const backups: Backup[] = [];
   const sanitisedPackages: string[] = [];
 
@@ -191,8 +272,28 @@ async function runPublish() {
   }
 
   try {
-    const extraArgs = process.argv.slice(2);
-    await exec(["bun", "x", "changeset", "publish", ...extraArgs]);
+    await verifyNpmPublishAccess();
+    if (parsedArgs.preflightOnly) {
+      console.log("npm publish preflight succeeded.");
+      return;
+    }
+
+    const extraArgs = parsedArgs.passthroughArgs;
+    const publish = await exec(["bun", "x", "changeset", "publish", ...extraArgs], {
+      allowFailure: true,
+    });
+    if (publish.code !== 0) {
+      const scope = packages
+        .map((pkg) => pkg.manifest.name)
+        .find((name): name is string => Boolean(name))
+        ?.match(/^@[^/]+/)?.[0];
+      const message =
+        scope && describeNpmPublishFailure({ output: publish.output, scope });
+      if (message) {
+        throw new Error(`${message}\n\nbun x changeset publish exited with code ${publish.code}`);
+      }
+      throw new Error(`bun x changeset publish exited with code ${publish.code}`);
+    }
   } finally {
     if (backups.length) {
       restoreBackups(backups);
@@ -203,17 +304,32 @@ async function runPublish() {
   }
 }
 
-async function exec(argv: string[]) {
+async function exec(
+  argv: string[],
+  opts: { allowFailure?: boolean } = {}
+): Promise<ExecResult> {
   const proc = Bun.spawn(argv, {
     cwd: repoRoot,
     stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+    stdout: "pipe",
+    stderr: "pipe",
   });
-  const code = await proc.exited;
-  if (code !== 0) {
+
+  const [stdout, stderr, code] = await Promise.all([
+    proc.stdout ? new Response(proc.stdout).text() : "",
+    proc.stderr ? new Response(proc.stderr).text() : "",
+    proc.exited,
+  ]);
+
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(stderr);
+
+  const output = [stdout, stderr].filter(Boolean).join("\n");
+  if (code !== 0 && !opts.allowFailure) {
     throw new Error(`${argv.join(" ")} exited with code ${code}`);
   }
+
+  return { code, output };
 }
 
 await runPublish().catch((err) => {
