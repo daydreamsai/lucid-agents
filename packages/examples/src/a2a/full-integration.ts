@@ -28,7 +28,7 @@ import {
   waitForTask,
 } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
-import { createAgentApp } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/http';
 import { http } from '@lucid-agents/http';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import { z } from 'zod';

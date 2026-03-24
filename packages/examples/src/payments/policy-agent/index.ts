@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
 import { createAgent } from '@lucid-agents/core';
-import { createAgentApp } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/http';
 import { http } from '@lucid-agents/http';
 import {
   createRuntimePaymentContext,
