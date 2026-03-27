@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "packages/geoip-x402-agent/Dockerfile"
+
+[deploy]
+startCommand = "bun run --cwd packages/geoip-x402-agent start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
