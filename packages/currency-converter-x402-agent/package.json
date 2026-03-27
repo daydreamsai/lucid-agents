@@ -1,0 +1,23 @@
+{
+  "name": "@lucid-agents/currency-converter-x402-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lucid Agent currency converter with x402 payment enforcement",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "check": "tsc --noEmit"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "dependencies": {
+    "@lucid-agents/http": "latest",
+    "@lucid-agents/payments": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.3"
+  }
+}
