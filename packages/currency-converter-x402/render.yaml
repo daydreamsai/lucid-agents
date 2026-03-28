@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: currency-converter-x402
+    runtime: docker
+    dockerfilePath: ./packages/currency-converter-x402/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: X402_PRICE_USD
+        value: "0.001"
