@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: sentiment-x402-agent
+    runtime: docker
+    dockerfilePath: ./apps/sentiment-x402-agent/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: X402_PRICE_USD
+        value: 0.001
+      - key: X402_PAYMENT_HEADER_NAME
+        value: x402-payment
