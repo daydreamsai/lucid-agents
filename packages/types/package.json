@@ -83,6 +83,8 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {

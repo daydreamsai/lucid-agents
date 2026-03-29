@@ -8,6 +8,9 @@
     "index.js",
     ".prettierignore.example",
     "README.md"
-  ]
+  ],
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  }
 }
-

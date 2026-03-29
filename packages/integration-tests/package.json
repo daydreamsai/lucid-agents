@@ -1,0 +1,24 @@
+{
+  "name": "@lucid-agents/integration-tests",
+  "version": "0.0.1",
+  "description": "Cross-package integration tests for lucid-agents monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "@lucid-agents/identity": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21",
+    "typescript": "catalog:"
+  }
+}
