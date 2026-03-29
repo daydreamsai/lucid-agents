@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: geoip-x402-agent
+    runtime: node
+    rootDir: packages/geoip-x402-agent
+    buildCommand: bun install
+    startCommand: bun src/server.ts
+    envVars:
+      - key: X402_PAYMENT_TOKEN
+        sync: false
+      - key: X402_PAYMENT_RECEIVER
+        value: geoip-agent
+      - key: X402_PAYMENT_NETWORK
+        value: base
+      - key: X402_PRICE_USD
+        value: "0.0005"
