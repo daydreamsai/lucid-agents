@@ -1,0 +1,32 @@
+{
+  "name": "@lucid-agents/geo-demand-api",
+  "version": "0.1.0",
+  "description": "Paid geo-demand API for ZIP/city-level demand index, trend velocity, and anomaly flags.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "fastify": "^4.29.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.8"
+  }
+}
