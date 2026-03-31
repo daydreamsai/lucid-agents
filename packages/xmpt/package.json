@@ -1,0 +1,29 @@
+{
+  "name": "@lucid-agents/xmpt",
+  "version": "0.1.0",
+  "description": "Agent-to-agent messaging extension for Lucid SDK",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.7.2"
+  }
+}
