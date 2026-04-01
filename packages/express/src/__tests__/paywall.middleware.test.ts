@@ -120,4 +120,54 @@ describe('withPayments middleware registration', () => {
     ] as any;
     expect(typeof postRoute?.accepts?.payTo).toBe('function');
   });
+
+  it('does not register when no payment config is available', () => {
+    const calls: any[][] = [];
+    const app = {
+      use: (...args: any[]) => calls.push(args),
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint,
+      kind: 'invoke',
+      payments: undefined,
+      middlewareFactory: (() =>
+        (_req: unknown, _res: unknown, next: () => void) =>
+          next()) as any,
+    });
+
+    expect(didRegister).toBe(false);
+    expect(calls.length).toBe(0);
+  });
+
+  it('returns false when entrypoint has no explicit price object', () => {
+    let capturedRoutes: Record<string, any> | null = null;
+    const app = {
+      use: (..._args: any[]) => {},
+    };
+
+    const middlewareFactory = (routes: Record<string, unknown>) => {
+      capturedRoutes = routes as Record<string, any>;
+      return (_req: unknown, _res: unknown, next: () => void) => next();
+    };
+
+    const didRegister = withPayments({
+      app: app as any,
+      path: '/entrypoints/test/invoke',
+      entrypoint: { key: 'test' } as any,
+      kind: 'invoke',
+      payments: {
+        ...payments,
+        prices: {
+          '/entrypoints/test/invoke': { invoke: '1234' },
+        },
+      },
+      middlewareFactory: middlewareFactory as any,
+    });
+
+    expect(didRegister).toBe(false);
+    expect(capturedRoutes).toBeNull();
+  });
 });
