@@ -97,6 +97,7 @@ export const SUPPORTED_CHAINS = {
   ARBITRUM: 42161,
   OPTIMISM: 10,
   POLYGON: 137,
+  // NOTE: TRON networks (TRC-8004) use separate config — see packages/identity/src/tron/config.ts
 } as const;
 
 export type SupportedChainId =
