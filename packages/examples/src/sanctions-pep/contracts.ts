@@ -79,6 +79,7 @@ export const JurisdictionRiskItemSchema = z.object({
 
 export const JurisdictionRiskOutputSchema = z.object({
   jurisdiction_risk: z.array(JurisdictionRiskItemSchema),
+  confidence: z.number().min(0).max(1),
   freshness: FreshnessMetadataSchema,
 });
 

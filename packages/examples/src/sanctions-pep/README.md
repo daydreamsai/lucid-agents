@@ -57,7 +57,7 @@ Analyze ownership chain for sanctions/PEP exposure.
 **Price:** $0.15 per analysis
 
 **Request (Query Parameters):**
-```
+```http
 GET /v1/screening/exposure-chain?entityName=Acme%20Corp&ownershipDepth=3
 ```
 
@@ -88,7 +88,7 @@ Assess jurisdiction-specific compliance risks.
 **Price:** $0.08 per jurisdiction
 
 **Request (Query Parameters):**
-```
+```http
 GET /v1/screening/jurisdiction-risk?jurisdictions=US,EU,CN
 ```
 

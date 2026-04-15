@@ -26,9 +26,9 @@ import {
  * and watchlist monitoring with ownership-chain risk context.
  *
  * Required environment variables:
- *   - FACILITATOR_URL - x402 facilitator endpoint
+ *   - PAYMENTS_FACILITATOR_URL - x402 facilitator endpoint
  *   - PAYMENTS_RECEIVABLE_ADDRESS - Wallet address for receiving payments
- *   - NETWORK - Network identifier (e.g., eip155:84532 for Base Sepolia)
+ *   - PAYMENTS_NETWORK - Network identifier (e.g., eip155:84532 for Base Sepolia)
  *
  * Run: bun run packages/examples/src/sanctions-pep/index.ts
  */
@@ -36,9 +36,9 @@ import {
 // Validate required environment variables
 function validateEnv(): void {
   const required = [
-    'FACILITATOR_URL',
+    'PAYMENTS_FACILITATOR_URL',
     'PAYMENTS_RECEIVABLE_ADDRESS',
-    'NETWORK',
+    'PAYMENTS_NETWORK',
   ];
 
   const missing = required.filter(key => !process.env[key]);
@@ -143,7 +143,7 @@ const agent = await createAgent({
 const { app, addEntrypoint } = await createAgentApp(agent);
 
 /**
- * POST /v1/screening/check
+ * POST /entrypoints/screening-check/invoke
  * Screen an entity against sanctions lists and PEP databases
  * Price: $0.10 per check
  */
@@ -227,7 +227,7 @@ addEntrypoint({
 });
 
 /**
- * GET /v1/screening/exposure-chain
+ * POST /entrypoints/exposure-chain/invoke
  * Analyze ownership chain for sanctions/PEP exposure
  * Price: $0.15 per analysis
  */
@@ -312,7 +312,7 @@ addEntrypoint({
 });
 
 /**
- * GET /v1/screening/jurisdiction-risk
+ * POST /entrypoints/jurisdiction-risk/invoke
  * Assess jurisdiction-specific compliance risks
  * Price: $0.08 per jurisdiction
  */
@@ -326,10 +326,13 @@ addEntrypoint({
     try {
       const { jurisdictions } = ctx.input;
 
+      let knownCount = 0;
       const jurisdiction_risk = jurisdictions.map(code => {
         const data = JURISDICTION_DATA[
           code as keyof typeof JURISDICTION_DATA
-        ] || {
+        ];
+        if (data) knownCount++;
+        const resolved = data || {
           risk_level: 'medium' as const,
           sanctions_active: false,
           pep_requirements: 'standard_due_diligence' as const,
@@ -337,16 +340,18 @@ addEntrypoint({
 
         return {
           jurisdiction: code,
-          ...data,
+          ...resolved,
         };
       });
 
+      const confidence = jurisdiction_risk.length > 0 ? knownCount / jurisdiction_risk.length : 0;
       const lastUpdated = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
       const freshness = calculateFreshnessMetadata(lastUpdated);
 
       return {
         output: {
           jurisdiction_risk,
+          confidence,
           freshness,
         },
       };
@@ -370,7 +375,7 @@ const server = Bun.serve({
 console.log(
   `Sanctions & PEP Intelligence API ready at http://${server.hostname}:${server.port}`
 );
-console.log(`   - POST /v1/screening/check - $0.10 per check`);
-console.log(`   - GET /v1/screening/exposure-chain - $0.15 per analysis`);
-console.log(`   - GET /v1/screening/jurisdiction-risk - $0.08 per jurisdiction`);
+console.log(`   - POST /entrypoints/screening-check/invoke - $0.10 per check`);
+console.log(`   - POST /entrypoints/exposure-chain/invoke - $0.15 per analysis`);
+console.log(`   - POST /entrypoints/jurisdiction-risk/invoke - $0.08 per jurisdiction`);
 console.log(`   - GET /.well-known/agent.json - Agent manifest`);
