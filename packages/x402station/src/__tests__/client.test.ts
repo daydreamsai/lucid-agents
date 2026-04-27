@@ -168,6 +168,32 @@ describe("X402Station — paid actions", () => {
     expect(calls[0]!.body).toBe("{}");
   });
 
+  it("alternatives POSTs to /api/v1/alternatives with url body", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.alternatives({ url: "https://api.venice.ai/api/v1/chat/completions" });
+    expect(calls[0]!.url).toBe("https://x402station.io/api/v1/alternatives");
+    expect(JSON.parse(calls[0]!.body)).toEqual({
+      url: "https://api.venice.ai/api/v1/chat/completions",
+    });
+  });
+
+  it("alternatives accepts taskClass + limit, omits unset url", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.alternatives({ taskClass: "llm-completions", limit: 3 });
+    const body = JSON.parse(calls[0]!.body);
+    expect(body).toEqual({ taskClass: "llm-completions", limit: 3 });
+    expect(body).not.toHaveProperty("url");
+  });
+
+  it("alternatives rejects empty input via zod refine", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await expect(c.alternatives({} as never)).rejects.toThrow(/at least one/i);
+    expect(calls.length).toBe(0);
+  });
+
   it("watch.subscribe omits signals when not provided", async () => {
     const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
     const c = new X402Station({ account: stubAccount, fetchImpl });

@@ -54,7 +54,20 @@ export const WatchSecretArgsSchema = z.object({
     .regex(/^[0-9a-f]{64}$/i, "secret must be 64 hex chars"),
 });
 
+// Routing-fallback. At least one of `url` or `taskClass` is required.
+// The route returns 400 if both are missing.
+export const AlternativesArgsSchema = z
+  .object({
+    url: z.string().url().optional(),
+    taskClass: z.string().max(80).optional(),
+    limit: z.number().int().min(1).max(10).optional(),
+  })
+  .refine((v) => v.url !== undefined || v.taskClass !== undefined, {
+    message: "alternatives requires at least one of `url` or `taskClass`",
+  });
+
 export type PreflightArgs = z.infer<typeof PreflightArgsSchema>;
 export type ForensicsArgs = z.infer<typeof ForensicsArgsSchema>;
 export type WatchSubscribeArgs = z.infer<typeof WatchSubscribeArgsSchema>;
 export type WatchSecretArgs = z.infer<typeof WatchSecretArgsSchema>;
+export type AlternativesArgs = z.infer<typeof AlternativesArgsSchema>;

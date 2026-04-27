@@ -123,6 +123,44 @@ export interface CatalogDecoysResponse {
   entries: CatalogDecoyEntry[];
 }
 
+export interface AlternativeEntry {
+  url: string;
+  service: string | null;
+  service_id: string | null;
+  provider: string | null;
+  domain: string | null;
+  category: string | null;
+  price_usdc: string | null;
+  currency: string | null;
+  uptime_1h_pct: number | null;
+  uptime_7d_pct: number | null;
+  avg_latency_1h_ms: number | null;
+  match_reason:
+    | "same_service"
+    | "same_provider"
+    | "same_domain"
+    | "same_category"
+    | "similar_price";
+}
+
+export interface AlternativesResponse {
+  target:
+    | {
+        url: string;
+        service?: string | null;
+        service_id?: string | null;
+        provider?: string | null;
+        category?: string | null;
+        price_usdc?: string | null;
+        currency?: string | null;
+        known?: boolean;
+      }
+    | { task_class: string };
+  match_strategy: "url_target" | "task_class_only" | "url_target_unknown_fallback";
+  alternatives: AlternativeEntry[];
+  candidate_count: number;
+}
+
 export interface WatchSubscribeResponse {
   watchId: string;
   /** 64-char hex secret. Returned ONCE — store it. HMAC seed for verifying delivery payloads. */

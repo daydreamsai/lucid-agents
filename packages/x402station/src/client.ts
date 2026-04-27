@@ -4,16 +4,19 @@ import {
   type X402Account,
 } from "@lucid-agents/payments";
 import {
+  AlternativesArgsSchema,
   ForensicsArgsSchema,
   PreflightArgsSchema,
   WatchSecretArgsSchema,
   WatchSubscribeArgsSchema,
+  type AlternativesArgs,
   type ForensicsArgs,
   type PreflightArgs,
   type WatchSecretArgs,
   type WatchSubscribeArgs,
 } from "./schemas";
 import type {
+  AlternativesResponse,
   CatalogDecoysResponse,
   ForensicsResponse,
   PaidResponse,
@@ -164,6 +167,26 @@ export class X402Station {
   /** Full known-bad blacklist as one cacheable JSON. $0.005 USDC. */
   async catalogDecoys(): Promise<PaidResponse<CatalogDecoysResponse>> {
     return this.callPaid<CatalogDecoysResponse>("/api/v1/catalog/decoys", {});
+  }
+
+  /**
+   * Routing fallback — siblings to a flagged endpoint. $0.005 USDC.
+   *
+   * Given a URL flagged by preflight (or a `taskClass` hint), returns up
+   * to 5 healthy sibling endpoints in the same provider/domain/category/
+   * price-band. Filters out 7-day-dead and 1-hour-erroring candidates;
+   * ranks by uptime + latency. Solves the "preflight returned ok=false,
+   * where do I go instead?" question that follows every blocked call.
+   */
+  async alternatives(
+    args: AlternativesArgs,
+  ): Promise<PaidResponse<AlternativesResponse>> {
+    const parsed = AlternativesArgsSchema.parse(args);
+    const body: Record<string, unknown> = {};
+    if (parsed.url !== undefined) body.url = parsed.url;
+    if (parsed.taskClass !== undefined) body.taskClass = parsed.taskClass;
+    if (parsed.limit !== undefined) body.limit = parsed.limit;
+    return this.callPaid<AlternativesResponse>("/api/v1/alternatives", body);
   }
 
   /**
