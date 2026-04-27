@@ -143,6 +143,40 @@ export interface AlternativeEntry {
     | "similar_price";
 }
 
+export interface WhatsNewEndpoint {
+  url: string;
+  service_id: string;
+  service_name: string;
+  provider: string | null;
+  domain: string | null;
+  category: string | null;
+  price_usdc: string | null;
+  currency: string | null;
+  first_seen_at?: string;
+  last_seen_at?: string;
+}
+
+export interface WhatsNewResponse {
+  since: string;
+  until: string;
+  window_hours: number;
+  added_endpoints: WhatsNewEndpoint[];
+  removed_endpoints: WhatsNewEndpoint[];
+  summary: {
+    added_endpoints_count: number;
+    removed_endpoints_count: number;
+    added_services_count: number;
+    removed_services_count: number;
+    polls_in_window: number;
+    first_poll_at: string | null;
+    last_poll_at: string | null;
+    current_active_endpoints: number;
+    current_active_services: number;
+  };
+  truncated: boolean;
+  limit: number;
+}
+
 export interface AlternativesResponse {
   target:
     | {

@@ -168,6 +168,24 @@ describe("X402Station — paid actions", () => {
     expect(calls[0]!.body).toBe("{}");
   });
 
+  it("whatsNew POSTs to /api/v1/whats-new with empty body when no args", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.whatsNew();
+    expect(calls[0]!.url).toBe("https://x402station.io/api/v1/whats-new");
+    expect(calls[0]!.body).toBe("{}");
+  });
+
+  it("whatsNew threads since + limit", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.whatsNew({ since: "2026-04-27T00:00:00Z", limit: 50 });
+    expect(JSON.parse(calls[0]!.body)).toEqual({
+      since: "2026-04-27T00:00:00Z",
+      limit: 50,
+    });
+  });
+
   it("alternatives POSTs to /api/v1/alternatives with url body", async () => {
     const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
     const c = new X402Station({ account: stubAccount, fetchImpl });

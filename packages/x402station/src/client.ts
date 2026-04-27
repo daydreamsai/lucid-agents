@@ -9,11 +9,13 @@ import {
   PreflightArgsSchema,
   WatchSecretArgsSchema,
   WatchSubscribeArgsSchema,
+  WhatsNewArgsSchema,
   type AlternativesArgs,
   type ForensicsArgs,
   type PreflightArgs,
   type WatchSecretArgs,
   type WatchSubscribeArgs,
+  type WhatsNewArgs,
 } from "./schemas";
 import type {
   AlternativesResponse,
@@ -25,6 +27,7 @@ import type {
   WatchStatusResponse,
   WatchSubscribeResponse,
   WatchUnsubscribeResponse,
+  WhatsNewResponse,
 } from "./types";
 
 const DEFAULT_BASE_URL = "https://x402station.io";
@@ -167,6 +170,24 @@ export class X402Station {
   /** Full known-bad blacklist as one cacheable JSON. $0.005 USDC. */
   async catalogDecoys(): Promise<PaidResponse<CatalogDecoysResponse>> {
     return this.callPaid<CatalogDecoysResponse>("/api/v1/catalog/decoys", {});
+  }
+
+  /**
+   * Catalog diff polling — added / removed endpoints since `since`. $0.001 USDC.
+   *
+   * Polling-friendly. Default window = now-24h, capped at 30 days back.
+   * Returns added_endpoints[] (first_seen_at >= since AND is_active=true),
+   * removed_endpoints[] (flipped to is_active=false since), service-level
+   * counts, polls_in_window, and current active totals.
+   */
+  async whatsNew(
+    args: WhatsNewArgs = {},
+  ): Promise<PaidResponse<WhatsNewResponse>> {
+    const parsed = WhatsNewArgsSchema.parse(args);
+    const body: Record<string, unknown> = {};
+    if (parsed.since !== undefined) body.since = parsed.since;
+    if (parsed.limit !== undefined) body.limit = parsed.limit;
+    return this.callPaid<WhatsNewResponse>("/api/v1/whats-new", body);
   }
 
   /**
