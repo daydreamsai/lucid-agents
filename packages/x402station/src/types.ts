@@ -143,6 +143,31 @@ export interface AlternativeEntry {
     | "similar_price";
 }
 
+export interface BuyCreditsResponse {
+  creditId: string;
+  balance: number;
+  initialBalance: number;
+  paidAmount: string;
+  payerAddress: string | null;
+  createdAt: string;
+  expiresAt: string;
+  usage: Record<string, unknown>;
+}
+
+export interface CreditsStatusResponse {
+  creditId: string;
+  balance: number;
+  initialBalance: number;
+  used: number;
+  paidAmount: string;
+  payerAddress: string | null;
+  createdAt: string;
+  expiresAt: string;
+  expired: boolean;
+  paymentTx: string | null;
+  paymentNetwork: string | null;
+}
+
 export interface WhatsNewEndpoint {
   url: string;
   service_id: string;

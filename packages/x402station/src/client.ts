@@ -5,12 +5,16 @@ import {
 } from "@lucid-agents/payments";
 import {
   AlternativesArgsSchema,
+  BuyCreditsArgsSchema,
+  CreditsStatusArgsSchema,
   ForensicsArgsSchema,
   PreflightArgsSchema,
   WatchSecretArgsSchema,
   WatchSubscribeArgsSchema,
   WhatsNewArgsSchema,
   type AlternativesArgs,
+  type BuyCreditsArgs,
+  type CreditsStatusArgs,
   type ForensicsArgs,
   type PreflightArgs,
   type WatchSecretArgs,
@@ -19,7 +23,9 @@ import {
 } from "./schemas";
 import type {
   AlternativesResponse,
+  BuyCreditsResponse,
   CatalogDecoysResponse,
+  CreditsStatusResponse,
   ForensicsResponse,
   PaidResponse,
   PaymentReceipt,
@@ -173,6 +179,36 @@ export class X402Station {
   }
 
   /**
+   * Buy 1000 prepaid /api/v1/preflight calls. $0.50 USDC.
+   *
+   * Effective rate $0.0005/call (50% off the per-call $0.001 tier).
+   * Returns `{ creditId, balance, expiresAt, ... }`. STORE THE creditId —
+   * bearer token, not retrievable later. Pass via X-Credit-Id header on
+   * subsequent preflight calls; on exhaustion/expiry the middleware falls
+   * through to per-call x402 automatically.
+   */
+  async buyCredits(
+    _args: BuyCreditsArgs = {},
+  ): Promise<PaidResponse<BuyCreditsResponse>> {
+    BuyCreditsArgsSchema.parse(_args);
+    return this.callPaid<BuyCreditsResponse>("/api/v1/credits", {});
+  }
+
+  /**
+   * Read a credit's balance + expiry. Free, id-gated.
+   *
+   * 404 covers both malformed UUID and unknown credit (anti-enumeration).
+   */
+  async creditsStatus(args: CreditsStatusArgs): Promise<CreditsStatusResponse> {
+    const parsed = CreditsStatusArgsSchema.parse(args);
+    return this.callFree<CreditsStatusResponse>(
+      `/api/v1/credits/${parsed.creditId}`,
+      "GET",
+      "",
+    );
+  }
+
+  /**
    * Catalog diff polling — added / removed endpoints since `since`. $0.001 USDC.
    *
    * Polling-friendly. Default window = now-24h, capped at 30 days back.
@@ -295,10 +331,15 @@ export class X402Station {
     secret: string,
   ): Promise<T> {
     let r: Response;
+    // Watch routes need x-x402station-secret. The credits-status route
+    // (id-gated, secret-less) doesn't — pass an empty `secret` and we
+    // skip the header so we don't ship "x-x402station-secret: ".
+    const headers: Record<string, string> = {};
+    if (secret) headers["x-x402station-secret"] = secret;
     try {
       r = await this.fetchFree(`${this.baseUrl}${path}`, {
         method,
-        headers: { "x-x402station-secret": secret },
+        headers,
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (e) {

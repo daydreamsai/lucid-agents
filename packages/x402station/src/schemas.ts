@@ -54,6 +54,15 @@ export const WatchSecretArgsSchema = z.object({
     .regex(/^[0-9a-f]{64}$/i, "secret must be 64 hex chars"),
 });
 
+// Bulk-preflight credits. v1 has no parameters — fixed $0.50 / 1000 calls.
+export const BuyCreditsArgsSchema = z.object({});
+
+// Read a credit's balance + expiry. UUID-only access; the id is the bearer
+// token returned by buyCredits.
+export const CreditsStatusArgsSchema = z.object({
+  creditId: z.string().uuid(),
+});
+
 // Catalog diff polling. `since` is an ISO 8601 timestamp (default = now()
 // - 24h, cap 30 days back). `limit` caps each of added_endpoints[] and
 // removed_endpoints[] (1..500, default 200).
@@ -80,3 +89,5 @@ export type WatchSubscribeArgs = z.infer<typeof WatchSubscribeArgsSchema>;
 export type WatchSecretArgs = z.infer<typeof WatchSecretArgsSchema>;
 export type AlternativesArgs = z.infer<typeof AlternativesArgsSchema>;
 export type WhatsNewArgs = z.infer<typeof WhatsNewArgsSchema>;
+export type BuyCreditsArgs = z.infer<typeof BuyCreditsArgsSchema>;
+export type CreditsStatusArgs = z.infer<typeof CreditsStatusArgsSchema>;

@@ -168,6 +168,32 @@ describe("X402Station — paid actions", () => {
     expect(calls[0]!.body).toBe("{}");
   });
 
+  it("buyCredits POSTs to /api/v1/credits with empty body", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({
+      status: 200,
+      bodyText: JSON.stringify({ creditId: "0a44f6b8-3b7d-4f2a-9e3a-2c5fd1b0aa11", balance: 1000 }),
+    });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.buyCredits();
+    expect(calls[0]!.url).toBe("https://x402station.io/api/v1/credits");
+    expect(calls[0]!.body).toBe("{}");
+  });
+
+  it("creditsStatus GETs /api/v1/credits/<id> without x-x402station-secret", async () => {
+    const { fetchImpl, calls } = buildFetchImpl({
+      status: 200,
+      bodyText: JSON.stringify({ creditId: "0a44f6b8-3b7d-4f2a-9e3a-2c5fd1b0aa11", balance: 999 }),
+    });
+    const c = new X402Station({ account: stubAccount, fetchImpl });
+    await c.creditsStatus({ creditId: "0a44f6b8-3b7d-4f2a-9e3a-2c5fd1b0aa11" });
+    expect(calls[0]!.url).toBe(
+      "https://x402station.io/api/v1/credits/0a44f6b8-3b7d-4f2a-9e3a-2c5fd1b0aa11",
+    );
+    expect(calls[0]!.method).toBe("GET");
+    // Empty `secret` arg → header not sent at all.
+    expect(calls[0]!.headers["x-x402station-secret"]).toBeUndefined();
+  });
+
   it("whatsNew POSTs to /api/v1/whats-new with empty body when no args", async () => {
     const { fetchImpl, calls } = buildFetchImpl({ status: 200, bodyText: "{}" });
     const c = new X402Station({ account: stubAccount, fetchImpl });
