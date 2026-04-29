@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { X402Station, type X402StationOptions } from "../client";
+import { validateWebhookUrl } from "../schemas";
 import type { Signal } from "../types";
 
 // Minimal stub Account satisfying the @lucid-agents/payments contract.
@@ -389,4 +390,35 @@ describe("X402Station — free, secret-gated watch endpoints", () => {
     ).rejects.toThrow();
     expect(calls.length).toBe(0);
   });
+});
+
+// audit-2026-04-29 recon-7 HIGH-8 regression — webhookUrl SSRF guard.
+// Client-side defense-in-depth on top of the server's /api/v1/watch SSRF
+// check. Rejects loopback / private / link-local / cloud-metadata /
+// userinfo URLs without a DNS round-trip.
+describe("validateWebhookUrl (SSRF guard)", () => {
+  const cases: Array<[string, string, boolean]> = [
+    ["public HTTPS — ok", "https://my-agent.example.com/x402-alerts", true],
+    ["plain HTTP — reject", "http://example.com/x402-alerts", false],
+    ["localhost — reject", "https://localhost/hook", false],
+    ["127.0.0.1 — reject", "https://127.0.0.1/hook", false],
+    ["127.0.0.5 — reject (any 127/8)", "https://127.0.0.5:8443/hook", false],
+    ["cloud metadata 169.254.169.254 — reject", "https://169.254.169.254/hook", false],
+    ["link-local 169.254.5.5 — reject", "https://169.254.5.5/hook", false],
+    ["RFC1918 10.0.0.5 — reject", "https://10.0.0.5/hook", false],
+    ["RFC1918 192.168.1.1 — reject", "https://192.168.1.1/hook", false],
+    ["RFC1918 172.16.0.5 — reject", "https://172.16.0.5/hook", false],
+    ["CGNAT 100.64.0.1 — reject", "https://100.64.0.1/hook", false],
+    ["IPv6 loopback [::1] — reject", "https://[::1]/hook", false],
+    ["IPv6 ULA [fc00::1] — reject", "https://[fc00::1]/hook", false],
+    ["IPv6 link-local [fe80::1] — reject", "https://[fe80::1]/hook", false],
+    ["userinfo spoof — reject", "https://api.good.com@evil.com/hook", false],
+    ["user:pass — reject", "https://user:pass@example.com/hook", false],
+  ];
+  for (const [label, url, expectOk] of cases) {
+    it(label, () => {
+      // null = ok, string = rejection reason
+      expect(validateWebhookUrl(url) === null).toBe(expectOk);
+    });
+  }
 });
