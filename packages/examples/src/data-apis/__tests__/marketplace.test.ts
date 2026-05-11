@@ -32,11 +32,16 @@ async function paidPost(
 }
 
 describe('TaskMarket data API examples', () => {
-  it('registers five paid API surfaces', () => {
+  it('registers ten paid API surfaces', () => {
     expect(Object.keys(apiRoutes).sort()).toEqual([
       'demand',
+      'gas',
+      'identity',
+      'liquidity',
       'macro',
       'provenance',
+      'regulations',
+      'risk',
       'screening',
       'supplier',
     ]);
@@ -49,6 +54,11 @@ describe('TaskMarket data API examples', () => {
       ['provenance', '/v1/provenance/lineage?datasetId=d1'],
       ['screening', '/v1/screening/exposure-chain?entityName=Acme'],
       ['macro', '/v1/macro/events?eventTypes=rates'],
+      ['liquidity', '/v1/liquidity/snapshot?chain=base'],
+      ['gas', '/v1/gas/quote?chain=base'],
+      ['risk', '/v1/risk/exposure-paths?address=0x1'],
+      ['regulations', '/v1/regulations/delta?jurisdiction=US'],
+      ['identity', '/v1/identity/reputation?agentAddress=0x1'],
     ] as const;
 
     for (const [name, path] of cases) {
@@ -205,6 +215,88 @@ describe('TaskMarket data API examples', () => {
           geography: 'global',
           horizon: '30d',
         })
+      ).json()
+    );
+  });
+
+  it('returns valid liquidity intelligence contracts', async () => {
+    const { app } = await createDataApiApp('liquidity');
+    apiSchemas.liquidity.parse(
+      await (await paidGet(app, '/v1/liquidity/snapshot?chain=base')).json()
+    );
+    apiSchemas.liquidity.parse(
+      await (
+        await paidGet(app, '/v1/liquidity/slippage?notionalUsd=100000')
+      ).json()
+    );
+    apiSchemas.liquidity.parse(
+      await (
+        await paidGet(app, '/v1/liquidity/routes?notionalUsd=100000')
+      ).json()
+    );
+  });
+
+  it('returns valid gas oracle contracts', async () => {
+    const { app } = await createDataApiApp('gas');
+    apiSchemas.gas.parse(await (await paidGet(app, '/v1/gas/quote')).json());
+    apiSchemas.gas.parse(
+      await (await paidGet(app, '/v1/gas/forecast?horizonMinutes=30')).json()
+    );
+    apiSchemas.gas.parse(
+      await (await paidGet(app, '/v1/gas/congestion?chain=base')).json()
+    );
+  });
+
+  it('returns valid counterparty risk contracts', async () => {
+    const { app } = await createDataApiApp('risk');
+    apiSchemas.risk.parse(
+      await (
+        await paidPost(app, '/v1/risk/score', {
+          address: '0x0000000000000000000000000000000000000001',
+        })
+      ).json()
+    );
+    apiSchemas.risk.parse(
+      await (await paidGet(app, '/v1/risk/exposure-paths?address=0x1')).json()
+    );
+    apiSchemas.risk.parse(
+      await (await paidGet(app, '/v1/risk/entity-profile?address=0x1')).json()
+    );
+  });
+
+  it('returns valid regulatory delta contracts', async () => {
+    const { app } = await createDataApiApp('regulations');
+    apiSchemas.regulations.parse(
+      await (await paidGet(app, '/v1/regulations/delta?jurisdiction=US')).json()
+    );
+    apiSchemas.regulations.parse(
+      await (
+        await paidGet(app, '/v1/regulations/impact?controlFramework=SOC2')
+      ).json()
+    );
+    apiSchemas.regulations.parse(
+      await (
+        await paidPost(app, '/v1/regulations/map-controls', {
+          jurisdiction: 'US',
+          controlFramework: 'SOC2',
+        })
+      ).json()
+    );
+  });
+
+  it('returns valid identity reputation contracts', async () => {
+    const { app } = await createDataApiApp('identity');
+    apiSchemas.identity.parse(
+      await (
+        await paidGet(app, '/v1/identity/reputation?agentAddress=0x1')
+      ).json()
+    );
+    apiSchemas.identity.parse(
+      await (await paidGet(app, '/v1/identity/history?agentAddress=0x1')).json()
+    );
+    apiSchemas.identity.parse(
+      await (
+        await paidGet(app, '/v1/identity/trust-breakdown?agentAddress=0x1')
       ).json()
     );
   });

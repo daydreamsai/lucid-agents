@@ -9,7 +9,17 @@ import {
 import type { Context } from 'hono';
 import { z } from 'zod';
 
-type ApiName = 'supplier' | 'demand' | 'provenance' | 'screening' | 'macro';
+type ApiName =
+  | 'supplier'
+  | 'demand'
+  | 'provenance'
+  | 'screening'
+  | 'macro'
+  | 'liquidity'
+  | 'gas'
+  | 'risk'
+  | 'regulations'
+  | 'identity';
 
 type RouteDef = {
   method: 'GET' | 'POST';
@@ -153,6 +163,175 @@ const macroScenarioSchema = z.object({
   freshness: freshnessSchema,
 });
 
+const liquiditySchema = z.object({
+  chain: z.string(),
+  base_token: z.string(),
+  quote_token: z.string(),
+  normalized_pools: z
+    .array(
+      z.object({
+        venue: z.string(),
+        pool_id: z.string(),
+        depth_buckets: z.array(
+          z.object({ notional_usd: z.number(), slippage_bps: z.number() })
+        ),
+      })
+    )
+    .optional(),
+  slippage_bps_curve: z
+    .array(
+      z.object({
+        venue: z.string(),
+        notional_usd: z.number(),
+        slippage_bps: z.number(),
+      })
+    )
+    .optional(),
+  routes: z
+    .array(
+      z.object({
+        venue_path: z.array(z.string()),
+        estimated_slippage_bps: z.number(),
+        quality_score: z.number().min(0).max(1),
+      })
+    )
+    .optional(),
+  best_route: z
+    .object({
+      venue_path: z.array(z.string()),
+      estimated_slippage_bps: z.number(),
+      quality_score: z.number().min(0).max(1),
+    })
+    .optional(),
+  confidence_score: z.number().min(0).max(1),
+  freshness: freshnessSchema,
+});
+
+const gasSchema = z.object({
+  chain: z.string(),
+  urgency: z.string().optional(),
+  target_blocks: z.number().int().positive().optional(),
+  recommended_max_fee: z.number().optional(),
+  priority_fee: z.number().optional(),
+  inclusion_probability_curve: z
+    .array(
+      z.object({
+        target_blocks: z.number().int().positive(),
+        probability: z.number().min(0).max(1),
+      })
+    )
+    .optional(),
+  forecast: z
+    .array(
+      z.object({
+        minute: z.number().int().nonnegative(),
+        max_fee: z.number(),
+        priority_fee: z.number(),
+      })
+    )
+    .optional(),
+  congestion_state: z.enum(['low', 'normal', 'elevated', 'severe']),
+  confidence_score: z.number().min(0).max(1),
+  freshness: freshnessSchema,
+});
+
+const riskSchema = z.object({
+  address: z.string(),
+  network: z.string(),
+  risk_score: z.number().min(0).max(100).optional(),
+  risk_factors: z
+    .array(
+      z.object({
+        code: z.string(),
+        weight: z.number(),
+        contribution: z.number(),
+      })
+    )
+    .optional(),
+  exposure_paths: z
+    .array(
+      z.object({
+        path: z.array(z.string()),
+        risk_score: z.number(),
+        distance: z.number().int().positive(),
+      })
+    )
+    .optional(),
+  cluster_id: z.string().optional(),
+  sanctions_proximity: z.number().min(0).max(1).optional(),
+  evidence_refs: z.array(z.string()).optional(),
+  freshness: freshnessSchema,
+});
+
+const regulationsSchema = z.object({
+  jurisdiction: z.string(),
+  industry: z.string().optional(),
+  since: z.string().optional(),
+  rule_diff: z
+    .array(
+      z.object({
+        rule_id: z.string(),
+        semantic_change_type: z.string(),
+        effective_date: z.string(),
+        urgency_score: z.number(),
+      })
+    )
+    .optional(),
+  affected_controls: z
+    .array(
+      z.object({
+        control_id: z.string(),
+        framework: z.string(),
+        impact_level: z.string(),
+        urgency_score: z.number(),
+      })
+    )
+    .optional(),
+  control_framework: z.string().optional(),
+  mappings: z
+    .array(
+      z.object({
+        rule_id: z.string(),
+        control_id: z.string(),
+        confidence: z.number().min(0).max(1),
+      })
+    )
+    .optional(),
+  freshness: freshnessSchema,
+});
+
+const identitySchema = z.object({
+  agent_address: z.string(),
+  chain: z.string(),
+  trust_score: z.number().min(0).max(100),
+  completion_rate: z.number().min(0).max(1).optional(),
+  dispute_rate: z.number().min(0).max(1).optional(),
+  onchain_identity_state: z
+    .enum(['active', 'probation', 'suspended'])
+    .optional(),
+  events: z
+    .array(
+      z.object({
+        event_type: z.string(),
+        timestamp: z.string(),
+        evidence_url: z.string(),
+      })
+    )
+    .optional(),
+  dimensions: z
+    .array(
+      z.object({
+        name: z.string(),
+        score: z.number(),
+        weight: z.number(),
+        confidence: z.number().min(0).max(1),
+      })
+    )
+    .optional(),
+  evidence_urls: z.array(z.string()).optional(),
+  freshness: freshnessSchema,
+});
+
 export const apiSchemas = {
   supplierScore: supplierScoreSchema,
   supplierForecast: supplierForecastSchema,
@@ -169,6 +348,11 @@ export const apiSchemas = {
   macroEvents: macroEventsSchema,
   macroImpact: macroImpactSchema,
   macroScenario: macroScenarioSchema,
+  liquidity: liquiditySchema,
+  gas: gasSchema,
+  risk: riskSchema,
+  regulations: regulationsSchema,
+  identity: identitySchema,
 };
 
 function hash(input: string): number {
@@ -527,6 +711,326 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
       });
     }),
   ],
+  liquidity: [
+    route('GET', '/v1/liquidity/snapshot', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const baseToken = queryString(request, 'baseToken', 'ETH');
+      const quoteToken = queryString(request, 'quoteToken', 'USDC');
+      const venues = queryString(request, 'venueFilter', 'uniswap,aerodrome')
+        .split(',')
+        .filter(Boolean);
+      const seed = `${chain}:${baseToken}:${quoteToken}:${venues.join(':')}`;
+      return json(apiSchemas.liquidity, {
+        chain,
+        base_token: baseToken,
+        quote_token: quoteToken,
+        normalized_pools: venues.map(venue => ({
+          venue,
+          pool_id: `${venue}-${hash(`${seed}:${venue}`)}`,
+          depth_buckets: [10000, 50000, 250000].map(notional => ({
+            notional_usd: notional,
+            slippage_bps: score(`${seed}:${venue}:${notional}`, 1, 90),
+          })),
+        })),
+        confidence_score: score(`${seed}:confidence`, 0.72, 0.98),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/liquidity/slippage', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const baseToken = queryString(request, 'baseToken', 'ETH');
+      const quoteToken = queryString(request, 'quoteToken', 'USDC');
+      const notionalUsd = queryNumber(request, 'notionalUsd', 100000, 1);
+      const venues = queryString(request, 'venueFilter', 'uniswap,aerodrome')
+        .split(',')
+        .filter(Boolean);
+      const seed = `${chain}:${baseToken}:${quoteToken}:${notionalUsd}:slippage`;
+      return json(apiSchemas.liquidity, {
+        chain,
+        base_token: baseToken,
+        quote_token: quoteToken,
+        slippage_bps_curve: venues.map(venue => ({
+          venue,
+          notional_usd: notionalUsd,
+          slippage_bps: score(`${seed}:${venue}`, 2, 140),
+        })),
+        confidence_score: score(`${seed}:confidence`, 0.72, 0.98),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/liquidity/routes', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const baseToken = queryString(request, 'baseToken', 'ETH');
+      const quoteToken = queryString(request, 'quoteToken', 'USDC');
+      const notionalUsd = queryNumber(request, 'notionalUsd', 100000, 1);
+      const seed = `${chain}:${baseToken}:${quoteToken}:${notionalUsd}:routes`;
+      const routes = ['aerodrome', 'uniswap:curve', 'uniswap:aerodrome'].map(
+        venuePath => ({
+          venue_path: venuePath.split(':'),
+          estimated_slippage_bps: score(`${seed}:${venuePath}:slippage`, 2, 95),
+          quality_score: score(`${seed}:${venuePath}:quality`, 0.68, 0.99),
+        })
+      );
+      const bestRoute = routes.reduce((best, current) =>
+        current.quality_score > best.quality_score ? current : best
+      );
+      return json(apiSchemas.liquidity, {
+        chain,
+        base_token: baseToken,
+        quote_token: quoteToken,
+        routes,
+        best_route: bestRoute,
+        confidence_score: score(`${seed}:confidence`, 0.72, 0.98),
+        freshness: freshness(seed),
+      });
+    }),
+  ],
+  gas: [
+    route('GET', '/v1/gas/quote', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const urgency = queryString(request, 'urgency', 'standard');
+      const targetBlocks = queryNumber(request, 'targetBlocks', 3, 1);
+      const seed = `${chain}:${urgency}:${targetBlocks}:quote`;
+      return json(apiSchemas.gas, {
+        chain,
+        urgency,
+        target_blocks: targetBlocks,
+        recommended_max_fee: score(`${seed}:max`, 0.02, 2.4),
+        priority_fee: score(`${seed}:priority`, 0.001, 0.22),
+        inclusion_probability_curve: [1, 2, 3, 5].map(blocks => ({
+          target_blocks: blocks,
+          probability: score(`${seed}:${blocks}`, 0.46, 0.99),
+        })),
+        congestion_state: ['low', 'normal', 'elevated', 'severe'][
+          hash(seed) % 4
+        ],
+        confidence_score: score(`${seed}:confidence`, 0.75, 0.98),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/gas/forecast', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const horizonMinutes = queryNumber(request, 'horizonMinutes', 30, 1);
+      const seed = `${chain}:${horizonMinutes}:forecast`;
+      return json(apiSchemas.gas, {
+        chain,
+        forecast: [0, 5, 10, 20, 30]
+          .filter(minute => minute <= horizonMinutes)
+          .map(minute => ({
+            minute,
+            max_fee: score(`${seed}:${minute}:max`, 0.02, 2.8),
+            priority_fee: score(`${seed}:${minute}:priority`, 0.001, 0.24),
+          })),
+        congestion_state: ['low', 'normal', 'elevated', 'severe'][
+          hash(seed) % 4
+        ],
+        confidence_score: score(`${seed}:confidence`, 0.72, 0.97),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/gas/congestion', request => {
+      const chain = queryString(request, 'chain', 'base');
+      const seed = `${chain}:congestion`;
+      return json(apiSchemas.gas, {
+        chain,
+        congestion_state: ['low', 'normal', 'elevated', 'severe'][
+          hash(seed) % 4
+        ],
+        confidence_score: score(`${seed}:confidence`, 0.74, 0.98),
+        freshness: freshness(seed),
+      });
+    }),
+  ],
+  risk: [
+    route('POST', '/v1/risk/score', async request => {
+      const body = await bodyJson(request);
+      const address = String(
+        body.address ?? '0x0000000000000000000000000000000000000001'
+      );
+      const network = String(body.network ?? 'base');
+      const seed = `${address}:${network}:risk`;
+      return json(apiSchemas.risk, {
+        address,
+        network,
+        risk_score: score(seed, 4, 91),
+        risk_factors: ['mixer_proximity', 'bridge_exposure'].map(code => ({
+          code,
+          weight: score(`${seed}:${code}:weight`, 0.1, 0.45),
+          contribution: score(`${seed}:${code}:contribution`, 1, 28),
+        })),
+        sanctions_proximity: score(`${seed}:sanctions`, 0.01, 0.62),
+        evidence_refs: [`urn:lucid:risk-evidence:${hash(seed)}`],
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/risk/exposure-paths', request => {
+      const address = queryString(
+        request,
+        'address',
+        '0x0000000000000000000000000000000000000001'
+      );
+      const network = queryString(request, 'network', 'base');
+      const threshold = queryNumber(request, 'threshold', 50, 0);
+      const seed = `${address}:${network}:${threshold}:paths`;
+      return json(apiSchemas.risk, {
+        address,
+        network,
+        exposure_paths: [1, 2, 3].map(distance => ({
+          path: [address, `0xcluster${hash(`${seed}:${distance}`)}`],
+          risk_score: score(`${seed}:${distance}`, threshold, 100),
+          distance,
+        })),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/risk/entity-profile', request => {
+      const address = queryString(
+        request,
+        'address',
+        '0x0000000000000000000000000000000000000001'
+      );
+      const network = queryString(request, 'network', 'base');
+      const seed = `${address}:${network}:profile`;
+      return json(apiSchemas.risk, {
+        address,
+        network,
+        risk_score: score(seed, 3, 88),
+        cluster_id: `cluster-${hash(seed)}`,
+        evidence_refs: [`urn:lucid:entity-profile:${hash(seed)}`],
+        freshness: freshness(seed),
+      });
+    }),
+  ],
+  regulations: [
+    route('GET', '/v1/regulations/delta', request => {
+      const jurisdiction = queryString(request, 'jurisdiction', 'US');
+      const industry = queryString(request, 'industry', 'crypto');
+      const since = queryString(request, 'since', '2026-01-01');
+      const seed = `${jurisdiction}:${industry}:${since}:delta`;
+      return json(apiSchemas.regulations, {
+        jurisdiction,
+        industry,
+        since,
+        rule_diff: ['custody_reporting', 'stablecoin_reserve'].map(rule => ({
+          rule_id: `${jurisdiction}-${rule}`,
+          semantic_change_type:
+            hash(`${seed}:${rule}`) % 2 === 0
+              ? 'new_obligation'
+              : 'threshold_update',
+          effective_date: new Date(
+            1700000000000 + (hash(`${seed}:${rule}:date`) % 31536000000)
+          ).toISOString(),
+          urgency_score: score(`${seed}:${rule}:urgency`, 0.1, 0.97),
+        })),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/regulations/impact', request => {
+      const jurisdiction = queryString(request, 'jurisdiction', 'US');
+      const industry = queryString(request, 'industry', 'crypto');
+      const controlFramework = queryString(request, 'controlFramework', 'SOC2');
+      const seed = `${jurisdiction}:${industry}:${controlFramework}:impact`;
+      return json(apiSchemas.regulations, {
+        jurisdiction,
+        industry,
+        affected_controls: ['CC6.1', 'CC7.2', 'CC9.2'].map(controlId => ({
+          control_id: controlId,
+          framework: controlFramework,
+          impact_level: ['low', 'medium', 'high'][
+            hash(`${seed}:${controlId}`) % 3
+          ],
+          urgency_score: score(`${seed}:${controlId}:urgency`, 0.12, 0.96),
+        })),
+        freshness: freshness(seed),
+      });
+    }),
+    route('POST', '/v1/regulations/map-controls', async request => {
+      const body = await bodyJson(request);
+      const jurisdiction = String(body.jurisdiction ?? 'US');
+      const controlFramework = String(body.controlFramework ?? 'SOC2');
+      const seed = `${jurisdiction}:${controlFramework}:map`;
+      return json(apiSchemas.regulations, {
+        jurisdiction,
+        control_framework: controlFramework,
+        mappings: ['custody_reporting', 'stablecoin_reserve'].map(rule => ({
+          rule_id: `${jurisdiction}-${rule}`,
+          control_id: `${controlFramework}-${hash(`${seed}:${rule}`) % 100}`,
+          confidence: score(`${seed}:${rule}:confidence`, 0.68, 0.98),
+        })),
+        freshness: freshness(seed),
+      });
+    }),
+  ],
+  identity: [
+    route('GET', '/v1/identity/reputation', request => {
+      const agentAddress = queryString(
+        request,
+        'agentAddress',
+        '0x0000000000000000000000000000000000000001'
+      );
+      const chain = queryString(request, 'chain', 'base');
+      const timeframe = queryString(request, 'timeframe', '90d');
+      const seed = `${agentAddress}:${chain}:${timeframe}:reputation`;
+      return json(apiSchemas.identity, {
+        agent_address: agentAddress,
+        chain,
+        trust_score: score(seed, 38, 98),
+        completion_rate: score(`${seed}:completion`, 0.63, 0.99),
+        dispute_rate: score(`${seed}:disputes`, 0.001, 0.14),
+        onchain_identity_state: ['active', 'probation', 'suspended'][
+          hash(seed) % 3
+        ],
+        evidence_urls: [`https://evidence.example.com/identity/${hash(seed)}`],
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/identity/history', request => {
+      const agentAddress = queryString(
+        request,
+        'agentAddress',
+        '0x0000000000000000000000000000000000000001'
+      );
+      const chain = queryString(request, 'chain', 'base');
+      const timeframe = queryString(request, 'timeframe', '90d');
+      const seed = `${agentAddress}:${chain}:${timeframe}:history`;
+      return json(apiSchemas.identity, {
+        agent_address: agentAddress,
+        chain,
+        trust_score: score(seed, 38, 98),
+        events: ['task_completed', 'attestation_issued'].map(eventType => ({
+          event_type: eventType,
+          timestamp: new Date(
+            1700000000000 + (hash(`${seed}:${eventType}`) % 86400000)
+          ).toISOString(),
+          evidence_url: `https://evidence.example.com/identity/${hash(`${seed}:${eventType}`)}`,
+        })),
+        freshness: freshness(seed),
+      });
+    }),
+    route('GET', '/v1/identity/trust-breakdown', request => {
+      const agentAddress = queryString(
+        request,
+        'agentAddress',
+        '0x0000000000000000000000000000000000000001'
+      );
+      const chain = queryString(request, 'chain', 'base');
+      const seed = `${agentAddress}:${chain}:breakdown`;
+      return json(apiSchemas.identity, {
+        agent_address: agentAddress,
+        chain,
+        trust_score: score(seed, 38, 98),
+        dimensions: ['delivery', 'feedback', 'onchain_consistency'].map(
+          name => ({
+            name,
+            score: score(`${seed}:${name}:score`, 30, 100),
+            weight: score(`${seed}:${name}:weight`, 0.18, 0.48),
+            confidence: score(`${seed}:${name}:confidence`, 0.68, 0.98),
+          })
+        ),
+        freshness: freshness(seed),
+      });
+    }),
+  ],
 };
 
 export async function createDataApiApp(name: ApiName) {
@@ -567,5 +1071,10 @@ export async function createAllDataApiApps() {
     provenance: await createDataApiApp('provenance'),
     screening: await createDataApiApp('screening'),
     macro: await createDataApiApp('macro'),
+    liquidity: await createDataApiApp('liquidity'),
+    gas: await createDataApiApp('gas'),
+    risk: await createDataApiApp('risk'),
+    regulations: await createDataApiApp('regulations'),
+    identity: await createDataApiApp('identity'),
   };
 }
