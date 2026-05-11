@@ -8,7 +8,7 @@ This directory contains paid data API examples for five TaskMarket PRDs:
 - Sanctions & PEP Exposure Intelligence API, issue #185
 - Macro Event Impact Vector API for Agents, issue #186
 
-Each API is built with Lucid core, HTTP, payments, and Zod contracts. Monetized routes return `402` without an `X-402-Payment` or `payment-signature` header and return deterministic JSON with freshness and confidence metadata when paid.
+Each API is built with Lucid core, HTTP, payments, and Zod contracts. Monetized routes return `402` with the x402 v2 `PAYMENT-REQUIRED` response header until the caller provides a valid payment credential, and return deterministic JSON with freshness and confidence metadata when paid.
 
 ## Endpoints
 

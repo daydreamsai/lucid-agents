@@ -1,7 +1,11 @@
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
-import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import {
+  paymentRequiredResponse,
+  payments,
+  paymentsFromEnv,
+} from '@lucid-agents/payments';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
@@ -10,7 +14,7 @@ type ApiName = 'supplier' | 'demand' | 'provenance' | 'screening' | 'macro';
 type RouteDef = {
   method: 'GET' | 'POST';
   path: string;
-  handler: (request: Request, now: number) => Response | Promise<Response>;
+  handler: (request: Request) => Response | Promise<Response>;
 };
 
 const freshnessSchema = z.object({
@@ -181,9 +185,17 @@ function score(input: string, min: number, max: number): number {
   return Number((min + ratio * (max - min)).toFixed(4));
 }
 
-function freshness(now: number, seed: string) {
+const demoPaymentConfig = {
+  payTo: '0x0000000000000000000000000000000000000001',
+  network: 'eip155:84532' as const,
+  facilitatorUrl: 'https://facilitator.example.com',
+  storage: { type: 'in-memory' as const },
+};
+
+function freshness(seed: string) {
+  const generatedAt = new Date(1700000000000 + (hash(seed) % 86400000));
   return {
-    generated_at: new Date(now).toISOString(),
+    generated_at: generatedAt.toISOString(),
     freshness_ms: hash(seed) % 120000,
     confidence: score(`${seed}:confidence`, 0.72, 0.98),
   };
@@ -198,28 +210,24 @@ function error(code: string, message: string, status: number): Response {
 }
 
 function requiresPayment(request: Request): Response | null {
-  if (
-    request.headers.get('X-402-Payment') ??
-    request.headers.get('payment-signature')
-  ) {
+  const hasPayment = [
+    request.headers.get('PAYMENT'),
+    request.headers.get('X-PAYMENT'),
+    request.headers.get('PAYMENT-RESPONSE'),
+    request.headers.get('payment-signature'),
+  ].some(value => value?.trim());
+
+  if (hasPayment) {
     return null;
   }
-  return Response.json(
-    {
-      error: {
-        code: 'payment_required',
-        message: 'A valid x402 payment is required for this endpoint.',
-      },
-    },
-    {
-      status: 402,
-      headers: {
-        'x-402-payment-required': 'true',
-        'x-402-price': process.env.DATA_API_PRICE_USD ?? '0.01',
-        'x-402-currency': 'USDC',
-      },
-    }
-  );
+
+  return paymentRequiredResponse({
+    required: true,
+    price: process.env.DATA_API_PRICE_USD ?? '0.01',
+    payTo: demoPaymentConfig.payTo,
+    network: demoPaymentConfig.network,
+    facilitatorUrl: demoPaymentConfig.facilitatorUrl,
+  });
 }
 
 function url(request: Request): URL {
@@ -230,10 +238,16 @@ function queryString(request: Request, key: string, fallback: string): string {
   return url(request).searchParams.get(key) ?? fallback;
 }
 
-function queryNumber(request: Request, key: string, fallback: number): number {
+function queryNumber(
+  request: Request,
+  key: string,
+  fallback: number,
+  min?: number
+): number {
   const raw = url(request).searchParams.get(key);
   const parsed = raw ? Number(raw) : fallback;
-  return Number.isFinite(parsed) ? parsed : fallback;
+  const value = Number.isFinite(parsed) ? parsed : fallback;
+  return min === undefined ? value : Math.max(min, value);
 }
 
 async function bodyJson(request: Request): Promise<Record<string, unknown>> {
@@ -254,7 +268,7 @@ function route(
 
 export const apiRoutes: Record<ApiName, RouteDef[]> = {
   supplier: [
-    route('GET', '/v1/suppliers/score', (request, now) => {
+    route('GET', '/v1/suppliers/score', request => {
       const supplierId = queryString(request, 'supplierId', 'supplier-acme');
       const category = queryString(request, 'category', 'components');
       const region = queryString(request, 'region', 'na');
@@ -271,12 +285,12 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
         },
         disruption_probability: score(`${seed}:risk`, 0.03, 0.34),
         alert_reasons: ['lead_time_drift', 'regional_capacity_signal'],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/suppliers/lead-time-forecast', (request, now) => {
+    route('GET', '/v1/suppliers/lead-time-forecast', request => {
       const supplierId = queryString(request, 'supplierId', 'supplier-acme');
-      const horizonDays = queryNumber(request, 'horizonDays', 30);
+      const horizonDays = queryNumber(request, 'horizonDays', 30, 1);
       const seed = `${supplierId}:${horizonDays}:forecast`;
       return json(apiSchemas.supplierForecast, {
         supplier_id: supplierId,
@@ -289,22 +303,22 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           low_days: score(`${seed}:low`, 3, 12),
           high_days: score(`${seed}:high`, 22, 55),
         },
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/suppliers/disruption-alerts', (request, now) => {
+    route('GET', '/v1/suppliers/disruption-alerts', request => {
       const supplierId = queryString(request, 'supplierId', 'supplier-acme');
       const seed = `${supplierId}:alerts`;
       return json(apiSchemas.supplierAlerts, {
         supplier_id: supplierId,
         disruption_probability: score(seed, 0.04, 0.41),
         alert_reasons: ['weather_delay_watch', 'fill_rate_variance'],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
   ],
   demand: [
-    route('GET', '/v1/demand/index', (request, now) => {
+    route('GET', '/v1/demand/index', request => {
       const geoType = queryString(request, 'geoType', 'city');
       if (!['zip', 'city', 'region'].includes(geoType))
         return error(
@@ -326,10 +340,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           high: Number((index + 7.25).toFixed(2)),
         },
         comparable_geos: [`${geoCode}-peer-1`, `${geoCode}-peer-2`],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/demand/trend', (request, now) => {
+    route('GET', '/v1/demand/trend', request => {
       const geoCode = queryString(request, 'geoCode', 'SFO');
       const category = queryString(request, 'category', 'apparel');
       const lookbackWindow = queryString(request, 'lookbackWindow', '30d');
@@ -341,10 +355,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
         velocity: score(seed, -0.18, 0.32),
         lookback_window: lookbackWindow,
         seasonality_mode: seasonalityMode,
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/demand/anomalies', (request, now) => {
+    route('GET', '/v1/demand/anomalies', request => {
       const geoCode = queryString(request, 'geoCode', 'SFO');
       const category = queryString(request, 'category', 'apparel');
       const seed = `${geoCode}:${category}:anomalies`;
@@ -361,12 +375,12 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
             severity: score(`${seed}:peer`, 0.1, 0.8),
           },
         ],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
   ],
   provenance: [
-    route('GET', '/v1/provenance/lineage', (request, now) => {
+    route('GET', '/v1/provenance/lineage', request => {
       const datasetId = queryString(request, 'datasetId', 'dataset-prices');
       const sourceId = queryString(request, 'sourceId', 'source-primary');
       const seed = `${datasetId}:${sourceId}:lineage`;
@@ -384,13 +398,13 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           ],
         },
         attestation_refs: [`urn:lucid:attestation:${hash(seed)}`],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/provenance/freshness', (request, now) => {
+    route('GET', '/v1/provenance/freshness', request => {
       const datasetId = queryString(request, 'datasetId', 'dataset-prices');
       const sourceId = queryString(request, 'sourceId', 'source-primary');
-      const maxStalenessMs = queryNumber(request, 'maxStalenessMs', 300000);
+      const maxStalenessMs = queryNumber(request, 'maxStalenessMs', 300000, 0);
       const seed = `${datasetId}:${sourceId}:freshness`;
       const stalenessMs = hash(seed) % 600000;
       return json(apiSchemas.provenanceFreshness, {
@@ -398,10 +412,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
         source_id: sourceId,
         staleness_ms: stalenessMs,
         sla_status: stalenessMs <= maxStalenessMs ? 'fresh' : 'stale',
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('POST', '/v1/provenance/verify-hash', async (request, now) => {
+    route('POST', '/v1/provenance/verify-hash', async request => {
       const body = await bodyJson(request);
       const datasetId = String(body.datasetId ?? 'dataset-prices');
       const expectedHash = String(body.expectedHash ?? 'hash-unknown');
@@ -413,12 +427,12 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           ? 'match'
           : 'mismatch',
         attestation_refs: [`urn:lucid:hash-check:${hash(seed)}`],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
   ],
   screening: [
-    route('POST', '/v1/screening/check', async (request, now) => {
+    route('POST', '/v1/screening/check', async request => {
       const body = await bodyJson(request);
       const entityName = String(body.entityName ?? 'Acme Trading LLC');
       const seed = `${entityName}:screening`;
@@ -429,10 +443,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
         match_confidence: score(`${seed}:match`, 0.71, 0.99),
         jurisdiction_risk: risk,
         evidence_bundle: [`urn:lucid:evidence:${hash(seed)}`],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/screening/exposure-chain', (request, now) => {
+    route('GET', '/v1/screening/exposure-chain', request => {
       const entityName = queryString(request, 'entityName', 'Acme Trading LLC');
       const seed = `${entityName}:exposure`;
       return json(apiSchemas.screeningExposure, {
@@ -442,10 +456,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           { entity: `${entityName} Holdings`, relationship: 'affiliate' },
         ],
         match_confidence: score(seed, 0.68, 0.96),
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/screening/jurisdiction-risk', (request, now) => {
+    route('GET', '/v1/screening/jurisdiction-risk', request => {
       const jurisdictions = queryString(request, 'jurisdictions', 'US,CA')
         .split(',')
         .filter(Boolean);
@@ -454,12 +468,12 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
         jurisdictions,
         jurisdiction_risk: score(seed, 0.05, 0.7),
         rationale: ['pep_exposure_index', 'sanctions_update_frequency'],
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
   ],
   macro: [
-    route('GET', '/v1/macro/events', (request, now) => {
+    route('GET', '/v1/macro/events', request => {
       const eventTypes = queryString(request, 'eventTypes', 'rates,energy')
         .split(',')
         .filter(Boolean);
@@ -473,10 +487,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           event_type: eventType,
           urgency_score: score(`${seed}:${eventType}:urgency`, 0.1, 0.95),
         })),
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('GET', '/v1/macro/impact-vectors', (request, now) => {
+    route('GET', '/v1/macro/impact-vectors', request => {
       const sectorSet = queryString(request, 'sectorSet', 'energy,retail')
         .split(',')
         .filter(Boolean);
@@ -494,10 +508,10 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           low: score(`${seed}:low`, 0.42, 0.65),
           high: score(`${seed}:high`, 0.74, 0.95),
         },
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
-    route('POST', '/v1/macro/scenario-score', async (request, now) => {
+    route('POST', '/v1/macro/scenario-score', async request => {
       const body = await bodyJson(request);
       const geography = String(body.geography ?? 'global');
       const horizon = String(body.horizon ?? '30d');
@@ -509,7 +523,7 @@ export const apiRoutes: Record<ApiName, RouteDef[]> = {
           energy: score(`${seed}:energy`, -0.8, 0.8),
           supply_chain: score(`${seed}:supply`, -0.8, 0.8),
         },
-        freshness: freshness(now, seed),
+        freshness: freshness(seed),
       });
     }),
   ],
@@ -525,7 +539,7 @@ export async function createDataApiApp(name: ApiName) {
     .use(
       payments({
         config: paymentsFromEnv({
-          storage: { type: 'in-memory' },
+          ...demoPaymentConfig,
         }),
       })
     )
@@ -537,7 +551,7 @@ export async function createDataApiApp(name: ApiName) {
         const handler = async (c: Context) => {
           const paymentError = requiresPayment(c.req.raw);
           if (paymentError) return paymentError;
-          return item.handler(c.req.raw, Date.now());
+          return item.handler(c.req.raw);
         };
         if (item.method === 'GET') app.get(item.path, handler);
         if (item.method === 'POST') app.post(item.path, handler);
