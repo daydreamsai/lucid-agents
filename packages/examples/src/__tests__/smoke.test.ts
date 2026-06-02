@@ -3,8 +3,10 @@
  *
  * Verifies that every example can build agents and boot servers without
  * external dependencies (no blockchain, no wallets, no real APIs).
- * Each test group recreates the agent construction inline rather than
+ * Most test groups recreate the agent construction inline rather than
  * importing the example files (which have top-level await / start servers).
+ * Examples that expose pure functions behind an `import.meta.main` guard
+ * (e.g. payments/trust-gated-payment) are imported directly and exercised.
  */
 import { a2a, waitForTask } from '@lucid-agents/a2a';
 import { analytics, getSummary } from '@lucid-agents/analytics';
@@ -17,6 +19,14 @@ import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import { wallets } from '@lucid-agents/wallet';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
+
+import {
+  type CounterpartyScreener,
+  isValidEvmAddress,
+  PaladinScreener,
+  payIfRecipientAllowed,
+  type ScreenResult,
+} from '../payments/trust-gated-payment';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -622,6 +632,273 @@ describe('Example Smoke Tests', () => {
       const card = await fetchCard(agentApp.app);
       expect(card.name).toBe('policy-agent');
       expect(card.version).toBe('1.0.0');
+    });
+  });
+
+  // =========================================================================
+  // 7. payments/trust-gated-payment
+  //
+  // Mocked-HTTP only: the screener fetch is injected, and the payment leg is a
+  // stub. No network and no real wallet are touched.
+  // =========================================================================
+  describe('payments/trust-gated-payment', () => {
+    /** Builds a mock fetch returning a fixed Response for the OFAC endpoint. */
+    function mockOfacFetch(status: number, body: unknown): typeof fetch {
+      return (async () =>
+        new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        })) as unknown as typeof fetch;
+    }
+
+    /** A fetch that always rejects, simulating a network failure / timeout. */
+    const failingFetch = (async () => {
+      throw new Error('network down');
+    }) as unknown as typeof fetch;
+
+    /** Records whether the (stubbed) payment leg actually fired. */
+    function makePaymentSpy() {
+      const calls: string[] = [];
+      const fetchWithPayment = (async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return new Response(JSON.stringify({ output: { ok: true } }), {
+          status: 200,
+        });
+      }) as unknown as (
+        input: RequestInfo | URL,
+        init?: RequestInit
+      ) => Promise<Response>;
+      return { calls, fetchWithPayment };
+    }
+
+    const CLEAN = '0x0000000000000000000000000000000000000001';
+    const SERVICE_URL = 'http://service.local/entrypoints/echo/invoke';
+
+    const OFAC_ALLOW = {
+      trust: {
+        recommendation: 'allow',
+        factors: [{ source: 'ofac', signal: 'not_listed', real: true }],
+      },
+    };
+    const OFAC_LISTED = {
+      trust: {
+        recommendation: 'block',
+        factors: [{ source: 'ofac', signal: 'listed', real: true }],
+      },
+    };
+
+    it('rejects an invalid address before any network call', async () => {
+      let screenerCalled = false;
+      const screener: CounterpartyScreener = {
+        async screenRecipient(): Promise<ScreenResult> {
+          screenerCalled = true;
+          return { decision: 'allow' };
+        },
+      };
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: 'not-an-address',
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: { logger: { warn() {}, info() {}, error() {} } },
+      });
+      expect(result.paid).toBe(false);
+      expect(result.status).toBe('aborted:invalid-address');
+      expect(screenerCalled).toBe(false);
+      expect(spy.calls.length).toBe(0);
+    });
+
+    it('isValidEvmAddress accepts good addresses and rejects bad', () => {
+      expect(isValidEvmAddress(CLEAN)).toBe(true);
+      expect(isValidEvmAddress('0x123')).toBe(false);
+      expect(
+        isValidEvmAddress('0xZZZ0000000000000000000000000000000000000')
+      ).toBe(false);
+    });
+
+    it('allow verdict -> payment proceeds', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, OFAC_ALLOW),
+      });
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: { logger: { warn() {}, info() {}, error() {} } },
+      });
+      expect(result.status).toBe('paid');
+      expect(result.paid).toBe(true);
+      expect(result.screen?.decision).toBe('allow');
+      expect(spy.calls).toEqual([SERVICE_URL]);
+    });
+
+    it('block verdict -> payment aborts (no payment fired)', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, OFAC_LISTED),
+      });
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: { logger: { warn() {}, info() {}, error() {} } },
+      });
+      expect(result.status).toBe('aborted:blocked');
+      expect(result.paid).toBe(false);
+      expect(result.screen?.decision).toBe('block');
+      expect(spy.calls.length).toBe(0);
+    });
+
+    it('screener 500 -> unavailable -> payment aborts (fail-closed default)', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(500, { detail: 'boom' }),
+      });
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: { logger: { warn() {}, info() {}, error() {} } },
+      });
+      expect(result.status).toBe('aborted:unavailable');
+      expect(result.paid).toBe(false);
+      expect(result.screen?.decision).toBe('unavailable');
+      expect(spy.calls.length).toBe(0);
+    });
+
+    it('screener network failure -> unavailable -> payment aborts (fail-closed)', async () => {
+      const screener = new PaladinScreener({ fetchImpl: failingFetch });
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: { logger: { warn() {}, info() {}, error() {} } },
+      });
+      expect(result.status).toBe('aborted:unavailable');
+      expect(result.paid).toBe(false);
+      expect(spy.calls.length).toBe(0);
+    });
+
+    it('unavailable + fail-open=true -> payment proceeds with loud log', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(429, { detail: 'rate limited' }),
+      });
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: {
+          failOpen: true,
+          logger: { warn() {}, info() {}, error() {} },
+        },
+      });
+      expect(result.status).toBe('proceeded:fail-open');
+      expect(result.paid).toBe(true);
+      expect(result.screen?.decision).toBe('unavailable');
+      expect(spy.calls).toEqual([SERVICE_URL]);
+    });
+
+    it('malformed screener JSON -> unavailable', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, 'this is not json'),
+      });
+      const result = await screener.screenRecipient(CLEAN);
+      expect(result.decision).toBe('unavailable');
+    });
+
+    // ── Hardened response→decision mapping ────────────────────────────────
+
+    it('200 allow with NO factors -> NOT allow (unavailable, fail-closed)', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, { trust: { recommendation: 'allow' } }),
+      });
+      const result = await screener.screenRecipient(CLEAN);
+      expect(result.decision).not.toBe('allow');
+      expect(result.decision).toBe('unavailable');
+    });
+
+    it('200 allow with ofac factor real:false -> unavailable (not trusted)', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, {
+          trust: {
+            recommendation: 'allow',
+            factors: [{ source: 'ofac', signal: 'not_listed', real: false }],
+          },
+        }),
+      });
+      const result = await screener.screenRecipient(CLEAN);
+      expect(result.decision).toBe('unavailable');
+    });
+
+    it('composite recommendation:block (no ofac listed) -> block; fail-open does NOT fire payment', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, {
+          trust: {
+            recommendation: 'block',
+            factors: [{ source: 'goplus', signal: 'honeypot' }],
+          },
+        }),
+      });
+      // Direct screen decision is block.
+      const screen = await screener.screenRecipient(CLEAN);
+      expect(screen.decision).toBe('block');
+
+      // Even under fail-open, a block must NEVER fire payment.
+      const spy = makePaymentSpy();
+      const result = await payIfRecipientAllowed({
+        screener,
+        recipient: CLEAN,
+        url: SERVICE_URL,
+        fetchWithPayment: spy.fetchWithPayment,
+        options: {
+          failOpen: true,
+          logger: { warn() {}, info() {}, error() {} },
+        },
+      });
+      expect(result.status).toBe('aborted:blocked');
+      expect(result.paid).toBe(false);
+      expect(spy.calls.length).toBe(0);
+    });
+
+    it('happy allow: ofac not_listed + real:true -> allow', async () => {
+      const screener = new PaladinScreener({
+        fetchImpl: mockOfacFetch(200, OFAC_ALLOW),
+      });
+      const result = await screener.screenRecipient(CLEAN);
+      expect(result.decision).toBe('allow');
+      expect(result.reason).toBe('ofac:not_listed');
+    });
+
+    it('timeout (fetch outlasts a tiny timeoutMs) -> unavailable', async () => {
+      // Emulate real fetch: never resolve on its own, but reject with an
+      // AbortError when the screener's AbortController fires (which is exactly
+      // how the timeout surfaces in production).
+      const abortableFetch = ((_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              reject(
+                new DOMException('The operation was aborted.', 'AbortError')
+              );
+            });
+          }
+        })) as unknown as typeof fetch;
+      const screener = new PaladinScreener({
+        fetchImpl: abortableFetch,
+        timeoutMs: 1,
+      });
+      const result = await screener.screenRecipient(CLEAN);
+      expect(result.decision).toBe('unavailable');
     });
   });
 });
