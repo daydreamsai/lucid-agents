@@ -1,0 +1,36 @@
+{
+  "name": "@lucid-agents/agent-liquidity-evm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Paid API-first Lucid agent for minute-level EVM liquidity depth, slippage curves, and route quality.",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/src/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "fastify": "^4.28.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
