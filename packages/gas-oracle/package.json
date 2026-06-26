@@ -1,0 +1,44 @@
+{
+  "name": "@lucid-agents/gas-oracle",
+  "version": "0.1.0",
+  "description": "Real-time gas and inclusion probability oracle API",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "bun test",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "zod": "catalog:",
+    "hono": "catalog:",
+    "viem": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}
