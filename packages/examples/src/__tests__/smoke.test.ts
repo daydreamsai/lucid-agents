@@ -624,4 +624,42 @@ describe('Example Smoke Tests', () => {
       expect(card.version).toBe('1.0.0');
     });
   });
+
+  // =========================================================================
+  // data-freshness-agent
+  // =========================================================================
+  describe('data-freshness-agent', () => {
+    let app: { fetch: (req: Request) => Response | Promise<Response> };
+
+    beforeAll(async () => {
+      const { createDataFreshnessAgent } = await import('../data-freshness-agent/agent');
+      const { registerEntrypoints } = await import('../data-freshness-agent/entrypoints');
+      const { createAgentApp } = await import('@lucid-agents/hono');
+      
+      const agent = await createDataFreshnessAgent();
+      const instance = await createAgentApp(agent);
+      registerEntrypoints(instance.addEntrypoint);
+      app = instance.app;
+    });
+
+    it('returns a valid agent card', async () => {
+      const res = await app.fetch(new Request('http://localhost/.well-known/agent-card.json'));
+      expect(res.status).toBe(200);
+      const card = await res.json() as any;
+      expect(card.name).toBe('data-freshness-agent');
+    });
+
+    it('requires payment for freshness endpoint', async () => {
+      const res = await app.fetch(
+        new Request('http://localhost/entrypoints/freshness/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: { url: 'https://daydreams.ai' } }),
+        })
+      );
+      expect(res.status).toBe(402);
+      const json = await res.json() as any;
+      expect(json.code).toBe('payment_required');
+    });
+  });
 });
