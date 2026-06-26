@@ -1,0 +1,30 @@
+{
+  "name": "macro-impact-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "test:contract": "bun test tests/contract",
+    "test:logic": "bun test tests/logic",
+    "test:integration": "bun test tests/integration",
+    "test:freshness": "bun test tests/freshness"
+  },
+  "dependencies": {
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.0"
+  }
+}
