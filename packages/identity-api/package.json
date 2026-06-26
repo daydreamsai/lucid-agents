@@ -1,0 +1,53 @@
+{
+  "name": "@lucid-agents/identity-api",
+  "version": "0.1.0",
+  "description": "ERC-8004 Identity Reputation Signal API",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/identity-api"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "test": "bun test",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@lucid-agents/wallet": "workspace:*",
+    "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/ap2": "workspace:*",
+    "@lucid-agents/types": "workspace:*",
+    "hono": "catalog:",
+    "viem": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}
