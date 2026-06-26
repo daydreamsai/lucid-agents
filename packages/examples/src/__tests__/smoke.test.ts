@@ -624,4 +624,42 @@ describe('Example Smoke Tests', () => {
       expect(card.version).toBe('1.0.0');
     });
   });
+
+  // =========================================================================
+  // geo-demand-pulse-agent
+  // =========================================================================
+  describe('geo-demand-pulse-agent', () => {
+    let app: { fetch: (req: Request) => Response | Promise<Response> };
+
+    beforeAll(async () => {
+      const { createGeoDemandAgent } = await import('../geo-demand-pulse-agent/agent');
+      const { registerEntrypoints } = await import('../geo-demand-pulse-agent/entrypoints');
+      const { createAgentApp } = await import('@lucid-agents/hono');
+      
+      const agent = await createGeoDemandAgent();
+      const instance = await createAgentApp(agent);
+      registerEntrypoints(instance.addEntrypoint);
+      app = instance.app;
+    });
+
+    it('returns a valid agent card', async () => {
+      const res = await app.fetch(new Request('http://localhost/.well-known/agent-card.json'));
+      expect(res.status).toBe(200);
+      const card = await res.json() as any;
+      expect(card.name).toBe('geo-demand-pulse-agent');
+    });
+
+    it('requires payment for pulse endpoint', async () => {
+      const res = await app.fetch(
+        new Request('http://localhost/entrypoints/pulse/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input: { latitude: 40.7128, longitude: -74.0060 } }),
+        })
+      );
+      expect(res.status).toBe(402);
+      const json = await res.json() as any;
+      expect(json.code).toBe('payment_required');
+    });
+  });
 });
