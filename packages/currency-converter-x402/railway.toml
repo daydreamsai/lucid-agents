@@ -1,0 +1,7 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "bun run --cwd packages/currency-converter-x402 start"
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
