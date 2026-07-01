@@ -1,0 +1,24 @@
+{
+  "name": "@lucid-agents/stock-price-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lucid Agent that returns real-time stock prices and enforces x402 micropayments.",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "yahoo-finance2": "^2.13.3"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
