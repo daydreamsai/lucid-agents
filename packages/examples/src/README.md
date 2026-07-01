@@ -189,3 +189,44 @@ Test 3 - Wallet blocking (test-blocked-wallet):
 - `test-endpoint` BLOCKED - wallet address 0x1234... in blockedRecipients
 
 Policy configuration is in `packages/examples/src/payments/payment-policies.json`. Prices are kept low to work with $10/day testnet USDC faucet limits.
+
+## x402station.io Preflight Before Payment
+
+`payments/x402station-preflight/` demonstrates adding an independent endpoint-risk check before a Lucid agent signs `PAYMENT-SIGNATURE` for an unfamiliar paid endpoint. It uses the free `https://x402station.io/api/v1/preflight-trial` endpoint by default, then falls through to Lucid's existing `fetchWithPayment` path only when the preflight verdict allows the target.
+
+This is complementary to Lucid payment policies:
+
+- x402station.io Preflight measures external endpoint risk signals such as dead services, zombies, decoys, never-paid endpoints, and proxy markup.
+- Lucid payment policies enforce local budget, rate-limit, and recipient rules before settlement.
+
+### Setup:
+
+```bash
+cd packages/examples/src/payments/x402station-preflight
+cp env.example .env
+# Edit .env with your wallet private key and payment configuration
+```
+
+### Run:
+
+```bash
+cd packages/examples/src/payments/x402station-preflight
+bun run index.ts
+
+curl -X POST http://localhost:3004/entrypoints/delegate-with-preflight/invoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "targetUrl": "http://localhost:3001",
+      "endpoint": "echo",
+      "data": { "input": { "message": "Hello!" } }
+    }
+  }'
+```
+
+**Expected results:**
+
+- The localhost example will usually block as `unknown_endpoint`, because x402station.io cannot independently probe your private local service. That is expected and proves no payment is attempted.
+- If preflight returns `ok: false`, the agent returns `blocked: true` before payment.
+- If preflight allows the URL, Lucid's payment policies still run before the paid request settles.
+- For production freshness and SLA, set `X402STATION_PREFLIGHT_URL=https://x402station.io/api/v1/preflight` and call it through a payment-enabled fetch or prepaid credit flow.
