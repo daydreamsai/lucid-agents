@@ -1,0 +1,24 @@
+{
+  "name": "@lucid-agents/geoip-x402-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lucid Agent: IP geolocation with x402 micropayments",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "bun-types": "^1.2.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
