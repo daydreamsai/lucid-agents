@@ -1,0 +1,23 @@
+{
+  "name": "weather-lucid-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Lucid weather agent with x402 payment enforcement ($0.001 per lookup).",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "check": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/http": "latest",
+    "@lucid-agents/payments": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "^1.2.4",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
