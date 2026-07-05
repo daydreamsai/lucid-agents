@@ -34,7 +34,7 @@ const agent = await createAgent({
 
 ```bash
 # Required in all payment modes
-FACILITATOR_URL=https://facilitator.x402.org
+FACILITATOR_URL=https://x402.org/facilitator
 NETWORK=base
 
 # Static destination mode (default)
@@ -108,7 +108,7 @@ Important behavior:
 
 ```bash
 # Stripe destination mode setup
-FACILITATOR_URL=https://facilitator.x402.org
+FACILITATOR_URL=https://x402.org/facilitator
 NETWORK=base
 PAYMENTS_DESTINATION=stripe
 STRIPE_SECRET_KEY=sk_live_...
@@ -418,10 +418,10 @@ In Stripe destination mode, the card omits static `payee` and marks dynamic paye
     {
       "method": "x402",
       "network": "base",
-      "endpoint": "https://facilitator.x402.org",
+      "endpoint": "https://x402.org/facilitator",
       "extensions": {
         "x402": {
-          "facilitatorUrl": "https://facilitator.x402.org",
+          "facilitatorUrl": "https://x402.org/facilitator",
           "payeeMode": "dynamic"
         }
       }
