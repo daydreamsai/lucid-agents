@@ -1,0 +1,1 @@
+web: bun run start
