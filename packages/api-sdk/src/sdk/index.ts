@@ -2,3 +2,14 @@
 
 export type * from './types.gen';
 export * from './sdk.gen';
+
+// Add new endpoints here
+
+// Example:
+// export const fetchPrice = async (symbol: string) => {
+//   const response = await fetch(`https://api.revenuedojo.com/price?symbol=${symbol}`);
+//   if (!response.ok) {
+//     throw new Error(`HTTP error! status: ${response.status}`);
+//   }
+//   return await response.json();
+// };
