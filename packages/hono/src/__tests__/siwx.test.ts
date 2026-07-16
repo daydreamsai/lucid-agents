@@ -6,7 +6,11 @@ import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import type { SIWxStorage } from '@lucid-agents/payments';
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
 
-const meta = { name: 'siwx-tester', version: '0.0.1', description: 'SIWX test agent' };
+const meta = {
+  name: 'siwx-tester',
+  version: '0.0.1',
+  description: 'SIWX test agent',
+};
 
 const mockFacilitatorResponse = {
   kinds: [
@@ -29,7 +33,7 @@ let originalFetch: typeof globalThis.fetch;
 
 beforeAll(() => {
   originalFetch = globalThis.fetch;
-  globalThis.fetch = async (
+  globalThis.fetch = (async (
     input: RequestInfo | URL,
     init?: RequestInit
   ): Promise<Response> => {
@@ -58,7 +62,7 @@ beforeAll(() => {
     }
 
     return originalFetch(input, init);
-  };
+  }) as unknown as typeof globalThis.fetch;
 });
 
 afterAll(() => {
@@ -337,7 +341,9 @@ describe('SIWX Integration (Hono)', () => {
       // Should include X-SIWX-EXTENSION header
       const siwxHeader = res.headers.get('X-SIWX-EXTENSION');
       expect(siwxHeader).toBeDefined();
-      const parsedHeader = JSON.parse(Buffer.from(siwxHeader!, 'base64').toString('utf-8'));
+      const parsedHeader = JSON.parse(
+        Buffer.from(siwxHeader!, 'base64').toString('utf-8')
+      );
       expect(parsedHeader.scheme).toBe('sign-in-with-x');
     });
 
@@ -477,17 +483,17 @@ describe('SIWX Integration (Hono)', () => {
     });
 
     it('should throw when authOnly route is mounted without enabled SIWX runtime', async () => {
-      const agent = await createAgent(meta)
-        .use(http())
-        // No payments extension at all
-        .addEntrypoint({
-          key: 'profile',
-          siwx: { authOnly: true },
-          handler: async () => ({ output: {} }),
-        })
-        .build();
-
-      await expect(createAgentApp(agent)).rejects.toThrow('authOnly');
+      await expect(
+        createAgent(meta)
+          .use(http())
+          // No payments extension at all
+          .addEntrypoint({
+            key: 'profile',
+            siwx: { authOnly: true },
+            handler: async () => ({ output: {} }),
+          })
+          .build()
+      ).rejects.toThrow('authOnly');
     });
 
     it('should reject replayed nonce on auth-only route', async () => {

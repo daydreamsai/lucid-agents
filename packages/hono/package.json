@@ -8,6 +8,9 @@
     "directory": "packages/hono"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,20 +35,19 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@lucid-agents/types": "workspace:*",
+    "hono": "catalog:"
+  },
+  "devDependencies": {
+    "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/ap2": "workspace:*",
     "@lucid-agents/core": "workspace:*",
     "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/mpp": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
-    "@lucid-agents/types": "workspace:*",
-    "hono": "catalog:",
-    "@x402/evm": "catalog:",
-    "@x402/hono": "catalog:",
-    "@x402/core": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
     "@lucid-agents/wallet": "workspace:*",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "zod": "catalog:"
   }
 }

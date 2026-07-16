@@ -15,6 +15,7 @@ import type {
   PaymentsConfig,
   PaymentTracker,
 } from '@lucid-agents/types/payments';
+import type { WalletsRuntime } from '@lucid-agents/types/wallets';
 import { wallets } from '@lucid-agents/wallet';
 import { describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
@@ -22,7 +23,7 @@ import { z } from 'zod';
 import { createAgent } from '../runtime';
 
 const makeRuntimeStub = (): {
-  runtime: Pick<AgentRuntime, 'wallets'>;
+  runtime: { wallets: WalletsRuntime };
   calls: {
     getWalletMetadata: ReturnType<typeof mock>;
     signChallenge: ReturnType<typeof mock>;
@@ -33,7 +34,7 @@ const makeRuntimeStub = (): {
   }));
   const signChallenge = mock(async (_challenge: unknown) => '0xdeadbeef');
 
-  const runtime: Pick<AgentRuntime, 'wallets'> = {
+  const runtime: { wallets: WalletsRuntime } = {
     wallets: {
       agent: {
         kind: 'local' as const,
@@ -350,8 +351,9 @@ describe('createAgent payments activation', () => {
   });
 
   it('activates payments when entrypoints provided in options', async () => {
-    const builder = createAgent({ name: 'test', version: '1.0.0' });
-    builder.use(payments({ config: paymentsConfig }));
+    const builder = createAgent({ name: 'test', version: '1.0.0' }).use(
+      payments({ config: paymentsConfig })
+    );
     builder.addEntrypoint({
       key: 'paid',
       description: 'Paid endpoint',
@@ -367,8 +369,9 @@ describe('createAgent payments activation', () => {
   });
 
   it('does not activate payments when entrypoints without prices provided in options', async () => {
-    const builder = createAgent({ name: 'test', version: '1.0.0' });
-    builder.use(payments({ config: paymentsConfig }));
+    const builder = createAgent({ name: 'test', version: '1.0.0' }).use(
+      payments({ config: paymentsConfig })
+    );
     builder.addEntrypoint({
       key: 'free',
       description: 'Free endpoint',
@@ -470,7 +473,7 @@ describe('createAgentRuntime wallets', () => {
   it('has undefined wallets when no wallet config provided', async () => {
     const agent = await createAgent({ name: 'test', version: '1.0.0' }).build();
 
-    expect(agent.wallets).toBeUndefined();
+    expect('wallets' in agent).toBe(false);
   });
 });
 
@@ -497,8 +500,7 @@ describe('createAgentRuntime entrypoints', () => {
   });
 
   it('activates payments when initial entrypoints have prices', async () => {
-    const builder = createAgent({ name: 'test', version: '1.0.0' });
-    builder.use(
+    const builder = createAgent({ name: 'test', version: '1.0.0' }).use(
       payments({
         config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
@@ -522,8 +524,7 @@ describe('createAgentRuntime entrypoints', () => {
   });
 
   it('does not activate payments when initial entrypoints have no prices', async () => {
-    const builder = createAgent({ name: 'test', version: '1.0.0' });
-    builder.use(
+    const builder = createAgent({ name: 'test', version: '1.0.0' }).use(
       payments({
         config: {
           payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
@@ -620,27 +621,27 @@ describe('createAgentRuntime manifest', () => {
 
 describe('createAgentRuntime integration', () => {
   it('handles full flow: config → wallets → payments → entrypoints → manifest', async () => {
-    const builder = createAgent({ name: 'test', version: '1.0.0' });
-    builder.use(
-      wallets({
-        config: {
-          agent: {
-            type: 'local' as const,
-            privateKey:
-              '0x1234567890123456789012345678901234567890123456789012345678901234',
+    const builder = createAgent({ name: 'test', version: '1.0.0' })
+      .use(
+        wallets({
+          config: {
+            agent: {
+              type: 'local' as const,
+              privateKey:
+                '0x1234567890123456789012345678901234567890123456789012345678901234',
+            },
           },
-        },
-      })
-    );
-    builder.use(
-      payments({
-        config: {
-          payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
-          facilitatorUrl: 'https://facilitator.test',
-          network: 'eip155:84532',
-        },
-      })
-    );
+        })
+      )
+      .use(
+        payments({
+          config: {
+            payTo: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+            facilitatorUrl: 'https://facilitator.test',
+            network: 'eip155:84532',
+          },
+        })
+      );
     builder.addEntrypoint({
       key: 'free',
       description: 'Free endpoint',
@@ -731,25 +732,19 @@ describe('createAgentRuntime integration', () => {
 });
 
 describe('Analytics Extension', () => {
-  it('analytics returns undefined when payments are not configured', async () => {
-    const agent = await createAgent({
-      name: 'test',
-      version: '1.0.0',
-    })
-      .use(analytics())
-      .build();
-
-    expect(agent.analytics).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeUndefined();
+  it('requires the payments capability', async () => {
+    await expect(
+      // @ts-expect-error Exercise the runtime backstop for an unsatisfied dependency.
+      createAgent({ name: 'test', version: '1.0.0' }).use(analytics()).build()
+    ).rejects.toThrow('requires missing extension "payments"');
   });
 
-  it('analytics.paymentTracker is defined when payments configured even without policy groups', async () => {
+  it('binds analytics operations instead of exposing the storage tracker', async () => {
     const paymentsConfig: PaymentsConfig = {
       payTo: '0xabc000000000000000000000000000000000c0de',
       facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
       network: 'eip155:84532',
     };
-
     const agent = await createAgent({
       name: 'test',
       version: '1.0.0',
@@ -758,147 +753,20 @@ describe('Analytics Extension', () => {
       .use(analytics())
       .build();
 
-    expect(agent.payments).toBeDefined();
-    expect(agent.payments?.paymentTracker).toBeDefined();
-    expect(agent.analytics).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeDefined();
-    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
-      agent.payments?.paymentTracker as PaymentTracker
-    );
-  });
+    const tracker = agent.payments?.paymentTracker as PaymentTracker;
+    await (
+      tracker as PaymentTracker & {
+        recordOutgoing: (
+          groupName: string,
+          scope: string,
+          amount: bigint
+        ) => Promise<void>;
+      }
+    ).recordOutgoing('analytics', 'global', 1_000_000n);
 
-  it('analytics.paymentTracker matches payments.paymentTracker when policy groups require tracking', async () => {
-    const paymentsConfig: PaymentsConfig = {
-      payTo: '0xabc000000000000000000000000000000000c0de',
-      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'eip155:84532',
-      policyGroups: [
-        {
-          name: 'Daily Spending Limit',
-          outgoingLimits: {
-            global: {
-              maxTotalUsd: 100, // This requires tracking
-            },
-          },
-        },
-      ],
-    };
-
-    const agent = await createAgent({
-      name: 'test',
-      version: '1.0.0',
-    })
-      .use(payments({ config: paymentsConfig }))
-      .use(analytics())
-      .build();
-
-    expect(agent.payments).toBeDefined();
-    expect(agent.payments?.paymentTracker).toBeDefined();
-    expect(agent.analytics).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeDefined();
-    // They should be the same instance
-    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
-      agent.payments?.paymentTracker as PaymentTracker
-    );
-  });
-
-  it('analytics.paymentTracker exists when incoming limits require tracking', async () => {
-    const paymentsConfig: PaymentsConfig = {
-      payTo: '0xabc000000000000000000000000000000000c0de',
-      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'eip155:84532',
-      policyGroups: [
-        {
-          name: 'Receivables Limit',
-          incomingLimits: {
-            global: {
-              maxTotalUsd: 1000, // This requires tracking
-            },
-          },
-        },
-      ],
-    };
-
-    const agent = await createAgent({
-      name: 'test',
-      version: '1.0.0',
-    })
-      .use(payments({ config: paymentsConfig }))
-      .use(analytics())
-      .build();
-
-    expect(agent.payments?.paymentTracker).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeDefined();
-    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
-      agent.payments?.paymentTracker as PaymentTracker
-    );
-  });
-
-  it('analytics.paymentTracker exists when per-target limits require tracking', async () => {
-    const paymentsConfig: PaymentsConfig = {
-      payTo: '0xabc000000000000000000000000000000000c0de',
-      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'eip155:84532',
-      policyGroups: [
-        {
-          name: 'Per-Target Limits',
-          outgoingLimits: {
-            perTarget: {
-              'https://example.com': {
-                maxTotalUsd: 50, // This requires tracking
-              },
-            },
-          },
-        },
-      ],
-    };
-
-    const agent = await createAgent({
-      name: 'test',
-      version: '1.0.0',
-    })
-      .use(payments({ config: paymentsConfig }))
-      .use(analytics())
-      .build();
-
-    expect(agent.payments?.paymentTracker).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeDefined();
-    const analyticsTracker = agent.analytics?.paymentTracker as PaymentTracker;
-    const paymentsTracker = agent.payments?.paymentTracker as PaymentTracker;
-    expect(analyticsTracker).toBe(paymentsTracker);
-  });
-
-  it('analytics.paymentTracker is defined when only rate limits are configured (payment tracker always created)', async () => {
-    const paymentsConfig: PaymentsConfig = {
-      payTo: '0xabc000000000000000000000000000000000c0de',
-      facilitatorUrl: 'https://facilitator.test' as `${string}://${string}`,
-      network: 'eip155:84532',
-      policyGroups: [
-        {
-          name: 'Rate Limit Only',
-          rateLimits: {
-            maxPayments: 10,
-            windowMs: 60000,
-          },
-        },
-      ],
-    };
-
-    const agent = await createAgent({
-      name: 'test',
-      version: '1.0.0',
-    })
-      .use(payments({ config: paymentsConfig }))
-      .use(analytics())
-      .build();
-
-    expect(agent.payments).toBeDefined();
-    expect(agent.payments?.paymentTracker).toBeDefined();
-    expect(agent.analytics).toBeDefined();
-    expect(agent.analytics?.paymentTracker).toBeDefined();
-    expect(agent.analytics?.paymentTracker as PaymentTracker).toBe(
-      agent.payments?.paymentTracker as PaymentTracker
-    );
+    const summary = await agent.analytics.getSummary();
+    expect(summary.outgoingTotal).toBe(1_000_000n);
+    expect('paymentTracker' in agent.analytics).toBe(false);
   });
 });
 
@@ -1072,18 +940,18 @@ describe('HTTP Extension', () => {
       .use(http())
       .build();
 
-    expect(agent.handlers).toBeDefined();
-    expect(agent.handlers?.health).toBeDefined();
-    expect(agent.handlers?.entrypoints).toBeDefined();
-    expect(agent.handlers?.manifest).toBeDefined();
-    expect(agent.handlers?.favicon).toBeDefined();
-    expect(agent.handlers?.invoke).toBeDefined();
-    expect(agent.handlers?.stream).toBeDefined();
-    expect(agent.handlers?.tasks).toBeDefined();
-    expect(agent.handlers?.getTask).toBeDefined();
-    expect(agent.handlers?.listTasks).toBeDefined();
-    expect(agent.handlers?.cancelTask).toBeDefined();
-    expect(agent.handlers?.subscribeTask).toBeDefined();
+    expect(agent.http).toBeDefined();
+    expect(agent.http.handlers.health).toBeDefined();
+    expect(agent.http.handlers.entrypoints).toBeDefined();
+    expect(agent.http.handlers.manifest).toBeDefined();
+    expect(agent.http.handlers.favicon).toBeDefined();
+    expect(agent.http.handlers.invoke).toBeDefined();
+    expect(agent.http.handlers.stream).toBeDefined();
+    expect(agent.http.handlers.tasks).toBeDefined();
+    expect(agent.http.handlers.getTask).toBeDefined();
+    expect(agent.http.handlers.listTasks).toBeDefined();
+    expect(agent.http.handlers.cancelTask).toBeDefined();
+    expect(agent.http.handlers.subscribeTask).toBeDefined();
   });
 
   it('handlers.health returns correct response', async () => {
@@ -1095,7 +963,7 @@ describe('HTTP Extension', () => {
       .build();
 
     const request = new Request('http://agent/health');
-    const response = await agent.handlers?.health(request);
+    const response = await agent.http.handlers.health(request);
     expect(response).toBeDefined();
     expect(response?.status).toBe(200);
     const body = await response?.json();
@@ -1118,7 +986,7 @@ describe('HTTP Extension', () => {
     });
 
     const request = new Request('http://agent/entrypoints');
-    const response = await agent.handlers?.entrypoints(request);
+    const response = await agent.http.handlers.entrypoints(request);
     expect(response).toBeDefined();
     expect(response?.status).toBe(200);
     const body = await response?.json();
@@ -1140,7 +1008,7 @@ describe('HTTP Extension', () => {
     const request = new Request(
       'http://agent.example.com/.well-known/agent-card.json'
     );
-    const response = await agent.handlers?.manifest(request);
+    const response = await agent.http.handlers.manifest(request);
     expect(response).toBeDefined();
     expect(response?.status).toBe(200);
     const body = await response?.json();
@@ -1156,7 +1024,7 @@ describe('HTTP Extension', () => {
       .use(http({ landingPage: false }))
       .build();
 
-    expect(agent.handlers?.landing).toBeUndefined();
+    expect(agent.http.handlers.landing).toBeUndefined();
   });
 
   it('handlers.landing is available when enabled', async () => {
@@ -1168,9 +1036,9 @@ describe('HTTP Extension', () => {
       .use(http({ landingPage: true }))
       .build();
 
-    expect(agent.handlers?.landing).toBeDefined();
+    expect(agent.http.handlers.landing).toBeDefined();
     const request = new Request('http://agent.example.com/');
-    const response = await agent.handlers?.landing?.(request);
+    const response = await agent.http.handlers.landing?.(request);
     expect(response).toBeDefined();
     expect(response?.status).toBe(200);
     const html = await response?.text();
@@ -1187,6 +1055,7 @@ describe('Scheduler Extension', () => {
     };
 
     await expect(
+      // @ts-expect-error Exercise the runtime backstop for an unsatisfied dependency.
       createAgent({
         name: 'test',
         version: '1.0.0',
@@ -1194,19 +1063,19 @@ describe('Scheduler Extension', () => {
         .use(payments({ config: paymentsConfig }))
         .use(scheduler())
         .build()
-    ).rejects.toThrow('A2A runtime missing');
+    ).rejects.toThrow('requires missing extension "a2a"');
   });
 
-  it('throws error when payments extension is missing', async () => {
-    await expect(
-      createAgent({
-        name: 'test',
-        version: '1.0.0',
-      })
-        .use(a2a())
-        .use(scheduler())
-        .build()
-    ).rejects.toThrow('Payments runtime missing');
+  it('supports free scheduled invocations without a payments extension', async () => {
+    const agent = await createAgent({
+      name: 'test',
+      version: '1.0.0',
+    })
+      .use(a2a())
+      .use(scheduler())
+      .build();
+
+    expect(agent.scheduler).toBeDefined();
   });
 
   it('adds scheduler runtime when both a2a and payments are present', async () => {

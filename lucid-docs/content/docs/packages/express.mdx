@@ -1,88 +1,67 @@
 ---
-title: "@lucid-agents/express"
-description: Express framework adapter for running agents.
+title: '@lucid-agents/express'
+description: Express adapter for a completed Lucid HTTP runtime.
 icon: Server
 ---
 
-The Express adapter creates an Express application from an agent runtime, exposing all entrypoints as HTTP routes.
+The Express adapter translates Node requests and streams to standard Web `Request` and `Response` objects, then binds the canonical route plan owned by `@lucid-agents/http`. It does not own a second entrypoint registry, manifest builder, task runtime, or paywall.
 
 ## Installation
 
 ```bash
-bun add @lucid-agents/express express
-```
-
-For TypeScript:
-
-```bash
+bun add @lucid-agents/core @lucid-agents/http @lucid-agents/express express
 bun add -D @types/express
 ```
 
-For payments support:
-
-```bash
-bun add x402-express
-```
+Add `@lucid-agents/payments` when the runtime receives x402 payments. No Express-specific payment package is required.
 
 ## Basic usage
 
 ```typescript
+import { z } from 'zod';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { createAgentApp } from '@lucid-agents/express';
-import { z } from 'zod';
 
-const agent = await createAgent({
+const runtime = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
 })
   .use(http())
+  .addEntrypoint({
+    key: 'greet',
+    input: z.object({ name: z.string() }),
+    async handler({ input }) {
+      return { output: { message: `Hello, ${input.name}!` } };
+    },
+  })
   .build();
 
-const { app, addEntrypoint } = await createAgentApp(agent);
-
-addEntrypoint({
-  key: 'greet',
-  input: z.object({ name: z.string() }),
-  async handler({ input }) {
-    return { output: { message: `Hello, ${input.name}!` } };
-  },
-});
-
-app.listen(3000, () => {
-  console.log('Agent running at http://localhost:3000');
-});
+const { app } = await createAgentApp(runtime);
+const server = app.listen(3000);
 ```
+
+Always install `http()` before creating the app. During shutdown, close the Node server and call `await runtime.close()`.
 
 ## API reference
 
-### createAgentApp(agent, options?)
+### createAgentApp(runtime, options?)
 
-Creates an Express app from an agent runtime.
+Creates an Express app and mounts every route in `runtime.http.routes`.
 
 ```typescript
-function createAgentApp(
-  agent: AgentRuntime,
-  options?: CreateAgentAppOptions
-): Promise<{
-  app: Express;
-  addEntrypoint: (def: EntrypointDef) => void;
-}>
+const { app, runtime, agent, addEntrypoint } =
+  await createAgentApp(runtime, options);
 ```
 
-**Parameters:**
+| Property | Description |
+| --- | --- |
+| `app` | Configured Express application. |
+| `runtime` | The same completed runtime passed to the adapter. |
+| `agent` | The runtime's protocol-agnostic agent core. |
+| `addEntrypoint` | Typed delegate to `runtime.entrypoints.add()`. |
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `agent` | `AgentRuntime` | Built agent runtime |
-| `options` | `CreateAgentAppOptions` | Optional configuration |
-
-**Returns:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `app` | `Express` | Configured Express application |
-| `addEntrypoint` | `Function` | Add entrypoints after app creation |
+Adding an entrypoint through either API updates the canonical registry and invalidates the generated Agent Card.
 
 ### CreateAgentAppOptions
 
@@ -93,164 +72,94 @@ type CreateAgentAppOptions = {
 };
 ```
 
-### Example with hooks
+Use `beforeMount` for middleware that must wrap agent routes. Use `afterMount` for additional routes or error handlers.
 
 ```typescript
 import cors from 'cors';
 import helmet from 'helmet';
 
-const { app, addEntrypoint } = await createAgentApp(agent, {
-  beforeMount: (app) => {
-    // Add security middleware
+const { app } = await createAgentApp(runtime, {
+  beforeMount(app) {
+    app.set('trust proxy', true);
     app.use(helmet());
     app.use(cors());
-
-    // Add authentication
-    app.use('/entrypoints', (req, res, next) => {
-      const token = req.headers.authorization;
-      if (!token) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-      next();
-    });
   },
-  afterMount: (app) => {
-    // Add custom routes
-    app.get('/custom', (req, res) => {
-      res.json({ custom: true });
-    });
-
-    // Add error handler
-    app.use((err, req, res, next) => {
-      console.error(err);
-      res.status(500).json({ error: 'Internal error' });
+  afterMount(app) {
+    app.get('/custom', (_request, response) => {
+      response.json({ custom: true });
     });
   },
 });
 ```
 
-## Routes
+The adapter forwards unhandled route errors to Express `next(error)`, so an error handler registered in `afterMount` can handle them.
 
-The adapter registers these routes:
+## Canonical routes
 
-| Route | Method | Description |
-|-------|--------|-------------|
-| `/` | GET | Landing page (if enabled) |
-| `/.well-known/agent.json` | GET | Agent Card manifest |
-| `/health` | GET | Health check endpoint |
-| `/entrypoints` | GET | List available entrypoints |
-| `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
-| `/entrypoints/:key/stream` | POST | Stream from an entrypoint (SSE) |
-| `/tasks` | GET | List tasks |
-| `/tasks/:id` | GET | Get task by ID |
-| `/tasks/:id/cancel` | POST | Cancel a task |
-| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
-| `/favicon.ico` | GET | Favicon |
+Paths below are relative to `http({ basePath })`. The default base path is empty.
 
-## Payment middleware
+| Method | Route | Description |
+| --- | --- | --- |
+| `GET` | `/` | Landing page when enabled. |
+| `GET` | `/health` | Health status. |
+| `GET` | `/entrypoints` | Discoverable entrypoints. |
+| `POST` | `/entrypoints/:key/invoke` | Invoke an entrypoint. |
+| `POST` | `/entrypoints/:key/stream` | Stream SSE envelopes. |
+| `GET` | `/.well-known/agent.json` | Legacy Agent Card path. |
+| `GET` | `/.well-known/agent-card.json` | Agent Card. |
+| `GET` | `/.well-known/oasf-record.json` | OASF record, or `404` when identity is not enabled. |
+| `GET` | `/favicon.svg` | Agent favicon. |
 
-Add x402 payment middleware for paid entrypoints:
+When the runtime includes `a2a()`, the same plan also mounts:
 
-```typescript
-import { createAgentApp, withPayments } from '@lucid-agents/express';
+| Method | Route | Description |
+| --- | --- | --- |
+| `POST` | `/tasks` | Create and start a task. |
+| `GET` | `/tasks` | List tasks owned by the access token. |
+| `GET` | `/tasks/:taskId` | Read an owned task. |
+| `POST` | `/tasks/:taskId/cancel` | Cancel an owned running task. |
+| `GET` | `/tasks/:taskId/subscribe` | Subscribe to owned task updates over SSE. |
 
-const agent = await createAgent(meta)
-  .use(http())
-  .use(payments({ config: paymentsFromEnv() }))
-  .build();
+Task creation accepts a 20–256 character `Task-Access-Token` header or generates a token and returns it with the task. All later task operations require that token. Task routes are omitted when `a2a()` is not installed.
 
-const { app, addEntrypoint } = await createAgentApp(agent);
+## Payments and authentication
 
-// Add paid entrypoint
-addEntrypoint({
-  key: 'premium',
-  price: { invoke: '$0.01' },
-  async handler({ input }) {
-    return { output: { result: 'premium content' } };
-  },
-});
-
-// Wrap app with payment middleware
-withPayments(app, agent);
-
-app.listen(3000);
-```
-
-### withPayments(app, agent)
-
-Adds x402 payment verification middleware.
+Payments are installed on the runtime, before the adapter is created:
 
 ```typescript
-function withPayments(app: Express, agent: AgentRuntime): void
-```
-
-The middleware:
-1. Checks if the entrypoint has a price
-2. Validates the `X-Payment` header
-3. Returns `402 Payment Required` if invalid/missing
-4. Allows the request through if payment is valid
-
-## Full example
-
-```typescript
-import express from 'express';
-import cors from 'cors';
-import { z } from 'zod';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
-import { createAgentApp, withPayments } from '@lucid-agents/express';
+import { createAgentApp } from '@lucid-agents/express';
 
-const agent = await createAgent({
-  name: 'my-agent',
+const runtime = await createAgent({
+  name: 'paid-agent',
   version: '1.0.0',
-  description: 'An AI-powered assistant',
 })
-  .use(http())
   .use(payments({ config: paymentsFromEnv() }))
+  .use(http())
+  .addEntrypoint({
+    key: 'premium',
+    price: '0.01',
+    async handler() {
+      return { output: { result: 'premium content' } };
+    },
+  })
   .build();
 
-const { app, addEntrypoint } = await createAgentApp(agent, {
-  beforeMount: (app) => {
-    app.use(cors());
-    app.use(express.json());
-  },
-});
-
-// Free entrypoint
-addEntrypoint({
-  key: 'echo',
-  input: z.object({ text: z.string() }),
-  async handler({ input }) {
-    return { output: { echoed: input.text } };
-  },
-});
-
-// Paid entrypoint
-addEntrypoint({
-  key: 'analyze',
-  input: z.object({ text: z.string() }),
-  price: { invoke: '$0.01' },
-  async handler({ input }) {
-    return { output: { analysis: 'AI analysis...' } };
-  },
-});
-
-// Add payment middleware
-withPayments(app, agent);
-
-const PORT = process.env.PORT ?? 3000;
-app.listen(PORT, () => {
-  console.log(`Agent running at http://localhost:${PORT}`);
-});
+const { app } = await createAgentApp(runtime);
+app.listen(3000);
 ```
+
+The HTTP runtime uses one authorization path for invoke, stream, and task creation. x402, MPP, SIWX entitlements, payment-policy admission, settlement, and idempotency therefore behave the same in Express, Hono, and TanStack. If both x402 and MPP are installed, each priced entrypoint must set `paymentProtocol: 'x402' | 'mpp'`.
+
+## Streaming and request bodies
+
+The adapter passes request bodies through as Web streams and pipes response bodies back to Node without buffering. Do not add a JSON parser solely for Lucid routes; the canonical handlers parse their own request bodies. Application-specific middleware can still be registered in `beforeMount`.
 
 ## Exports
 
 ```typescript
-// Main API
-export { createAgentApp, withPayments } from '@lucid-agents/express';
-
-// Types
+export { createAgentApp } from '@lucid-agents/express';
 export type { CreateAgentAppOptions } from '@lucid-agents/express';
 ```

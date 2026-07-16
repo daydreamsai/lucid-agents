@@ -1,12 +1,4 @@
-import {
-  analytics,
-  exportToCSV,
-  exportToJSON,
-  getAllTransactions,
-  getIncomingSummary,
-  getOutgoingSummary,
-  getSummary,
-} from '@lucid-agents/analytics';
+import { analytics } from '@lucid-agents/analytics';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
@@ -75,15 +67,12 @@ addEntrypoint({
     }),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours * 60 * 60 * 1000;
-    const summary = await getSummary(
-      runtime.analytics.paymentTracker,
-      windowMs
-    );
+    const summary = await runtime.analytics.getSummary(windowMs);
 
     return {
       output: {
@@ -115,15 +104,12 @@ addEntrypoint({
     outgoingCount: z.number(),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours * 60 * 60 * 1000;
-    const summary = await getOutgoingSummary(
-      runtime.analytics.paymentTracker,
-      windowMs
-    );
+    const summary = await runtime.analytics.getSummary(windowMs);
 
     return {
       output: {
@@ -148,15 +134,12 @@ addEntrypoint({
     incomingCount: z.number(),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours * 60 * 60 * 1000;
-    const summary = await getIncomingSummary(
-      runtime.analytics.paymentTracker,
-      windowMs
-    );
+    const summary = await runtime.analytics.getSummary(windowMs);
 
     return {
       output: {
@@ -191,17 +174,14 @@ addEntrypoint({
     ),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours
       ? input.windowHours * 60 * 60 * 1000
       : undefined;
-    let transactions = await getAllTransactions(
-      runtime.analytics.paymentTracker,
-      windowMs
-    );
+    let transactions = await runtime.analytics.getTransactions(windowMs);
 
     if (input.direction) {
       transactions = transactions.filter(t => t.direction === input.direction);
@@ -237,14 +217,14 @@ addEntrypoint({
     rowCount: z.number(),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours
       ? input.windowHours * 60 * 60 * 1000
       : undefined;
-    const csv = await exportToCSV(runtime.analytics.paymentTracker, windowMs);
+    const csv = await runtime.analytics.exportCSV(windowMs);
     const lines = csv.split('\n').filter(line => line.trim().length > 0);
     const rowCount = lines.length - 1;
 
@@ -273,17 +253,14 @@ addEntrypoint({
     }),
   }),
   async handler({ input, runtime }) {
-    if (!runtime?.analytics?.paymentTracker) {
+    if (!runtime?.analytics) {
       throw new Error('Analytics not available');
     }
 
     const windowMs = input.windowHours
       ? input.windowHours * 60 * 60 * 1000
       : undefined;
-    const jsonString = await exportToJSON(
-      runtime.analytics.paymentTracker,
-      windowMs
-    );
+    const jsonString = await runtime.analytics.exportJSON(windowMs);
     const data = JSON.parse(jsonString);
 
     return {

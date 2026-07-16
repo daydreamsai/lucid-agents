@@ -1,289 +1,196 @@
 # @lucid-agents/a2a
 
-Complete A2A Protocol implementation for Lucid agents. Enables agent-to-agent communication, Agent Card discovery, and task-based operations.
+A2A agent-card discovery, direct invocation, streaming, and owned asynchronous
+tasks for Lucid Agents.
 
-## What is A2A?
-
-The [A2A Protocol](https://a2a-protocol.org/) (Agent-to-Agent Protocol) is a standardized way for AI agents to discover and communicate with each other. It provides:
-
-- **Agent Discovery**: Agents expose Agent Cards describing their capabilities
-- **Task-Based Operations**: Long-running tasks with status tracking and cancellation
-- **Multi-Turn Conversations**: Context tracking across multiple interactions
-- **Streaming Support**: Real-time streaming responses via SSE
-
-## Installation
+## Install
 
 ```bash
-bun add @lucid-agents/a2a
+bun add @lucid-agents/a2a @lucid-agents/core @lucid-agents/http
 ```
 
-## Quick Start
+## Enable A2A tasks
 
-### Building Agent Cards
-
-```typescript
-import { createAgent } from '@lucid-agents/core';
+```ts
 import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
 
-const agent = await createAgent({
-  name: 'my-agent',
-  version: '1.0.0',
-})
-  .use(a2a())
+const agent = await createAgent({ name: 'worker', version: '1.0.0' })
+  .use(
+    a2a({
+      tasks: {
+        maxTasks: 1_000,
+        retentionMs: 24 * 60 * 60 * 1_000,
+        maxRunMs: 15 * 60 * 1_000,
+      },
+    })
+  )
+  .use(http())
+  .addEntrypoint({
+    key: 'summarize',
+    handler: async ({ input }) => ({ output: { summary: String(input) } }),
+  })
   .build();
-
-// Build Agent Card
-const card = runtime.a2a.buildCard('https://my-agent.example.com');
-console.log(card.name); // 'my-agent'
-console.log(card.skills); // Array of skills/entrypoints
 ```
 
-### Fetching Other Agents' Cards
+Installing `a2a()` adds the task runtime and makes HTTP task routes available.
+Without it, the agent card does not advertise task support and the task routes
+are not mounted.
 
-```typescript
-// Fetch another agent's card
-const otherAgentCard = await runtime.a2a.fetchCard('https://other-agent.example.com');
+## Call another agent
 
-// Find a specific skill
-import { findSkill } from '@lucid-agents/a2a';
-const echoSkill = findSkill(otherAgentCard, 'echo');
+The client uses the first HTTP entry in `supportedInterfaces`, falling back to
+the deprecated agent-card `url` field. This preserves an advertised base path.
+
+```ts
+const card = await agent.a2a.fetchCard('https://worker.example');
+
+const result = await agent.a2a.client.invoke(
+  card,
+  'summarize',
+  { text: 'Long text' },
+  undefined,
+  { idempotencyKey: 'summary:document-42' }
+);
 ```
 
-### Calling Other Agents (Direct Invocation)
+For streaming:
 
-```typescript
-// Synchronous invocation
-const result = await runtime.a2a.client.invoke(otherAgentCard, 'echo', {
-  text: 'Hello, agent!',
+```ts
+await agent.a2a.client.stream(card, 'summarize', { text: 'Long text' }, event =>
+  console.log(event.type, event.data)
+);
+```
+
+Pass a payment-enabled Fetch implementation in the optional `fetch` position
+when the remote entrypoint is priced.
+
+## Task operations
+
+Creating a task returns an opaque ownership capability:
+
+```ts
+const access = await agent.a2a.client.sendMessage(card, 'summarize', {
+  text: 'Long text',
 });
 
-console.log(result.output); // { text: 'Echo: Hello, agent!' }
-console.log(result.usage); // { total_tokens: 10 }
+// access = { taskId, accessToken, status: 'running' }
+const task = await agent.a2a.client.getTask(card, access);
 ```
 
-### Task-Based Operations
+Keep `accessToken` secret. Every read, cancellation, listing, and subscription
+requires it. The server persists only its SHA-256 hash, and a request made with a
+different token cannot distinguish the task from a missing task.
 
-```typescript
-// Create a task (returns immediately)
-const { taskId } = await runtime.a2a.client.sendMessage(
-  otherAgentCard,
-  'process',
-  { data: [1, 2, 3] },
-  undefined,
-  { contextId: 'conversation-1' } // Optional: for multi-turn conversations
-);
-
-// Get task status
-const task = await runtime.a2a.client.getTask(otherAgentCard, taskId);
-console.log(task.status); // 'running' | 'completed' | 'failed' | 'cancelled'
-
-// Wait for task completion
+```ts
 import { waitForTask } from '@lucid-agents/a2a';
-const completedTask = await waitForTask(runtime.a2a.client, otherAgentCard, taskId);
-console.log(completedTask.result?.output);
-```
 
-### Multi-Turn Conversations
+const completed = await waitForTask(agent.a2a.client, card, access, 30_000);
 
-```typescript
-const contextId = 'conversation-123';
-
-// First message
-const { taskId: task1 } = await runtime.a2a.client.sendMessage(
-  otherAgentCard,
-  'chat',
-  { message: 'Hello' },
-  undefined,
-  { contextId }
-);
-
-// Second message in same conversation
-const { taskId: task2 } = await runtime.a2a.client.sendMessage(
-  otherAgentCard,
-  'chat',
-  { message: 'How are you?' },
-  undefined,
-  { contextId }
-);
-
-// List all tasks in conversation
-const conversationTasks = await runtime.a2a.client.listTasks(otherAgentCard, {
-  contextId,
-});
-console.log(`Found ${conversationTasks.tasks.length} tasks in conversation`);
-```
-
-### Task Management
-
-```typescript
-// List tasks with filtering
-const allTasks = await a2a.client.listTasks(otherAgentCard);
-const runningTasks = await a2a.client.listTasks(otherAgentCard, {
-  status: 'running',
-});
-const conversationTasks = await a2a.client.listTasks(otherAgentCard, {
-  contextId: 'conversation-1',
-  status: ['completed', 'failed'],
+await agent.a2a.client.subscribeTask(card, access, event => {
+  console.log(event.type, event.data);
 });
 
-// Pagination
-const page1 = await a2a.client.listTasks(otherAgentCard, {
-  limit: 10,
-  offset: 0,
-});
+await agent.a2a.client.cancelTask(card, access);
 
-// Cancel a running task
-await a2a.client.cancelTask(otherAgentCard, taskId);
-```
-
-### Streaming Responses
-
-```typescript
-await a2a.client.stream(otherAgentCard, 'generate', { prompt: '...' }, async chunk => {
-  console.log(chunk.type, chunk.data);
-  // 'delta' { text: 'Hello' }
-  // 'delta' { text: ' world' }
-  // 'done' { output: {...}, usage: {...} }
+const owned = await agent.a2a.client.listTasks(card, access.accessToken, {
+  status: ['running', 'completed'],
+  limit: 50,
 });
 ```
 
-### Convenience Functions
+Pass `options.accessToken` to `sendMessage` when several tasks should belong to
+the same owner and be returned by one `listTasks` call.
 
-```typescript
-import { fetchAndInvoke, fetchAndSendMessage } from '@lucid-agents/a2a';
+## HTTP task contract
 
-// Fetch card and invoke in one call
-const result = await fetchAndInvoke(
-  'https://other-agent.example.com',
-  'echo',
-  { text: 'Hello' }
-);
+With the default empty base path, `@lucid-agents/http` exposes:
 
-// Fetch card and send message in one call
-const { taskId } = await fetchAndSendMessage(
-  'https://other-agent.example.com',
-  'process',
-  { data: [...] }
-);
+| Operation        | Route                          | Access token          |
+| ---------------- | ------------------------------ | --------------------- |
+| Create           | `POST /tasks`                  | supplied or generated |
+| List owned tasks | `GET /tasks`                   | required              |
+| Read             | `GET /tasks/:taskId`           | required              |
+| Cancel           | `POST /tasks/:taskId/cancel`   | required              |
+| Subscribe (SSE)  | `GET /tasks/:taskId/subscribe` | required              |
+
+The token is transported in `Task-Access-Token`. A configured HTTP base path is
+also used by these routes and is preserved in agent-card interfaces.
+
+Task creation uses the same authorization gate as direct invoke and stream. A
+priced or auth-only entrypoint is verified before a task is reserved, and x402
+settlement is finalized before background execution is admitted.
+
+## Storage and state transitions
+
+The default `createInMemoryTaskStore()` is process-local and bounded. It:
+
+- retains at most 1,000 tasks by default;
+- expires terminal tasks after 24 hours by default;
+- evicts only terminal tasks;
+- rejects new work if capacity contains only active tasks;
+- delivers owner-isolated update subscriptions.
+
+For restart survival or multiple workers, implement `TaskStore` and inject it:
+
+```ts
+import type { TaskStore } from '@lucid-agents/types/a2a';
+
+declare const durableStore: TaskStore;
+
+const agent = await createAgent({ name: 'worker', version: '1.0.0' })
+  .use(a2a({ tasks: { store: durableStore, maxRunMs: 60_000 } }))
+  .use(http())
+  .build();
 ```
 
-## API Reference
+The store contract uses both atomic execution claims and fenced
+`compareAndSet` transitions:
 
-### `createA2ARuntime(runtime, options?)`
+- `claimExecution(taskId, ownerId, expiresAt, now)` may claim a running task
+  only when it has no live lease;
+- an expired lease may be recovered by another worker;
+- terminal writes pass `executionOwnerId`, so a stale worker cannot overwrite
+  the recovery worker's result;
+- `create` and every state transition must be durable before returning;
+- subscription delivery must remain isolated by the persisted owner hash.
 
-Creates an A2A runtime from an AgentRuntime. Always returns a runtime (A2A is always available).
+Valid terminal states are `completed`, `failed`, and `cancelled`; a timeout
+fences and marks a still-running task failed. A durable store should use a
+database transaction, conditional update, or equivalent compare-and-swap for
+both claim and transition operations. `runtime.close()` closes the task runtime
+and injected store. It aborts local handlers without marking durable running
+tasks cancelled; their leases remain recoverable by another worker.
 
-```typescript
-import { createA2ARuntime } from '@lucid-agents/a2a';
-import { createAgentRuntime } from '@lucid-agents/core';
+## Standalone utilities
 
-const runtime = createAgentRuntime({ name: 'my-agent', version: '1.0.0' });
-const a2a = createA2ARuntime(runtime);
+```ts
+import {
+  buildAgentCard,
+  fetchAgentCard,
+  fetchAgentCardWithEntrypoints,
+  invokeAgent,
+  streamAgent,
+  sendMessage,
+  getTask,
+  listTasks,
+  cancelTask,
+  subscribeTask,
+  createInMemoryTaskStore,
+  createTaskRuntime,
+} from '@lucid-agents/a2a';
 ```
 
-### `buildAgentCard(options)`
+Protocol types—including `AgentCard`, `TaskAccess`, `TaskStore`, and
+`A2ARuntime`—are defined in `@lucid-agents/types/a2a` rather than re-exported.
 
-Builds a base A2A-compliant Agent Card. Does NOT include payments, identity, or AP2 extensions.
+## Discovery
 
-```typescript
-import { buildAgentCard } from '@lucid-agents/a2a';
+HTTP serves the current card at both:
 
-const card = buildAgentCard({
-  meta: { name: 'my-agent', version: '1.0.0' },
-  registry: entrypoints,
-  origin: 'https://my-agent.example.com',
-});
-```
+- `/.well-known/agent-card.json` (canonical)
+- `/.well-known/agent.json` (legacy compatibility)
 
-### `fetchAgentCard(baseUrl, fetch?)`
-
-Fetches an Agent Card from `/.well-known/agent-card.json`.
-
-```typescript
-import { fetchAgentCard } from '@lucid-agents/a2a';
-
-const card = await fetchAgentCard('https://other-agent.example.com');
-```
-
-### Client Methods
-
-The A2A client provides the following methods:
-
-- **`invoke(card, skillId, input, fetch?)`** - Synchronous invocation
-- **`stream(card, skillId, input, emit, fetch?)`** - Streaming invocation
-- **`sendMessage(card, skillId, input, fetch?, options?)`** - Create task
-- **`getTask(card, taskId, fetch?)`** - Get task status
-- **`listTasks(card, filters?, fetch?)`** - List tasks with filtering
-- **`cancelTask(card, taskId, fetch?)`** - Cancel running task
-- **`subscribeTask(card, taskId, emit, fetch?)`** - Subscribe to task updates via SSE
-- **`fetchAndInvoke(baseUrl, skillId, input, fetch?)`** - Convenience: fetch + invoke
-- **`fetchAndSendMessage(baseUrl, skillId, input, fetch?)`** - Convenience: fetch + sendMessage
-
-### Utilities
-
-- **`findSkill(card, skillId)`** - Find a skill in an Agent Card
-- **`parseAgentCard(json)`** - Parse Agent Card JSON
-- **`waitForTask(client, card, taskId, maxWaitMs?)`** - Poll for task completion
-
-## Task Lifecycle
-
-1. **Create**: `sendMessage()` returns `{ taskId, status: 'running' }` immediately
-2. **Execute**: Task runs asynchronously in the background
-3. **Update**: Status changes to `completed`, `failed`, or `cancelled`
-4. **Retrieve**: Use `getTask()` or `subscribeTask()` to get updates
-5. **Complete**: Task contains `result` (on success) or `error` (on failure)
-
-## Multi-Turn Conversations
-
-Use `contextId` to group related tasks in a conversation:
-
-```typescript
-const contextId = `conversation-${Date.now()}`;
-
-// All tasks with same contextId belong to same conversation
-await a2a.client.sendMessage(card, 'chat', { message: 'Hello' }, undefined, {
-  contextId,
-});
-await a2a.client.sendMessage(card, 'chat', { message: 'How are you?' }, undefined, {
-  contextId,
-});
-
-// List all tasks in conversation
-const tasks = await a2a.client.listTasks(card, { contextId });
-```
-
-## Facilitating Agent Pattern
-
-Agents can act as both clients and servers, enabling agent composition:
-
-```typescript
-// Agent 2 (Facilitator) receives call from Agent 3
-addEntrypoint({
-  key: 'process',
-  handler: async ctx => {
-    // Agent 2 calls Agent 1 (Worker)
-    const agent1Card = await a2a.fetchCard('http://agent1:8787');
-    const { taskId } = await a2a.client.sendMessage(agent1Card, 'process', ctx.input);
-    const task = await waitForTask(a2a.client, agent1Card, taskId);
-
-    // Return Agent 1's result to Agent 3
-    return { output: task.result?.output, usage: task.result?.usage };
-  },
-});
-```
-
-See `packages/a2a/examples/full-integration.ts` for a complete example.
-
-## Related Packages
-
-- `@lucid-agents/core` - Core agent runtime
-- `@lucid-agents/ap2` - AP2 extension for Agent Cards
-- `@lucid-agents/payments` - Payment utilities for paid agent calls
-- `@lucid-agents/types` - Shared type definitions
-
-## Resources
-
-- [A2A Protocol Specification](https://a2a-protocol.org/latest/specification/) - Complete protocol documentation
-- [A2A Protocol Overview](https://a2a-protocol.org/) - Protocol introduction and concepts
-- [Full Integration Example](examples/full-integration.ts) - Complete facilitating agent example
-
+The card is origin-aware and includes the current canonical entrypoint registry.
+Unknown fields and `supportedInterfaces` are preserved when cards are parsed.

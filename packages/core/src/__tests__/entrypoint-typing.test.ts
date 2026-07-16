@@ -3,6 +3,7 @@
  * This file tests that TypeScript properly infers input/output types from Zod schemas
  */
 
+import type { AgentRuntime } from '@lucid-agents/types/core';
 import { describe, expect, test } from 'bun:test';
 import { z } from 'zod';
 
@@ -19,7 +20,7 @@ describe('EntrypointDef type inference', () => {
       count: z.number().optional(),
     });
 
-    core.addEntrypoint({
+    core.registerEntrypoint({
       key: 'chat',
       description: 'Chat endpoint',
       input: inputSchema,
@@ -38,7 +39,7 @@ describe('EntrypointDef type inference', () => {
     });
 
     // Test that handler receives properly typed input
-    const entrypoint = core.getEntrypoint('chat');
+    const entrypoint = core.agent.getEntrypoint('chat');
     expect(entrypoint).toBeDefined();
     if (!entrypoint?.handler) {
       throw new Error('Handler not found');
@@ -52,6 +53,7 @@ describe('EntrypointDef type inference', () => {
       },
       signal: new AbortController().signal,
       metadata: { headers: new Headers() },
+      runtime: {} as AgentRuntime,
     });
 
     expect(result.output).toEqual({
@@ -66,7 +68,7 @@ describe('EntrypointDef type inference', () => {
       meta: { name: 'test', version: '1.0.0' },
     });
 
-    core.addEntrypoint({
+    core.registerEntrypoint({
       key: 'generate',
       input: z.object({ prompt: z.string() }),
       output: z.object({
@@ -87,7 +89,7 @@ describe('EntrypointDef type inference', () => {
     });
 
     // Test that handler receives properly typed input and returns properly typed output
-    const entrypoint = core.getEntrypoint('generate');
+    const entrypoint = core.agent.getEntrypoint('generate');
     expect(entrypoint).toBeDefined();
     if (!entrypoint?.handler) {
       throw new Error('Handler not found');
@@ -98,6 +100,7 @@ describe('EntrypointDef type inference', () => {
       input: { prompt: 'test' },
       signal: new AbortController().signal,
       metadata: { headers: new Headers() },
+      runtime: {} as AgentRuntime,
     });
 
     expect(result.output).toHaveProperty('text');
@@ -109,7 +112,7 @@ describe('EntrypointDef type inference', () => {
       meta: { name: 'test', version: '1.0.0' },
     });
 
-    core.addEntrypoint({
+    core.registerEntrypoint({
       key: 'analyze',
       input: z.object({
         user: z.object({
@@ -133,7 +136,7 @@ describe('EntrypointDef type inference', () => {
     });
 
     // Test that handler receives properly typed complex nested input
-    const entrypoint = core.getEntrypoint('analyze');
+    const entrypoint = core.agent.getEntrypoint('analyze');
     expect(entrypoint).toBeDefined();
     if (!entrypoint?.handler) {
       throw new Error('Handler not found');
@@ -147,6 +150,7 @@ describe('EntrypointDef type inference', () => {
       },
       signal: new AbortController().signal,
       metadata: { headers: new Headers() },
+      runtime: {} as AgentRuntime,
     });
 
     expect(result.output).toEqual({

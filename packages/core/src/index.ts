@@ -1,5 +1,5 @@
-export { AgentCore, createAgentCore } from './core/agent';
 export { AgentBuilder } from './extensions/builder';
+export { buildAgentManifest } from './manifest';
 export { createAgent } from './runtime';
 export * from './utils';
 export { validateAgentMetadata } from './validation';

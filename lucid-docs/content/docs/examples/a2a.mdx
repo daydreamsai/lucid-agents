@@ -95,14 +95,18 @@ addEntrypoint2({
     const agent1Card = await a2aClient.fetchCard('http://localhost:8787');
 
     // Create task on Agent 1
-    const { taskId } = await a2aClient.client.sendMessage(
+    const taskAccess = await a2aClient.client.sendMessage(
       agent1Card,
       'echo',
       { text: ctx.input.text }
     );
 
     // Wait for result
-    const task = await waitForTask(a2aClient.client, agent1Card, taskId);
+    const task = await waitForTask(
+      a2aClient.client,
+      agent1Card,
+      taskAccess
+    );
 
     if (task.status === 'failed') {
       throw new Error(task.error?.message || 'Task failed');
@@ -128,11 +132,11 @@ const a2a3 = agent3.a2a;
 
 // Call Agent 2, which calls Agent 1
 const card2 = await a2a3.fetchCard('http://localhost:8788');
-const { taskId } = await a2a3.client.sendMessage(card2, 'echo', {
+const taskAccess = await a2a3.client.sendMessage(card2, 'echo', {
   text: 'Hello from Agent 3!',
 });
 
-const result = await waitForTask(a2a3.client, card2, taskId);
+const result = await waitForTask(a2a3.client, card2, taskAccess);
 console.log('Final result:', result.result?.output);
 // Output: { text: "Echo: Hello from Agent 3!" }
 ```
@@ -158,11 +162,11 @@ Create a task and poll for results:
 
 ```typescript
 // Create task (returns immediately)
-const { taskId, status } = await client.sendMessage(card, 'skillId', input);
-// status is 'running'
+const taskAccess = await client.sendMessage(card, 'skillId', input);
+// taskAccess = { taskId, accessToken, status: 'running' }
 
 // Wait for completion
-const task = await waitForTask(client, card, taskId);
+const task = await waitForTask(client, card, taskAccess);
 
 if (task.status === 'completed') {
   console.log(task.result?.output);
@@ -178,14 +182,28 @@ Group related tasks with `contextId`:
 ```typescript
 const contextId = `conversation-${Date.now()}`;
 
-// First message
-await client.sendMessage(card, 'chat', { text: 'Hello' }, undefined, { contextId });
+// First message establishes the owner capability
+const first = await client.sendMessage(
+  card,
+  'chat',
+  { text: 'Hello' },
+  undefined,
+  { contextId }
+);
 
-// Second message in same conversation
-await client.sendMessage(card, 'chat', { text: 'Tell me more' }, undefined, { contextId });
+// Second message reuses the same owner and conversation
+await client.sendMessage(
+  card,
+  'chat',
+  { text: 'Tell me more' },
+  undefined,
+  { contextId, accessToken: first.accessToken }
+);
 
 // List all messages in conversation
-const { tasks } = await client.listTasks(card, { contextId });
+const { tasks } = await client.listTasks(card, first.accessToken, {
+  contextId,
+});
 ```
 
 #### Task cancellation
@@ -194,11 +212,11 @@ Cancel a running task:
 
 ```typescript
 try {
-  const cancelled = await client.cancelTask(card, taskId);
+  const cancelled = await client.cancelTask(card, taskAccess);
   console.log('Cancelled:', cancelled.status);  // 'cancelled'
 } catch (error) {
   // Task may have already completed
-  const task = await client.getTask(card, taskId);
+  const task = await client.getTask(card, taskAccess);
   console.log('Task status:', task.status);
 }
 ```
@@ -208,7 +226,7 @@ try {
 Always validate output from remote agents:
 
 ```typescript
-const task = await waitForTask(client, card, taskId);
+const task = await waitForTask(client, card, taskAccess);
 
 // Don't trust remote data - validate with Zod
 const outputSchema = z.object({ result: z.number() });

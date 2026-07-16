@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import type { AgentCardWithEntrypoints, AgentMeta } from '@lucid-agents/types/a2a';
+import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import type { AgentMeta } from '@lucid-agents/types/core';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import { z } from 'zod';
 
@@ -172,7 +173,12 @@ describe('fetchAgentCard', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -181,7 +187,10 @@ describe('fetchAgentCard', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const card = await fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch);
+    const card = await fetchAgentCard(
+      'https://remote.example.com',
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(card).toBeDefined();
     expect(card.name).toBe('remote-agent');
@@ -199,7 +208,12 @@ describe('fetchAgentCard', () => {
 
     let callCount = 0;
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       callCount++;
       // First call fails (spec path), second succeeds (alternative path)
       if (urlStr.includes('/.well-known/agent-card.json')) {
@@ -213,7 +227,10 @@ describe('fetchAgentCard', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const card = await fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch);
+    const card = await fetchAgentCard(
+      'https://remote.example.com',
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(card).toBeDefined();
     expect(card.name).toBe('remote-agent');
@@ -230,7 +247,12 @@ describe('fetchAgentCard', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/agentcard.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -239,7 +261,10 @@ describe('fetchAgentCard', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const card = await fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch);
+    const card = await fetchAgentCard(
+      'https://remote.example.com',
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(card).toBeDefined();
     expect(card.name).toBe('remote-agent');
@@ -256,7 +281,12 @@ describe('fetchAgentCard', () => {
 
     const fullUrl = 'https://remote.example.com/.well-known/agent-card.json';
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr === fullUrl) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -265,7 +295,10 @@ describe('fetchAgentCard', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const card = await fetchAgentCard(fullUrl, mockFetch as unknown as typeof fetch);
+    const card = await fetchAgentCard(
+      fullUrl,
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(card).toBeDefined();
     expect(card.name).toBe('remote-agent');
@@ -276,7 +309,12 @@ describe('fetchAgentCard', () => {
       throw new Error('Network error');
     });
 
-    await expect(fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch)).rejects.toThrow();
+    await expect(
+      fetchAgentCard(
+        'https://remote.example.com',
+        mockFetch as unknown as typeof fetch
+      )
+    ).rejects.toThrow();
   });
 
   it('throws error when all paths fail', async () => {
@@ -284,9 +322,12 @@ describe('fetchAgentCard', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    await expect(fetchAgentCard('https://remote.example.com', mockFetch as unknown as typeof fetch)).rejects.toThrow(
-      'Failed to fetch Agent Card'
-    );
+    await expect(
+      fetchAgentCard(
+        'https://remote.example.com',
+        mockFetch as unknown as typeof fetch
+      )
+    ).rejects.toThrow('Failed to fetch Agent Card');
   });
 });
 
@@ -303,7 +344,12 @@ describe('fetchAgentCardWithEntrypoints', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -327,6 +373,12 @@ describe('parseAgentCard', () => {
       name: 'parsed-agent',
       version: '1.0.0',
       url: 'https://parsed.example.com/',
+      supportedInterfaces: [
+        {
+          url: 'https://parsed.example.com/api/agent/',
+          protocolBinding: 'HTTP+JSON',
+        },
+      ],
       skills: [],
       entrypoints: {},
     };
@@ -335,6 +387,9 @@ describe('parseAgentCard', () => {
 
     expect(card.name).toBe('parsed-agent');
     expect(card.version).toBe('1.0.0');
+    expect(card.supportedInterfaces?.[0]?.url).toBe(
+      'https://parsed.example.com/api/agent/'
+    );
   });
 
   it('validates required fields', () => {
@@ -362,7 +417,12 @@ describe('hasCapability', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -401,7 +461,12 @@ describe('hasSkillTag', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -434,7 +499,12 @@ describe('hasSkillTag', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -474,7 +544,12 @@ describe('supportsPayments', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -500,7 +575,12 @@ describe('supportsPayments', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -533,7 +613,12 @@ describe('hasTrustInfo', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -566,7 +651,12 @@ describe('hasTrustInfo', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -592,7 +682,12 @@ describe('hasTrustInfo', () => {
     };
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },

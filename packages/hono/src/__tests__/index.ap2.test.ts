@@ -12,7 +12,9 @@ describe('createAgentApp AP2 extension', () => {
     description: 'Test agent for AP2',
   };
 
-  const fetchCard = async (app: ReturnType<typeof createAgentApp>['app']) => {
+  const fetchCard = async (
+    app: Awaited<ReturnType<typeof createAgentApp>>['app']
+  ) => {
     const res = await app.request('http://agent/.well-known/agent-card.json');
     expect(res.status).toBe(200);
     return (await res.json()) as any;
@@ -47,7 +49,6 @@ describe('createAgentApp AP2 extension', () => {
             payTo: '0xabc000000000000000000000000000000000c0de',
             facilitatorUrl: 'https://facilitator.local' as any,
             network: 'eip155:84532' as any,
-            defaultPrice: '$0.01',
           },
         })
       )

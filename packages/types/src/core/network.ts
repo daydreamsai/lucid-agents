@@ -11,8 +11,8 @@
  * 'eip155:11155111'  // Ethereum Sepolia
  *
  * // Solana networks
- * 'solana:mainnet'   // Solana Mainnet
- * 'solana:devnet'    // Solana Devnet
+ * 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' // Solana Mainnet
+ * 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1' // Solana Devnet
  *
  * @see https://chainagnostic.org/CAIPs/caip-2
  */

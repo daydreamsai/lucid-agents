@@ -11,7 +11,6 @@ import { fileURLToPath } from 'node:url';
 
 import {
   type AdapterDefinition,
-  type AdapterSnippets,
   getAdapterDefinition,
   getAdapterDisplayName,
   isAdapterSupported,
@@ -948,16 +947,24 @@ function parseTemplateSections(content: string): Record<string, string> {
 }
 
 function mergeAdapterAndTemplate(
-  adapterSnippets: AdapterSnippets,
+  adapter: AdapterDefinition,
   templateSections: Record<string, string>
 ): string {
+  const adapterSnippets = adapter.snippets;
+  const templatePreSetup = templateSections['{{TEMPLATE_PRE_SETUP}}'] || '';
+  const configuredPreSetup = adapter.httpBasePath
+    ? templatePreSetup.replace(
+        /\.use\(http\(\)\)/g,
+        `.use(http({ basePath: "${adapter.httpBasePath}" }))`
+      )
+    : templatePreSetup;
   const parts: string[] = [
     'import { z } from "zod";',
     adapterSnippets.imports, // Adapter-specific imports
     templateSections['{{TEMPLATE_IMPORTS}}'] || '', // Template imports (createAgent, http, etc.)
     '',
     adapterSnippets.preSetup,
-    templateSections['{{TEMPLATE_PRE_SETUP}}'] || '',
+    configuredPreSetup,
     '',
     adapterSnippets.appCreation,
     '',
@@ -1124,6 +1131,9 @@ async function copyTemplate(
   adapter: AdapterDefinition
 ) {
   // Copy adapter files
+  for (const baseFilesDir of adapter.baseFilesDirs ?? []) {
+    await copyAdapterLayer(baseFilesDir, targetDir);
+  }
   await copyAdapterLayer(adapter.filesDir, targetDir);
 
   const entries = await fs.readdir(templateRoot, { withFileTypes: true });
@@ -1188,7 +1198,7 @@ async function applyTemplateTransforms(
     const templateAgentContent = await fs.readFile(templateAgentPath, 'utf8');
     const templateSections = parseTemplateSections(templateAgentContent);
     const mergedAgentContent = mergeAdapterAndTemplate(
-      params.adapter.snippets,
+      params.adapter,
       templateSections
     );
 

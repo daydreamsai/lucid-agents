@@ -6,6 +6,8 @@
   "package": {
     "dependencies": {
       "@lucid-agents/identity": "latest",
+      "@lucid-agents/http": "latest",
+      "@lucid-agents/payments": "latest",
       "@lucid-agents/wallet": "latest",
       "viem": "^2.41.2"
     }
@@ -175,7 +177,10 @@
         "message": "Payment destination mode",
         "choices": [
           { "value": "static", "title": "Static wallet address" },
-          { "value": "stripe", "title": "Stripe dynamic destination (Base only)" }
+          {
+            "value": "stripe",
+            "title": "Stripe dynamic destination (Base only)"
+          }
         ],
         "defaultValue": "static"
       },

@@ -1,30 +1,54 @@
-import type { AgentConfig, EntrypointDef } from '@lucid-agents/types/core';
-import { z } from 'zod';
+import type {
+  AgentConfig,
+  AgentCore,
+  EntrypointDef,
+} from '@lucid-agents/types/core';
+import type { z } from 'zod';
 
-export class AgentCore {
-  private entrypoints = new Map<string, EntrypointDef>();
+type EntrypointLifecycle = {
+  beforeAdd?: (entrypoint: EntrypointDef) => void;
+  afterAdd?: (entrypoint: EntrypointDef) => void;
+};
 
-  constructor(public readonly config: AgentConfig) {}
-
-  addEntrypoint<
+/** Internal mutation controller. Only its read-only `agent` view is public. */
+export type AgentCoreController = {
+  agent: AgentCore;
+  registerEntrypoint: <
     TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
     TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
-  >(entrypoint: EntrypointDef<TInput, TOutput>): void {
-    if (!entrypoint.key || typeof entrypoint.key !== 'string') {
-      throw new Error('Entrypoint must include a non-empty string key');
-    }
-    this.entrypoints.set(entrypoint.key, entrypoint);
-  }
+    TRuntime extends object = object,
+  >(
+    entrypoint: EntrypointDef<TInput, TOutput, TRuntime>
+  ) => void;
+  configureEntrypointLifecycle: (hooks: EntrypointLifecycle) => void;
+};
 
-  getEntrypoint(key: string): EntrypointDef | undefined {
-    return this.entrypoints.get(key);
-  }
+export function createAgentCore(config: AgentConfig): AgentCoreController {
+  const entrypoints = new Map<string, EntrypointDef>();
+  let lifecycle: EntrypointLifecycle = {};
 
-  listEntrypoints(): EntrypointDef[] {
-    return Array.from(this.entrypoints.values());
-  }
-}
+  const agent: AgentCore = {
+    config,
+    getEntrypoint: key => entrypoints.get(key),
+    listEntrypoints: () => [...entrypoints.values()],
+  };
 
-export function createAgentCore(config: AgentConfig): AgentCore {
-  return new AgentCore(config);
+  return {
+    agent,
+    registerEntrypoint(entrypoint) {
+      if (!entrypoint.key || typeof entrypoint.key !== 'string') {
+        throw new Error('Entrypoint must include a non-empty string key');
+      }
+      if (entrypoints.has(entrypoint.key)) {
+        throw new Error(`Entrypoint "${entrypoint.key}" is already registered`);
+      }
+      const stored = entrypoint as unknown as EntrypointDef;
+      lifecycle.beforeAdd?.(stored);
+      entrypoints.set(entrypoint.key, stored);
+      lifecycle.afterAdd?.(stored);
+    },
+    configureEntrypointLifecycle(hooks) {
+      lifecycle = hooks;
+    },
+  };
 }

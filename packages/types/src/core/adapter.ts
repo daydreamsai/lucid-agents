@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { EntrypointDef, EntrypointHandler } from './entrypoint';
+import type { AgentRuntime } from './runtime';
 
 /**
  * Return type for adapter-specific `createAgentApp` functions.
@@ -10,8 +11,8 @@ import type { EntrypointDef, EntrypointHandler } from './entrypoint';
  */
 export type CreateAgentAppReturn<
   TApp = unknown,
-  TRuntime = any,
-  TAgent = any,
+  TRuntime extends object = AgentRuntime,
+  TAgent = AgentRuntime['agent'],
 > = {
   app: TApp;
   runtime: TRuntime;
@@ -20,6 +21,6 @@ export type CreateAgentAppReturn<
     TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
     TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
   >(
-    def: EntrypointDef<TInput, TOutput>
+    def: EntrypointDef<TInput, TOutput, TRuntime>
   ) => void;
 };

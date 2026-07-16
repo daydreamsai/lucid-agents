@@ -1,4 +1,23 @@
-import type { PaymentDirection, PaymentRecord } from '@lucid-agents/types/payments';
+import type {
+  PaymentDirection,
+  PaymentRecord,
+} from '@lucid-agents/types/payments';
+
+export type PaymentLimitReservation = {
+  groupName: string;
+  scope: string;
+  direction: PaymentDirection;
+  amount: bigint;
+  maxTotal: bigint;
+  windowMs?: number;
+  ttlMs: number;
+};
+
+export type PaymentLimitReservationResult =
+  | { allowed: true; reservationId: string }
+  | { allowed: false };
+
+export type PaymentAccountingRecord = Omit<PaymentRecord, 'id' | 'timestamp'>;
 
 /**
  * Interface for payment data storage.
@@ -41,8 +60,30 @@ export interface PaymentStorage {
     windowMs?: number
   ): Promise<PaymentRecord[]>;
 
+  /** Atomically reserve capacity below a total limit. */
+  reservePaymentLimit(
+    reservation: PaymentLimitReservation
+  ): Promise<PaymentLimitReservationResult>;
+
+  /** Atomically turn a live reservation into a payment record. */
+  commitPaymentReservation(reservationId: string): Promise<boolean>;
+
+  /**
+   * Atomically commit every reservation and additional history record, or
+   * commit none of them when any reservation is missing or expired.
+   */
+  commitPaymentReservations(
+    reservationIds: readonly string[],
+    records?: readonly PaymentAccountingRecord[]
+  ): Promise<boolean>;
+
+  /** Release a reservation without recording a payment. */
+  releasePaymentReservation(reservationId: string): Promise<void>;
+
   /**
    * Clears all payment data (useful for testing or reset).
    */
   clear(): Promise<void>;
+  /** Release persistent storage resources. */
+  close?(): Promise<void> | void;
 }

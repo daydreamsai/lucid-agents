@@ -1,53 +1,72 @@
-import type { Network } from '@x402/core/types';
+import type { Network } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
 /**
  * Supported EVM networks (CAIP-2 format)
  */
 const SupportedEVMNetworks: Network[] = [
-  'eip155:1',        // Ethereum mainnet
+  'eip155:1', // Ethereum mainnet
   'eip155:11155111', // Ethereum Sepolia
-  'eip155:8453',     // Base mainnet
-  'eip155:84532',    // Base Sepolia
-  'eip155:137',      // Polygon
-  'eip155:80002',    // Polygon Amoy
-  'eip155:43114',    // Avalanche
-  'eip155:43113',    // Avalanche Fuji
+  'eip155:8453', // Base mainnet
+  'eip155:84532', // Base Sepolia
+  'eip155:137', // Polygon
+  'eip155:80002', // Polygon Amoy
+  'eip155:43114', // Avalanche
+  'eip155:43113', // Avalanche Fuji
 ];
 
 /**
  * Supported SVM networks (CAIP-2 format)
  */
 const SupportedSVMNetworks: Network[] = [
-  'solana:mainnet',
-  'solana:devnet',
+  'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
 ];
-
-const SupportedNamedNetworks = [
-  'ethereum',
-  'sepolia',
-  'base',
-  'base-sepolia',
-  'solana',
-  'solana-devnet',
-] as const;
 
 const SUPPORTED_NETWORKS: Network[] = [
   ...SupportedEVMNetworks,
   ...SupportedSVMNetworks,
-  ...(SupportedNamedNetworks as unknown as Network[]),
 ];
 
-const BASE_NETWORKS = new Set(['base', 'eip155:8453']);
+const LEGACY_NETWORK_ALIASES: Readonly<Record<string, Network>> = {
+  ethereum: 'eip155:1',
+  sepolia: 'eip155:11155111',
+  base: 'eip155:8453',
+  'base-sepolia': 'eip155:84532',
+  solana: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  'solana-mainnet': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  'solana:mainnet': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+  'solana-devnet': 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+  'solana:devnet': 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+};
+
+const BASE_NETWORKS = new Set<Network>(['eip155:8453']);
 
 function isStripeMode(
   payments: PaymentsConfig
-): payments is PaymentsConfig & { stripe: NonNullable<PaymentsConfig['stripe']> } {
+): payments is PaymentsConfig & {
+  stripe: NonNullable<PaymentsConfig['stripe']>;
+} {
   return 'stripe' in payments && typeof payments.stripe === 'object';
 }
 
-function normalizeNetwork(network: string): string {
-  return network.trim().toLowerCase();
+/**
+ * Resolve historical network aliases at the configuration boundary. Runtime
+ * state, manifests, and x402 payloads always use the canonical CAIP-2 value.
+ */
+export function normalizePaymentNetwork(network: string): Network {
+  const trimmed = network.trim();
+  const normalizedAlias = trimmed.toLowerCase();
+  const canonical =
+    LEGACY_NETWORK_ALIASES[normalizedAlias] ??
+    (normalizedAlias.startsWith('eip155:') ? normalizedAlias : trimmed);
+  if (!SUPPORTED_NETWORKS.includes(canonical as Network)) {
+    throw new Error(
+      `Unsupported payment network: ${network}. ` +
+        `Supported networks: ${SUPPORTED_NETWORKS.join(', ')}.`
+    );
+  }
+  return canonical as Network;
 }
 
 /**
@@ -111,15 +130,17 @@ export function validatePaymentsConfig(
       );
     }
 
-    const normalizedNetwork = normalizeNetwork(network);
+    const normalizedNetwork = normalizePaymentNetwork(network);
     if (!BASE_NETWORKS.has(normalizedNetwork)) {
       throw new Error(
-        `Stripe destination mode currently supports only Base mainnet (base / eip155:8453). Received: ${network}.`
+        `Stripe destination mode currently supports only Base mainnet (eip155:8453). Received: ${network}.`
       );
     }
   }
 
-  if (!SUPPORTED_NETWORKS.includes(network as Network)) {
+  try {
+    normalizePaymentNetwork(network);
+  } catch {
     console.error(
       `[agent-kit] Payment configuration error for entrypoint "${entrypointKey}":`,
       `Unsupported network: ${network}`,
@@ -128,7 +149,7 @@ export function validatePaymentsConfig(
     throw new Error(
       `Unsupported payment network: ${network}. ` +
         `Supported networks: ${SUPPORTED_NETWORKS.join(', ')}. ` +
-        `Please use one of the supported networks in your configuration.`
+        `Please use a supported CAIP-2 identifier in your configuration.`
     );
   }
 }

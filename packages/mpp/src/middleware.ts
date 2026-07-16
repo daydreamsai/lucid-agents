@@ -1,56 +1,7 @@
-import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
-import type { MppRuntime } from './types';
+import { Credential, Receipt } from 'mppx';
 
 /**
- * Options for the MPP charge middleware.
- */
-export type MppChargeOptions = {
-  /** Payment amount in the configured currency */
-  amount: string;
-  /** Human-readable description */
-  description?: string;
-  /** Override currency */
-  currency?: string;
-  /** Restrict to specific payment methods */
-  methods?: string[];
-};
-
-/**
- * Options for the MPP session middleware.
- */
-export type MppSessionOptions = {
-  /** Per-unit cost */
-  amount: string;
-  /** Unit type description */
-  unitType?: string;
-  /** Suggested deposit for the session channel */
-  suggestedDeposit?: string;
-  /** Minimum required deposit */
-  minDeposit?: string;
-};
-
-/**
- * Evaluate whether a request needs MPP payment.
- * Returns the 402 response if payment is required, or null if not.
- *
- * This is a framework-agnostic helper. Framework adapters (express, hono)
- * can wrap this in their middleware pattern.
- */
-export function evaluateMppPayment(
-  entrypoint: EntrypointDef,
-  kind: 'invoke' | 'stream',
-  mppRuntime: MppRuntime | undefined
-): Response | null {
-  if (!mppRuntime?.isActive) return null;
-
-  const requirement = mppRuntime.requirements(entrypoint, kind);
-  if (!requirement.required) return null;
-
-  return requirement.response;
-}
-
-/**
- * Decode the MPP Payment header into its component fields.
+ * Decode a standard `Authorization: Payment …` credential.
  *
  * **WARNING**: This is a **decode-only** helper. It performs NO cryptographic
  * verification, signature checking, or payment confirmation. Do NOT use this
@@ -60,23 +11,39 @@ export function evaluateMppPayment(
  * @returns The decoded challenge ID and payload, or `null` if the header is
  *          missing or malformed.
  */
-export function decodePaymentHeader(
-  request: Request
-): { challengeId: string; payload: Record<string, unknown> } | null {
-  const paymentHeader = request.headers.get('Payment');
-  if (!paymentHeader) return null;
-
-  // Extract credential from Payment header: credential="base64url-encoded-json"
-  const match = paymentHeader.match(/credential="([^"]+)"/);
-  if (!match?.[1]) return null;
-
+export function decodeMppCredential(request: Request): {
+  challengeId: string;
+  challenge: {
+    id: string;
+    realm: string;
+    method: string;
+    intent: string;
+    request: Record<string, unknown>;
+    description?: string;
+    digest?: string;
+    expires?: string;
+  };
+  payload: Record<string, unknown>;
+  source?: string;
+} | null {
+  const authorization = request.headers.get('Authorization');
+  if (!authorization) return null;
   try {
-    // base64url decode
-    const decoded = atob(match[1].replace(/-/g, '+').replace(/_/g, '/'));
-    const credential = JSON.parse(decoded);
+    const payment = Credential.extractPaymentScheme(authorization);
+    if (!payment) return null;
+    const credential = Credential.deserialize(payment);
+    if (
+      !credential.payload ||
+      typeof credential.payload !== 'object' ||
+      Array.isArray(credential.payload)
+    ) {
+      return null;
+    }
     return {
-      challengeId: credential.challenge_id ?? credential.challengeId,
-      payload: credential.payload ?? credential,
+      challengeId: credential.challenge.id,
+      challenge: credential.challenge,
+      payload: credential.payload as Record<string, unknown>,
+      ...(credential.source ? { source: credential.source } : {}),
     };
   } catch {
     return null;
@@ -84,20 +51,23 @@ export function decodePaymentHeader(
 }
 
 /**
- * @deprecated Renamed to {@link decodePaymentHeader}. This alias will be
+ * @deprecated Renamed to {@link decodeMppCredential}. This alias will be
  * removed in a future major version.
  */
-export const extractMppCredential = decodePaymentHeader;
+export const decodePaymentHeader = decodeMppCredential;
+
+/** @deprecated Use {@link decodeMppCredential}. */
+export const extractMppCredential = decodeMppCredential;
 
 /**
  * Create a Payment-Receipt header value.
  */
 export function createReceiptHeader(receipt: {
-  challengeId: string;
-  status: 'settled' | 'pending';
-  amount?: string;
-  method?: string;
+  method: string;
+  reference: string;
+  status: 'success';
+  timestamp: string;
+  externalId?: string;
 }): string {
-  const json = JSON.stringify(receipt);
-  return btoa(json);
+  return Receipt.serialize(receipt);
 }

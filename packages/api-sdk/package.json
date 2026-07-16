@@ -8,36 +8,44 @@
     "directory": "packages/api-sdk"
   },
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "lucidAgents": {
+    "runtime": "portable",
+    "bundlerExports": [
+      "./react-query"
+    ]
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./client": {
-      "types": "./src/sdk/client/index.ts",
-      "import": "./src/sdk/client/index.ts",
-      "default": "./src/sdk/client/index.ts"
+      "types": "./dist/sdk/client/index.d.ts",
+      "import": "./dist/sdk/client/index.js",
+      "default": "./dist/sdk/client/index.js"
     },
     "./react-query": {
-      "types": "./src/sdk/@tanstack/react-query.gen.ts",
-      "import": "./src/sdk/@tanstack/react-query.gen.ts",
-      "default": "./src/sdk/@tanstack/react-query.gen.ts"
+      "types": "./dist/sdk/@tanstack/react-query.gen.d.ts",
+      "import": "./dist/sdk/@tanstack/react-query.gen.js",
+      "default": "./dist/sdk/@tanstack/react-query.gen.js"
     },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
   "files": [
-    "src"
+    "dist"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "clean": "rm -rf src/sdk",
-    "generate": "bun run codegen.ts"
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "generate": "bun run codegen.ts",
+    "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hey-api/client-fetch": "^0.10.0"
@@ -45,6 +53,7 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.88.2",
     "@tanstack/react-query": "^5.90.12",
+    "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {

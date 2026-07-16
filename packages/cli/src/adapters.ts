@@ -16,8 +16,12 @@ export type AdapterSnippets = {
 export type AdapterDefinition = {
   id: string;
   displayName: string;
+  /** Base layers copied in order before the adapter-specific overlay. */
+  baseFilesDirs?: string[];
   filesDir: string;
   placeholderTargets?: string[];
+  /** Public base path used by generated HTTP handlers. */
+  httpBasePath?: string;
   snippets: AdapterSnippets;
   buildReplacements?: (params: {
     answers: Map<string, string | boolean>;
@@ -89,8 +93,10 @@ addEntrypoint({
   'tanstack-ui': {
     id: 'tanstack-ui',
     displayName: 'TanStack Start (UI)',
+    baseFilesDirs: [join(ADAPTER_FILES_ROOT, 'tanstack', 'headless')],
     filesDir: join(ADAPTER_FILES_ROOT, 'tanstack', 'ui'),
     placeholderTargets: ['src/lib/agent.ts.template'],
+    httpBasePath: '/api/agent',
     snippets: {
       imports: `import { createTanStackRuntime } from "@lucid-agents/tanstack";`,
       preSetup: ``,
@@ -123,6 +129,7 @@ runtime.entrypoints.add({
     displayName: 'TanStack Start (Headless)',
     filesDir: join(ADAPTER_FILES_ROOT, 'tanstack', 'headless'),
     placeholderTargets: ['src/lib/agent.ts.template'],
+    httpBasePath: '/api/agent',
     snippets: {
       imports: `import { createTanStackRuntime } from "@lucid-agents/tanstack";`,
       preSetup: ``,
@@ -155,13 +162,16 @@ runtime.entrypoints.add({
     displayName: 'Next.js',
     filesDir: join(ADAPTER_FILES_ROOT, 'next'),
     placeholderTargets: ['lib/agent.ts.template'],
+    httpBasePath: '/api/agent',
     snippets: {
       imports: ``,
       preSetup: ``,
-      appCreation: `const { agent: agentCore, handlers, entrypoints } = agent;
+      appCreation: `const runtime = agent;
+const agentCore = runtime.agent;
+const { handlers } = runtime.http;
 
-const addEntrypoint = (def: typeof entrypoints.snapshot()[number]) => {
-  entrypoints.add(def);
+const addEntrypoint = (def: Parameters<typeof runtime.entrypoints.add>[0]) => {
+  runtime.entrypoints.add(def);
 };`,
       entrypointRegistration: `const inputSchema = z.object({
   text: z.string().min(1, "Please provide some text."),
@@ -181,7 +191,7 @@ addEntrypoint({
   },
 });`,
       postSetup: ``,
-      exports: `export { agent: agentCore, handlers, app: agent };`,
+      exports: `export { agentCore as agent, handlers, runtime, runtime as app };`,
     },
   },
 };

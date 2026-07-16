@@ -5,4 +5,8 @@
 # Skip in CI environments
 [ -n "$CI" ] && exit 0
 
+# Entire augments commits when installed, but must not block contributors who
+# do not use the optional local CLI.
+command -v entire >/dev/null 2>&1 || exit 0
+
 entire hooks git commit-msg "$1" || exit 1

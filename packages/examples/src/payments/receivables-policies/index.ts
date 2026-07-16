@@ -24,17 +24,23 @@ import { z } from 'zod';
  * - Global incoming limits (max per payment, max total, time windows)
  * - Per-sender limits (different limits for different wallet addresses)
  * - Per-endpoint limits (different limits for different entrypoints)
- * - Sender allow/block lists (domain and wallet-based)
+ * - Sender allow/block lists over verified payer wallet addresses
  *
  * What to expect:
  * - Payments from allowed senders within limits will succeed
  * - Payments from blocked senders will be rejected (403)
  * - Payments exceeding limits will be rejected (403)
- * - Domain-based checks happen before payment (payment not received)
- * - Wallet-based checks happen after payment (payment received but service denied)
+ * - Caller-controlled Origin/Referer domains are never treated as payer identity
  *
  * Run: bun run packages/examples/src/payments/receivables-policies
  */
+
+const paymentConfig = paymentsFromEnv();
+if (!paymentConfig) {
+  throw new Error(
+    'Payment configuration is required. Set the facilitator, network, and receiving address environment variables.'
+  );
+}
 
 const agent = await createAgent({
   name: 'receivables-policies-agent',
@@ -45,7 +51,7 @@ const agent = await createAgent({
   .use(
     payments({
       config: {
-        ...paymentsFromEnv(),
+        ...paymentConfig,
         policyGroups: [
           {
             name: 'Incoming Payment Controls',
@@ -68,14 +74,8 @@ const agent = await createAgent({
                 },
               },
             },
-            blockedSenders: [
-              'https://untrusted.example.com',
-              '0x9999999999999999999999999999999999999999',
-            ],
-            allowedSenders: [
-              'https://trusted.example.com',
-              '0x1234567890123456789012345678901234567890',
-            ],
+            blockedSenders: ['0x9999999999999999999999999999999999999999'],
+            allowedSenders: ['0x1234567890123456789012345678901234567890'],
           },
         ],
       },
@@ -87,7 +87,7 @@ const { app, addEntrypoint } = await createAgentApp(agent);
 
 /**
  * Basic entrypoint with incoming payment policy enforcement.
- * Domain-based checks happen before payment, wallet-based checks after.
+ * Sender checks run only after the payment rail verifies the payer address.
  */
 addEntrypoint({
   key: 'basic',

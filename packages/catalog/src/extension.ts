@@ -14,7 +14,7 @@ export type CatalogRuntime = {
 };
 
 export function catalog(
-  options: CatalogExtensionOptions,
+  options: CatalogExtensionOptions
 ): Extension<{ catalog?: CatalogRuntime }> {
   let catalogItems: CatalogItem[] = [];
 
@@ -30,7 +30,7 @@ export function catalog(
         catalogItems = parseCatalogCsv(content);
       } else {
         throw new Error(
-          `Unsupported catalog file format: ${ext}. Use .yaml, .yml, or .csv`,
+          `Unsupported catalog file format: ${ext}. Use .yaml, .yml, or .csv`
         );
       }
 
@@ -40,10 +40,11 @@ export function catalog(
         },
       };
     },
-    async onBuild(runtime: AgentRuntime): Promise<void> {
+    async initialize(runtime: AgentRuntime): Promise<void> {
       const entrypoints = generateEntrypoints(catalogItems, {
         keyPrefix: options.keyPrefix,
         network: options.network,
+        paymentProtocol: options.paymentProtocol,
         handlerFactory: options.handlerFactory,
         inputSchema: options.inputSchema,
       });

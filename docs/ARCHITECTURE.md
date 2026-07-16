@@ -1,664 +1,328 @@
-# Lucid Agents - SDK Architecture
+# Lucid Agents architecture
 
-High-level architecture overview of the Lucid Agents SDK.
+This document describes the current package boundaries and runtime invariants. It
+is intended to be a map for maintainers, not a catalogue of every public API.
 
-## Package Structure
+## Design rules
 
-The SDK is organized into five architectural layers:
+1. `@lucid-agents/types` owns shared protocol contracts and contains no runtime
+   implementation.
+2. `@lucid-agents/core` owns the extension kernel, the entrypoint registry, and
+   runtime lifecycle. It does not own HTTP routing or payment enforcement.
+3. An extension owns its domain runtime. Core installs the returned slice
+   directly; it does not wrap or translate it.
+4. `@lucid-agents/http` owns the transport-neutral Fetch handlers, route plan,
+   and the single authorization gate used by invoke, stream, and task requests.
+5. Adapters translate the canonical route plan into framework routes. They do
+   not implement a second paywall or entrypoint registry.
+6. Process-local state is the portable default. Node-only and durable backends
+   live behind explicit package subpaths or injected ports.
+7. A task is an owned capability. Its opaque access token is returned once and
+   only a SHA-256 hash is persisted.
 
-```mermaid
-graph TB
-    subgraph "Layer 0: Base Packages"
-        types["@lucid-agents/types<br/>Shared type definitions"]
-        cli["@lucid-agents/cli<br/>CLI scaffolding tool<br/>(no runtime deps)"]
-    end
+## Package map
 
-    subgraph "Layer 1: Extensions"
-        identity["@lucid-agents/identity<br/>ERC-8004 identity & trust"]
-        payments["@lucid-agents/payments<br/>x402 bi-directional payments"]
-        wallet["@lucid-agents/wallet<br/>Wallet connectors"]
-        a2a["@lucid-agents/a2a<br/>A2A protocol support"]
-        ap2["@lucid-agents/ap2<br/>AP2 extension"]
-        analytics["@lucid-agents/analytics<br/>Payment analytics"]
-        http["@lucid-agents/http<br/>HTTP extension"]
-        scheduler["@lucid-agents/scheduler<br/>Scheduled tasks"]
-        future["Future extensions<br/>(monitoring, etc.)"]
-    end
-
-    subgraph "Layer 2: Core"
-        core["@lucid-agents/core<br/>Core runtime"]
-    end
-
-    subgraph "Layer 3: Adapters"
-        hono["@lucid-agents/hono<br/>Hono framework adapter"]
-        tanstack["@lucid-agents/tanstack<br/>TanStack Start adapter"]
-        express["@lucid-agents/express<br/>Express adapter"]
-    end
-
-    subgraph "Layer 4: Examples"
-        examples["@lucid-agents/examples<br/>Integration examples"]
-    end
-
-    types --> identity
-    types --> payments
-    types --> wallet
-    types --> a2a
-    types --> ap2
-    types --> analytics
-    types --> http
-    types --> scheduler
-    types --> core
-
-    core --> identity
-    core --> payments
-    core --> wallet
-    core --> a2a
-    core --> ap2
-    core --> analytics
-    core --> http
-    core --> scheduler
-
-    hono --> core
-    tanstack --> core
-    express --> core
-
-    examples --> core
-    examples --> hono
-    examples --> tanstack
-    examples --> express
-
-    style identity fill:#e1f5ff
-    style payments fill:#e1f5ff
-    style future fill:#f0f0f0,stroke-dasharray: 5 5
-    style core fill:#fff4e1
-    style hono fill:#e8f5e9
-    style tanstack fill:#e8f5e9
-    style express fill:#e8f5e9
-    style cli fill:#f3e5f5
-    style templates fill:#f3e5f5
+```text
+types                         shared contracts
+  │
+  ├─ core                    extension kernel + protocol-neutral manifest base
+  │
+  ├─ extensions
+  │    ├─ http               Fetch handlers + canonical route plan + auth gate
+  │    ├─ payments           x402, SIWX, policies, tracking, storage ports
+  │    ├─ mpp                MPP challenges and credential verification
+  │    ├─ wallet             wallet connectors
+  │    ├─ identity           ERC-8004 identity and OASF contribution
+  │    ├─ a2a                cards, clients, bounded/durable task runtime
+  │    ├─ ap2                AP2 manifest capability
+  │    ├─ analytics          operations bound to the payments tracker
+  │    ├─ scheduler          leased, idempotent A2A jobs
+  │    └─ catalog            catalogue-driven entrypoint registration
+  │
+  ├─ adapters
+  │    ├─ hono
+  │    ├─ express
+  │    └─ tanstack
+  │
+  ├─ api-sdk                 generated Runtime API client
+  └─ cli                     project/template generator (no runtime dependency)
 ```
 
-## Dependency Graph
+Package build order is not hand-maintained. `scripts/build-packages.ts` reads
+workspace manifests, topologically orders production/optional/peer dependencies,
+and rejects dependency cycles. This prevents a new package from silently being
+omitted from releases.
 
-```mermaid
-graph LR
-    subgraph "Layer 0: Base Packages"
-        types[types]
-        cli[cli]
-    end
+## Extension kernel
 
-    subgraph "Layer 1: Extensions (Independent)"
-        identity[identity]
-        payments[payments]
-        wallet[wallet]
-        a2a[a2a]
-        ap2[ap2]
-        analytics[analytics]
-        http[http]
-        scheduler[scheduler]
-    end
+`createAgent(meta)` returns a typed `AgentBuilder`. Each `.use(extension)` call
+adds the extension's runtime slice to the builder type. Required capabilities
+are also tracked in the type, so `.build()` is unavailable when a required
+extension is absent.
 
-    subgraph "Layer 2: Core Runtime"
-        core[core]
-    end
+At runtime, the kernel performs these steps:
 
-    subgraph "Layer 3: Framework Adapters"
-        hono[hono]
-        tanstack[tanstack]
-        express[express]
-    end
-
-    subgraph "Layer 4: Examples"
-        examples[examples]
-    end
-
-    types --> identity
-    types --> payments
-    types --> wallet
-    types --> a2a
-    types --> ap2
-    types --> analytics
-    types --> http
-    types --> scheduler
-    types --> core
-
-    payments --> core
-    identity --> core
-    wallet --> core
-    a2a --> core
-    ap2 --> core
-    analytics --> core
-    http --> core
-    scheduler --> core
-
-    core --> hono
-    core --> tanstack
-    core --> express
-
-    examples --> core
-    examples --> hono
-    examples --> tanstack
-    examples --> express
-
-    style types fill:#4fc3f7
-    style cli fill:#4fc3f7
-    style identity fill:#81c784
-    style payments fill:#81c784
-    style wallet fill:#81c784
-    style a2a fill:#81c784
-    style ap2 fill:#81c784
-    style analytics fill:#81c784
-    style http fill:#81c784
-    style scheduler fill:#81c784
-    style core fill:#ffb74d
-    style hono fill:#ba68c8
-    style tanstack fill:#ba68c8
-    style express fill:#ba68c8
-    style examples fill:#e57373
+```text
+validate unique extension names
+        ↓
+topologically order requires / before / after constraints
+        ↓
+build each extension sequentially and attach its slice directly
+        ↓
+register entrypoints in one AgentCore registry
+        ↓
+run initialize hooks sequentially
+        ↓
+return AgentRuntime
 ```
 
-Note: Dependencies are one-directional. @lucid-agents/core imports from extensions (both types and runtime functions). All packages import shared types from @lucid-agents/types. This pure DAG structure eliminates circular dependencies.
-
-## Layer 1: Extensions
-
-Extensions add optional capabilities. They are independent and don't depend on each other.
-
-### @lucid-agents/identity
-
-**Purpose:** ERC-8004 on-chain identity and trust layer
-
-**Provides:**
-
-- Registry clients (Identity, Reputation, Validation)
-- Trust configuration
-- Domain proof signing
-- `createAgentIdentity()` bootstrap function
-
-**Dependencies:** `viem` (Ethereum interactions)
-
----
-
-### @lucid-agents/payments
-
-**Purpose:** x402 payment protocol (bi-directional)
-
-**Provides:**
-
-- Entrypoint definitions (priced capabilities)
-- Payment requirement resolution (server-side)
-- x402 client utilities (client-side)
-- Payment configuration and validation
-- Multi-network support (EVM and Solana)
-
-**Dependencies:** `@x402/core`, `@x402/fetch`, `zod`
-
----
-
-### @lucid-agents/wallet
-
-**Purpose:** Wallet connectors and helpers for agent operations
-
-**Provides:**
-
-- Wallet client creation and management
-- Multi-network wallet support (EVM and Solana)
-- Wallet configuration utilities
-
-**Dependencies:** `viem` (Ethereum interactions)
-
----
-
-### @lucid-agents/a2a
-
-**Purpose:** Agent-to-Agent (A2A) protocol implementation
-
-**Provides:**
-
-- Agent Card building and fetching
-- A2A client utilities (invoke, stream, task operations)
-- Task-based operations (sendMessage, getTask, listTasks, cancelTask)
-- Multi-turn conversation support with contextId
-- A2A runtime integration
-
-**Dependencies:** `@lucid-agents/types`, `zod`
-
----
-
-### @lucid-agents/ap2
-
-**Purpose:** AP2 (Agent Payments Protocol) extension
-
-**Provides:**
-
-- AP2 runtime creation
-- Agent Card enhancement with AP2 extension metadata
-- AP2 role management (merchant, shopper)
-
-**Dependencies:** `@lucid-agents/types`
-
----
-
-### @lucid-agents/analytics
-
-**Purpose:** Payment analytics and reporting
-
-**Provides:**
-
-- Payment summary statistics (outgoing, incoming, net)
-- Transaction history and filtering
-- CSV/JSON export for accounting systems
-- Time-windowed analytics
-
-**Dependencies:** `@lucid-agents/types`, `viem`
-
----
-
-### @lucid-agents/http
-
-**Purpose:** HTTP extension for request/response handling
-
-**Provides:**
-
-- HTTP request/response handling
-- Server-Sent Events (SSE) streaming
-- HTTP invocation utilities
-
-**Dependencies:** `@lucid-agents/types`
-
----
-
-### @lucid-agents/scheduler
-
-**Purpose:** Scheduled task execution
-
-**Provides:**
-
-- Task scheduling and execution
-- Interval-based tasks
-- Cron-like scheduling
-
-**Dependencies:** `@lucid-agents/types`
-
-## Layer 2: Core
-
-### @lucid-agents/core
-
-**Purpose:** Framework-agnostic agent runtime
-
-**Provides:**
-
-- Agent execution (`AgentCore`)
-- HTTP request handlers (invoke, stream, tasks)
-- Server-Sent Events (SSE) streaming
-- Manifest generation (AgentCard, A2A)
-- Task management (create, get, list, cancel, subscribe)
-- Configuration management
-- Landing page UI
-
-**Dependencies:** `@lucid-agents/payments`, `@lucid-agents/identity`, `@lucid-agents/wallet`, `@lucid-agents/a2a`, `@lucid-agents/ap2`, `@lucid-agents/analytics`, `@lucid-agents/http`, `@lucid-agents/scheduler`
-
-## Layer 3: Adapters
-
-Adapters integrate the core runtime with specific web frameworks.
-
-### @lucid-agents/hono
-
-**Purpose:** Hono framework integration
-
-**Provides:**
-
-- `createAgentApp()` - Returns Hono app instance
-- `withPayments()` - x402-hono middleware wrapper
-- Automatic route registration for tasks, entrypoints, manifest
-
-**Dependencies:** `@lucid-agents/core`, `hono`, `x402-hono`
-
----
-
-### @lucid-agents/tanstack
-
-**Purpose:** TanStack Start framework integration
-
-**Provides:**
-
-- `createTanStackRuntime()` - Returns runtime & handlers
-- `withPayments()` - x402-tanstack middleware wrapper
-- Route files for tasks, entrypoints, manifest
-
-**Dependencies:** `@lucid-agents/core`, `@tanstack/start`, `x402-tanstack-start`
-
----
-
-### @lucid-agents/express
-
-**Purpose:** Express framework integration
-
-**Provides:**
-
-- `createAgentApp()` - Returns Express app instance
-- `withPayments()` - x402 Express middleware wrapper
-- Automatic route registration for tasks, entrypoints, manifest
-
-**Dependencies:** `@lucid-agents/core`, `express`, `x402-express`
-
-## Layer 0: Base Packages
-
-### @lucid-agents/types
-
-**Purpose:** Shared type definitions (foundational package)
-
-**Provides:**
-
-- All shared TypeScript type definitions
-- Zero dependencies on other @lucid-agents packages
-- Single source of truth for type contracts
-
-**Dependencies:** External only (zod, x402)
-
----
-
-### @lucid-agents/cli
-
-**Purpose:** CLI for scaffolding new agent projects
-
-**Provides:**
-
-- Interactive project wizard
-- Template system (blank, identity, trading-data-agent (merchant), trading-recommendation-agent (shopper))
-- Adapter selection (hono, tanstack-ui, tanstack-headless, express)
-- Merge system (combines adapter + template)
-
-**Dependencies:** None (no runtime dependencies on other @lucid-agents packages; only generates code that references them)
-
-## Developer Flow
-
-```mermaid
-graph TB
-    dev[Developer]
-
-    dev -->|1. Runs| cli[@lucid-agents/cli]
-    cli -->|2. Selects| adapter{Choose Adapter}
-    cli -->|3. Selects| template{Choose Template}
-
-    adapter -->|hono| hono_files[Hono Base Files]
-    adapter -->|tanstack| ts_files[TanStack Base Files]
-
-    template -->|blank| t_blank[Blank Template]
-    template -->|identity| t_identity[Identity Template]
-    template -->|trading-data-agent| t_data[Trading Data Template]
-    template -->|trading-recommendation-agent| t_reco[Trading Recommendation Template]
-
-    hono_files --> merge[Merge System]
-    ts_files --> merge
-    t_blank --> merge
-    t_identity --> merge
-    t_data --> merge
-    t_reco --> merge
-
-    merge -->|4. Generates| project[Agent Project]
-
-    project -->|5. Uses| runtime[core + adapters]
-    runtime -->|6. Optionally uses| extensions[Extensions<br/>payments, identity]
-
-    style dev fill:#fff
-    style cli fill:#f48fb1
-    style project fill:#81c784
-    style runtime fill:#ffcc80
-    style extensions fill:#90caf9
+Extension property collisions, missing required extensions, dependency cycles,
+duplicate entrypoint keys, invalid slices, and lifecycle hook failures are hard
+errors. If build or initialization fails, every extension whose build was
+entered, including the currently failing extension, is disposed in reverse
+dependency order. `runtime.close()` is idempotent and uses the same reverse
+order.
+
+An extension contract has:
+
+- `name` and optional `requires`, `before`, and `after` constraints;
+- `build(context)` to return its complete runtime slice;
+- `onEntrypointAdded` for validation or activation;
+- `initialize` for setup that needs the completed runtime;
+- `onManifestBuild` to contribute discovery metadata;
+- `dispose` to release resources.
+
+## Canonical runtime and entrypoints
+
+The base `AgentRuntime` contains only protocol-neutral capabilities:
+
+- `agent`: a read-only metadata and entrypoint view;
+- `entrypoints.add/list/snapshot`: the one public entrypoint registry;
+- `manifest.build/invalidate`: origin-keyed agent-card generation;
+- `close`: lifecycle cleanup.
+
+Extensions add named capabilities such as `runtime.http`, `runtime.payments`, or
+`runtime.a2a`. No fixed HTTP, payments, identity, or wallet keys are present in
+the base runtime type.
+
+All entrypoints—whether added on the builder or dynamically on the completed
+runtime—enter the same registry. Every consumer reads a snapshot of that
+registry, eliminating adapter-specific copies and stale manifests.
+
+## HTTP route contract
+
+The HTTP extension contributes:
+
+```ts
+runtime.http = {
+  basePath,
+  handlers,
+  routes,
+};
 ```
 
-## Request Flow
+`routes` is the canonical framework-neutral route plan. Hono and Express bind it
+directly. TanStack and generated Next/TanStack projects delegate route modules to
+the same `handlers`. A configured `basePath` applies consistently to health,
+discovery, entrypoint, and task routes.
 
-How an HTTP request flows through the system:
+The route plan contains:
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Adapter as Framework Adapter
-    participant Paywall as x402 Middleware
-    participant Runtime as core Runtime
-    participant Core as AgentCore
-    participant Handler as User Handler
+| Capability                   | Method and path                                    |
+| ---------------------------- | -------------------------------------------------- |
+| Health                       | `GET {basePath}/health`                            |
+| Entrypoints                  | `GET {basePath}/entrypoints`                       |
+| Invoke                       | `POST {basePath}/entrypoints/:key/invoke`          |
+| Stream                       | `POST {basePath}/entrypoints/:key/stream`          |
+| Agent card                   | `GET {basePath}/.well-known/agent-card.json`       |
+| Legacy card alias            | `GET {basePath}/.well-known/agent.json`            |
+| OASF                         | `GET {basePath}/.well-known/oasf-record.json`      |
+| Tasks, when A2A is installed | `POST/GET {basePath}/tasks` and task member routes |
 
-    Client->>Adapter: HTTP Request
-    Adapter->>Paywall: Check payment (if enabled)
+The agent-card compatibility routes generated at a framework root call the
+runtime manifest handler; they never keep a second manifest cache.
 
-    alt Payment Required & Invalid
-        Paywall-->>Client: 402 Payment Required
-    end
+Invoke idempotency is target-side and enabled by default. The HTTP runtime binds
+a 20–256 character `Idempotency-Key` to an entrypoint, request fingerprint,
+ambient authorization/cookie context, and a stable subject derived from a
+freshly verified SIWX or payment credential. Only completed 2xx responses are
+retained and replayed for the same subject. Claims are owner-fenced, bounded,
+and expiring; multi-instance deployments inject an atomic durable
+`HttpIdempotencyStore`. Policy admission and settlement occur only after a new
+claim is won, so a retry is not blocked by its own committed limits or settled
+twice.
 
-    Paywall->>Runtime: Request approved
-    Runtime->>Runtime: Validate input schema
+## One authorization transaction
 
-    alt Invalid Input
-        Runtime-->>Client: 400 Bad Request
-    end
+Invoke, stream, and task creation call the same
+`authorizeEntrypointRequest(request, entrypoint, operation)` gate.
 
-    Runtime->>Core: Execute entrypoint
-    Core->>Handler: Call user's handler
-    Handler-->>Core: Return output
-    Core-->>Runtime: Execution result
-    Runtime-->>Adapter: Format response
-    Adapter-->>Client: 200 OK + JSON
+```text
+request + canonical entrypoint
+        ↓
+validate exactly one configured payment rail
+        ↓
+SIWX entitlement/auth-only verification
+        ↓
+x402 or MPP challenge / credential verification
+        ↓
+invoke idempotency claim or authenticated replay
+        ↓
+verified incoming policy evaluation
+        ↓
+atomic total/rate reservations
+        ↓
+execute invoke, or admit stream/task work
+        ↓
+finalize(response): settle + commit, or release on pre-admission failure
 ```
 
-## Build Order
+Important invariants:
 
-Packages must build in dependency order:
+- A priced entrypoint cannot ambiguously use both x402 and MPP. The entrypoint
+  must select a rail when both extensions are installed.
+- An arbitrary payment header is not authorization. The owning payment package
+  must verify the credential.
+- MPP uses the standard `WWW-Authenticate: Payment` challenge and
+  `Authorization: Payment` credential wire contract. Native Tempo/Stripe rails
+  delegate verification to mppx; custom rails require an explicit verifier.
+- Credential verification and policy admission are separate phases. A
+  completed invoke replay is freshly authenticated but never reserves policy
+  state, executes application code, or invokes Lucid settlement again.
+- SIWX entitlement reuse is evaluated before either payment rail, including
+  MPP. An MPP verifier that performs external settlement must use the request's
+  idempotency key as its own deduplication boundary.
+- Static amount and endpoint limits may be preflighted, but incoming sender
+  rules run only with a cryptographically verified x402 or MPP payer. HTTP
+  `Origin` and `Referer` are never sender identity.
+- Total and rate limits reserve capacity atomically in the configured storage.
+  Storage errors fail closed; a request cannot bypass a limit because tracking
+  is unavailable.
+- Settlement commits every reservation and non-reserved history record through
+  one storage transaction, so policy accounting is all-or-nothing.
+- Invoke commits only after successful application output. Streams and tasks
+  commit when the server successfully admits the asynchronous work because the
+  HTTP response is already live/accepted at that boundary.
+- Invalid input, failed invoke output/handlers, failed admission, failed
+  settlement, or recording errors release outstanding reservations.
+- Outgoing policy wrapping is active even when no rate limiter is configured.
 
-```mermaid
-graph LR
-    A[Layer 0: types] --> B[Layer 1: identity]
-    A --> C[Layer 1: payments]
-    A --> D[Layer 1: wallet]
-    A --> E[Layer 1: a2a]
-    A --> F[Layer 1: ap2]
-    A --> G[Layer 1: analytics]
-    A --> H[Layer 1: http]
-    A --> I[Layer 1: scheduler]
-    A --> J[Layer 0: cli]
-    B --> K[Layer 2: core]
-    C --> K
-    D --> K
-    E --> K
-    F --> K
-    G --> K
-    H --> K
-    I --> K
-    K --> L[Layer 3: hono]
-    K --> M[Layer 3: tanstack]
-    K --> N[Layer 3: express]
-    K --> O[Layer 4: examples]
-    L --> O
-    M --> O
-    N --> O
+## Payment boundaries
 
-    style A fill:#4fc3f7
-    style J fill:#4fc3f7
-    style B fill:#90caf9
-    style C fill:#90caf9
-    style D fill:#90caf9
-    style E fill:#90caf9
-    style F fill:#90caf9
-    style G fill:#90caf9
-    style H fill:#90caf9
-    style I fill:#90caf9
-    style K fill:#ffb74d
-    style L fill:#ba68c8
-    style M fill:#ba68c8
-    style N fill:#ba68c8
-    style O fill:#e57373
+`@lucid-agents/payments` owns x402 verification/settlement, incoming and outgoing
+policies, payment tracking, SIWX, and payment-aware Fetch construction. Adapters
+only invoke the authorization contract exposed through HTTP.
+
+The portable default is isolated in-memory payment and SIWX storage. Durable or
+platform-specific code must be selected explicitly:
+
+| Import                                    | Purpose                              | Platform        |
+| ----------------------------------------- | ------------------------------------ | --------------- |
+| `@lucid-agents/payments`                  | portable runtime + in-memory storage | Web/Node/Bun    |
+| `@lucid-agents/payments/node`             | environment-driven Node factories    | Node/Bun        |
+| `@lucid-agents/payments/storage/sqlite`   | SQLite factories                     | Bun/Node server |
+| `@lucid-agents/payments/storage/postgres` | Postgres factories                   | Node/Bun server |
+| `@lucid-agents/payments/providers/stripe` | Stripe PAYTO resolution              | Node/Bun server |
+
+Postgres and Stripe are optional peer dependencies. The portable root import
+must not statically load `bun:sqlite`, `pg`, Stripe, or Node-only globals.
+
+## A2A task ownership and durability
+
+Task endpoints exist only when `a2a()` is installed. Creating a task returns:
+
+```ts
+{ taskId, accessToken, status: 'running' }
 ```
 
-Note: Layer 0 packages (types, cli) have no internal dependencies. Layer 1 extensions are independent and can build in parallel. Core depends on all extensions, adapters depend on core, and examples depend on all packages.
+Subsequent get, list, cancel, and subscribe operations require the access token
+through the `Task-Access-Token` header. A token is 20–256 characters; the store
+receives only its SHA-256 hash. Unknown tasks and tasks owned by another token
+are intentionally indistinguishable.
 
-## Package Responsibilities
+`TaskStore` is an injectable persistence port with atomic execution claims,
+fenced `compareAndSet` state transitions, and subscription delivery. A worker
+claims a running task with an expiring owner lease before executing it. Another
+worker may recover an expired lease, while the stale owner is prevented from
+publishing a terminal result. Worker shutdown aborts local handlers but leaves
+durable running records recoverable rather than cancelling them. The default
+`createInMemoryTaskStore()`:
 
-| Package                   | Layer | Responsibility                                               |
-| ------------------------- | ----- | ------------------------------------------------------------ |
-| `@lucid-agents/types`     | 0     | Shared type definitions (zero dependencies)                  |
-| `@lucid-agents/cli`       | 0     | CLI tool, templates, project scaffolding (no runtime deps)   |
-| `@lucid-agents/identity`  | 1     | ERC-8004 on-chain identity, registries, trust models         |
-| `@lucid-agents/payments`  | 1     | x402 protocol, EntrypointDef, pricing, payment client/server |
-| `@lucid-agents/wallet`    | 1     | Wallet connectors and helpers for agent operations           |
-| `@lucid-agents/a2a`       | 1     | A2A protocol implementation, Agent Cards, task operations    |
-| `@lucid-agents/ap2`       | 1     | AP2 extension for Agent Cards                                |
-| `@lucid-agents/analytics` | 1     | Payment analytics and reporting                              |
-| `@lucid-agents/http`      | 1     | HTTP extension for request/response handling                 |
-| `@lucid-agents/scheduler` | 1     | Scheduled task execution                                     |
-| `@lucid-agents/core`      | 2     | Core runtime, HTTP handlers, SSE, manifest, config, UI       |
-| `@lucid-agents/hono`      | 3     | Hono framework integration, middleware wiring                |
-| `@lucid-agents/tanstack`  | 3     | TanStack framework integration, middleware wiring            |
-| `@lucid-agents/express`   | 3     | Express framework integration, middleware wiring             |
-| `@lucid-agents/examples`  | 4     | Integration examples and test scenarios                      |
+- bounds the number of retained tasks;
+- expires terminal tasks after a retention window;
+- evicts only terminal tasks and rejects capacity exhaustion otherwise;
+- isolates subscriptions by owner hash;
+- supports a bounded execution timeout.
 
-## Extension Independence
+Production deployments that need restart survival must inject a durable store.
+Agent cards only advertise task capabilities when the A2A task runtime exists.
 
-```mermaid
-graph TB
-    subgraph "Independent Extensions"
-        identity[@lucid-agents/identity<br/>ERC-8004 identity]
-        payments[@lucid-agents/payments<br/>x402 payments]
-        wallet[@lucid-agents/wallet<br/>Wallet connectors]
-        a2a[@lucid-agents/a2a<br/>A2A protocol]
-        ap2[@lucid-agents/ap2<br/>AP2 extension]
-        analytics[@lucid-agents/analytics<br/>Payment analytics]
-        http[@lucid-agents/http<br/>HTTP extension]
-        scheduler[@lucid-agents/scheduler<br/>Scheduled tasks]
-    end
+## Scheduler guarantees
 
-    subgraph "Core"
-        core[@lucid-agents/core<br/>Uses all extensions]
-    end
+The scheduler requires `a2a()` and optionally uses `payments()` for paid calls.
+Jobs are claimed with leases through an injected `SchedulerStore`. Each job gets
+an idempotency key automatically. Retries reuse that key, while a successful
+interval occurrence rotates the scheduler-managed key for the next occurrence.
+This gives downstream agents a stable deduplication key for at-least-once worker
+execution.
 
-    identity -.->|optional| core
-    payments -.->|optional| core
-    wallet -.->|optional| core
-    a2a -.->|optional| core
-    ap2 -.->|optional| core
-    analytics -.->|optional| core
-    http -.->|optional| core
-    scheduler -.->|optional| core
+## Identity and discovery ownership
 
-    style identity fill:#90caf9
-    style payments fill:#a5d6a7
-    style wallet fill:#a5d6a7
-    style a2a fill:#a5d6a7
-    style ap2 fill:#a5d6a7
-    style analytics fill:#a5d6a7
-    style http fill:#a5d6a7
-    style scheduler fill:#a5d6a7
-    style core fill:#ffcc80
+The identity extension owns ERC-8004 initialization, registration results, trust
+metadata, and OASF contribution. It fails closed when registration needs a wallet
+and no wallet capability is present. The resolved `AgentIdentity` is exposed as
+`runtime.identity.result`; generated applications do not run a second identity
+initialization path.
+
+Manifest building is origin-aware and extension-driven. HTTP serves the current
+manifest directly, so dynamic entrypoints and extension contributions appear in
+all adapters without a separate adapter cache.
+
+## Portability and test matrix
+
+The repository verifies architecture at several levels:
+
+- strict TypeScript for every package;
+- dependency-derived full package builds;
+- Node 20 and Node 22 portable import checks;
+- an edge-like import scan that rejects Node/Bun-only dependencies in every
+  portable public entrypoint while validating and excluding explicitly
+  declared Node-only or bundler-only subpaths;
+- adapter contract tests for route parity and base paths;
+- authorization tests across invoke, stream, and tasks;
+- concurrent storage tests for atomic policy limits;
+- durable task-store contract and ownership tests;
+- generated-template and example smoke tests;
+- PostgreSQL integration tests in CI;
+- repository-wide source line and function coverage thresholds in CI. Compiled
+  `dist/` artifacts and test files are excluded from the coverage denominator;
+  the aggregate gate is implemented by `scripts/check-coverage.ts` rather than
+  Bun's per-file threshold setting.
+
+Run the same local quality sequence with:
+
+```bash
+bun run build:packages
+bun run type-check
+bun run lint
+bun run format:check
+bun run test:portability
+bun run test:coverage
+bun test packages/examples/src/__tests__/
 ```
 
-Extensions are independent modules that core can optionally use. They don't depend on each other.
+## Adding a capability
 
-## Types Package
-
-`@lucid-agents/types` is the foundational package containing all shared type definitions.
-
-### Key Characteristics
-
-- **Zero dependencies** on other @lucid-agents packages
-- **Only external dependencies**: zod, x402
-- **Pure TypeScript types** - no runtime code
-- **Single source of truth** for type contracts
-
-### Contains
-
-- `AgentMeta`, `AgentContext`, `Usage` - Core agent types
-- `EntrypointDef`, `EntrypointPrice`, `EntrypointHandler` - Entrypoint types
-- `PaymentsConfig`, `SolanaAddress` - Payment types
-- Stream types for SSE responses
-
-### Architecture Benefits
-
-All packages import from @lucid-agents/types, creating a clean dependency DAG:
-
-```mermaid
-graph TD
-    types[@lucid-agents/types]
-    cli[@lucid-agents/cli]
-    identity[@lucid-agents/identity]
-    payments[@lucid-agents/payments]
-    core[@lucid-agents/core]
-    hono[@lucid-agents/hono]
-    tanstack[@lucid-agents/tanstack]
-    examples[@lucid-agents/examples]
-
-    types --> identity
-    types --> payments
-    types --> core
-    identity --> core
-    payments --> core
-    core --> hono
-    core --> tanstack
-    core --> examples
-    hono --> examples
-    tanstack --> examples
-```
-
-**Benefits:**
-
-- Zero circular dependencies (pure DAG)
-- Explicit type contracts
-- Better IDE support and type inference
-- Smaller bundles (types erased at compile time)
-- Easy to maintain and evolve
-
-## Future Roadmap
-
-Planned extensions and adapters:
-
-```mermaid
-graph TB
-    subgraph "Existing"
-        identity_now[@lucid-agents/identity]
-        payments_now[@lucid-agents/payments]
-        wallet_now[@lucid-agents/wallet]
-        a2a_now[@lucid-agents/a2a]
-        ap2_now[@lucid-agents/ap2]
-        core_now[@lucid-agents/core]
-        hono_now[@lucid-agents/hono]
-        tanstack_now[@lucid-agents/tanstack]
-        express_now[@lucid-agents/express]
-    end
-
-    subgraph "Planned Extensions"
-        monitoring[monitoring<br/>Metrics & observability]
-        storage[storage<br/>Persistent state]
-    end
-
-    subgraph "Planned Adapters"
-        fastify[fastify]
-        nextjs[nextjs]
-    end
-
-    core_now --> monitoring
-    core_now --> storage
-
-    core_now --> fastify
-    core_now --> nextjs
-
-    style monitoring fill:#fff59d,stroke-dasharray: 5 5
-    style storage fill:#fff59d,stroke-dasharray: 5 5
-    style fastify fill:#e1bee7,stroke-dasharray: 5 5
-    style nextjs fill:#e1bee7,stroke-dasharray: 5 5
-```
-
-## Summary
-
-The Lucid Agents SDK follows a **layered, modular architecture**:
-
-1. **Layer 0: Base Packages** - Types and CLI (no internal dependencies)
-2. **Layer 1: Extensions** - Independent capabilities (identity, payments, wallet, a2a, ap2, analytics, http, scheduler)
-3. **Layer 2: Core** - Framework-agnostic runtime
-4. **Layer 3: Adapters** - Framework-specific integrations (hono, tanstack, express)
-5. **Layer 4: Examples** - Integration examples and test scenarios
-
-This enables:
-
-- **Modularity** - Use only what you need
-- **Extensibility** - Easy to add new extensions and adapters
-- **Clarity** - Clear package boundaries
-- **Scalability** - Foundation for future growth
+1. Put shared contracts in the owning package or `@lucid-agents/types` when
+   multiple packages genuinely share them.
+2. Return the complete domain runtime from an extension; do not add a wrapper in
+   core.
+3. Declare runtime requirements in both the typed dependency shape and
+   `requires`/ordering metadata.
+4. If the capability adds HTTP surface, extend the HTTP handler and canonical
+   route contracts, then prove parity in every adapter/template.
+5. If it stores state, define an atomic persistence port, a bounded portable
+   default, and a durable contract test.
+6. Add unit, integration, portability, generated-project, and example smoke
+   coverage proportional to the public surface.
+7. Update package docs, this architecture map, and add a changeset.

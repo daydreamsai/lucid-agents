@@ -19,6 +19,7 @@ import {
 import type {
   AgentWalletHandle,
   DeveloperWalletHandle,
+  WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 
 import { getRegistryAddresses } from './config';
@@ -109,7 +110,7 @@ export type CreateAgentIdentityOptions = {
    * Agent runtime instance (optional if walletHandle is provided).
    * If walletHandle is not provided, runtime.wallets.developer is required.
    */
-  runtime?: AgentRuntime;
+  runtime?: AgentRuntime<{ wallets?: WalletsRuntime }>;
 
   /**
    * Optional wallet handle to use for identity operations.
@@ -800,7 +801,7 @@ export function generateOASFRecord(
     entrypoints: entrypoints.map(entry => ({
       key: entry.key,
       description: entry.description,
-      streaming: Boolean(entry.stream ?? entry.streaming),
+      streaming: Boolean(entry.stream),
       input: entry.input,
       output: entry.output,
     })),

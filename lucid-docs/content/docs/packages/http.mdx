@@ -1,15 +1,15 @@
 ---
-title: "@lucid-agents/http"
-description: HTTP extension for request/response handling and SSE streaming.
+title: '@lucid-agents/http'
+description: Fetch-native handlers, canonical routes, authorization, and SSE streaming.
 icon: Globe
 ---
 
-The HTTP extension adds HTTP protocol support to agents, including request handling, Server-Sent Events (SSE) streaming, and landing page rendering.
+The HTTP extension turns a completed agent into a transport-neutral HTTP runtime. It owns the canonical route plan, Fetch-native handlers, entrypoint authorization transaction, target-side idempotency, request validation, and SSE response format used by every framework adapter.
 
 ## Installation
 
 ```bash
-bun add @lucid-agents/http
+bun add @lucid-agents/core @lucid-agents/http
 ```
 
 ## Basic usage
@@ -22,211 +22,212 @@ const agent = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
 })
-  .use(http())
+  .use(http({ basePath: '/api/agent' }))
+  .addEntrypoint({
+    key: 'echo',
+    async handler({ input }) {
+      return { output: input };
+    },
+  })
   .build();
+
+agent.http.basePath; // '/api/agent'
+agent.http.handlers; // Fetch-native Request -> Response handlers
+agent.http.routes; // canonical route and capability plan
 ```
 
-## API reference
+Install domain extensions such as `payments()`, `mpp()`, `identity()`, and `a2a()` before HTTP when convenient. The extension kernel also honors HTTP's declared ordering constraints when call-site order differs.
 
-### http(options?)
-
-Creates the HTTP extension.
-
-```typescript
-function http(options?: HttpExtensionOptions): Extension<HttpExtensionContext>
-```
-
-**Options:**
+## Configuration
 
 ```typescript
 type HttpExtensionOptions = {
-  landingPage?: boolean;  // Enable landing page at "/" (default: true)
-  favicon?: boolean;      // Enable favicon endpoint (default: true)
+  landingPage?: boolean;
+  basePath?: string;
+  idempotency?: false | {
+    store?: HttpIdempotencyStore;
+    inProgressTtlMs?: number;
+    retentionMs?: number;
+    maxEntries?: number;
+  };
 };
 ```
 
-**Example:**
+| Option | Default | Description |
+| --- | --- | --- |
+| `landingPage` | `true` | Include the landing-page handler and route. |
+| `basePath` | `''` | Normalize and prefix every canonical route. The prefix is also advertised in the Agent Card's HTTP interface. |
+| `idempotency` | bounded in-memory store | Configure target-side invoke deduplication, inject a durable store, or explicitly disable it. |
 
 ```typescript
 const agent = await createAgent(meta)
-  .use(http({ landingPage: true, favicon: true }))
+  .use(
+    http({
+      basePath: '/api/agent',
+      landingPage: false,
+      idempotency: {
+        store: durableIdempotencyStore,
+        inProgressTtlMs: 15 * 60_000,
+        retentionMs: 24 * 60 * 60_000,
+      },
+    })
+  )
   .build();
 ```
 
-### HTTP handlers
+The default idempotency store is bounded and process-local. Multi-instance deployments should inject an atomic durable `HttpIdempotencyStore`.
 
-When the HTTP extension is used, `agent.handlers` provides these handlers:
+## Fetch-native handlers
 
-```typescript
-type AgentHttpHandlers = {
-  invoke: (key: string, input: unknown, request?: Request) => Promise<InvokeResult>;
-  stream: (key: string, input: unknown, request?: Request) => ReadableStream;
-  manifest: (origin: string) => AgentCardWithEntrypoints;
-  health: () => { status: 'ok' };
-  entrypoints: () => EntrypointInfo[];
-  landingPage?: (origin: string) => string;
-  favicon?: () => Response;
-};
-```
-
-Framework adapters use these handlers to create routes.
-
-### SSE streaming
-
-The HTTP extension provides utilities for Server-Sent Events:
+Handlers accept a standard Web `Request` and return a `Promise<Response>`:
 
 ```typescript
-import { createSSEStream, writeSSE } from '@lucid-agents/http';
-
-// Create an SSE stream
-const stream = createSSEStream((writer) => {
-  await writeSSE(writer, { kind: 'delta', delta: 'Hello', mime: 'text/plain' });
-  await writeSSE(writer, { kind: 'done', output: { completed: true } });
-});
+const response = await agent.http.handlers.invoke(
+  new Request(
+    'https://agent.example/api/agent/entrypoints/echo/invoke',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: { value: 1 } }),
+    }
+  ),
+  { key: 'echo' }
+);
 ```
 
-### Stream envelopes
+`AgentHttpHandlers` contains `health`, `entrypoints`, `manifest`, `oasf`, `favicon`, optional `landing`, `invoke`, `stream`, `tasks`, `listTasks`, `getTask`, `cancelTask`, and `subscribeTask`. Framework adapters bind these handlers; they do not call entrypoint implementations directly.
 
-Streaming entrypoints emit typed envelopes:
+The manifest handler builds by request origin. Compatibility routes should delegate to it instead of caching a manifest independently.
 
-```typescript
-// Delta envelope - incremental content (e.g., LLM tokens)
-type StreamDeltaEnvelope = {
-  kind: 'delta';
-  delta: string;
-  mime: string;  // e.g., 'text/plain', 'text/markdown'
-};
+## Canonical route plan
 
-// Data envelope - structured data
-type StreamDataEnvelope = {
-  kind: 'data';
-  data: unknown;
-};
+`agent.http.routes` is the only route definition consumed by Hono and Express and is exposed to TanStack and generated adapters. Each item contains a stable ID, method, path, parameter names, and `handle(request, params)`.
 
-// Status envelope - progress updates
-type StreamStatusEnvelope = {
-  kind: 'status';
-  status: string;
-};
+With an empty base path, the plan includes:
 
-// Done envelope - final result
-type StreamDoneEnvelope = {
-  kind: 'done';
-  output: unknown;
-  usage?: Usage;
-  model?: string;
-};
+| Method | Route | Capability |
+| --- | --- | --- |
+| `GET` | `/` | Landing page, unless disabled. |
+| `GET` | `/health` | Health status. |
+| `GET` | `/entrypoints` | Entrypoint discovery. |
+| `POST` | `/entrypoints/:key/invoke` | Invoke. |
+| `POST` | `/entrypoints/:key/stream` | SSE stream. |
+| `GET` | `/.well-known/agent-card.json` | Canonical Agent Card. |
+| `GET` | `/.well-known/agent.json` | Legacy card alias. |
+| `GET` | `/.well-known/oasf-record.json` | OASF record or `404`. |
+| `GET` | `/favicon.svg` | SVG favicon. |
 
-// Error envelope
-type StreamErrorEnvelope = {
-  kind: 'error';
-  error: { code: string; message: string };
-};
-```
+Task routes are added only when `a2a()` is installed:
 
-### Stream result
+| Method | Route | Capability |
+| --- | --- | --- |
+| `POST` | `/tasks` | Create and start a task. |
+| `GET` | `/tasks` | List tasks owned by the access token. |
+| `GET` | `/tasks/:taskId` | Read an owned task. |
+| `POST` | `/tasks/:taskId/cancel` | Cancel an owned task. |
+| `GET` | `/tasks/:taskId/subscribe` | Subscribe to owned task updates. |
 
-Stream handlers return a `StreamResult`:
+`basePath` prefixes every route in the plan. Task ownership and the `Task-Access-Token` contract are documented in the [A2A package](/docs/packages/a2a).
 
-```typescript
-type StreamResult = {
-  output: unknown;
-  usage?: Usage;
-  model?: string;
-};
-```
+## Authorization transaction
 
-## Endpoints
+Invoke, stream, and task creation all call one authorization gate. It:
 
-The HTTP extension enables these endpoints (via framework adapters):
+1. resolves exactly one payment rail for the canonical entrypoint;
+2. verifies SIWX, x402, or MPP credentials in the owning extension;
+3. wins the target-side idempotency claim for an invoke;
+4. admits the request by evaluating and reserving incoming policy capacity;
+5. executes the invoke or admits asynchronous stream/task work;
+6. finalizes settlement and accounting, or releases a pre-admission reservation on failure.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Landing page (if enabled) |
-| `/.well-known/agent.json` | GET | Agent Card manifest |
-| `/health` | GET | Health check |
-| `/entrypoints` | GET | List available entrypoints |
-| `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
-| `/entrypoints/:key/stream` | POST | Stream from an entrypoint |
-| `/tasks` | GET | List tasks |
-| `/tasks/:id` | GET | Get task by ID |
-| `/tasks/:id/cancel` | POST | Cancel a task |
-| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
-| `/favicon.ico` | GET | Favicon (if enabled) |
+If x402 and MPP are both installed, every priced entrypoint must set `paymentProtocol: 'x402' | 'mpp'`. An auth-only entrypoint requires an enabled SIWX payments runtime. These invariants are checked whenever an entrypoint is registered, including after build.
 
-## Request/Response format
+`authorizeEntrypointRequest` is available for custom transports. After successful verification, call `authorization.admit()`. Only admitted work may execute. Call the admission's `finalize(response)` exactly once, or `abort()` if the transport abandons the operation before it has a response.
 
-### Invoke request
+## Invoke requests and idempotency
 
-```bash
-POST /entrypoints/greet/invoke
+```http
+POST /entrypoints/echo/invoke
 Content-Type: application/json
+Idempotency-Key: echo:customer-42:request-2026-07
 
-{
-  "input": {
-    "name": "Alice"
-  }
-}
+{"input":{"value":1}}
 ```
 
-### Invoke response
+A successful response has the canonical shape:
 
 ```json
 {
-  "status": "completed",
-  "output": {
-    "message": "Hello, Alice!"
+  "run_id": "7f3fbb8e-0dd7-4a92-a014-67fd40ba1574",
+  "status": "succeeded",
+  "output": { "value": 1 },
+  "usage": { "total_tokens": 10 },
+  "model": "example-model"
+}
+```
+
+An `Idempotency-Key` must contain 20–256 characters. It is scoped to the entrypoint and bound to the body, ambient authorization context, and freshly verified payment/SIWX subject. The same completed request is replayed with `Idempotency-Replayed: true`; concurrent duplicates and conflicting reuse return `409`.
+
+Verification happens before the claim, while payment-policy reservation and settlement happen only after a new claim is won. If response persistence fails after execution or irreversible settlement, the runtime retains the claim and returns `503` so a retry cannot execute or charge twice.
+
+## SSE streaming
+
+A streaming entrypoint receives its validated context and an `emit` function:
+
+```typescript
+.addEntrypoint({
+  key: 'tokens',
+  stream: async ({ input }, emit) => {
+    await emit({
+      kind: 'text',
+      text: String(input),
+      mime: 'text/plain',
+    });
+    return {
+      output: { done: true },
+      status: 'succeeded',
+    };
   },
-  "usage": {
-    "total_tokens": 10
-  }
-}
+})
 ```
 
-### Stream request
+The runtime writes a `run-start` envelope, assigns `runId`, sequence, and timestamp fields to emitted envelopes, and finishes with `run-end`. A handler failure emits both an `error` envelope and a failed `run-end`.
 
-```bash
-POST /entrypoints/chat/stream
-Content-Type: application/json
+User-emittable envelopes are:
 
-{
-  "input": {
-    "message": "Hello"
-  }
-}
-```
+- `text` for a complete text segment;
+- `delta` for incremental text;
+- `asset` for inline or external assets;
+- `control` for structured control messages;
+- `error` for a domain error.
 
-### Stream response (SSE)
+Low-level transports can use `createSSEStream` and `writeSSE`:
 
-```
-data: {"kind":"delta","delta":"Hello","mime":"text/plain"}
-
-data: {"kind":"delta","delta":", how can I help?","mime":"text/plain"}
-
-data: {"kind":"done","output":{"completed":true},"usage":{"total_tokens":25}}
+```typescript
+const response = createSSEStream(({ write, close }) => {
+  write({
+    event: 'delta',
+    data: JSON.stringify({ kind: 'delta', delta: 'Hello' }),
+  });
+  close();
+});
 ```
 
 ## Exports
 
 ```typescript
-// Extension
-export { http } from '@lucid-agents/http';
-export type { HttpExtensionOptions } from '@lucid-agents/http';
-
-// SSE utilities
-export { createSSEStream, writeSSE } from '@lucid-agents/http';
-
-// Handler utilities
-export { invokeHandler } from '@lucid-agents/http';
-
-// Types
-export type {
-  AgentHttpHandlers,
-  StreamEnvelope,
-  StreamPushEnvelope,
-  StreamDeltaEnvelope,
-  StreamDataEnvelope,
-  StreamDoneEnvelope,
-  StreamResult,
+export {
+  http,
+  createAgentRoutePlan,
+  invoke,
+  invokeHandler,
+  stream,
+  authorizeEntrypointRequest,
+  createInMemoryHttpIdempotencyStore,
+  HttpIdempotencyCapacityError,
+  createSSEStream,
+  writeSSE,
 } from '@lucid-agents/http';
 ```
+
+Transport contracts such as `HttpExtensionOptions`, `AgentHttpRuntime`, `AgentHttpRoute`, `AgentHttpHandlers`, stream envelopes, and idempotency-store types are defined in `@lucid-agents/types/http`.

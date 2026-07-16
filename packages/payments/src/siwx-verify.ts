@@ -1,5 +1,6 @@
 import { verifyMessage } from 'viem';
 import type { SIWxStorage } from './siwx-storage';
+import { decodeBase64Utf8, encodeBase64Utf8 } from './base64';
 
 export type SIWxPayload = {
   domain: string;
@@ -28,6 +29,8 @@ export type SIWxVerifyResult = {
 export type SIWxVerifyOptions = {
   storage: SIWxStorage;
   resourceUri: string;
+  /** Internal storage scope for an entitlement when it differs from the signed URI. */
+  entitlementResource?: string;
   domain: string;
   requireEntitlement?: boolean; // true for paid-route reuse, false for auth-only
   /** Skip cryptographic signature verification (for testing only) */
@@ -43,7 +46,7 @@ export function parseSIWxHeader(
 ): SIWxPayload | undefined {
   if (!headerValue) return undefined;
   try {
-    const decoded = Buffer.from(headerValue, 'base64').toString('utf-8');
+    const decoded = decodeBase64Utf8(headerValue);
     return JSON.parse(decoded) as SIWxPayload;
   } catch {
     return undefined;
@@ -173,7 +176,7 @@ export async function verifySIWxPayload(
   // For paid-route reuse, check entitlement BEFORE consuming the nonce
   if (options.requireEntitlement !== false) {
     const hasPaid = await options.storage.hasPaid(
-      options.resourceUri,
+      options.entitlementResource ?? options.resourceUri,
       normalizedAddress
     );
     if (!hasPaid) {
@@ -256,7 +259,7 @@ export function enrichResponseWithSIWxChallenge(
   declaration: Record<string, unknown>,
   statusCode: 401 | 402
 ): { body: Record<string, unknown>; headers: Record<string, string> } {
-  const headerValue = Buffer.from(JSON.stringify(declaration)).toString('base64');
+  const headerValue = encodeBase64Utf8(JSON.stringify(declaration));
   const headers: Record<string, string> = {
     'X-SIWX-EXTENSION': headerValue,
   };
@@ -266,7 +269,7 @@ export function enrichResponseWithSIWxChallenge(
       body: {
         ...body,
         extensions: {
-          ...(body.extensions as Record<string, unknown> ?? {}),
+          ...((body.extensions as Record<string, unknown>) ?? {}),
           siwx: declaration,
         },
       },
@@ -279,7 +282,12 @@ export function enrichResponseWithSIWxChallenge(
     body: {
       ...body,
       error: {
-        ...(typeof body.error === 'object' && body.error !== null ? body.error : { code: 'auth_required', message: String(body.error ?? 'Authentication required') }),
+        ...(typeof body.error === 'object' && body.error !== null
+          ? body.error
+          : {
+              code: 'auth_required',
+              message: String(body.error ?? 'Authentication required'),
+            }),
         siwx: declaration,
       },
     },
@@ -290,5 +298,5 @@ export function enrichResponseWithSIWxChallenge(
 function generateNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
 }

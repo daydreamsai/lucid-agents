@@ -1,3 +1,5 @@
+import type { PaymentRateLimiter } from '@lucid-agents/types/payments';
+
 /**
  * Rate limiter for tracking payments per time window per policy group.
  * Uses sliding window approach (in-memory).
@@ -6,7 +8,7 @@
  * Tracks payment timestamps per policy group and enforces rate limits
  * based on maximum payments allowed within a time window.
  */
-class RateLimiter {
+class InMemoryRateLimiter implements PaymentRateLimiter {
   private payments: Map<string, number[]> = new Map();
 
   /**
@@ -85,12 +87,12 @@ class RateLimiter {
   }
 }
 
-export type { RateLimiter };
+export type RateLimiter = PaymentRateLimiter;
 
 /**
  * Creates a new rate limiter instance.
  * @returns A new RateLimiter instance for tracking payment rate limits
  */
 export function createRateLimiter(): RateLimiter {
-  return new RateLimiter();
+  return new InMemoryRateLimiter();
 }

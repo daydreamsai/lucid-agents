@@ -1,5 +1,5 @@
 import YAML from 'yaml';
-import { parse as csvParse } from 'csv-parse/sync';
+import { parse as csvParse } from 'csv-parse/browser/esm/sync';
 import { CatalogItemSchema, type CatalogItem } from './types';
 
 export function parseCatalogYaml(content: string): CatalogItem[] {
@@ -18,7 +18,7 @@ export function parseCatalogYaml(content: string): CatalogItem[] {
     rawItems = parsed.products;
   } else {
     throw new Error(
-      'YAML must contain a "products" array or be a top-level array',
+      'YAML must contain a "products" array or be a top-level array'
     );
   }
 
@@ -34,9 +34,7 @@ export function parseCatalogYaml(content: string): CatalogItem[] {
   return items;
 }
 
-export function parseCatalogCsv(
-  content: string,
-): CatalogItem[] {
+export function parseCatalogCsv(content: string): CatalogItem[] {
   const records = csvParse(content, {
     columns: true,
     skip_empty_lines: true,
@@ -60,22 +58,21 @@ export function parseCatalogCsv(
       }
     }
 
-    const item: CatalogItem = {
+    const item = {
       key: record.key,
       name: record.name,
       description: record.description || undefined,
       price:
-        record.price && record.price.trim() !== ''
-          ? record.price
-          : undefined,
+        record.price && record.price.trim() !== '' ? record.price : undefined,
       network: record.network || undefined,
+      paymentProtocol: record.paymentProtocol || undefined,
       ...(hasMetadata ? { metadata } : {}),
     };
 
     const result = CatalogItemSchema.safeParse(item);
     if (!result.success) {
       throw new Error(
-        `Invalid CSV row for key "${record.key}": ${result.error.message}`,
+        `Invalid CSV row for key "${record.key}": ${result.error.message}`
       );
     }
     items.push(result.data);

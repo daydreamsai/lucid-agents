@@ -1,464 +1,345 @@
 ---
 title: '@lucid-agents/payments'
-description: x402 payment protocol for monetizing agent capabilities.
+description: Bidirectional x402 payments, SIWX, policies, and atomic accounting.
 icon: CreditCard
 ---
 
-The payments extension adds x402 payment protocol support, enabling agents to accept payments in USDC on EVM chains (Base, Ethereum) or Solana.
+The payments extension receives x402 payments, creates payment-enabled outbound Fetch clients, verifies SIWX credentials, enforces incoming and outgoing policies, and records payment history. One runtime owns this complexity; HTTP adapters do not install their own paywalls.
 
 ## Installation
 
 ```bash
-bun add @lucid-agents/payments @x402/fetch @x402/evm
+bun add @lucid-agents/payments @lucid-agents/core @lucid-agents/http
 ```
 
-## Basic usage
+The package already declares the x402 protocol dependencies it uses. Install optional `pg` or `stripe` peers only when selecting those Node-specific integrations.
+
+## Receive x402 payments
 
 ```typescript
+import { z } from 'zod';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 
 const agent = await createAgent({
-  name: 'my-agent',
+  name: 'merchant',
   version: '1.0.0',
 })
-  .use(http())
   .use(payments({ config: paymentsFromEnv() }))
+  .use(http())
+  .addEntrypoint({
+    key: 'quote',
+    input: z.object({ symbol: z.string() }),
+    output: z.object({ price: z.number() }),
+    price: '0.01',
+    async handler({ input }) {
+      return {
+        output: { price: input.symbol === 'ETH' ? 3_000 : 0 },
+      };
+    },
+  })
   .build();
 ```
 
+Prices are USD decimal strings without a currency symbol. A flat string applies to invoke; use `{ invoke, stream }` when operations have different prices. An entrypoint without a price is free.
+
+If x402 and MPP are both installed, every priced entrypoint must choose one rail with `paymentProtocol: 'x402' | 'mpp'`.
+
 ## Configuration
 
-### Environment variables
-
-```bash
-# Required in all payment modes
-FACILITATOR_URL=https://facilitator.x402.org
-NETWORK=base
-
-# Static destination mode (default)
-PAYMENTS_RECEIVABLE_ADDRESS=0x... # EVM or Solana address
-
-# Stripe destination mode (dynamic payTo)
-PAYMENTS_DESTINATION=stripe
-STRIPE_SECRET_KEY=sk_live_...
+```typescript
+payments({
+  config: {
+    payTo: '0xabc0000000000000000000000000000000000000',
+    facilitatorUrl: 'https://facilitator.example',
+    facilitatorAuth: process.env.FACILITATOR_AUTH,
+    network: 'eip155:84532',
+    storage: { type: 'in-memory' },
+  },
+});
 ```
 
-Supported aliases:
+Supported aliases normalize to CAIP-2 identifiers:
 
-- `PAYMENTS_FACILITATOR_URL` can be used instead of `FACILITATOR_URL`
-- `PAYMENTS_NETWORK` can be used instead of `NETWORK`
+| Alias | Canonical network |
+| --- | --- |
+| `base` | `eip155:8453` |
+| `base-sepolia` | `eip155:84532` |
+| `ethereum` | `eip155:1` |
+| `sepolia` | `eip155:11155111` |
+| `solana` | `solana:mainnet` |
+| `solana-devnet` | `solana:devnet` |
 
-### paymentsFromEnv()
+`paymentsFromEnv(overrides?, env?)` reads:
 
-Loads configuration from environment variables:
+- `PAYMENTS_RECEIVABLE_ADDRESS`;
+- `FACILITATOR_URL` or `PAYMENTS_FACILITATOR_URL`;
+- `NETWORK` or `PAYMENTS_NETWORK`;
+- `FACILITATOR_AUTH` or `PAYMENTS_FACILITATOR_AUTH`;
+- `PAYMENTS_DESTINATION=stripe` and `STRIPE_SECRET_KEY` for Stripe mode.
+
+Pass an explicit environment record in runtimes that do not expose `process.env`. Configuration is validated when a priced or SIWX entrypoint activates the payments runtime.
 
 ```typescript
-import { paymentsFromEnv } from '@lucid-agents/payments';
-
-const config = paymentsFromEnv();
-// Returns PaymentsConfig from env + optional overrides
-```
-
-### PaymentsConfig
-
-```typescript
-type PaymentsConfig = {
-  facilitatorUrl: string;
-  facilitatorAuth?: string;
-  network: Network;
-  policyGroups?: PaymentPolicyGroup[];
-  storage?: PaymentStorageConfig;
-} & (
-  | {
-      // Static destination mode
-      payTo: `0x${string}` | SolanaAddress;
-      stripe?: never;
-    }
-  | {
-      // Stripe destination mode
-      stripe: {
-        secretKey: string;
-        apiBaseUrl?: string;
-        apiVersion?: string;
-      };
-      payTo?: never;
-    }
+const config = paymentsFromEnv(
+  { network: 'eip155:84532' },
+  platformEnvironment
 );
 ```
 
-### Stripe destination mode (dynamic payTo)
+`payments({ config: false })` explicitly disables the capability. An absent environment configuration produces no active payments runtime, allowing one build artifact to support free and paid deployments.
 
-Use Stripe destination mode when you want `payTo` to be resolved per request.
+## Authorization lifecycle
 
-How it works:
+The HTTP extension owns one authorization transaction for invoke, stream, and task creation:
 
-1. Runtime first tries to read destination `to` from the incoming payment header.
-2. If no destination is present, it creates a Stripe PaymentIntent and uses Stripe’s Base deposit address.
-3. The Agent Card advertises this as dynamic payee resolution (`extensions.x402.payeeMode = "dynamic"`).
+1. Payments verifies x402 or SIWX and returns a stable subject without reserving or settling.
+2. An invoke wins its idempotency claim.
+3. `admit()` evaluates incoming policies and atomically reserves capacity.
+4. The entrypoint executes, or asynchronous stream/task work is accepted.
+5. `finalize()` settles and commits accounting, while `abort()` releases a pre-settlement reservation.
 
-Important behavior:
+Invalid input, failed handlers/output validation, failed admission, failed settlement, and storage errors do not consume a provisional reservation. A stream or task finalizes when its asynchronous work is successfully admitted because its HTTP operation is already live or accepted.
 
-- Stripe mode is enabled when `payments.stripe` is configured or `PAYMENTS_DESTINATION=stripe`.
-- `STRIPE_SECRET_KEY` is required in Stripe mode.
-- Missing Stripe secret fails fast in `paymentsFromEnv()` with:
-  `Missing Stripe secret: set STRIPE_SECRET_KEY or override`
-- Stripe destination mode currently supports only Base mainnet (`base` / `eip155:8453`).
+SIWX entitlements are checked before either x402 or MPP challenges, allowing both rails to reuse the same paid entitlement. If settlement becomes irreversible and later response persistence fails, HTTP retains the idempotency claim so a retry cannot execute or charge twice.
 
-```bash
-# Stripe destination mode setup
-FACILITATOR_URL=https://facilitator.x402.org
-NETWORK=base
-PAYMENTS_DESTINATION=stripe
-STRIPE_SECRET_KEY=sk_live_...
-```
+## Storage boundaries
+
+The root package is portable and defaults to isolated in-memory payment and SIWX storage. Durable backends are explicit subpaths. Merely selecting `sqlite` or `postgres` in configuration without passing its factory fails closed.
+
+### In memory
 
 ```typescript
-import { paymentsFromEnv } from '@lucid-agents/payments';
+payments({ config: { ...config } });
+// Equivalent: storage: { type: 'in-memory' }
+```
 
-const config = paymentsFromEnv({
-  // Optional explicit overrides:
-  network: 'base',
-  // Optional Stripe overrides:
-  // stripe: { secretKey: process.env.STRIPE_SECRET_KEY!, apiVersion: '2024-06-20' },
+Use this for tests, edge-style runtimes, or intentionally ephemeral processes.
+
+### SQLite
+
+```typescript
+import {
+  sqlitePaymentStorageFactory,
+  sqliteSIWxStorageFactory,
+} from '@lucid-agents/payments/storage/sqlite';
+
+payments({
+  config: {
+    ...config,
+    storage: {
+      type: 'sqlite',
+      sqlite: { dbPath: '.data/payments.db' },
+    },
+    siwx: {
+      enabled: true,
+      storage: {
+        type: 'sqlite',
+        sqlite: { dbPath: '.data/siwx.db' },
+      },
+    },
+  },
+  storageFactory: sqlitePaymentStorageFactory,
+  siwxStorageFactory: sqliteSIWxStorageFactory,
 });
 ```
 
-## API reference
+SQLite uses Bun's SQLite runtime and is intended for one local process.
 
-### payments(options)
-
-Creates the payments extension.
+### Postgres
 
 ```typescript
-function payments(options: {
-  config: PaymentsConfig;
-}): Extension<PaymentsExtensionContext>;
+import {
+  postgresPaymentStorageFactory,
+  postgresSIWxStorageFactory,
+} from '@lucid-agents/payments/storage/postgres';
+
+payments({
+  agentId: 'merchant-production',
+  config: {
+    ...config,
+    storage: {
+      type: 'postgres',
+      postgres: { connectionString: process.env.DATABASE_URL! },
+    },
+  },
+  storageFactory: postgresPaymentStorageFactory,
+  siwxStorageFactory: postgresSIWxStorageFactory,
+});
 ```
 
-### Pricing entrypoints
+Use a stable `agentId` to isolate agents sharing one database. Postgres transactions and advisory locking enforce the same reservation contract across processes.
 
-Add pricing to entrypoints:
+All backends provide atomic total/rate reservations and an all-or-nothing accounting batch. Settlement commits every applicable limit, rate, and history record together; an expired reservation or storage error cannot leave partial policy state. `agent.close()` releases storage resources.
+
+## Payment policies
+
+Policy groups are conjunctive: every configured group must allow the payment.
 
 ```typescript
-addEntrypoint({
-  key: 'premium-analysis',
-  description: 'Advanced AI analysis',
-  input: z.object({ text: z.string() }),
-  output: z.object({ analysis: z.string() }),
-  price: {
-    invoke: '$0.01', // Price per invocation
-  },
-  async handler({ input }) {
-    return { output: { analysis: 'detailed analysis...' } };
+payments({
+  config: {
+    ...config,
+    policyGroups: [
+      {
+        name: 'daily-budget',
+        outgoingLimits: {
+          global: {
+            maxPaymentUsd: 5,
+            maxTotalUsd: 50,
+            windowMs: 86_400_000,
+          },
+        },
+        incomingLimits: {
+          global: { maxPaymentUsd: 10, maxTotalUsd: 500 },
+          perSender: {
+            '0x1234567890123456789012345678901234567890': {
+              maxTotalUsd: 25,
+            },
+          },
+        },
+        allowedRecipients: ['trusted.example'],
+        blockedSenders: [
+          '0xbad0000000000000000000000000000000000000',
+        ],
+        rateLimits: {
+          maxPayments: 100,
+          windowMs: 3_600_000,
+        },
+      },
+    ],
   },
 });
 ```
 
-For streaming entrypoints:
+Scopes resolve from most specific to least specific: endpoint, target/sender, then global. Incoming sender rules use only a cryptographically verified payer address from x402 or MPP; caller-controlled headers are never sender identity. Outgoing recipient rules use the destination URL.
+
+MPP payments enter the same incoming policy and accounting transaction as x402. A policy that requires sender or USD amount data fails closed when the verified rail does not provide usable values.
+
+Rate enforcement has one source of truth: configured `PaymentStorage`. `createRateLimiter()` remains a standalone process-local utility for custom integrations; the runtime does not maintain a duplicate rate counter.
+
+Node applications can load policy JSON through the Node entrypoint:
 
 ```typescript
-addEntrypoint({
-  key: 'chat',
-  streaming: true,
-  price: {
-    stream: '$0.005', // Price per stream request
-  },
-  async stream(ctx, emit) {
-    // ...
+import { policiesFromConfig } from '@lucid-agents/payments/node';
+```
+
+## SIWX
+
+SIWX protects a free auth-only route or lets a wallet reuse a paid entitlement:
+
+```typescript
+const agent = await createAgent({
+  name: 'members',
+  version: '1.0.0',
+})
+  .use(
+    payments({
+      config: {
+        ...config,
+        siwx: {
+          enabled: true,
+          defaultStatement: 'Sign in to Members',
+          expirationSeconds: 300,
+          storage: { type: 'in-memory' },
+        },
+      },
+    })
+  )
+  .use(http())
+  .addEntrypoint({
+    key: 'profile',
+    siwx: { authOnly: true },
+    async handler({ auth }) {
+      return { output: { address: auth?.address } };
+    },
+  })
+  .addEntrypoint({
+    key: 'report',
+    price: '0.05',
+    siwx: { enabled: true },
+    async handler({ auth }) {
+      return { output: { address: auth?.address } };
+    },
+  })
+  .build();
+```
+
+Nonces are consumed atomically. Replays, malformed signatures, expired payloads, and resource/domain mismatches are rejected. Never enable `skipSignatureVerification` outside tests.
+
+## Make paid outbound calls
+
+When `wallets()` is installed, obtain a payment-aware Fetch function from the bound runtime:
+
+```typescript
+const paidFetch = await agent.payments?.getFetchWithPayment(agent);
+
+const response = await paidFetch?.(
+  'https://seller.example/entrypoints/data/invoke',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { symbol: 'ETH' } }),
+  }
+);
+```
+
+`createRuntimePaymentContext()` and `createX402Fetch()` support lower-level construction. Never place a server private key in an edge or client bundle.
+
+## Stripe destination mode
+
+Stripe mode resolves a Base crypto deposit address for each challenge. Install the optional `stripe` peer and provide `stripe` instead of `payTo`:
+
+```typescript
+payments({
+  config: {
+    stripe: { secretKey: process.env.STRIPE_SECRET_KEY! },
+    facilitatorUrl: 'https://facilitator.example',
+    network: 'eip155:8453',
   },
 });
 ```
 
-### Price formats
+Stripe utilities live at `@lucid-agents/payments/providers/stripe` and load dynamically only in destination mode.
 
-Prices can be specified as:
+## PaymentsRuntime
 
-```typescript
-// Flat price
-price: '0.01'
-
-// Per-mode price
-price: { invoke: '0.01', stream: '0.005' }
-```
-
-In Stripe destination mode, string values used for dynamic amount resolution are interpreted as USD decimals.
-
-### PaymentsRuntime
-
-When payments are configured, `agent.payments` provides:
+The extension exposes one complete runtime directly:
 
 ```typescript
 type PaymentsRuntime = {
-  config: PaymentsConfig;
-  resolvePrice: (entrypoint: EntrypointDef) => EntrypointPrice | undefined;
-  evaluateRequirement: (
-    entrypoint: EntrypointDef,
-    request: Request
-  ) => PaymentRequirement | null;
+  readonly config: PaymentsConfig;
+  readonly isActive: boolean;
+  requirements(entrypoint, kind): RuntimePaymentRequirement;
+  activate(entrypoint): void;
+  resolvePrice(entrypoint, kind): string | null;
+  authorize(request, entrypoint, kind, verifiedPayment?): Promise<
+    IncomingPaymentAuthorization
+  >;
+  authorizeSIWx(request, entrypoint, kind): Promise<
+    IncomingPaymentAuthorization | undefined
+  >;
+  getFetchWithPayment(runtime, network?): Promise<FetchFunction | null>;
+  readonly paymentTracker?: PaymentTracker;
+  readonly policyGroups?: PaymentPolicyGroup[];
+  close(): Promise<void>;
 };
 ```
 
-## Network support
+The runtime is passed through without adapter/core wrappers. Shared configuration and runtime contracts are defined in `@lucid-agents/types/payments` and `@lucid-agents/types/siwx`.
 
-### EVM networks
+## Exports and runtime portability
 
-- `base` - Base mainnet
-- `base-sepolia` - Base Sepolia testnet
-- `ethereum` - Ethereum mainnet
-- `sepolia` - Ethereum Sepolia testnet
+The portable root exports the extension, in-memory implementations, incoming authorization, validation, pricing, x402 clients, SIWX helpers, policies, and tracker utilities.
 
-### Solana networks
+Node-only functionality is isolated:
 
-- `solana` - Solana mainnet
-- `solana-devnet` - Solana devnet
+| Subpath | Purpose |
+| --- | --- |
+| `@lucid-agents/payments/node` | File/config policy loading. |
+| `@lucid-agents/payments/storage/sqlite` | Bun SQLite payment and SIWX factories. |
+| `@lucid-agents/payments/storage/postgres` | Postgres payment and SIWX factories. |
+| `@lucid-agents/payments/providers/stripe` | Stripe destination provider. |
 
-The network is auto-detected from the address format:
-
-- `0x...` - EVM address
-- Base58 string - Solana address
-
-## x402 protocol
-
-The x402 protocol enables HTTP-native payments:
-
-1. Client sends request without payment
-2. Server returns `402 Payment Required` with payment details
-3. Client creates payment and retries with `X-Payment` header
-4. Server verifies payment and processes request
-
-### Payment flow
-
-```
-Client                          Server
-  │                               │
-  │  POST /entrypoints/foo/invoke │
-  │─────────────────────────────▶│
-  │                               │
-  │  402 Payment Required         │
-  │  X-Payment-Details: {...}     │
-  │◀─────────────────────────────│
-  │                               │
-  │  POST /entrypoints/foo/invoke │
-  │  X-Payment: {payment_proof}   │
-  │─────────────────────────────▶│
-  │                               │
-  │  200 OK                       │
-  │  {output: ...}                │
-  │◀─────────────────────────────│
-```
-
-## Client-side payments
-
-To call paid agent endpoints, you need a wallet that can sign x402 payment transactions.
-
-### Using helper functions
-
-The simplest approach uses the `createX402Fetch` and `accountFromPrivateKey` helpers:
-
-```typescript
-import { createX402Fetch, accountFromPrivateKey } from '@lucid-agents/payments';
-
-// Create account from private key
-const account = accountFromPrivateKey(process.env.PRIVATE_KEY as `0x${string}`);
-
-// Create payment-enabled fetch
-const x402Fetch = createX402Fetch({ account });
-
-// Automatically handles 402 responses and payments
-const response = await x402Fetch(
-  'https://agent.example.com/entrypoints/chat/invoke',
-  {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input: { message: 'Hello' } }),
-  }
-);
-```
-
-### Using raw @x402 packages
-
-For advanced use cases, you can use the `@x402/*` packages directly:
-
-```typescript
-import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
-import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
-import { privateKeyToAccount } from 'viem/accounts';
-
-const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
-const signer = toClientEvmSigner(account);
-
-// Create x402 client and register networks
-const client = new x402Client()
-  .register('eip155:8453', new ExactEvmScheme(signer)) // Base mainnet
-  .register('eip155:84532', new ExactEvmScheme(signer)) // Base Sepolia
-  .register('eip155:1', new ExactEvmScheme(signer)) // Ethereum mainnet
-  .register('eip155:11155111', new ExactEvmScheme(signer)); // Ethereum Sepolia
-
-const x402Fetch = wrapFetchWithPayment(fetch, client);
-
-const response = await x402Fetch(
-  'https://agent.example.com/entrypoints/chat/invoke',
-  {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input: { message: 'Hello' } }),
-  }
-);
-```
-
-### Using with API SDK
-
-Combine x402 payments with the type-safe SDK client:
-
-```typescript
-import { createClient, createConfig } from '@lucid-agents/api-sdk/client';
-import { createX402Fetch, accountFromPrivateKey } from '@lucid-agents/payments';
-
-const x402Fetch = createX402Fetch({
-  account: accountFromPrivateKey(process.env.PRIVATE_KEY as `0x${string}`),
-});
-
-const client = createClient(
-  createConfig({
-    baseUrl: 'https://api-lucid-dev.daydreams.systems',
-    fetch: x402Fetch,
-  })
-);
-
-// Invoke paid endpoint with full type safety
-const { data, error } = await client.POST(
-  '/agents/{agentId}/entrypoints/{key}/invoke',
-  {
-    params: { path: { agentId: 'agent-123', key: 'premium' } },
-    body: { input: { query: 'Analyze this data' } },
-  }
-);
-```
-
-See [Calling Paid Endpoints](/docs/examples/calling-paid-endpoints) for a complete example with error handling.
-
-## Sign-In With X (SIWX)
-
-SIWX lets returning wallets skip payment for previously-paid resources and protects auth-only routes with wallet signatures.
-
-### Configuration
-
-```typescript
-.use(payments({
-  config: {
-    ...paymentsFromEnv(),
-    siwx: {
-      enabled: true,
-      defaultStatement: 'Sign in to reuse access.',
-      expirationSeconds: 3600,
-      storage: { type: 'in-memory' },
-    },
-  },
-}))
-```
-
-### Auth-only route
-
-Routes that require wallet authentication but no payment:
-
-```typescript
-addEntrypoint({
-  key: 'profile',
-  siwx: { authOnly: true },
-  async handler({ auth }) {
-    // auth.address  - wallet address
-    // auth.chainId  - chain ID
-    // auth.grantedBy - 'auth-only'
-    return { output: { address: auth?.address } };
-  },
-});
-```
-
-### Challenge format
-
-SIWX challenges are communicated through response extensions:
-
-- **402 Payment Required** -- Response body includes `extensions.siwx` and the `X-SIWX-EXTENSION` header is set. The client signs the challenge and retries.
-- **401 Unauthorized** (auth-only) -- Response body includes `error.siwx` and the `X-SIWX-EXTENSION` header is set.
-
-The client-side `wrapFetchWithSIWx` helper handles both cases automatically. See the [payments package README](/docs/packages/payments) for full configuration and client-side setup.
-
-## Manifest integration
-
-Payment information is included in the Agent Card:
-
-```json
-{
-  "name": "my-agent",
-  "payments": [
-    {
-      "method": "x402",
-      "payee": "0x...",
-      "network": "ethereum"
-    }
-  ],
-  "skills": [
-    {
-      "id": "chat",
-      "pricing": {
-        "stream": "$0.005"
-      }
-    }
-  ]
-}
-```
-
-In Stripe destination mode, the card omits static `payee` and marks dynamic payee resolution:
-
-```json
-{
-  "payments": [
-    {
-      "method": "x402",
-      "network": "base",
-      "endpoint": "https://facilitator.x402.org",
-      "extensions": {
-        "x402": {
-          "facilitatorUrl": "https://facilitator.x402.org",
-          "payeeMode": "dynamic"
-        }
-      }
-    }
-  ]
-}
-```
-
-See [Stripe Destination Mode Example](/docs/examples/stripe-destination-mode) for a full setup and invocation flow.
-
-## Exports
-
-```typescript
-// Extension
-export { payments } from '@lucid-agents/payments';
-
-// Configuration
-export { paymentsFromEnv } from '@lucid-agents/payments';
-
-// Utilities
-export {
-  resolvePrice,
-  evaluatePaymentRequirement,
-} from '@lucid-agents/payments';
-
-// x402 client utilities
-export { createX402Fetch } from '@lucid-agents/payments';
-export {
-  createPaymentTracker,
-  createRateLimiter,
-} from '@lucid-agents/payments';
-
-// Types
-export type {
-  PaymentsConfig,
-  PaymentsRuntime,
-  EntrypointPrice,
-  PaymentRequirement,
-} from '@lucid-agents/payments';
-```
+Domain types should be imported from `@lucid-agents/types/payments` or `@lucid-agents/types/siwx`; package-owned implementation types such as `PaymentStorage` and factory types remain available from `@lucid-agents/payments`.

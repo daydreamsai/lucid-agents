@@ -8,6 +8,9 @@
     "directory": "packages/analytics"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,4 +1,5 @@
-import { catalog, type CatalogItem } from '@lucid-agents/catalog';
+import type { CatalogItem, HandlerFactory } from '@lucid-agents/catalog';
+import { catalog } from '@lucid-agents/catalog/node';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
@@ -19,6 +20,7 @@ import { join } from 'path';
  * Environment variables:
  *   MPP_TEMPO_CURRENCY     - Token address (default: pathUSD contract)
  *   MPP_TEMPO_RECIPIENT    - Recipient wallet address (default: dev wallet)
+ *   MPP_SECRET_KEY         - Stable HMAC key for payment challenges
  *   PORT                   - Server port (default: 3000)
  */
 
@@ -26,8 +28,11 @@ import { join } from 'path';
 // Each catalog item gets its own handler via this factory.
 // In production, you'd route to actual AI models or services.
 
-const handlerFactory = (item: CatalogItem) => {
-  return async (ctx: { input: { params?: Record<string, unknown> } }) => {
+const handlerFactory: HandlerFactory = (item: CatalogItem) => {
+  return async ctx => {
+    const input = ctx.input as {
+      params?: Record<string, unknown>;
+    };
     return {
       output: {
         product: item.key,
@@ -35,7 +40,7 @@ const handlerFactory = (item: CatalogItem) => {
         description: item.description ?? 'No description',
         price: item.price ?? 'free',
         metadata: item.metadata ?? {},
-        params: ctx.input.params ?? {},
+        params: input.params ?? {},
         timestamp: new Date().toISOString(),
       },
     };
@@ -67,6 +72,7 @@ const agent = await createAgent({
         ],
         currency: 'usd',
         defaultIntent: 'charge',
+        secretKey: process.env.MPP_SECRET_KEY,
       },
     })
   )
@@ -74,6 +80,7 @@ const agent = await createAgent({
     catalog({
       file: catalogFile,
       keyPrefix: 'store/',
+      paymentProtocol: 'mpp',
       handlerFactory,
     })
   )
@@ -82,9 +89,7 @@ const agent = await createAgent({
 // ─── Access Catalog at Runtime ───────────────────────────────────
 // The catalog runtime exposes parsed items for introspection.
 
-const items: CatalogItem[] =
-  (agent as unknown as { catalog?: { items: CatalogItem[] } }).catalog?.items ??
-  [];
+const items: CatalogItem[] = agent.catalog?.items ?? [];
 console.log(`\nLoaded ${items.length} products from catalog\n`);
 
 // ─── Create Hono App ─────────────────────────────────────────────

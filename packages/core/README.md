@@ -1,516 +1,246 @@
 # @lucid-agents/core
 
-`@lucid-agents/core` is the core runtime for building AI agents with typed entrypoints, discovery endpoints, monetization hooks, and trust metadata. It provides the shared runtime logic used by adapter packages like `@lucid-agents/hono` and `@lucid-agents/tanstack`.
+The protocol-neutral Lucid Agents runtime kernel: typed extension composition,
+one entrypoint registry, origin-aware manifest construction, and deterministic
+lifecycle management.
 
-**Note:** For most use cases, you'll want to use one of the adapter packages (`@lucid-agents/hono` or `@lucid-agents/tanstack`) rather than importing from this core package directly.
+Core does not mount HTTP routes or enforce payments. Install extensions for
+those capabilities.
 
-## Highlights
+## Quick start
 
-- Protocol-agnostic core runtime - not tied to any specific protocol (HTTP, WebSocket, etc.)
-- Extension-based architecture - add features via `.use()` method
-- Type-safe entrypoints with optional Zod input and output schemas.
-- Automatic manifest building with extension hooks.
-- Shared runtime configuration with environment + runtime overrides.
-- ERC-8004 trust and AP2 manifest integration via extensions.
-- Utilities for x402-enabled LLM calls, agent wallets, and identity registries.
-
-**Note:** HTTP-specific functionality (handlers, invoke, stream) is provided by the `@lucid-agents/http` extension, not the core package.
-
-## Install & Import
-
-This is the core runtime package. For building agents, use one of the adapter packages:
-
-**Hono Adapter:**
-
-```ts
-import { createAgentApp } from '@lucid-agents/hono';
-import type { EntrypointDef, AgentMeta } from '@lucid-agents/core';
+```bash
+bun add @lucid-agents/core @lucid-agents/http @lucid-agents/hono zod
 ```
 
-**Express Adapter:**
-
 ```ts
-import { createAgentApp } from '@lucid-agents/express';
-import type { EntrypointDef, AgentMeta } from '@lucid-agents/core';
-```
-
-**TanStack Adapter:**
-
-```ts
-import { createTanStackRuntime } from '@lucid-agents/tanstack';
-import type { EntrypointDef, AgentMeta } from '@lucid-agents/core';
-```
-
-Subpath exports (shared across adapters):
-
-- `@lucid-agents/core` — main exports including types (EntrypointDef, AgentMeta, etc.)
-- `@lucid-agents/core/utils` — focused helpers
-
-## Core Concepts
-
-### Core Runtime
-
-This package provides the core runtime logic via an extension-based API. Use `createAgent()` to build a runtime with extensions, then pass it to adapter packages like `@lucid-agents/hono` and `@lucid-agents/tanstack`.
-
-**Extension System:**
-
-The runtime uses a modular extension system where features are added via `.use()`:
-
-- `http()` — adds HTTP request handlers (required for HTTP adapters)
-- `payments()` — adds x402 payment support
-- `wallets()` — adds wallet management
-- `identity()` — adds ERC-8004 identity and trust config
-- `a2a()` — adds A2A Protocol support
-- `ap2()` — adds AP2 extension metadata
-
-**Building a Runtime:**
-
-```ts
-const agent = await createAgent({
-  name: 'my-agent',
-  version: '1.0.0',
-  description: 'My agent',
-})
-  .use(http())
-  .use(payments({ ... }))
-  .use(identity({ ... }))
-  .build();
-```
-
-**Using with Adapters:**
-
-- `createAgentApp(runtime)` — returns Hono or Express app instance
-- `createTanStackRuntime(runtime)` — returns TanStack runtime and handlers
-- `runtime.entrypoints.add(def)` — register entrypoints at runtime
-
-**Example with Hono Adapter:**
-
-```ts
-import { z } from 'zod';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { createAgentApp } from '@lucid-agents/hono';
+import { z } from 'zod';
 
-const agent = await createAgent({
-  name: 'hello-agent',
-  version: '0.1.0',
-  description: 'Echoes whatever you pass in',
+const runtime = await createAgent({
+  name: 'greeter',
+  version: '1.0.0',
+  description: 'Returns typed greetings',
 })
   .use(http())
+  .addEntrypoint({
+    key: 'greet',
+    description: 'Greet a person',
+    input: z.object({ name: z.string().min(1) }),
+    output: z.object({ message: z.string() }),
+    handler: async ({ input }) => ({
+      output: { message: `Hello, ${input.name}` },
+    }),
+  })
   .build();
 
-const { app, addEntrypoint } = createAgentApp(runtime);
-
-addEntrypoint({
-  key: 'echo',
-  description: 'Echo a message',
-  input: z.object({ text: z.string() }),
-  async handler({ input }) {
-    return {
-      output: { text: String(input.text ?? '') },
-      usage: { total_tokens: String(input.text ?? '').length },
-    };
-  },
-});
-
+const { app } = await createAgentApp(runtime);
 export default app;
 ```
 
-**Example with Express Adapter:**
+## Runtime shape
+
+The base runtime contains only kernel services:
 
 ```ts
-import { z } from 'zod';
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { createAgentApp } from '@lucid-agents/express';
-
-const agent = await createAgent({
-  name: 'hello-agent',
-  version: '0.1.0',
-  description: 'Echoes whatever you pass in',
-})
-  .use(http())
-  .build();
-
-const { app, addEntrypoint } = createAgentApp(runtime);
-
-addEntrypoint({
-  key: 'echo',
-  description: 'Echo a message',
-  input: z.object({ text: z.string() }),
-  async handler({ input }) {
-    return {
-      output: { text: String(input.text ?? '') },
-      usage: { total_tokens: String(input.text ?? '').length },
-    };
-  },
-});
-
-app.listen(process.env.PORT ?? 3000);
+runtime.agent; // read-only metadata and canonical entrypoint view
+runtime.entrypoints; // add, list, snapshot
+runtime.manifest; // build(origin), invalidate()
+runtime.close(); // idempotent reverse-order cleanup
 ```
 
-**Example with TanStack Adapter:**
+Each extension adds its own exact slice. TypeScript therefore exposes
+`runtime.http` only after `http()`, `runtime.payments` only after `payments()`,
+and so on. Core does not maintain optional placeholder keys for known protocols.
+
+## Extension composition
 
 ```ts
-import { z } from 'zod';
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { createTanStackRuntime } from '@lucid-agents/tanstack';
-
-const agent = await createAgent({
-  name: 'hello-agent',
-  version: '0.1.0',
-  description: 'Echoes whatever you pass in',
-})
-  .use(http())
+const runtime = await createAgent(meta)
+  .use(wallets({ config: walletsFromEnv() }))
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(a2a())
+  .use(scheduler())
+  .use(http({ basePath: '/api/agent' }))
   .build();
+```
 
-const { runtime, handlers } = createTanStackRuntime(appRuntime);
+An extension declares a unique `name`, typed capability requirements, runtime
+`requires`, and optional `before`/`after` constraints. Build performs a stable
+topological sort, then:
 
+1. calls each extension `build` sequentially;
+2. attaches the returned runtime slice directly;
+3. registers all builder entrypoints in the one registry;
+4. calls `initialize` sequentially.
+
+Missing requirements are caught by the builder type and validated again at
+runtime. Duplicate extension names, dependency cycles, property collisions,
+duplicate entrypoint keys, and invalid slices are errors.
+
+If setup fails, already-built extensions are disposed in reverse dependency
+order. A successful runtime's `close()` is idempotent and uses the same reverse
+order.
+
+### Extension contract
+
+```ts
+import type { BuildContext, Extension } from '@lucid-agents/types/core';
+
+type DatabaseRuntime = { query(sql: string): Promise<unknown[]> };
+
+export function database(): Extension<{ database: DatabaseRuntime }> {
+  let connection: DatabaseRuntime | undefined;
+  return {
+    name: 'database',
+    async build(_ctx: BuildContext) {
+      connection = await connectDatabase();
+      return { database: connection };
+    },
+    async dispose() {
+      await closeDatabase(connection);
+    },
+  };
+}
+```
+
+Use `onEntrypointAdded` to validate or activate against every canonical
+entrypoint, `initialize` for work that needs the completed runtime, and
+`onManifestBuild` to contribute discovery metadata. Domain complexity belongs
+inside the extension; return the complete capability consumers need.
+
+## Entrypoints
+
+Entrypoints may be registered before or after build:
+
+```ts
 runtime.entrypoints.add({
-  key: 'echo',
-  description: 'Echo a message',
-  input: z.object({ text: z.string() }),
-  async handler({ input }) {
-    return {
-      output: { text: String(input.text ?? '') },
-      usage: { total_tokens: String(input.text ?? '').length },
-    };
-  },
+  key: 'status',
+  handler: async ({ runtime, signal, metadata, auth }) => ({
+    output: { ok: !signal.aborted },
+  }),
 });
-
-const { agent } = runtime;
-export { agent, handlers, runtime };
 ```
 
-## Supported Networks
+All registration paths enter the same registry and run extension validation
+hooks. Dynamic entrypoints immediately appear in adapter routing (dynamic
+`:key` routes), entrypoint listings, and newly built manifests. Duplicate keys
+are rejected instead of overwriting existing behavior.
 
-Lucid-agents supports payment receiving on multiple blockchain networks:
+Handler context contains:
 
-### EVM Networks
+- typed `input` when an input Zod schema is present;
+- `signal` for cancellation;
+- `runtime` with the exact installed capabilities;
+- `metadata.headers` for transport metadata;
+- `runId` when invoked through HTTP;
+- verified SIWX `auth` when authorization granted it.
 
-- `base` - Base mainnet (L2)
-- `base-sepolia` - Base Sepolia testnet
-- `ethereum` - Ethereum mainnet
-- `sepolia` - Ethereum Sepolia testnet
+Output is validated against the output schema. Input validation returns a 400 in
+HTTP; invalid handler output and handler exceptions return a 500. Authorization
+finalization still runs for all of those paths.
 
-### Solana Networks
+## Streaming
 
-- `solana` - Solana mainnet
-- `solana-devnet` - Solana devnet
-
-### Address Formats
-
-- **EVM**: 0x-prefixed hex (42 characters) - e.g., `0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0`
-- **Solana**: Base58 encoding (~44 characters, no prefix) - e.g., `9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz`
-
-### Example with Solana
+Add a `stream` handler for SSE output:
 
 ```ts
-const { app, addEntrypoint } = createAgentApp(
-  {
-    name: 'solana-agent',
-    version: '1.0.0',
-    description: 'Agent accepting Solana USDC payments',
+.addEntrypoint({
+  key: 'story',
+  input: z.object({ topic: z.string() }),
+  stream: async ({ input }, emit) => {
+    await emit({ kind: 'text', text: `A story about ${input.topic}` });
+    await emit({ kind: 'delta', delta: '...', final: true });
+    return { output: { complete: true }, status: 'succeeded' };
   },
-  {
-    payments: {
-      payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz', // Solana address
-      network: 'solana-devnet',
-      facilitatorUrl: 'https://facilitator.daydreams.systems',
-    },
-  }
-);
-
-addEntrypoint({
-  key: 'translate',
-  description: 'Translate text',
-  input: z.object({ text: z.string(), target: z.string() }),
-  async handler({ input }) {
-    // Your translation logic
-    return {
-      output: { translated: `Translated: ${input.text}` },
-    };
-  },
-});
+})
 ```
 
-### SPL Token Addresses
+Streaming envelope types live in `@lucid-agents/types/http` because the SSE
+protocol is owned by the HTTP package.
 
-For Solana payments, USDC addresses are:
+## Adapters
 
-- **Mainnet USDC**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-- **Devnet USDC**: `Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr`
-
-### Entrypoints
-
-`EntrypointDef` describes a unit of work. Each entrypoint becomes two HTTP endpoints:
-
-- `POST /entrypoints/:key/invoke` — always available; returns JSON `{ run_id, status, output?, usage?, model? }`.
-- `POST /entrypoints/:key/stream` — only registered when `streaming` and `stream` are provided; streams `run-start`, `delta`, `text`, `asset`, `control`, `error`, and `run-end` events over SSE.
-
-Field highlights:
-
-- `input` / `output` accept Zod schemas and automatically drive validation and manifest JSON schema generation.
-- `handler(ctx)` handles non-streaming invocations.
-- `stream(ctx, emit)` emits `StreamPushEnvelope`s and finishes with a `StreamResult`.
-- `price` accepts either a single string or `{ invoke?, stream? }`; `network` can override the global payment network per entrypoint.
+Every adapter consumes the completed HTTP runtime:
 
 ```ts
-addEntrypoint({
-  key: 'stream',
-  description: 'Streams characters back to the caller',
-  input: z.object({ prompt: z.string() }),
-  streaming: true,
-  price: { stream: '2500' },
-  async stream({ input }, emit) {
-    for (const ch of input.prompt ?? '') {
-      await emit({ kind: 'delta', delta: ch, mime: 'text/plain' });
-    }
-    return { output: { done: true } };
-  },
-});
+import { createAgentApp as createHonoAgentApp } from '@lucid-agents/hono';
+import { createAgentApp as createExpressAgentApp } from '@lucid-agents/express';
+
+// Hono
+const { app, runtime, addEntrypoint } = await createHonoAgentApp(agent);
+
+// Express
+const { app } = await createExpressAgentApp(agent);
+app.listen(3000);
+
+// TanStack Start
+const { handlers, routes } = await createTanStackRuntime(agent);
 ```
 
-### HTTP routes
+Hono and Express bind `runtime.http.routes`, the canonical route plan. TanStack
+and generated Next/TanStack modules delegate to `runtime.http.handlers`. Payment
+and SIWX middleware is not duplicated in adapters.
 
-Every agent app exposes the following for free:
+## Manifest and discovery
 
-- `GET /health` → `{ ok: true, version }`
-- `GET /entrypoints` → `{ items: Array<{ key, description?, streaming }> }`
-- `GET /.well-known/agent.json` and `/.well-known/agent-card.json` → full manifest (skills, schemas, pricing, trust metadata, AP2 extension, etc.)
-- `POST /entrypoints/:key/invoke` and (optional) `POST /entrypoints/:key/stream` as described above.
-- `GET /` → lightweight HTML page that renders the manifest (handy for local inspection).
+`runtime.manifest.build(origin)` returns an origin-specific agent card populated
+from the current entrypoint registry. Extension `onManifestBuild` hooks add
+payments, identity, A2A, AP2, and other metadata. Results are cached by origin;
+`runtime.entrypoints.add()` invalidates the cache.
 
-## Configuration & Environment
+The HTTP extension serves the card at
+`/.well-known/agent-card.json` and the legacy `/.well-known/agent.json` alias.
+Use its manifest handler in framework compatibility routes so there is only one
+cache and one origin calculation.
 
-`core` keeps configuration centralized so every helper resolves the same values.
+## Payments and payment rails
 
-- Defaults live in `src/config.ts` (currently empty placeholders).
-- Environment variables flow in via the extension helpers (`paymentsFromEnv()` and `walletsFromEnv()`).
-- `configureAgentKit(overrides)` merges values at runtime; use it inside tests or before calling `createAgentApp`.
-- `getAgentKitConfig()` returns the resolved values; `resetAgentKitConfigForTesting()` clears overrides.
-
-The helper `paymentsFromEnv()` returns the currently resolved `PaymentsConfig`, honouring inline config and environment values. `walletsFromEnv()` follows the same pattern.
+Core entrypoints only declare protocol-neutral pricing metadata:
 
 ```ts
-import {
-  configureAgentKit,
-  getAgentKitConfig,
-  paymentsFromEnv,
-} from '@lucid-agents/core';
-
-configureAgentKit({
-  payments: {
-    facilitatorUrl: 'https://facilitator.daydreams.systems',
-    payTo: '0x...',
-    network: 'ethereum',
-  },
-  wallets: {
-    agent: {
-      type: 'local',
-      privateKey: '0xabc...',
-    },
-  },
-});
-
-const config = getAgentKitConfig();
-console.log(config.payments?.facilitatorUrl); // resolved facilitator
-console.log(config.wallets?.agent?.type); // 'local'
-console.log(paymentsFromEnv()); // reuse inside handlers
+{
+  key: 'quote',
+  price: { invoke: '0.01', stream: '0.001' },
+  paymentProtocol: 'x402',
+  network: 'eip155:84532',
+}
 ```
 
-## Payments & Monetization
+`@lucid-agents/payments` owns x402 and SIWX. `@lucid-agents/mpp` owns MPP. The
+HTTP extension invokes the selected runtime through one authorization gate. If
+both payment extensions are installed, a priced entrypoint must choose
+`'x402'` or `'mpp'` explicitly.
 
-The `payments()` extension enables receiving payments via the x402 protocol and provides bi-directional payment tracking with persistent storage. When payments are configured, the adapter automatically wraps invoke/stream routes with x402 payment middleware.
+## Shared types
 
-**To receive payments, you need:**
-
-1. **Payments extension** - Add `.use(payments({ config: {...} }))` to enable payment processing
-2. **AP2 extension (optional)** - Add `.use(ap2({ roles: ['merchant'] }))` to advertise payment capabilities in the manifest
-
-**Important:** Payments and AP2 are independent extensions. The payments extension handles payment processing, while AP2 advertises payment roles in the manifest for discovery. If you want to participate in the AP2 ecosystem (advertise as merchant/shopper), you must explicitly add the AP2 extension.
-
-### Payment Tracking & Policies
-
-The payments extension provides:
-
-- **Bi-directional tracking** - Track both outgoing payments (agent pays) and incoming payments (agent receives)
-- **Persistent storage** - Multiple storage backends (SQLite, In-Memory, Postgres) for different deployment scenarios
-- **Payment policies** - Enforce limits and controls on both outgoing and incoming payments
-- **Automatic recording** - Payments are automatically tracked when using `fetchWithPayment` or when receiving payments
-
-See [`@lucid-agents/payments` documentation](../payments/README.md) for complete examples, storage options, and API reference.
-
-### Pricing
-
-- Each entrypoint must explicitly define its `price` (string or `{ invoke?, stream? }` object)
-- If no price is set, the entrypoint is free (no paywall)
-
-`resolvePrice(entrypoint, payments, kind)` (from `@lucid-agents/payments`) returns the price or `null`.
-
-For authenticated wallet access, pair your agent with
-`@lucid-agents/agent-auth` and reuse the generated SDK surface:
+Canonical contracts are defined in scoped subpaths:
 
 ```ts
-import { AgentRuntime } from '@lucid-agents/agent-auth';
-import { createRuntimePaymentContext } from '@lucid-agents/payments';
-
-const { runtime } = await AgentRuntime.load({
-  wallet: {
-    signer: {
-      async signChallenge(challenge) {
-        // sign however your environment requires
-        return `signed:${challenge.id}`;
-      },
-    },
-  },
-  loader: {
-    overrides: {
-      baseUrl: process.env.LUCID_API_URL,
-      agentRef: process.env.AGENT_REF,
-      credentialId: process.env.CREDENTIAL_ID,
-      scopes: ['agents.read'],
-    },
-  },
-});
-
-const token = await runtime.ensureAccessToken();
-const agents = await runtime.api.listAgents();
-console.log('active bearer token', token.slice(0, 12), agents.items.length);
-
-// Wrap fetch with x402 payments using the runtime-managed wallet
-const { fetchWithPayment } = await createRuntimePaymentContext({
-  runtime,
-});
-
-const paidResponse = await fetchWithPayment?.('https://paid.endpoint/api', {
-  method: 'POST',
-  body: JSON.stringify({ prompt: 'charge me' }),
-  headers: { 'content-type': 'application/json' },
-});
-console.log('paid response', await paidResponse?.json());
+import type {
+  AgentRuntime,
+  EntrypointDef,
+  Extension,
+} from '@lucid-agents/types/core';
+import type { AgentCard } from '@lucid-agents/types/a2a';
+import type { AgentHttpRuntime } from '@lucid-agents/types/http';
 ```
 
-## Manifest, AP2, and Discovery
+Public implementations should import each concept from its owning package and
+avoid creating parallel “internal” versions of runtime types.
 
-The manifest is automatically generated by `createAgentApp` using the A2A protocol base card and enhancement functions for payments, identity, and AP2 extensions. It produces an A2A-compatible AgentCard that includes:
+## Shutdown
 
-- `skills[]` mirroring entrypoints and their schemas.
-- `capabilities.streaming` when any entrypoint offers SSE.
-- `payments[]` with x402 metadata when monetization is active (via `payments()` extension).
-- AP2 extension entries when explicitly configured (via `ap2()` extension) - **required for AP2 ecosystem participation**.
-- Trust metadata (`registrations`, `trustModels`, validation URIs) from `TrustConfig`.
-
-**Note:** Payments and AP2 are separate extensions:
-
-- **Payments extension** (`payments()`) - Handles actual payment processing via x402 protocol
-- **AP2 extension** (`ap2()`) - Advertises payment roles (merchant/shopper) in the manifest for discovery
-
-If you want to receive payments AND advertise payment capabilities, you need both extensions:
+Always close a long-lived runtime:
 
 ```ts
-.use(payments({ config: {...} }))
-.use(ap2({ roles: ['merchant'] }))
-```
-
-## Trust & Identity (ERC-8004)
-
-Trust metadata is modelled by `TrustConfig`. For ERC-8004 identity management, use the dedicated `@lucid-agents/identity` package:
-
-```ts
-import { createAgentIdentity, getTrustConfig } from '@lucid-agents/identity';
-
-// Register agent identity with auto-registration
-const identity = await createAgentIdentity({
-  domain: 'agent.example.com',
-  autoRegister: true,
-  chainId: 84532,
-  trustModels: ['feedback', 'inference-validation'],
-});
-
-// Use in your agent app
-const { app } = createAgentApp(
-  { name: 'my-agent', version: '1.0.0' },
-  { trust: getTrustConfig(identity) }
-);
-
-console.log(`Agent ID: ${identity.record?.agentId}`);
-console.log(`Status: ${identity.status}`);
-```
-
-The package also exports lower-level helpers for advanced use cases:
-
-- `createIdentityRegistryClient({ address, chainId, publicClient, walletClient })` — direct registry access for advanced workflows.
-- `signAgentDomainProof({ domain, address, chainId, signer })` — manually sign domain ownership proofs.
-- `buildTrustConfigFromIdentity(record, { signature, chainId, namespace, registryAddress, trustOverrides })` — convert registry records into `TrustConfig`.
-
-See [`@lucid-agents/identity` documentation](../@lucid-agents/identity/README.md) for complete examples and API reference.
-
-## Agent-to-Agent (A2A) Client
-
-Agents can call other agents using the A2A protocol. The A2A client is available through the runtime:
-
-```ts
-import { createRuntimePaymentContext } from '@lucid-agents/payments';
-
-addEntrypoint({
-  key: 'delegate',
-  handler: async ctx => {
-    const runtime = ctx.runtime;
-    if (!runtime?.a2a) {
-      throw new Error('A2A client not available');
-    }
-
-    // Create payment-enabled fetch (optional)
-    const paymentContext = await createRuntimePaymentContext({
-      runtime,
-      network: 'ethereum',
-    });
-
-    // Fetch worker agent's card
-    const workerCard = await runtime.a2a.fetchCard(
-      'https://worker.example.com',
-      paymentContext.fetchWithPayment
-    );
-
-    // Call worker agent
-    const result = await runtime.a2a.client.invoke(
-      workerCard,
-      'process',
-      ctx.input.data,
-      paymentContext.fetchWithPayment
-    );
-
-    return { output: { result: result.output } };
-  },
+process.once('SIGTERM', async () => {
+  await runtime.close();
+  process.exit(0);
 });
 ```
 
-### Convenience Functions
-
-```ts
-import { fetchAndInvoke } from '@lucid-agents/a2a';
-
-// Fetch card and invoke in one call
-const result = await fetchAndInvoke(
-  'https://worker.example.com',
-  'process',
-  { data: [1, 2, 3] },
-  fetchWithPayment // optional
-);
-```
-
-See `examples/full-agent.ts` for a complete agent example, or use the `trading-data-agent` and `trading-recommendation-agent` CLI templates for A2A composition examples.
-
-## x402 utilities
-
-For downstream components that need to make requests with x402 payments:
-
-- `createX402Fetch({ account, fetchImpl })` and `accountFromPrivateKey(privateKey)` — wrap a fetch implementation with x402 payments.
-
-## Miscellaneous utilities
-
-- `toJsonSchemaOrUndefined(zodSchema)` — safe JSON-schema conversion.
-- `normalizeAddress`, `sanitizeAddress`, `toCaip10` — address manipulation helpers used by the trust layer.
-- `defaults` — exported constants describing the built-in facilitator URL, pay-to address, network, and API base URL.
+This closes task stores, payment/SIWX storage, schedulers, and any custom
+extension resources in dependency-safe order.

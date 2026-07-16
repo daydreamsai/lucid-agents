@@ -23,11 +23,10 @@
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^4.1.16",
-    "viem": "catalog:",
+    "viem": "^2.41.2",
     "wagmi": "^2.19.2",
-    "@x402/fetch": "catalog:",
-    "@x402/evm": "catalog:",
-    "@x402/next": "^2.2.0",
+    "@x402/fetch": "^2.2.0",
+    "@x402/evm": "^2.2.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

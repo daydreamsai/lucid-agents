@@ -1,4 +1,4 @@
-import type { AgentMeta } from '../a2a';
+import type { AgentMeta } from './manifest';
 
 /**
  * Configuration for an agent instance.

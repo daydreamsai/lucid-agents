@@ -1,7 +1,7 @@
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { payments } from '@lucid-agents/payments';
-import { createAgentApp, withPayments } from '@lucid-agents/hono';
+import { createAgentApp } from '@lucid-agents/hono';
 import { resolvePrice } from '@lucid-agents/payments';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
@@ -13,14 +13,14 @@ const meta = { name: 'tester', version: '0.0.1', description: 'test agent' };
 const mockFacilitatorResponse = {
   kinds: [
     {
-      scheme: "exact",
-      network: "eip155:84532",
+      scheme: 'exact',
+      network: 'eip155:84532',
       asset: {
-        address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
         decimals: 6,
         eip712: {
-          name: "USDC",
-          version: "2",
+          name: 'USDC',
+          version: '2',
         },
       },
     },
@@ -31,25 +31,36 @@ let originalFetch: typeof globalThis.fetch;
 
 beforeAll(() => {
   originalFetch = globalThis.fetch;
-  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  globalThis.fetch = (async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
 
-    if (url.includes("facilitator") && url.includes("/supported")) {
+    if (url.includes('facilitator') && url.includes('/supported')) {
       return new Response(JSON.stringify(mockFacilitatorResponse), {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    if (url.includes("facilitator") && url.includes("/verify")) {
-      return new Response(JSON.stringify({ valid: false, reason: "No payment" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (url.includes('facilitator') && url.includes('/verify')) {
+      return new Response(
+        JSON.stringify({ valid: false, reason: 'No payment' }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     return originalFetch(input, init);
-  };
+  }) as unknown as typeof globalThis.fetch;
 });
 
 afterAll(() => {
@@ -89,182 +100,6 @@ describe('resolvePrice', () => {
     const entrypoint: EntrypointDef = { key: 'x' };
     expect(resolvePrice(entrypoint, payments, 'invoke')).toBe(null);
     expect(resolvePrice(entrypoint, undefined, 'invoke')).toBe(null);
-  });
-});
-
-describe('withPayments helper', () => {
-  const payments: PaymentsConfig = {
-    payTo: '0xabc0000000000000000000000000000000000000',
-    facilitatorUrl: 'https://facilitator.daydreams.systems',
-    network: 'eip155:84532',
-  };
-
-  const entrypoint: EntrypointDef = {
-    key: 'test',
-    price: { invoke: '42' },
-  };
-
-  it('registers middleware when price/network resolved', () => {
-    const calls: Array<[string, any]> = [];
-    let capturedRoutes: Record<string, any> | null = null;
-    let capturedFacilitator: any = null;
-    let capturedSchemes: any[] | null = null;
-    const app = { use: (...args: any[]) => calls.push([...args] as any) };
-    const middlewareFactory = (
-      routes: Record<string, any>,
-      facilitatorClient: any,
-      schemes?: any[]
-    ) => {
-      capturedRoutes = routes;
-      capturedFacilitator = facilitatorClient;
-      capturedSchemes = schemes ?? null;
-      return { routes, facilitator: facilitatorClient };
-    };
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint,
-      kind: 'invoke',
-      payments,
-      middlewareFactory: middlewareFactory as any,
-    });
-    expect(didRegister).toBe(true);
-    expect(calls.length).toBe(1);
-    const [path] = calls[0];
-    expect(path).toBe('/entrypoints/test/invoke');
-    expect(capturedRoutes).toBeTruthy();
-    const routeKeys = Object.keys(capturedRoutes ?? {});
-    expect(routeKeys).toContain('POST /entrypoints/test/invoke');
-    expect(routeKeys).toContain('GET /entrypoints/test/invoke');
-
-    const postConfig = capturedRoutes?.['POST /entrypoints/test/invoke'] ?? null;
-    expect(postConfig.accepts?.price).toBe('42');
-    expect(postConfig.mimeType).toBe('application/json');
-
-    const getConfig = capturedRoutes?.['GET /entrypoints/test/invoke'] ?? null;
-    expect(getConfig.accepts?.price).toBe('42');
-    expect(getConfig.mimeType).toBe('application/json');
-    expect(capturedFacilitator).toBeTruthy();
-
-    expect(capturedSchemes).toBeTruthy();
-    expect(capturedSchemes?.length).toBe(1);
-    expect(capturedSchemes?.[0]?.network).toBe('eip155:*');
-    expect(capturedSchemes?.[0]?.server?.scheme).toBe('exact');
-  });
-
-  it('skips registration when no payments provided', () => {
-    const calls: any[] = [];
-    const app = { use: (...args: any[]) => calls.push([...args]) };
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint,
-      kind: 'invoke',
-    });
-    expect(didRegister).toBe(false);
-    expect(calls.length).toBe(0);
-  });
-
-  it('skips registration when entrypoint has no price', () => {
-    const calls: any[] = [];
-    const app = { use: (...args: any[]) => calls.push([...args]) };
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint: { key: 'test' }, // No price defined
-      kind: 'invoke',
-      payments,
-    });
-    expect(didRegister).toBe(false);
-    expect(calls.length).toBe(0);
-  });
-
-  it('allows overriding facilitator config', () => {
-    const calls: Array<[string, any]> = [];
-    let capturedFacilitator: any = null;
-    const app = { use: (...args: any[]) => calls.push([...args] as any) };
-    const customFacilitator = { url: 'https://override.example' };
-    const middlewareFactory = (
-      routes: Record<string, any>,
-      facilitatorClient: any,
-      schemes?: any[]
-    ) => {
-      capturedFacilitator = facilitatorClient;
-      return { routes, facilitator: facilitatorClient };
-    };
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint,
-      kind: 'invoke',
-      payments,
-      facilitator: customFacilitator,
-      middlewareFactory: middlewareFactory as any,
-    });
-    expect(didRegister).toBe(true);
-    expect(capturedFacilitator).toBeTruthy();
-  });
-
-  it('injects facilitator bearer auth header from payments config', async () => {
-    const calls: Array<[string, any]> = [];
-    let capturedFacilitator: any = null;
-    const app = { use: (...args: any[]) => calls.push([...args] as any) };
-    const middlewareFactory = (
-      routes: Record<string, any>,
-      facilitatorClient: any
-    ) => {
-      capturedFacilitator = facilitatorClient;
-      return { routes, facilitator: facilitatorClient };
-    };
-
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint,
-      kind: 'invoke',
-      payments: {
-        ...payments,
-        facilitatorAuth: 'facilitator-secret',
-      },
-      middlewareFactory: middlewareFactory as any,
-    });
-
-    expect(didRegister).toBe(true);
-    expect(capturedFacilitator).toBeTruthy();
-
-    const authHeaders = await capturedFacilitator.createAuthHeaders('verify');
-    expect(authHeaders.headers.Authorization).toBe(
-      'Bearer facilitator-secret'
-    );
-  });
-
-  it('wires dynamic payTo callback in stripe mode', () => {
-    let capturedRoutes: Record<string, any> | null = null;
-    const app = { use: (..._args: any[]) => {} };
-    const middlewareFactory = (
-      routes: Record<string, any>,
-      facilitatorClient: any
-    ) => {
-      capturedRoutes = routes;
-      return { routes, facilitator: facilitatorClient };
-    };
-
-    const didRegister = withPayments({
-      app: app as any,
-      path: '/entrypoints/test/invoke',
-      entrypoint,
-      kind: 'invoke',
-      payments: {
-        facilitatorUrl: 'https://facilitator.daydreams.systems',
-        network: 'eip155:8453',
-        stripe: { secretKey: 'sk_test_123' },
-      },
-      middlewareFactory: middlewareFactory as any,
-    });
-
-    expect(didRegister).toBe(true);
-    const postRoute = capturedRoutes?.['POST /entrypoints/test/invoke'] ?? null;
-    expect(typeof postRoute?.accepts?.payTo).toBe('function');
   });
 });
 

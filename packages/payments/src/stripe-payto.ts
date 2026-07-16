@@ -1,5 +1,5 @@
 import type { StripePaymentsConfig } from '@lucid-agents/types/payments';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 
 const DEFAULT_USDC_BASE_UNITS = 10_000; // $0.01 in 6-decimal USDC
 const USDC_BASE_UNITS_PER_CENT = 10_000;
@@ -116,10 +116,11 @@ function parseStripeApiBaseUrl(apiBaseUrl: string): StripeApiBaseOverride {
   };
 }
 
-function createStripeClient(
+async function createStripeClient(
   stripeConfig: StripePaymentsConfig,
   secretKey: string
-): Stripe {
+): Promise<Stripe> {
+  const { default: StripeClient } = await import('stripe');
   const config: Stripe.StripeConfig = {};
   if (stripeConfig.apiVersion) {
     config.apiVersion =
@@ -133,7 +134,7 @@ function createStripeClient(
     config.protocol = override.protocol;
   }
 
-  return new Stripe(secretKey, config);
+  return new StripeClient(secretKey, config);
 }
 
 export async function createStripePayToAddress(
@@ -149,7 +150,7 @@ export async function createStripePayToAddress(
 
   const amountBaseUnits = resolveAmountBaseUnits(context);
   const amountInCents = toCentsFromBaseUnits(amountBaseUnits);
-  const stripeClient = createStripeClient(stripe, secretKey);
+  const stripeClient = await createStripeClient(stripe, secretKey);
 
   try {
     const paymentIntent = await stripeClient.paymentIntents.create({
@@ -166,10 +167,6 @@ export async function createStripePayToAddress(
 
     return readBaseDepositAddress(paymentIntent);
   } catch (error) {
-    if (error instanceof Stripe.errors.StripeError && error.message) {
-      throw new Error(error.message);
-    }
-
     if (error instanceof Error) {
       throw error;
     }

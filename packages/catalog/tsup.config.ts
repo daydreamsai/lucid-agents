@@ -1,13 +1,17 @@
 import { definePackageConfig } from '../tsup.config.base';
 
 export default definePackageConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    index: 'src/index.ts',
+    node: 'src/node.ts',
+  },
   dts: true,
   external: [
     '@lucid-agents/core',
     '@lucid-agents/types',
     'yaml',
     'csv-parse',
+    'csv-parse/browser/esm/sync',
     'zod',
   ],
 });

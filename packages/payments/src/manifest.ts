@@ -1,5 +1,9 @@
-import type { AgentCardWithEntrypoints, Manifest, PaymentMethod } from '@lucid-agents/types/a2a';
-import type { EntrypointDef } from '@lucid-agents/types/core';
+import type { PaymentMethod } from '@lucid-agents/types/a2a';
+import type {
+  AgentManifest,
+  EntrypointDef,
+  ManifestEntrypoint,
+} from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
 import { resolvePrice } from './pricing';
@@ -10,12 +14,12 @@ import { resolvePrice } from './pricing';
  * Immutable - returns new card, doesn't mutate input.
  */
 export function createAgentCardWithPayments(
-  card: AgentCardWithEntrypoints,
+  card: AgentManifest,
   paymentsConfig: PaymentsConfig,
   entrypoints: Iterable<EntrypointDef>
-): AgentCardWithEntrypoints {
+): AgentManifest & { payments: PaymentMethod[] } {
   const entrypointList = Array.from(entrypoints);
-  const entrypointsWithPricing: Manifest['entrypoints'] = {};
+  const entrypointsWithPricing: AgentManifest['entrypoints'] = {};
 
   // Add pricing to each entrypoint
   for (const [key, entrypoint] of Object.entries(card.entrypoints)) {
@@ -26,9 +30,11 @@ export function createAgentCardWithPayments(
     }
 
     const invP = resolvePrice(entrypointDef, paymentsConfig, 'invoke');
-    const strP = entrypointDef.stream ? resolvePrice(entrypointDef, paymentsConfig, 'stream') : undefined;
+    const strP = entrypointDef.stream
+      ? resolvePrice(entrypointDef, paymentsConfig, 'stream')
+      : undefined;
 
-    const manifestEntry: Manifest['entrypoints'][string] = {
+    const manifestEntry: ManifestEntrypoint = {
       ...entrypoint,
     };
 

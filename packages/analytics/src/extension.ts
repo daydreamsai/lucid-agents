@@ -1,26 +1,42 @@
-import type {
-  AgentRuntime,
-  BuildContext,
-  Extension,
-} from '@lucid-agents/types/core';
+import type { BuildContext, Extension } from '@lucid-agents/types/core';
 import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
-import type { PaymentTracker } from '@lucid-agents/types/payments';
+import type { PaymentsRuntime } from '@lucid-agents/types/payments';
 
-export function analytics(): Extension<{ analytics: AnalyticsRuntime }> {
+import {
+  exportToCSV,
+  exportToJSON,
+  getAllTransactions,
+  getAnalyticsData,
+  getSummary,
+} from './api';
+
+type AnalyticsDependencies = { payments: PaymentsRuntime | undefined };
+
+export function analytics(): Extension<
+  { analytics: AnalyticsRuntime },
+  AnalyticsDependencies
+> {
   return {
     name: 'analytics',
-    build(_ctx: BuildContext): { analytics: AnalyticsRuntime } {
+    requires: ['payments'],
+    build(ctx: BuildContext<AnalyticsDependencies>): {
+      analytics: AnalyticsRuntime;
+    } {
+      const tracker = ctx.runtime.payments?.paymentTracker;
+      if (!tracker) {
+        throw new Error(
+          'analytics() requires an enabled payments() runtime with storage'
+        );
+      }
       return {
-        analytics: {} as AnalyticsRuntime,
-      };
-    },
-    onBuild(runtime: AgentRuntime) {
-      const analyticsRuntime: AnalyticsRuntime = {
-        get paymentTracker() {
-          return runtime.payments?.paymentTracker as PaymentTracker | undefined;
+        analytics: {
+          getSummary: windowMs => getSummary(tracker, windowMs),
+          getTransactions: windowMs => getAllTransactions(tracker, windowMs),
+          getData: windowMs => getAnalyticsData(tracker, windowMs),
+          exportCSV: windowMs => exportToCSV(tracker, windowMs),
+          exportJSON: windowMs => exportToJSON(tracker, windowMs),
         },
       };
-      runtime.analytics = analyticsRuntime;
     },
   };
 }

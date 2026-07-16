@@ -24,10 +24,10 @@ describeWithDb('Multi-Agent Payment Isolation', () => {
   const agentIdC = 'agent_c';
 
   beforeEach(async () => {
-    storageAgentA = createPostgresPaymentStorage(TEST_DB_URL, agentIdA);
-    storageAgentB = createPostgresPaymentStorage(TEST_DB_URL, agentIdB);
-    storageAgentC = createPostgresPaymentStorage(TEST_DB_URL, agentIdC);
-    storageNoAgent = createPostgresPaymentStorage(TEST_DB_URL);
+    storageAgentA = createPostgresPaymentStorage(TEST_DB_URL!, agentIdA);
+    storageAgentB = createPostgresPaymentStorage(TEST_DB_URL!, agentIdB);
+    storageAgentC = createPostgresPaymentStorage(TEST_DB_URL!, agentIdC);
+    storageNoAgent = createPostgresPaymentStorage(TEST_DB_URL!);
 
     trackerA = createPaymentTracker(storageAgentA);
     trackerB = createPaymentTracker(storageAgentB);

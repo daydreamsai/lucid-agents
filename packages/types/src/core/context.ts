@@ -15,13 +15,13 @@ export type Usage = {
 /**
  * Context provided to entrypoint handlers.
  */
-export type AgentContext = {
+export type AgentContext<TRuntime extends object = AgentRuntime> = {
   key: string;
   input: unknown;
   signal: AbortSignal;
   metadata?: Record<string, unknown>;
   runId?: string;
-  runtime?: AgentRuntime;
+  runtime: TRuntime;
   auth?: AgentAuthContext;
 };
 
@@ -38,4 +38,3 @@ export class ZodValidationError extends Error {
     );
   }
 }
-

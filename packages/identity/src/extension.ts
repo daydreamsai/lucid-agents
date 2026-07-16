@@ -1,72 +1,130 @@
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
-import type { AgentRuntime, Extension } from '@lucid-agents/types/core';
-import type { TrustConfig } from '@lucid-agents/types/identity';
+import type {
+  AgentManifest,
+  AgentRuntime,
+  BuildContext,
+  Extension,
+} from '@lucid-agents/types/core';
+import type {
+  IdentityRuntime,
+  OASFRecord,
+  TrustConfig,
+} from '@lucid-agents/types/identity';
+import type { WalletsRuntime } from '@lucid-agents/types/wallets';
 
-import type { CreateAgentIdentityOptions } from './init';
-import { createAgentIdentity, getTrustConfig } from './init';
+import type { IdentityConfig } from './env';
+import type { AgentIdentity } from './init';
+import {
+  createAgentIdentity,
+  generateAgentRegistration,
+  generateOASFRecord,
+  getTrustConfig,
+} from './init';
 import { createAgentCardWithIdentity } from './manifest';
 
-export type IdentityConfig = {
+export type IdentityExtensionRuntime = {
   trust?: TrustConfig;
-  domain?: string;
-  autoRegister?: boolean;
-  rpcUrl?: string;
-  chainId?: number;
-  registration?: CreateAgentIdentityOptions['registration'];
+  identity?: IdentityRuntime & {
+    /** Complete identity result, including registry clients and registration state. */
+    result?: AgentIdentity;
+  };
 };
 
-export function identity(options?: { config?: IdentityConfig }): Extension<{
-  trust?: TrustConfig;
-  identity?: { registration?: CreateAgentIdentityOptions['registration'] };
-}> {
+function hasWallets(
+  runtime: AgentRuntime & Record<string, unknown>
+): runtime is AgentRuntime<{ wallets: WalletsRuntime }> &
+  Record<string, unknown> {
+  const wallets = runtime.wallets as WalletsRuntime | undefined;
+  return Boolean(wallets?.developer || wallets?.agent);
+}
+
+function resolveRequestEndpoint(
+  record: OASFRecord,
+  requestUrl: string
+): OASFRecord {
+  if (!record.endpoint.startsWith('/')) return record;
+  const endpoint = new URL(record.endpoint, requestUrl);
+  return { ...record, endpoint: endpoint.toString() };
+}
+
+export function identity(options?: {
+  config?: IdentityConfig;
+}): Extension<IdentityExtensionRuntime> {
   const config = options?.config;
   let trustConfig: TrustConfig | undefined = config?.trust;
-  let identityResult:
-    | Awaited<ReturnType<typeof createAgentIdentity>>
-    | undefined;
 
   return {
     name: 'identity',
-    build(): {
-      trust?: TrustConfig;
-      identity?: { registration?: CreateAgentIdentityOptions['registration'] };
-    } {
-      const registration = config?.registration;
-      return {
-        trust: trustConfig,
-        identity: registration ? { registration } : undefined,
-      };
-    },
-    async onBuild(runtime: AgentRuntime): Promise<void> {
-      // If trust config is already provided, no need to create identity
-      if (trustConfig || !runtime.wallets?.agent) {
-        return;
-      }
+    after: ['wallets'],
+    async build(ctx: BuildContext): Promise<IdentityExtensionRuntime> {
+      let identityResult: AgentIdentity | undefined;
+      const shouldResolveIdentity =
+        !trustConfig &&
+        Boolean(config?.domain || config?.autoRegister !== undefined);
 
-      // If identity config is provided, create identity automatically
-      if (config?.domain || config?.autoRegister !== undefined) {
-        const identityOptions: CreateAgentIdentityOptions = {
-          runtime,
-          domain: config.domain,
-          autoRegister: config.autoRegister,
-          rpcUrl: config.rpcUrl,
-          chainId: config.chainId,
-          registration: config.registration,
-        };
-
-        identityResult = await createAgentIdentity(identityOptions);
+      if (shouldResolveIdentity) {
+        if (!hasWallets(ctx.runtime)) {
+          throw new Error(
+            'Identity auto-registration requires a developer or agent wallet. ' +
+              'Install wallets() or provide identity.config.trust.'
+          );
+        }
+        identityResult = await createAgentIdentity({
+          runtime: ctx.runtime,
+          domain: config?.domain,
+          autoRegister: config?.autoRegister,
+          rpcUrl: config?.rpcUrl,
+          chainId: config?.chainId,
+          registration: config?.registration,
+        });
         trustConfig = getTrustConfig(identityResult);
       }
+
+      const registrationOptions = config?.registration
+        ? {
+            name: ctx.meta.name,
+            description: ctx.meta.description,
+            ...config.registration,
+          }
+        : undefined;
+      const metadataIdentity: AgentIdentity = identityResult ?? {
+        status: trustConfig
+          ? 'Identity trust configured'
+          : 'Identity metadata configured',
+        domain: config?.domain,
+        trust: trustConfig,
+      };
+
+      const registration = registrationOptions
+        ? generateAgentRegistration(metadataIdentity, registrationOptions)
+        : undefined;
+      const buildOASFRecord = registrationOptions
+        ? (requestUrl: string): OASFRecord | undefined => {
+            const record = generateOASFRecord(
+              metadataIdentity,
+              registrationOptions,
+              ctx.runtime
+            );
+            return record
+              ? resolveRequestEndpoint(record, requestUrl)
+              : undefined;
+          }
+        : undefined;
+
+      return {
+        trust: trustConfig,
+        identity:
+          registration || buildOASFRecord || identityResult
+            ? { registration, buildOASFRecord, result: identityResult }
+            : undefined,
+      };
     },
     onManifestBuild(
-      card: AgentCardWithEntrypoints,
+      card: AgentManifest,
       _runtime: AgentRuntime
-    ): AgentCardWithEntrypoints {
-      // Use trust config from closure (set in onBuild or from config)
-      if (trustConfig) {
-        return createAgentCardWithIdentity(card, trustConfig);
-      }
-      return card;
+    ): AgentManifest {
+      return trustConfig
+        ? createAgentCardWithIdentity(card, trustConfig)
+        : card;
     },
   };
 }

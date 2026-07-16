@@ -9,12 +9,7 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: [
-    '@lucid-agents/core',
-    '@lucid-agents/payments',
     '@lucid-agents/types',
     'express',
-    'x402-express',
-    'x402',
-    'zod',
   ],
 });

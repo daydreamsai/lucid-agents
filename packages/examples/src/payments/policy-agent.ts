@@ -2,6 +2,7 @@ import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { createRuntimePaymentContext, payments } from '@lucid-agents/payments';
+import { policiesFromConfig } from '@lucid-agents/payments/node';
 import { wallets } from '@lucid-agents/wallet';
 import { z } from 'zod';
 
@@ -41,8 +42,10 @@ const agent = await createAgent({
         payTo: '0x1234567890123456789012345678901234567890',
         network: 'eip155:84532',
         facilitatorUrl: 'https://facilitator.daydreams.systems',
+        policyGroups: policiesFromConfig(
+          'packages/examples/src/payments/payment-policies.json'
+        ),
       },
-      policies: 'packages/examples/src/payments/payment-policies.json',
     })
   )
   .use(

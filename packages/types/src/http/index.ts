@@ -16,6 +16,62 @@ export type HttpExtensionOptions = {
    * @default true
    */
   landingPage?: boolean;
+  /**
+   * Public path prefix where agent routes are mounted (for example `/api/agent`).
+   * This is included in Agent Card URLs and generated links.
+   * @default ""
+   */
+  basePath?: string;
+  /**
+   * Target-side invocation idempotency. Enabled with a bounded in-memory
+   * store by default; inject a durable store for multi-instance deployments.
+   */
+  idempotency?: false | HttpIdempotencyOptions;
+};
+
+/** Serializable HTTP response retained for a completed idempotent invoke. */
+export type StoredHttpResponse = {
+  status: number;
+  statusText: string;
+  headers: Array<[string, string]>;
+  body: string;
+};
+
+export type HttpIdempotencyClaim =
+  | { state: 'claimed' }
+  | { state: 'in_progress' }
+  | { state: 'conflict' }
+  | { state: 'completed'; response: StoredHttpResponse };
+
+/** Atomic persistence port for target-side invoke deduplication. */
+export type HttpIdempotencyStore = {
+  claim: (
+    scope: string,
+    key: string,
+    fingerprint: string,
+    ownerId: string,
+    expiresAt: number,
+    now: number
+  ) => Promise<HttpIdempotencyClaim>;
+  complete: (
+    scope: string,
+    key: string,
+    ownerId: string,
+    response: StoredHttpResponse,
+    expiresAt: number
+  ) => Promise<boolean>;
+  release: (scope: string, key: string, ownerId: string) => Promise<void>;
+  close?: () => Promise<void> | void;
+};
+
+export type HttpIdempotencyOptions = {
+  store?: HttpIdempotencyStore;
+  /** Duration of an in-progress ownership claim. @default 900000 */
+  inProgressTtlMs?: number;
+  /** Duration to retain a successful response. @default 86400000 */
+  retentionMs?: number;
+  /** Maximum entries for the default in-memory store. @default 10000 */
+  maxEntries?: number;
 };
 
 /**
@@ -231,4 +287,39 @@ export type AgentHttpHandlers = {
     req: Request,
     params: { taskId: string }
   ) => Promise<Response>;
+};
+
+export type AgentHttpRouteId =
+  | 'health'
+  | 'entrypoints'
+  | 'manifest'
+  | 'legacyManifest'
+  | 'oasf'
+  | 'landing'
+  | 'favicon'
+  | 'invoke'
+  | 'stream'
+  | 'tasks'
+  | 'getTask'
+  | 'listTasks'
+  | 'cancelTask'
+  | 'subscribeTask';
+
+/** Transport-neutral route emitted by the HTTP extension. */
+export type AgentHttpRoute = {
+  id: AgentHttpRouteId;
+  method: 'GET' | 'POST';
+  path: string;
+  params: readonly string[];
+  handle: (
+    request: Request,
+    params: Record<string, string>
+  ) => Promise<Response>;
+};
+
+/** Complete route/capability plan consumed by framework adapters. */
+export type AgentHttpRuntime = {
+  basePath: string;
+  handlers: AgentHttpHandlers;
+  routes: readonly AgentHttpRoute[];
 };

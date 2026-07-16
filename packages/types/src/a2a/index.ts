@@ -7,35 +7,11 @@ import type { AgentRuntime } from '../core';
 import type { Usage } from '../core';
 import type { FetchFunction } from '../http';
 import type { AP2ExtensionDescriptor } from '../ap2';
+import type { AgentMeta, ManifestEntrypoint } from '../core/manifest';
 
 /**
  * Metadata describing an agent.
  * Used for building Agent Cards (A2A protocol) and landing pages (HTTP).
- */
-export type AgentMeta = {
-  name: string;
-  version: string;
-  description?: string;
-  icon?: string;
-  /**
-   * Open Graph image URL for social previews and x402scan discovery.
-   * Should be an absolute URL (e.g., "https://agent.com/og-image.png").
-   * Recommended size: 1200x630px.
-   */
-  image?: string;
-  /**
-   * Canonical URL of the agent. Used for Open Graph tags.
-   * If not provided, defaults to the agent's origin URL.
-   */
-  url?: string;
-  /**
-   * Open Graph type. Defaults to "website".
-   */
-  type?: 'website' | 'article';
-};
-
-/**
- * Agent manifest structure describing entrypoints and capabilities.
  */
 export type Manifest = {
   name: string;
@@ -46,9 +22,9 @@ export type Manifest = {
     {
       description?: string;
       streaming: boolean;
-      input_schema?: any;
-      output_schema?: any;
-      pricing?: { invoke?: string; stream?: string };
+      input_schema?: ManifestEntrypoint['input_schema'];
+      output_schema?: ManifestEntrypoint['output_schema'];
+      pricing?: ManifestEntrypoint['pricing'];
     }
   >;
 };
@@ -73,9 +49,7 @@ export type AgentCapabilities = {
   streaming?: boolean;
   pushNotifications?: boolean;
   stateTransitionHistory?: boolean;
-  extensions?: Array<
-    AP2ExtensionDescriptor | Record<string, unknown>
-  >;
+  extensions?: Array<AP2ExtensionDescriptor | Record<string, unknown>>;
 };
 
 /**
@@ -170,6 +144,12 @@ export type Task<TOutput = unknown> = {
   updatedAt: string;
 };
 
+/** Opaque capability required to read or mutate a task. */
+export type TaskAccess = {
+  taskId: string;
+  accessToken: string;
+};
+
 export type ListTasksRequest = {
   contextId?: string;
   status?: TaskStatus | TaskStatus[];
@@ -203,8 +183,7 @@ export type SendMessageRequest = {
   metadata?: Record<string, unknown>;
 };
 
-export type SendMessageResponse = {
-  taskId: string;
+export type SendMessageResponse = TaskAccess & {
   status: 'running';
 };
 
@@ -218,6 +197,82 @@ export type TaskUpdateEvent = {
     result?: TaskResult;
     error?: TaskError;
   };
+};
+
+/** Durable task record. Only the token hash is persisted. */
+export type StoredTask = {
+  task: Task;
+  ownerHash: string;
+  /** Fenced execution lease. A replacement worker may claim it after expiry. */
+  executionLease?: {
+    ownerId: string;
+    expiresAt: number;
+  };
+};
+
+/** Atomic persistence port for A2A task state, ownership, and update delivery. */
+export type TaskStore = {
+  create: (record: StoredTask, event: TaskUpdateEvent) => Promise<void>;
+  get: (taskId: string) => Promise<StoredTask | undefined>;
+  list: (
+    ownerHash: string,
+    filters?: ListTasksRequest
+  ) => Promise<ListTasksResponse>;
+  /** Atomically claim or recover execution of a running task. */
+  claimExecution: (
+    taskId: string,
+    ownerId: string,
+    expiresAt: number,
+    now: number
+  ) => Promise<Task | undefined>;
+  compareAndSet: (
+    taskId: string,
+    expected: TaskStatus[],
+    next: Task,
+    event: TaskUpdateEvent,
+    /** When supplied, reject transitions from a stale execution owner. */
+    executionOwnerId?: string
+  ) => Promise<Task | undefined>;
+  subscribe: (
+    taskId: string,
+    ownerHash: string,
+    listener: (event: TaskUpdateEvent) => void | Promise<void>
+  ) => Promise<() => void> | (() => void);
+  close?: () => Promise<void> | void;
+};
+
+export type StartTaskOptions = {
+  taskId: string;
+  /** Secret capability. The task runtime persists only its SHA-256 hash. */
+  accessToken: string;
+  contextId?: string;
+  execute: (signal: AbortSignal) => Promise<TaskResult>;
+  mapError?: (error: unknown) => TaskError;
+};
+
+export type ReserveTaskOptions = Pick<
+  StartTaskOptions,
+  'taskId' | 'contextId' | 'accessToken'
+>;
+export type ExecuteTaskOptions = Pick<StartTaskOptions, 'execute' | 'mapError'>;
+
+/** A2A-owned task state machine used by HTTP and other transports. */
+export type A2ATaskRuntime = {
+  reserve: (options: ReserveTaskOptions) => Promise<Task>;
+  execute: (taskId: string, options: ExecuteTaskOptions) => Promise<Task>;
+  start: (options: StartTaskOptions) => Promise<Task>;
+  get: (taskId: string, accessToken: string) => Promise<Task | undefined>;
+  list: (
+    accessToken: string,
+    filters?: ListTasksRequest
+  ) => Promise<ListTasksResponse>;
+  cancel: (taskId: string, accessToken: string) => Promise<Task | undefined>;
+  subscribe: (
+    taskId: string,
+    accessToken: string,
+    listener: (event: TaskUpdateEvent) => void | Promise<void>
+  ) => Promise<() => void> | (() => void);
+  close: () => Promise<void>;
 };
 
 /**
@@ -239,6 +294,13 @@ export type StreamEmit = (chunk: {
   data: unknown;
 }) => Promise<void> | void;
 
+export type A2AInvokeOptions = {
+  /** Stable 20–256 character key reused when a remote invocation is retried. */
+  idempotencyKey?: string;
+  /** Additional transport headers. */
+  headers?: HeadersInit;
+};
+
 /**
  * Options for building an Agent Card.
  */
@@ -246,13 +308,19 @@ export type BuildAgentCardOptions = {
   meta: AgentMeta;
   registry: Iterable<EntrypointDef>;
   origin: string;
+  supportsTasks?: boolean;
 };
 
 /**
  * Options for creating A2A runtime.
  */
 export type CreateA2ARuntimeOptions = {
-  // Future: could add options here
+  tasks?: {
+    store?: TaskStore;
+    maxTasks?: number;
+    retentionMs?: number;
+    maxRunMs?: number;
+  };
 };
 
 /**
@@ -266,7 +334,8 @@ export type A2AClient = {
     card: AgentCard,
     skillId: string,
     input: unknown,
-    fetch?: FetchFunction
+    fetch?: FetchFunction,
+    options?: A2AInvokeOptions
   ) => Promise<InvokeAgentResult>;
 
   /**
@@ -299,7 +368,12 @@ export type A2AClient = {
     skillId: string,
     input: unknown,
     fetch?: FetchFunction,
-    options?: { contextId?: string; metadata?: Record<string, unknown> }
+    options?: {
+      contextId?: string;
+      metadata?: Record<string, unknown>;
+      /** Reuse a capability to group tasks under the same owner. */
+      accessToken?: string;
+    }
   ) => Promise<SendMessageResponse>;
 
   /**
@@ -307,7 +381,7 @@ export type A2AClient = {
    */
   getTask: (
     card: AgentCard,
-    taskId: string,
+    access: TaskAccess,
     fetch?: FetchFunction
   ) => Promise<Task>;
 
@@ -316,7 +390,7 @@ export type A2AClient = {
    */
   subscribeTask: (
     card: AgentCard,
-    taskId: string,
+    access: TaskAccess,
     emit: (chunk: TaskUpdateEvent) => Promise<void> | void,
     fetch?: FetchFunction
   ) => Promise<void>;
@@ -336,6 +410,7 @@ export type A2AClient = {
    */
   listTasks: (
     card: AgentCard,
+    accessToken: string,
     filters?: ListTasksRequest,
     fetch?: FetchFunction
   ) => Promise<ListTasksResponse>;
@@ -345,18 +420,9 @@ export type A2AClient = {
    */
   cancelTask: (
     card: AgentCard,
-    taskId: string,
+    access: TaskAccess,
     fetch?: FetchFunction
   ) => Promise<Task>;
-};
-
-/**
- * Manifest runtime type.
- * Returned by AgentRuntime.manifest.
- */
-export type ManifestRuntime = {
-  build: (origin: string) => AgentCardWithEntrypoints;
-  invalidate: () => void;
 };
 
 /**
@@ -386,4 +452,7 @@ export type A2ARuntime = {
    * Client utilities for calling other agents.
    */
   client: A2AClient;
+
+  /** Server-side A2A task state and persistence seam. */
+  tasks: A2ATaskRuntime;
 };

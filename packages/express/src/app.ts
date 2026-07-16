@@ -9,17 +9,14 @@ import { Readable } from 'node:stream';
 import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { TLSSocket } from 'node:tls';
 
-import type { EntrypointDef } from '@lucid-agents/core';
 import type {
   AgentRuntime,
   CreateAgentAppReturn,
 } from '@lucid-agents/types/core';
-import type { AgentAuthContext } from '@lucid-agents/types/siwx';
-import { AgentBuilder } from '@lucid-agents/core';
-import { invoke, stream } from '@lucid-agents/http';
-import { entrypointHasSIWx } from '@lucid-agents/payments';
-import { withPayments, withSIWxAuthOnly } from './paywall';
-import { withMpp } from './mpp-paywall';
+import type {
+  AgentHttpRoute,
+  AgentHttpRuntime,
+} from '@lucid-agents/types/http';
 
 type NodeRequestInit = RequestInit & { duplex?: 'half' };
 
@@ -38,12 +35,20 @@ export type CreateAgentAppOptions = {
   afterMount?: (app: Express) => void;
 };
 
-export async function createAgentApp(
-  runtime: AgentRuntime,
+/** Bind a completed HTTP runtime's canonical route plan to an Express app. */
+export async function createAgentApp<
+  TCapabilities extends { http: AgentHttpRuntime },
+>(
+  runtime: AgentRuntime<TCapabilities>,
   opts?: CreateAgentAppOptions
-): Promise<CreateAgentAppReturn<Express, AgentRuntime, AgentRuntime['agent']>> {
-  // Require HTTP extension - runtime must have handlers
-  if (!runtime.handlers) {
+): Promise<
+  CreateAgentAppReturn<
+    Express,
+    AgentRuntime<TCapabilities>,
+    AgentRuntime['agent']
+  >
+> {
+  if (!runtime.http) {
     throw new Error(
       'HTTP extension is required. Use app.use(http()) when building the runtime.'
     );
@@ -52,118 +57,19 @@ export async function createAgentApp(
 
   opts?.beforeMount?.(app);
 
-  const registerEntrypointRoutes = (entrypoint: EntrypointDef) => {
-    const invokePath = `/entrypoints/${entrypoint.key}/invoke` as const;
-    const streamPath = `/entrypoints/${entrypoint.key}/stream` as const;
-
-    // Check if this is an auth-only SIWX route (no price)
-    const isAuthOnly = entrypoint.siwx?.authOnly === true;
-
-    if (isAuthOnly) {
-      // Auth-only: register SIWX enforcement middleware (no payment)
-      withSIWxAuthOnly({ app, path: invokePath, entrypoint, runtime });
-      withSIWxAuthOnly({ app, path: streamPath, entrypoint, runtime });
-    } else {
-      // Paid route: register payment middleware (with optional SIWX reuse)
-      withPayments({
-        app,
-        path: invokePath,
-        entrypoint,
-        kind: 'invoke',
-        payments: runtime.payments?.config,
-        runtime,
-      });
-
-      withPayments({
-        app,
-        path: streamPath,
-        entrypoint,
-        kind: 'stream',
-        payments: runtime.payments?.config,
-        runtime,
-      });
-    }
-
-    withMpp({ app, path: invokePath, entrypoint, kind: 'invoke', mpp: runtime.mpp });
-
-    app.post(invokePath, async (req, res, next) => {
-      try {
-        const request = toWebRequest(req);
-        const auth = (req as any).siwxAuth as AgentAuthContext | undefined;
-        const response = await invoke(request, entrypoint.key, runtime, auth ? { auth } : undefined);
-        await sendResponse(res, response);
-      } catch (error) {
-        next(error);
-      }
-    });
-
-    withMpp({ app, path: streamPath, entrypoint, kind: 'stream', mpp: runtime.mpp });
-
-    app.post(streamPath, async (req, res, next) => {
-      try {
-        const request = toWebRequest(req);
-        const auth = (req as any).siwxAuth as AgentAuthContext | undefined;
-        const response = await stream(request, entrypoint.key, runtime, auth ? { auth } : undefined);
-        await sendResponse(res, response);
-      } catch (error) {
-        next(error);
-      }
-    });
-  };
-
-  app.get('/health', createRouteHandler(runtime.handlers.health));
-  app.get('/entrypoints', createRouteHandler(runtime.handlers.entrypoints));
-  app.get(
-    '/.well-known/agent.json',
-    createRouteHandler(runtime.handlers.manifest)
-  );
-  app.get(
-    '/.well-known/agent-card.json',
-    createRouteHandler(runtime.handlers.manifest)
-  );
-  app.get(
-    '/.well-known/oasf-record.json',
-    createRouteHandler(
-      runtime.handlers.oasf ??
-        (async () =>
-          new Response(
-            JSON.stringify({
-              error: {
-                code: 'not_found',
-                message: 'OASF record is not enabled',
-              },
-            }),
-            {
-              status: 404,
-              headers: { 'content-type': 'application/json' },
-            }
-          ))
-    )
-  );
-  app.get('/favicon.svg', createRouteHandler(runtime.handlers.favicon));
-
-  if (runtime.handlers.landing) {
-    app.get('/', createRouteHandler(runtime.handlers.landing));
-  } else {
-    app.get('/', (_req, res) => {
-      res.status(404).send('Landing disabled');
-    });
+  for (const route of runtime.http.routes) {
+    const handler = createPlannedRouteHandler(route);
+    if (route.method === 'GET') app.get(route.path, handler);
+    else app.post(route.path, handler);
   }
 
-  const addEntrypoint = (def: EntrypointDef): void => {
+  const addEntrypoint: CreateAgentAppReturn<
+    Express,
+    AgentRuntime<TCapabilities>,
+    AgentRuntime['agent']
+  >['addEntrypoint'] = def => {
     runtime.entrypoints.add(def);
-    const entrypoint = runtime.entrypoints
-      .snapshot()
-      .find(item => item.key === def.key);
-    if (!entrypoint) {
-      throw new Error(`Failed to register entrypoint "${def.key}"`);
-    }
-    registerEntrypointRoutes(entrypoint);
   };
-
-  for (const entrypoint of runtime.entrypoints.snapshot()) {
-    registerEntrypointRoutes(entrypoint);
-  }
 
   opts?.afterMount?.(app);
 
@@ -172,23 +78,10 @@ export async function createAgentApp(
     runtime,
     agent: runtime.agent,
     addEntrypoint,
-  } as CreateAgentAppReturn<Express, AgentRuntime, AgentRuntime['agent']>;
+  };
 }
 
-function createRouteHandler(
-  handler: (req: Request) => Promise<Response>
-): RequestHandler;
-function createRouteHandler<TParams extends Record<string, unknown>>(
-  handler: (req: Request, params: TParams) => Promise<Response>,
-  params: TParams
-): RequestHandler;
-function createRouteHandler(
-  handler: (
-    req: Request,
-    params?: Record<string, unknown>
-  ) => Promise<Response>,
-  params?: Record<string, unknown>
-): RequestHandler {
+function createPlannedRouteHandler(route: AgentHttpRoute): RequestHandler {
   return async (
     req: ExpressRequest,
     res: ExpressResponse,
@@ -196,14 +89,16 @@ function createRouteHandler(
   ) => {
     try {
       const request = toWebRequest(req);
-      const response = await handler(request, params);
+      const params = Object.fromEntries(
+        route.params.map(name => [name, String(req.params[name] ?? '')])
+      );
+      const response = await route.handle(request, params);
       await sendResponse(res, response);
     } catch (error) {
       next(error);
     }
   };
 }
-
 
 function isEncryptedSocket(
   socket: ExpressRequest['socket']

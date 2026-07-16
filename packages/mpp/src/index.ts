@@ -5,16 +5,12 @@ export { mpp, type MppExtensionOptions } from './extension';
 export {
   tempo,
   tempoServer,
-  tempoClient,
   stripe,
   stripeServer,
-  stripeClient,
   lightning,
   lightningServer,
-  lightningClient,
   custom,
   customServer,
-  customClient,
 } from './methods';
 
 // Environment helpers
@@ -22,10 +18,13 @@ export { mppFromEnv } from './env';
 
 // Challenge & pricing
 export {
+  buildChallengeSet,
   buildChallengeResponse,
   resolveEntrypointPrice,
   resolveEntrypointMppConfig,
-  type ChallengeParams,
+  type ChallengeBuildOptions,
+  type MppChallengeSet,
+  type MppWireChallenge,
 } from './challenge';
 
 // Manifest
@@ -33,30 +32,8 @@ export { buildManifestWithMpp } from './manifest';
 
 // Middleware helpers
 export {
-  evaluateMppPayment,
+  decodeMppCredential,
   decodePaymentHeader,
   extractMppCredential,
   createReceiptHeader,
-  type MppChargeOptions,
-  type MppSessionOptions,
 } from './middleware';
-
-// Types
-export type {
-  MppPaymentMethod,
-  MppPaymentIntent,
-  MppConfig,
-  MppClientConfig,
-  MppRuntime,
-  MppPaymentRequirement,
-  MppServerMethod,
-  MppClientMethod,
-  MppSessionConfig,
-  EntrypointMppConfig,
-  TempoServerConfig,
-  TempoClientConfig,
-  StripeServerConfig,
-  StripeClientConfig,
-  LightningServerConfig,
-  LightningClientConfig,
-} from './types';

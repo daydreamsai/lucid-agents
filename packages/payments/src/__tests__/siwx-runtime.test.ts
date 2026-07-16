@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { createPaymentsRuntime, entrypointHasSIWx } from '../payments';
+import { createPaymentsRuntime } from '../payments';
+import { entrypointHasSIWx } from '../siwx-entrypoint';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import type { EntrypointDef } from '@lucid-agents/types/core';
+import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 
 const baseConfig: PaymentsConfig = {
   facilitatorUrl: 'https://facilitator.example.com',
@@ -56,7 +58,7 @@ describe('SIWX Runtime Configuration', () => {
       expect(runtime!.siwxStorage).toBeDefined();
     });
 
-    it('should throw for postgres SIWX storage without connectionString', () => {
+    it('requires an explicit platform adapter for postgres SIWX storage', () => {
       const config: PaymentsConfig = {
         ...baseConfig,
         siwx: {
@@ -64,7 +66,34 @@ describe('SIWX Runtime Configuration', () => {
           storage: { type: 'postgres' },
         },
       };
-      expect(() => createPaymentsRuntime(config)).toThrow('connectionString');
+      expect(() => createPaymentsRuntime(config)).toThrow('siwxStorageFactory');
+    });
+
+    it('requires an explicit platform adapter for SQLite payment storage', () => {
+      expect(() =>
+        createPaymentsRuntime({
+          ...baseConfig,
+          storage: { type: 'sqlite' },
+        })
+      ).toThrow('storageFactory');
+    });
+
+    it('closes custom storage only once', async () => {
+      const storage = createInMemoryPaymentStorage();
+      let closes = 0;
+      storage.close = () => {
+        closes += 1;
+      };
+      const runtime = createPaymentsRuntime(
+        baseConfig,
+        undefined,
+        () => storage
+      )!;
+
+      await runtime.close();
+      await runtime.close();
+
+      expect(closes).toBe(1);
     });
   });
 

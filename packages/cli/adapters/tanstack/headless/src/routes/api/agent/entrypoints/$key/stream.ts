@@ -1,15 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { createTanStackPaywall } from '@lucid-agents/tanstack';
-import { handlers, runtime } from '@/lib/agent';
-
-const paywall = createTanStackPaywall({
-  runtime,
-  basePath: '/api/agent',
-});
+import { handlers } from '@/lib/agent';
 
 export const Route = createFileRoute('/api/agent/entrypoints/$key/stream')({
   server: {
-    middleware: paywall.stream ? [paywall.stream] : [],
     handlers: {
       POST: async ({ request, params }) => {
         const key = (params as { key: string }).key;

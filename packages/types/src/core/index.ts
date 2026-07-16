@@ -6,3 +6,4 @@ export * from './runtime';
 export * from './extension';
 export * from './adapter';
 export * from './network';
+export * from './manifest';

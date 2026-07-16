@@ -8,7 +8,6 @@ export type AgentEntrypoint = {
 
 export type AgentPayments = {
   network?: string | null;
-  defaultPrice?: string | null;
   payTo?: string | null;
 };
 

@@ -113,4 +113,6 @@ export interface SIWxStorage {
   ): Promise<'consumed' | 'already_used'>;
   /** Clear all SIWX data (for testing) */
   clear(): Promise<void>;
+  /** Release persistent storage resources. */
+  close?(): Promise<void> | void;
 }

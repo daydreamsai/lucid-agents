@@ -8,6 +8,7 @@ import {
   payments,
   paymentsFromEnv,
 } from '@lucid-agents/payments';
+import { policiesFromConfig } from '@lucid-agents/payments/node';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 import { z } from 'zod';
 
@@ -42,6 +43,13 @@ import { z } from 'zod';
  * Run: bun run packages/examples/src/payments/policy-agent
  */
 
+const paymentConfig = paymentsFromEnv();
+if (!paymentConfig) {
+  throw new Error(
+    'Payment configuration is required. Set the facilitator, network, and receiving address environment variables.'
+  );
+}
+
 const agent = await createAgent({
   name: 'policy-agent',
   version: '1.0.0',
@@ -50,8 +58,12 @@ const agent = await createAgent({
   .use(http())
   .use(
     payments({
-      config: paymentsFromEnv(),
-      policies: join(import.meta.dir, '..', 'payment-policies.json'),
+      config: {
+        ...paymentConfig,
+        policyGroups: policiesFromConfig(
+          join(import.meta.dir, '..', 'payment-policies.json')
+        ),
+      },
     })
   )
   .use(

@@ -21,6 +21,7 @@ import {
   listTasks,
   cancelTask,
 } from './client';
+import { createInMemoryTaskStore, createTaskRuntime } from './tasks';
 
 /**
  * Creates A2A runtime from an AgentRuntime.
@@ -28,8 +29,15 @@ import {
  */
 export function createA2ARuntime(
   runtime: AgentRuntime,
-  _options?: CreateA2ARuntimeOptions
+  options: CreateA2ARuntimeOptions = {}
 ): A2ARuntime {
+  const taskOptions = options.tasks ?? {};
+  const taskStore =
+    taskOptions.store ??
+    createInMemoryTaskStore({
+      maxTasks: taskOptions.maxTasks,
+      retentionMs: taskOptions.retentionMs,
+    });
   const a2aRuntime: A2ARuntime = {
     buildCard(origin: string) {
       const entrypoints = runtime.entrypoints.snapshot();
@@ -37,6 +45,7 @@ export function createA2ARuntime(
         meta: runtime.agent.config.meta,
         registry: entrypoints,
         origin,
+        supportsTasks: true,
       });
     },
 
@@ -44,10 +53,7 @@ export function createA2ARuntime(
       return fetchAgentCard(baseUrl, fetchImpl);
     },
 
-    async fetchCardWithEntrypoints(
-      baseUrl: string,
-      fetchImpl?: FetchFunction
-    ) {
+    async fetchCardWithEntrypoints(baseUrl: string, fetchImpl?: FetchFunction) {
       return fetchAgentCardWithEntrypoints(baseUrl, fetchImpl);
     },
 
@@ -62,6 +68,10 @@ export function createA2ARuntime(
       listTasks,
       cancelTask,
     },
+    tasks: createTaskRuntime({
+      store: taskStore,
+      maxRunMs: taskOptions.maxRunMs,
+    }),
   };
 
   return a2aRuntime;

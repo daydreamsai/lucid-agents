@@ -1,10 +1,10 @@
 ---
-title: "@lucid-agents/types"
-description: Shared TypeScript type definitions for all packages.
+title: '@lucid-agents/types'
+description: Shared domain contracts for every Lucid Agents package.
 icon: FileType
 ---
 
-The types package provides shared TypeScript type definitions used across all Lucid Agents packages. It has zero dependencies on other `@lucid-agents` packages.
+`@lucid-agents/types` is the single source of truth for concepts shared between packages. Runtime packages import these contracts directly instead of defining parallel internal/public shapes. The package is ESM, side-effect free, portable, and has no dependency on another `@lucid-agents` package.
 
 ## Installation
 
@@ -12,42 +12,65 @@ The types package provides shared TypeScript type definitions used across all Lu
 bun add @lucid-agents/types
 ```
 
-## Overview
+Most applications receive the package transitively. Install it directly when authoring extensions, adapters, stores, or other integrations against its contracts.
 
-Types are organized by domain:
+## Domain subpaths
 
-| Export path | Contains |
-|-------------|----------|
-| `@lucid-agents/types/core` | Agent, config, entrypoint, extension types |
-| `@lucid-agents/types/a2a` | Agent Card, task, manifest types |
-| `@lucid-agents/types/http` | HTTP handlers, streaming types |
-| `@lucid-agents/types/payments` | Payment config, pricing types |
-| `@lucid-agents/types/wallets` | Wallet runtime, connector types |
-| `@lucid-agents/types/identity` | Identity, registration, trust types |
-| `@lucid-agents/types/ap2` | AP2 config, role types |
+Prefer the narrow domain path that owns the type:
 
-## Core types
+| Export path | Owns |
+| --- | --- |
+| `@lucid-agents/types/core` | Agent metadata, runtime, manifest, entrypoint, extension, adapter, and network contracts. |
+| `@lucid-agents/types/http` | Fetch handlers, route plan, SSE envelopes, and idempotency-store ports. |
+| `@lucid-agents/types/a2a` | Agent Cards, A2A clients, owned tasks, leases, and task stores. |
+| `@lucid-agents/types/payments` | x402 configuration, runtime, policies, authorization, tracking, and storage contracts. |
+| `@lucid-agents/types/mpp` | MPP server/client methods, verifier, authorization, and runtime contracts. |
+| `@lucid-agents/types/siwx` | SIWX configuration, credentials, authentication context, and nonce storage. |
+| `@lucid-agents/types/identity` | ERC-8004 registration, trust, OASF, clients, and runtime contracts. |
+| `@lucid-agents/types/wallets` | Wallet configuration, connectors, metadata, and runtime contracts. |
+| `@lucid-agents/types/ap2` | AP2 roles, descriptors, configuration, and runtime contracts. |
+| `@lucid-agents/types/scheduler` | Hires, jobs, schedules, leases, stores, and scheduler runtime. |
+| `@lucid-agents/types/analytics` | Payment analytics, transaction, and runtime contracts. |
+
+The root entrypoint remains available, but domain subpaths make ownership and dependency direction explicit.
+
+## Core runtime
 
 ```typescript
 import type {
   AgentConfig,
+  AgentContext,
+  AgentManifest,
+  AgentMeta,
   AgentRuntime,
+  AgentRuntimeBase,
+  BuildContext,
   EntrypointDef,
   EntrypointHandler,
   EntrypointStreamHandler,
-  EntrypointsRuntime,
   Extension,
-  BuildContext,
+  ManifestRuntime,
+  PaymentProtocol,
 } from '@lucid-agents/types/core';
 ```
 
-### AgentConfig
+### AgentRuntime
+
+Core owns only the protocol-neutral runtime base. Installed extensions contribute exact capability slices through the generic:
 
 ```typescript
-type AgentConfig = {
-  meta: AgentMeta;
+type AgentRuntimeBase<Capabilities extends object = {}> = {
+  agent: AgentCore;
+  entrypoints: EntrypointsRuntime<Capabilities>;
+  manifest: ManifestRuntime;
+  close(): Promise<void>;
 };
+
+type AgentRuntime<Capabilities extends object = {}> =
+  AgentRuntimeBase<Capabilities> & Capabilities;
 ```
+
+This keeps `core` independent of HTTP, payments, A2A, and other domain packages while preserving typed access after composition.
 
 ### EntrypointDef
 
@@ -55,293 +78,196 @@ type AgentConfig = {
 type EntrypointDef<
   TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
   TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TRuntime extends object = AgentRuntime,
 > = {
   key: string;
   description?: string;
   input?: TInput;
   output?: TOutput;
-  streaming?: boolean;
-  price?: EntrypointPrice;
+  price?: string | { invoke?: string; stream?: string };
+  paymentProtocol?: 'x402' | 'mpp';
   network?: Network;
-  handler?: EntrypointHandler<TInput, TOutput>;
-  stream?: EntrypointStreamHandler<TInput>;
+  handler?: EntrypointHandler<TInput, TOutput, TRuntime>;
+  stream?: EntrypointStreamHandler<TInput, TRuntime>;
   metadata?: Record<string, unknown>;
+  siwx?: SIWxEntrypointConfig;
 };
 ```
+
+Streaming is inferred from the presence of `stream`; there is no separate `streaming` flag on the definition. `paymentProtocol` is required for priced entrypoints when x402 and MPP are both installed.
+
+### AgentContext
+
+```typescript
+type AgentContext<TRuntime extends object = AgentRuntime> = {
+  key: string;
+  input: unknown;
+  signal: AbortSignal;
+  metadata?: Record<string, unknown>;
+  runId?: string;
+  runtime: TRuntime;
+  auth?: AgentAuthContext;
+};
+```
+
+Transports attach their details through `metadata` rather than changing the domain handler contract. HTTP places request headers at `metadata.headers`.
 
 ### Extension
 
 ```typescript
-type Extension<T = unknown> = {
+interface Extension<
+  RuntimeSlice extends Record<string, unknown> = {},
+  Dependencies extends object = {},
+> {
+  readonly __dependencies?: Dependencies;
   name: string;
-  build(ctx: BuildContext): T;
-  onEntrypointAdded?(entrypoint: EntrypointDef, runtime: AgentRuntime): void;
-  onManifestBuild?(
-    card: AgentCardWithEntrypoints,
+  requires?: readonly string[];
+  after?: readonly string[];
+  before?: readonly string[];
+  build(
+    context: BuildContext<Dependencies>
+  ): RuntimeSlice | Promise<RuntimeSlice>;
+  initialize?(runtime: AgentRuntime): void | Promise<void>;
+  onEntrypointAdded?(
+    entrypoint: EntrypointDef,
     runtime: AgentRuntime
-  ): AgentCardWithEntrypoints;
-};
+  ): void;
+  onManifestBuild?(
+    manifest: AgentManifest,
+    runtime: AgentRuntime
+  ): AgentManifest;
+  dispose?(runtime: AgentRuntime): void | Promise<void>;
+}
 ```
 
-## A2A types
+The kernel validates missing dependencies and cycles, applies ordering constraints, initializes in dependency order, and disposes in reverse order.
 
-```typescript
-import type {
-  AgentMeta,
-  AgentCard,
-  AgentCardWithEntrypoints,
-  Manifest,
-  Task,
-  TaskStatus,
-  TaskResult,
-  TaskError,
-  A2ARuntime,
-  A2AClient,
-  SendMessageRequest,
-  SendMessageResponse,
-} from '@lucid-agents/types/a2a';
-```
-
-### AgentMeta
-
-```typescript
-type AgentMeta = {
-  name: string;
-  version: string;
-  description?: string;
-  icon?: string;
-  image?: string;
-  url?: string;
-  type?: 'website' | 'article';
-};
-```
-
-### AgentCard
-
-```typescript
-type AgentCard = {
-  protocolVersion?: string;
-  name: string;
-  description?: string;
-  version?: string;
-  supportedInterfaces?: AgentInterface[];
-  capabilities?: AgentCapabilities;
-  skills?: Skill[];
-  payments?: PaymentMethod[];
-  registrations?: RegistrationEntry[];
-  trustModels?: TrustModel[];
-};
-```
-
-### Task
-
-```typescript
-type Task<TOutput = unknown> = {
-  taskId: string;
-  status: TaskStatus;
-  result?: TaskResult<TOutput>;
-  error?: TaskError;
-  contextId?: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type TaskStatus = 'running' | 'completed' | 'failed' | 'cancelled';
-```
-
-## HTTP types
+## HTTP contracts
 
 ```typescript
 import type {
   AgentHttpHandlers,
+  AgentHttpRoute,
+  AgentHttpRuntime,
   HttpExtensionOptions,
+  HttpIdempotencyStore,
   StreamEnvelope,
   StreamPushEnvelope,
-  StreamDeltaEnvelope,
-  StreamDataEnvelope,
-  StreamDoneEnvelope,
   StreamResult,
-  FetchFunction,
 } from '@lucid-agents/types/http';
 ```
 
-### StreamEnvelope
+### Stream envelopes
+
+The runtime owns `run-start` and `run-end`. Entrypoint code emits `StreamPushEnvelope` values:
 
 ```typescript
 type StreamPushEnvelope =
+  | StreamTextEnvelope
   | StreamDeltaEnvelope
-  | StreamDataEnvelope
-  | StreamStatusEnvelope;
+  | StreamAssetEnvelope
+  | StreamControlEnvelope
+  | StreamErrorEnvelope;
 
 type StreamDeltaEnvelope = {
   kind: 'delta';
   delta: string;
-  mime: string;
+  mime?: string;
+  final?: boolean;
+  role?: string;
 };
 
-type StreamDataEnvelope = {
-  kind: 'data';
-  data: unknown;
-};
-
-type StreamDoneEnvelope = {
-  kind: 'done';
-  output: unknown;
-  usage?: Usage;
+type StreamRunEndEnvelope = {
+  kind: 'run-end';
+  runId: string;
+  status: 'succeeded' | 'failed' | 'cancelled';
+  output?: unknown;
+  usage?: StreamUsage;
   model?: string;
+  error?: { code: string; message?: string };
 };
 ```
 
-## Payment types
+Every envelope may carry sequence, timestamp, run, and metadata fields. `AgentHttpRoute` is the canonical transport-neutral method/path/handler record used by adapters.
+
+### Idempotency store
+
+`HttpIdempotencyStore` is an atomic claim/complete/release port. A claim can be new, in progress, conflicting, or completed with a stored response. Multi-instance HTTP runtimes should implement this contract over durable shared storage.
+
+## A2A contracts
 
 ```typescript
 import type {
+  A2AClient,
+  A2ARuntime,
+  AgentCard,
+  AgentCardWithEntrypoints,
+  StoredTask,
+  Task,
+  TaskAccess,
+  TaskStatus,
+  TaskStore,
+} from '@lucid-agents/types/a2a';
+```
+
+`TaskAccess` is the opaque owner capability returned by task creation:
+
+```typescript
+type TaskAccess = {
+  taskId: string;
+  accessToken: string;
+};
+```
+
+`StoredTask` persists only an owner hash plus an optional fenced execution lease. `TaskStore` requires atomic execution claims and compare-and-set transitions so multiple workers cannot publish competing terminal results.
+
+## Payment contracts
+
+```typescript
+import type {
+  IncomingPaymentAuthorization,
+  PaymentRequirement,
+  PaymentTracker,
   PaymentsConfig,
   PaymentsRuntime,
-  EntrypointPrice,
-  PaymentRequirement,
-  SolanaAddress,
 } from '@lucid-agents/types/payments';
-```
 
-### EntrypointPrice
+import type { PaymentStorage } from '@lucid-agents/payments';
 
-```typescript
-type EntrypointPrice = {
-  invoke?: string;  // Price for invoke requests
-  stream?: string;  // Price for stream requests
-};
-```
-
-## Wallet types
-
-```typescript
 import type {
-  WalletsConfig,
-  WalletsRuntime,
-  WalletConnector,
-  WalletConnectorConfig,
-  WalletCapabilities,
-} from '@lucid-agents/types/wallets';
-```
+  MppConfig,
+  MppCredentialVerifier,
+  MppRuntime,
+} from '@lucid-agents/types/mpp';
 
-### WalletConnector
-
-```typescript
-type WalletConnector = {
-  getAddress: () => Promise<`0x${string}`>;
-  signMessage: (message: string) => Promise<`0x${string}`>;
-  signTypedData: (data: TypedData) => Promise<`0x${string}`>;
-  getCapabilities?: () => WalletCapabilities;
-  getWalletClient?: () => Promise<{ client: WalletClient }>;
-};
-```
-
-## Identity types
-
-```typescript
 import type {
-  RegistrationEntry,
-  AgentRegistration,
-  AgentService,
-  TrustModel,
-} from '@lucid-agents/types/identity';
+  AgentAuthContext,
+  SIWxConfig,
+  SIWxStorage,
+} from '@lucid-agents/types/siwx';
 ```
 
-### RegistrationEntry
+The payment contracts separate verification from admission/finalization, expose atomic reservations and batched commits, and keep storage behind interfaces. Portable runtimes use portable implementations; Node-only SQLite, Postgres, and Stripe factories live in explicit package subpaths.
+
+## Authoring an integration
+
+Import the contract from the owning domain and implement it without importing another package's internals:
 
 ```typescript
-type RegistrationEntry = {
-  agentId: number | string;
-  agentRegistry: string; // CAIP-10: namespace:chainId:address
-  agentAddress?: string;
-  signature?: string;
-};
+import type { HttpIdempotencyStore } from '@lucid-agents/types/http';
+
+export function createDurableIdempotencyStore(): HttpIdempotencyStore {
+  return {
+    async claim(scope, key, fingerprint, ownerId, expiresAt, now) {
+      // Perform one atomic conditional write/read transaction.
+      return { state: 'claimed' };
+    },
+    async complete(scope, key, ownerId, response, expiresAt) {
+      return true;
+    },
+    async release(scope, key, ownerId) {},
+  };
+}
 ```
 
-### AgentService
-
-```typescript
-type AgentService = {
-  id?: string;
-  type?: string;
-  serviceEndpoint: string;
-  description?: string;
-};
-```
-
-### AgentRegistration
-
-```typescript
-type AgentRegistration = {
-  type: 'agent';
-  name: string;
-  description?: string;
-  image?: string;
-  domain?: string;
-  url?: string;
-  owner?: string;
-  services?: AgentService[];
-  registrations?: RegistrationEntry[];
-  supportedTrust?: TrustModel[];
-};
-```
-
-## AP2 types
-
-```typescript
-import type {
-  AP2Config,
-  AP2Runtime,
-  AP2Role,
-  AP2ExtensionDescriptor,
-  AP2ExtensionParams,
-} from '@lucid-agents/types/ap2';
-```
-
-### AP2 types
-
-```typescript
-type AP2Role = 'merchant' | 'shopper';
-
-type AP2Config = {
-  roles: AP2Role[];
-};
-
-type AP2ExtensionDescriptor = {
-  uri: 'urn:x-lucid:ap2:1.0';
-  params: AP2ExtensionParams;
-};
-```
-
-## Usage context
-
-```typescript
-import type { AgentContext, Usage } from '@lucid-agents/types/core';
-```
-
-### AgentContext
-
-Passed to entrypoint handlers:
-
-```typescript
-type AgentContext = {
-  input: unknown;
-  request?: Request;
-  headers?: Headers;
-  // ... additional context from extensions
-};
-```
-
-### Usage
-
-Track resource consumption:
-
-```typescript
-type Usage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  [key: string]: number | undefined;
-};
-```
+The same rule applies to `TaskStore`, payment storage, wallet connectors, scheduler stores, and SIWX nonce storage: the shared type is the boundary; the owning runtime supplies behavior.

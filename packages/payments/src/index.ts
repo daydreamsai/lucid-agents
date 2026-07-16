@@ -1,6 +1,6 @@
 export { resolvePrice } from './pricing';
 export { createAgentCardWithPayments } from './manifest';
-export { validatePaymentsConfig } from './validation';
+export { normalizePaymentNetwork, validatePaymentsConfig } from './validation';
 export {
   entrypointHasExplicitPrice,
   evaluatePaymentRequirement,
@@ -8,8 +8,9 @@ export {
   resolvePaymentRequirement,
   paymentRequiredResponse,
   createPaymentsRuntime,
-  entrypointHasSIWx,
 } from './payments';
+export type { PaymentStorageFactory, SIWxStorageFactory } from './payments';
+export { entrypointHasSIWx } from './siwx-entrypoint';
 export {
   createRuntimePaymentContext,
   type RuntimePaymentContext,
@@ -22,7 +23,6 @@ export {
   encodePaymentRequiredHeader,
   decodePaymentRequiredHeader,
   type PaymentRequiredHeaderDetails,
-  extractSenderDomain,
   extractPayerAddress,
   parsePriceAmount,
 } from './utils';
@@ -45,20 +45,13 @@ export {
   type Hex,
 } from './crypto';
 export { payments } from './extension';
+export { createIncomingPaymentAuthorizer } from './incoming';
 export { createPaymentTracker, type PaymentTracker } from './payment-tracker';
 export type { PaymentStorage } from './payment-storage';
-export {
-  createSQLitePaymentStorage,
-  type SQLitePaymentStorage,
-} from './sqlite-payment-storage';
 export {
   createInMemoryPaymentStorage,
   type InMemoryPaymentStorage,
 } from './in-memory-payment-storage';
-export {
-  createPostgresPaymentStorage,
-  type PostgresPaymentStorage,
-} from './postgres-payment-storage';
 export { createRateLimiter, type RateLimiter } from './rate-limiter';
 export {
   evaluatePolicyGroups,
@@ -73,19 +66,12 @@ export {
   type PolicyEvaluationResult,
 } from './policy';
 export { wrapBaseFetchWithPolicy } from './policy-wrapper';
+export type { PolicyWrapperOptions } from './policy-wrapper';
 export type { SIWxStorage } from './siwx-storage';
 export {
   createInMemorySIWxStorage,
   type InMemorySIWxStorage,
 } from './siwx-in-memory-storage';
-export {
-  createSQLiteSIWxStorage,
-  type SQLiteSIWxStorage,
-} from './siwx-sqlite-storage';
-export {
-  createPostgresSIWxStorage,
-  type PostgresSIWxStorage,
-} from './siwx-postgres-storage';
 export {
   parseSIWxHeader,
   verifySIWxPayload,

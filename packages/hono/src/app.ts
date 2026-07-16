@@ -1,14 +1,10 @@
 import { Hono } from 'hono';
 
 import type {
-  EntrypointDef,
   CreateAgentAppReturn,
   AgentRuntime,
 } from '@lucid-agents/types/core';
-import type { AgentAuthContext } from '@lucid-agents/types/siwx';
-import { invoke, stream } from '@lucid-agents/http';
-import { withPayments, withSiwxAuth } from './paywall';
-import { withMpp } from './mpp-paywall';
+import type { AgentHttpRuntime } from '@lucid-agents/types/http';
 
 export type CreateAgentAppOptions = {
   /**
@@ -23,12 +19,16 @@ export type CreateAgentAppOptions = {
   afterMount?: (app: Hono) => void;
 };
 
-export async function createAgentApp(
-  runtime: AgentRuntime,
+/** Bind a completed HTTP runtime's canonical route plan to a Hono app. */
+export async function createAgentApp<
+  TCapabilities extends { http: AgentHttpRuntime },
+>(
+  runtime: AgentRuntime<TCapabilities>,
   opts?: CreateAgentAppOptions
-): Promise<CreateAgentAppReturn<Hono, AgentRuntime, AgentRuntime['agent']>> {
-  // Require HTTP extension - runtime must have handlers
-  if (!runtime.handlers) {
+): Promise<
+  CreateAgentAppReturn<Hono, AgentRuntime<TCapabilities>, AgentRuntime['agent']>
+> {
+  if (!runtime.http) {
     throw new Error(
       'HTTP extension is required. Use app.use(http()) when building the runtime.'
     );
@@ -38,123 +38,30 @@ export async function createAgentApp(
   // Allow custom middleware before agent routes
   opts?.beforeMount?.(app);
 
-  const registerEntrypointRoutes = (entrypoint: EntrypointDef) => {
-    const invokePath = `/entrypoints/${entrypoint.key}/invoke` as const;
-    const streamPath = `/entrypoints/${entrypoint.key}/stream` as const;
-
-    const paymentsRegistered = withPayments({
-      app,
-      path: invokePath,
-      entrypoint,
-      kind: 'invoke',
-      payments: runtime.payments?.config,
-      runtime,
+  for (const route of runtime.http.routes) {
+    app.on(route.method, route.path, c => {
+      const availableParams = c.req.param() as Record<string, string>;
+      const params = Object.fromEntries(
+        route.params.map(name => [name, availableParams[name] ?? ''])
+      );
+      return route.handle(c.req.raw, params);
     });
-
-    // For auth-only entrypoints without a price, register SIWX middleware
-    if (!paymentsRegistered) {
-      withSiwxAuth({ app, path: invokePath, entrypoint, runtime });
-    }
-
-    withMpp({ app, path: invokePath, entrypoint, kind: 'invoke', mpp: runtime.mpp });
-
-    app.post(invokePath, c => {
-      const auth = (c as any).get('siwxAuth') as
-        | AgentAuthContext
-        | undefined;
-      return invoke(c.req.raw, entrypoint.key, runtime, auth ? { auth } : undefined);
-    });
-
-    // Always register stream route for API consistency, even if entrypoint.stream is undefined.
-    // The runtime handler will return 400 "stream_not_supported" if streaming isn't configured.
-    // This ensures clients get a proper error (400) rather than "route not found" (404).
-    // Benefits: AI agents can optimistically try streaming without querying the manifest first,
-    // then fall back to invoke on 400. This reduces round-trips and simplifies client logic.
-    const streamPaymentsRegistered = withPayments({
-      app,
-      path: streamPath,
-      entrypoint,
-      kind: 'stream',
-      payments: runtime.payments?.config,
-      runtime,
-    });
-
-    if (!streamPaymentsRegistered) {
-      withSiwxAuth({ app, path: streamPath, entrypoint, runtime });
-    }
-
-    withMpp({ app, path: streamPath, entrypoint, kind: 'stream', mpp: runtime.mpp });
-
-    app.post(streamPath, c => {
-      const auth = (c as any).get('siwxAuth') as
-        | AgentAuthContext
-        | undefined;
-      return stream(c.req.raw, entrypoint.key, runtime, auth ? { auth } : undefined);
-    });
-  };
-
-  app.get('/health', c => runtime.handlers.health(c.req.raw));
-  app.get('/entrypoints', c => runtime.handlers.entrypoints(c.req.raw));
-  app.get('/.well-known/agent.json', c => runtime.handlers.manifest(c.req.raw));
-  app.get('/.well-known/agent-card.json', c =>
-    runtime.handlers.manifest(c.req.raw)
-  );
-  app.get('/.well-known/oasf-record.json', c =>
-    runtime.handlers.oasf
-      ? runtime.handlers.oasf(c.req.raw)
-      : c.json(
-          {
-            error: {
-              code: 'not_found',
-              message: 'OASF record is not enabled',
-            },
-          },
-          404
-        )
-  );
-
-  app.get('/favicon.svg', c => runtime.handlers.favicon(c.req.raw));
-
-  // Task routes (A2A Protocol task-based operations)
-  app.post('/tasks', c => runtime.handlers.tasks(c.req.raw));
-  app.get('/tasks', c => runtime.handlers.listTasks(c.req.raw));
-  app.get('/tasks/:taskId', c =>
-    runtime.handlers.getTask(c.req.raw, { taskId: c.req.param('taskId') })
-  );
-  app.post('/tasks/:taskId/cancel', c =>
-    runtime.handlers.cancelTask(c.req.raw, { taskId: c.req.param('taskId') })
-  );
-  app.get('/tasks/:taskId/subscribe', c =>
-    runtime.handlers.subscribeTask(c.req.raw, { taskId: c.req.param('taskId') })
-  );
-
-  if (runtime.handlers.landing) {
-    app.get('/', c => runtime.handlers.landing!(c.req.raw));
-  } else {
-    app.get('/', c => c.text('Landing disabled', 404));
   }
 
-  const addEntrypoint = (def: EntrypointDef): void => {
+  const addEntrypoint: CreateAgentAppReturn<
+    Hono,
+    AgentRuntime<TCapabilities>,
+    AgentRuntime['agent']
+  >['addEntrypoint'] = def => {
     runtime.entrypoints.add(def);
-    const entrypoint = runtime.entrypoints
-      .snapshot()
-      .find((item: EntrypointDef) => item.key === def.key);
-    if (!entrypoint) {
-      throw new Error(`Failed to register entrypoint "${def.key}"`);
-    }
-    registerEntrypointRoutes(entrypoint);
   };
-
-  for (const entrypoint of runtime.entrypoints.snapshot()) {
-    registerEntrypointRoutes(entrypoint);
-  }
 
   // Allow custom routes and handlers after agent routes
   opts?.afterMount?.(app);
 
   const result: CreateAgentAppReturn<
     Hono,
-    AgentRuntime,
+    AgentRuntime<TCapabilities>,
     AgentRuntime['agent']
   > = {
     app,

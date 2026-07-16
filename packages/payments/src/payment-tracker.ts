@@ -1,6 +1,12 @@
-import type { PaymentDirection, PaymentTracker as PaymentTrackerInterface } from '@lucid-agents/types/payments';
+import type {
+  PaymentDirection,
+  PaymentRecord,
+  PaymentTracker as PaymentTrackerInterface,
+} from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
-import { createSQLitePaymentStorage } from './sqlite-payment-storage';
+import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
+
+const RATE_RESERVATION_PREFIX = '\u0000rate:';
 
 /**
  * Formats a BigInt amount (in base units with 6 decimals) to a human-friendly USDC string.
@@ -18,6 +24,121 @@ function formatUsdcAmount(amount: bigint): string {
  */
 export class PaymentTracker implements PaymentTrackerInterface {
   constructor(private storage: PaymentStorage) {}
+
+  private async reserveTotalLimit(
+    direction: PaymentDirection,
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    amount: bigint
+  ): Promise<{ allowed: boolean; reservationId?: string; reason?: string }> {
+    const result = await this.storage.reservePaymentLimit({
+      groupName,
+      scope,
+      direction,
+      amount,
+      maxTotal: BigInt(Math.floor(maxTotalUsd * 1_000_000)),
+      windowMs,
+      ttlMs: 5 * 60 * 1000,
+    });
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        reason: `Total ${direction} payment limit exceeded for policy group "${groupName}" at scope "${scope}"`,
+      };
+    }
+    return { allowed: true, reservationId: result.reservationId };
+  }
+
+  /**
+   * Atomically reserve capacity under an incoming total limit for this runtime.
+   * The reservation must be committed after settlement or released on failure.
+   */
+  async reserveIncomingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    amount: bigint
+  ): Promise<{ allowed: boolean; reservationId?: string; reason?: string }> {
+    return this.reserveTotalLimit(
+      'incoming',
+      groupName,
+      scope,
+      maxTotalUsd,
+      windowMs,
+      amount
+    );
+  }
+
+  /** Atomically reserve outgoing spend before a payment credential is sent. */
+  async reserveOutgoingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    amount: bigint
+  ): Promise<{ allowed: boolean; reservationId?: string; reason?: string }> {
+    return this.reserveTotalLimit(
+      'outgoing',
+      groupName,
+      scope,
+      maxTotalUsd,
+      windowMs,
+      amount
+    );
+  }
+
+  /**
+   * Atomically reserve one payment in a storage-backed sliding window.
+   * Synthetic records are hidden from the public payment history.
+   */
+  async reserveRateLimit(
+    groupName: string,
+    direction: PaymentDirection,
+    maxPayments: number,
+    windowMs: number
+  ): Promise<{ allowed: boolean; reservationId?: string; reason?: string }> {
+    const result = await this.storage.reservePaymentLimit({
+      groupName: `${RATE_RESERVATION_PREFIX}${groupName}`,
+      scope: 'global',
+      direction,
+      amount: 1n,
+      maxTotal: BigInt(maxPayments),
+      windowMs,
+      ttlMs: Math.max(windowMs, 60_000),
+    });
+    if (!result.allowed) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded for policy group "${groupName}"`,
+      };
+    }
+    return { allowed: true, reservationId: result.reservationId };
+  }
+
+  async commitReservation(reservationId: string): Promise<void> {
+    await this.commitReservations([reservationId]);
+  }
+
+  /** Atomically commit a complete payment-policy accounting batch. */
+  async commitReservations(
+    reservationIds: readonly string[],
+    records: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[] = []
+  ): Promise<void> {
+    const committed = await this.storage.commitPaymentReservations(
+      reservationIds,
+      records
+    );
+    if (!committed) {
+      throw new Error('One or more payment reservations expired');
+    }
+  }
+
+  async releaseReservation(reservationId: string): Promise<void> {
+    await this.storage.releasePaymentReservation(reservationId);
+  }
 
   /**
    * Checks if an outgoing payment limit would be exceeded.
@@ -105,7 +226,11 @@ export class PaymentTracker implements PaymentTrackerInterface {
    * @param scope - Scope key ("global", target URL, or endpoint URL)
    * @param amount - Amount spent in base units
    */
-  async recordOutgoing(groupName: string, scope: string, amount: bigint): Promise<void> {
+  async recordOutgoing(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void> {
     await this.storage.recordPayment({
       groupName,
       scope,
@@ -120,7 +245,11 @@ export class PaymentTracker implements PaymentTrackerInterface {
    * @param scope - Scope key ("global", sender address, or endpoint URL)
    * @param amount - Amount received in base units
    */
-  async recordIncoming(groupName: string, scope: string, amount: bigint): Promise<void> {
+  async recordIncoming(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void> {
     await this.storage.recordPayment({
       groupName,
       scope,
@@ -164,7 +293,9 @@ export class PaymentTracker implements PaymentTrackerInterface {
    * @returns Array of all payment records
    */
   async getAllData() {
-    return await this.storage.getAllRecords();
+    return (await this.storage.getAllRecords()).filter(
+      record => !record.groupName.startsWith(RATE_RESERVATION_PREFIX)
+    );
   }
 
   /**
@@ -173,15 +304,19 @@ export class PaymentTracker implements PaymentTrackerInterface {
   async clear(): Promise<void> {
     await this.storage.clear();
   }
+
+  async close(): Promise<void> {
+    await this.storage.close?.();
+  }
 }
 
 /**
  * Creates a new payment tracker instance.
- * Defaults to SQLite storage if no storage is provided.
- * @param storage - Optional storage implementation (defaults to SQLite)
+ * Defaults to portable in-memory storage if no storage is provided.
+ * @param storage - Optional storage implementation (defaults to in-memory)
  * @returns A new PaymentTracker instance
  */
 export function createPaymentTracker(storage?: PaymentStorage): PaymentTracker {
-  const storageImpl = storage ?? createSQLitePaymentStorage();
+  const storageImpl = storage ?? createInMemoryPaymentStorage();
   return new PaymentTracker(storageImpl);
 }

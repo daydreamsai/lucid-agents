@@ -1,35 +1,19 @@
-import type { ManifestRuntime } from '../a2a';
-import type { AgentHttpHandlers } from '../http';
-import type { PaymentsRuntime } from '../payments';
-import type { WalletsRuntime } from '../wallets';
-import type { A2ARuntime } from '../a2a';
-import type { AP2Runtime } from '../ap2';
+import type { ManifestRuntime } from './manifest';
 import type { EntrypointsRuntime } from './entrypoint';
-import type { AnalyticsRuntime } from '../analytics';
-import type { SchedulerRuntime } from '../scheduler';
-import type { MppRuntime } from '../mpp';
 import type { AgentCore } from './agent';
 
-/**
- * Agent runtime interface.
- * This type is defined in the types package to avoid circular dependencies
- * between @lucid-agents/core and @lucid-agents/payments.
- *
- * The actual implementation is in @lucid-agents/core.
- */
-export type AgentRuntime = {
-  /**
-   * Agent core instance.
-   */
+/** Protocol-neutral runtime services owned by the extension kernel. */
+export type AgentRuntimeBase<Capabilities extends object = {}> = {
   agent: AgentCore;
-  wallets?: WalletsRuntime;
-  payments?: PaymentsRuntime;
-  mpp?: MppRuntime;
-  analytics?: AnalyticsRuntime;
-  a2a?: A2ARuntime;
-  ap2?: AP2Runtime;
-  scheduler?: SchedulerRuntime;
-  handlers?: AgentHttpHandlers;
-  entrypoints: EntrypointsRuntime;
+  entrypoints: EntrypointsRuntime<Capabilities>;
   manifest: ManifestRuntime;
+  /** Dispose extension resources in reverse dependency order. Idempotent. */
+  close: () => Promise<void>;
 };
+
+/**
+ * Runtime base plus the exact capabilities contributed by installed extensions.
+ * Protocol packages own their capability types; core does not enumerate them.
+ */
+export type AgentRuntime<Capabilities extends object = {}> =
+  AgentRuntimeBase<Capabilities> & Capabilities;

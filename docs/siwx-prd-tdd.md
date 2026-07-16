@@ -374,7 +374,7 @@ Add failing tests:
 - `packages/hono/src/__tests__/siwx.test.ts`
   - `createAgentApp throws when authOnly route is mounted without enabled SIWX runtime`
 - `packages/tanstack/src/__tests__/siwx.test.ts`
-  - `createTanStackPaywall rejects authOnly route without SIWX runtime`
+  - `shared runtime rejects authOnly route without SIWX runtime`
 
 Implementation:
 

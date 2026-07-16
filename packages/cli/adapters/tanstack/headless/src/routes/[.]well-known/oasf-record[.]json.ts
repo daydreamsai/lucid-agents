@@ -5,8 +5,8 @@ export const Route = createFileRoute('/.well-known/oasf-record.json')({
     handlers: {
       GET: async ({ request }) => {
         const { runtime } = await import('@/lib/agent');
-        if (runtime.handlers?.oasf) {
-          return runtime.handlers.oasf(request);
+        if (runtime.http.handlers.oasf) {
+          return runtime.http.handlers.oasf(request);
         }
 
         return new Response(

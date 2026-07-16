@@ -13,6 +13,7 @@ old/*
 # Build outputs
 dist/
 */dist/
+coverage/
 *.tsbuildinfo
 
 # Data directories

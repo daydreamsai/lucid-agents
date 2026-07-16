@@ -88,7 +88,6 @@ async function main() {
     key: 'stream',
     description: 'Stream characters back one by one',
     input: z.object({ prompt: z.string() }),
-    streaming: true,
     price: paymentsConfig ? '2000' : undefined, // 0.002 USDC if payments enabled
     stream: async (ctx, emit) => {
       const input = ctx.input as { prompt: string };

@@ -1,7 +1,20 @@
 import { describe, expect, it, mock } from 'bun:test';
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import type {
+  A2AClient,
+  AgentCardWithEntrypoints,
+} from '@lucid-agents/types/a2a';
 
-import { fetchAndInvoke, invokeAgent, streamAgent } from '../client';
+import {
+  cancelTask,
+  fetchAndInvoke,
+  getTask,
+  invokeAgent,
+  listTasks,
+  sendMessage,
+  streamAgent,
+  subscribeTask,
+  waitForTask,
+} from '../client';
 import { buildAgentCard } from '../card';
 import { z } from 'zod';
 
@@ -40,20 +53,32 @@ describe('invokeAgent', () => {
       output: { text: 'echoed' },
     };
 
-    const mockFetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
-      if (urlStr.includes('/entrypoints/echo/invoke')) {
-        expect(init?.method).toBe('POST');
-        const body = init?.body ? JSON.parse(init.body as string) : {};
-        expect(body.input).toEqual({ text: 'hello' });
-        return new Response(JSON.stringify(mockResponse), {
-          headers: { 'Content-Type': 'application/json' },
-        });
+    const mockFetch = mock(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        const urlStr =
+          typeof url === 'string'
+            ? url
+            : url instanceof URL
+              ? url.toString()
+              : (url as Request).url;
+        if (urlStr.includes('/entrypoints/echo/invoke')) {
+          expect(init?.method).toBe('POST');
+          const body = init?.body ? JSON.parse(init.body as string) : {};
+          expect(body.input).toEqual({ text: 'hello' });
+          return new Response(JSON.stringify(mockResponse), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        throw new Error(`Unexpected URL: ${urlStr}`);
       }
-      throw new Error(`Unexpected URL: ${urlStr}`);
-    });
+    );
 
-    const result = await invokeAgent(card, 'echo', { text: 'hello' }, mockFetch as unknown as typeof fetch);
+    const result = await invokeAgent(
+      card,
+      'echo',
+      { text: 'hello' },
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(result).toBeDefined();
     expect(result.output).toEqual({ text: 'echoed' });
@@ -69,9 +94,14 @@ describe('invokeAgent', () => {
       throw new Error('Network error');
     });
 
-    await expect(invokeAgent(card, 'echo', { text: 'hello' }, mockFetch as unknown as typeof fetch)).rejects.toThrow(
-      'Network error'
-    );
+    await expect(
+      invokeAgent(
+        card,
+        'echo',
+        { text: 'hello' },
+        mockFetch as unknown as typeof fetch
+      )
+    ).rejects.toThrow('Network error');
   });
 
   it('works with payment-enabled fetch', async () => {
@@ -87,10 +117,107 @@ describe('invokeAgent', () => {
       });
     });
 
-    const result = await invokeAgent(card, 'echo', { text: 'hello' }, mockFetch as unknown as typeof fetch);
+    const result = await invokeAgent(
+      card,
+      'echo',
+      { text: 'hello' },
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(result).toBeDefined();
     expect(result.output).toEqual({ text: 'echoed' });
+  });
+
+  it('preserves the base path from the Agent Card URL', async () => {
+    const pathCard = {
+      ...card,
+      url: 'https://agent.example.com/api/agent/',
+    };
+    let requestedUrl: string | undefined;
+    const mockFetch = mock(async (input: string | URL | Request) => {
+      requestedUrl =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      return Response.json({ status: 'succeeded', output: {} });
+    });
+
+    await invokeAgent(
+      pathCard,
+      'echo',
+      {},
+      mockFetch as unknown as typeof fetch
+    );
+
+    expect(requestedUrl).toBe(
+      'https://agent.example.com/api/agent/entrypoints/echo/invoke'
+    );
+  });
+
+  it('prefers the advertised HTTP interface over the deprecated URL field', async () => {
+    const interfaceCard = {
+      ...card,
+      url: 'https://agent.example.com/',
+      supportedInterfaces: [
+        {
+          url: 'https://agent.example.com/api/agent/',
+          protocolBinding: 'HTTP+JSON',
+        },
+      ],
+    };
+    let requestedUrl: string | undefined;
+    const mockFetch = mock(async (input: string | URL | Request) => {
+      requestedUrl =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      return Response.json({ status: 'succeeded', output: {} });
+    });
+
+    await invokeAgent(
+      interfaceCard,
+      'echo',
+      {},
+      mockFetch as unknown as typeof fetch
+    );
+
+    expect(requestedUrl).toBe(
+      'https://agent.example.com/api/agent/entrypoints/echo/invoke'
+    );
+  });
+
+  it('propagates an idempotency key to the remote invocation', async () => {
+    let requestHeaders: Headers | undefined;
+    const mockFetch = mock(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        requestHeaders = new Headers(init?.headers);
+        return Response.json({ status: 'succeeded', output: {} });
+      }
+    );
+
+    const idempotencyKey = 'scheduler-job:00000000-0000-4000-8000-000000000001';
+    await invokeAgent(card, 'echo', {}, mockFetch as unknown as typeof fetch, {
+      idempotencyKey,
+    });
+
+    expect(requestHeaders?.get('Idempotency-Key')).toBe(idempotencyKey);
+  });
+
+  it('rejects an invalid idempotency key before making a request', async () => {
+    const mockFetch = mock(async () =>
+      Response.json({ status: 'succeeded', output: {} })
+    );
+
+    await expect(
+      invokeAgent(card, 'echo', {}, mockFetch as unknown as typeof fetch, {
+        idempotencyKey: 'too-short',
+      })
+    ).rejects.toThrow('20 to 256');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -130,7 +257,12 @@ describe('streamAgent', () => {
     ].join('');
 
     const mockFetch = mock(async (url: string | URL | Request) => {
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/entrypoints/stream/stream')) {
         return new Response(mockEvents, {
           headers: { 'Content-Type': 'text/event-stream' },
@@ -144,7 +276,13 @@ describe('streamAgent', () => {
       events.push(chunk);
     });
 
-    await streamAgent(card, 'stream', { text: 'hello' }, emit, mockFetch as unknown as typeof fetch);
+    await streamAgent(
+      card,
+      'stream',
+      { text: 'hello' },
+      emit,
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(events.length).toBeGreaterThan(0);
     expect(mockFetch).toHaveBeenCalled();
@@ -187,7 +325,12 @@ describe('fetchAndInvoke', () => {
     let callCount = 0;
     const mockFetch = mock(async (url: string | URL | Request) => {
       callCount++;
-      const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
+      const urlStr =
+        typeof url === 'string'
+          ? url
+          : url instanceof URL
+            ? url.toString()
+            : (url as Request).url;
       if (urlStr.includes('/.well-known/agent-card.json')) {
         return new Response(JSON.stringify(mockCard), {
           headers: { 'Content-Type': 'application/json' },
@@ -202,7 +345,12 @@ describe('fetchAndInvoke', () => {
       return new Response('Not Found', { status: 404 });
     });
 
-    const result = await fetchAndInvoke('https://remote.example.com', 'echo', { text: 'hello' }, mockFetch as unknown as typeof fetch);
+    const result = await fetchAndInvoke(
+      'https://remote.example.com',
+      'echo',
+      { text: 'hello' },
+      mockFetch as unknown as typeof fetch
+    );
 
     expect(result).toBeDefined();
     expect(result.output).toEqual({ text: 'echoed' });
@@ -215,9 +363,114 @@ describe('fetchAndInvoke', () => {
       throw new Error('Card fetch failed');
     });
 
-    await expect(fetchAndInvoke('https://remote.example.com', 'echo', {}, mockFetch as unknown as typeof fetch)).rejects.toThrow(
-      'Card fetch failed'
-    );
+    await expect(
+      fetchAndInvoke(
+        'https://remote.example.com',
+        'echo',
+        {},
+        mockFetch as unknown as typeof fetch
+      )
+    ).rejects.toThrow('Card fetch failed');
   });
 });
 
+describe('task client route contract', () => {
+  const accessToken = 'client-task-access-token-0001';
+  const card: AgentCardWithEntrypoints = {
+    name: 'path-agent',
+    version: '1.0.0',
+    url: 'https://agent.example.com/api/agent/',
+    skills: [{ id: 'echo', name: 'echo' }],
+    entrypoints: {
+      echo: { description: 'Echo', streaming: false },
+    },
+  };
+
+  it('preserves the base path and owner capability for every task operation', async () => {
+    const requests: Array<{ url: string; headers: Headers }> = [];
+    const mockFetch = mock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        requests.push({ url, headers: new Headers(init?.headers) });
+        if (url.endsWith('/tasks')) {
+          if (init?.method === 'POST') {
+            return Response.json({
+              taskId: 'task-1',
+              accessToken,
+              status: 'running',
+            });
+          }
+          return Response.json({ tasks: [] });
+        }
+        if (url.endsWith('/subscribe')) {
+          return new Response(
+            'event: statusUpdate\ndata: {"taskId":"task-1","status":"running"}\n\n',
+            { headers: { 'Content-Type': 'text/event-stream' } }
+          );
+        }
+        return Response.json({
+          taskId: 'task-1',
+          status: url.endsWith('/cancel') ? 'cancelled' : 'running',
+          createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        });
+      }
+    );
+    const fetchImpl = mockFetch as unknown as typeof fetch;
+
+    const access = await sendMessage(card, 'echo', {}, fetchImpl, {
+      accessToken,
+    });
+    await getTask(card, access, fetchImpl);
+    await listTasks(card, accessToken, { status: 'running' }, fetchImpl);
+    await cancelTask(card, access, fetchImpl);
+    await subscribeTask(card, access, () => {}, fetchImpl);
+
+    expect(requests.map(request => request.url)).toEqual([
+      'https://agent.example.com/api/agent/tasks',
+      'https://agent.example.com/api/agent/tasks/task-1',
+      'https://agent.example.com/api/agent/tasks?status=running',
+      'https://agent.example.com/api/agent/tasks/task-1/cancel',
+      'https://agent.example.com/api/agent/tasks/task-1/subscribe',
+    ]);
+    expect(
+      requests.every(
+        request => request.headers.get('Task-Access-Token') === accessToken
+      )
+    ).toBe(true);
+  });
+});
+
+describe('waitForTask', () => {
+  it('returns a cancelled task as a terminal result', async () => {
+    const task = {
+      taskId: 'task-cancelled',
+      status: 'cancelled' as const,
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+    };
+    const client = {
+      getTask: mock(async () => task),
+    } as unknown as A2AClient;
+    const card = {
+      name: 'task-agent',
+      supportedInterfaces: [
+        { protocolBinding: 'HTTP+JSON', url: 'https://agent.example/' },
+      ],
+    };
+
+    await expect(
+      waitForTask(
+        client,
+        card,
+        { taskId: task.taskId, accessToken: 'task-access-token-000000001' },
+        50
+      )
+    ).resolves.toEqual(task);
+  });
+});

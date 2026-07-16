@@ -86,7 +86,7 @@ When you select an adapter, the CLI copies the corresponding runtime framework f
 - `express` - Node-style HTTP server built on Express with `@lucid-agents/express`
 - `tanstack-ui` - TanStack Start with full UI dashboard (wallet integration, entrypoint testing, schema forms)
 - `tanstack-headless` - TanStack Start API-only (no UI components)
-- `next` – Next.js App Router shell with x402-next middleware and the dashboard UI
+- `next` – Next.js App Router shell whose routes delegate to the shared HTTP runtime, plus the dashboard UI
 
 The adapter provides the runtime skeleton (routing, server setup, build config), while templates provide the agent logic (entrypoints, features, configuration).
 

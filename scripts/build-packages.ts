@@ -2,12 +2,15 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type Manifest = {
+export type Manifest = {
   name?: string;
   scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
 };
 
-type PackageInfo = {
+export type PackageInfo = {
   dir: string;
   manifest: Manifest;
   name: string;
@@ -18,7 +21,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const packagesDir = path.join(repoRoot, 'packages');
 
-function collectPackages(): PackageInfo[] {
+export function collectPackages(): PackageInfo[] {
   if (!existsSync(packagesDir)) return [];
 
   const entries = readdirSync(packagesDir, { withFileTypes: true });
@@ -72,6 +75,68 @@ async function cleanPackages() {
   }
 }
 
+/**
+ * Derive build order from workspace package manifests. Only published runtime
+ * dependencies participate: dev dependencies intentionally do not, because
+ * cross-package test fixtures form cycles (for example core <-> adapters).
+ */
+export function orderPackagesForBuild(
+  packages: readonly PackageInfo[]
+): PackageInfo[] {
+  const byName = new Map(packages.map(pkg => [pkg.name, pkg]));
+  const outgoing = new Map<string, Set<string>>();
+  const indegree = new Map<string, number>();
+
+  for (const { name } of packages) {
+    outgoing.set(name, new Set());
+    indegree.set(name, 0);
+  }
+
+  for (const pkg of packages) {
+    const dependencies = {
+      ...pkg.manifest.dependencies,
+      ...pkg.manifest.optionalDependencies,
+      ...pkg.manifest.peerDependencies,
+    };
+    for (const dependency of Object.keys(dependencies)) {
+      if (!byName.has(dependency) || dependency === pkg.name) continue;
+      const dependents = outgoing.get(dependency)!;
+      if (dependents.has(pkg.name)) continue;
+      dependents.add(pkg.name);
+      indegree.set(pkg.name, (indegree.get(pkg.name) ?? 0) + 1);
+    }
+  }
+
+  const ready = packages
+    .map(pkg => pkg.name)
+    .filter(name => indegree.get(name) === 0)
+    .sort();
+  const ordered: PackageInfo[] = [];
+
+  while (ready.length > 0) {
+    const name = ready.shift()!;
+    ordered.push(byName.get(name)!);
+    for (const dependent of outgoing.get(name) ?? []) {
+      const degree = (indegree.get(dependent) ?? 0) - 1;
+      indegree.set(dependent, degree);
+      if (degree === 0) {
+        ready.push(dependent);
+        ready.sort();
+      }
+    }
+  }
+
+  if (ordered.length !== packages.length) {
+    const cyclic = packages
+      .map(pkg => pkg.name)
+      .filter(name => (indegree.get(name) ?? 0) > 0)
+      .sort();
+    throw new Error(`Workspace dependency cycle: ${cyclic.join(' -> ')}`);
+  }
+
+  return ordered;
+}
+
 async function buildPackages() {
   const packages = collectPackages();
 
@@ -80,52 +145,7 @@ async function buildPackages() {
     return;
   }
 
-  // Build order ensures dependencies are built before dependents.
-  // Layer 0: Packages with no internal dependencies (types, CLI)
-  // Layer 1: Extensions that only depend on @lucid-agents/types
-  // Layer 2: Core runtime that depends on all extensions
-  // Layer 3: Adapters that depend on core and extensions
-  // Layer 4: Examples that depend on all packages for integration testing
-  const preferredOrder = [
-    // Layer 0: Base packages with no internal dependencies
-    '@lucid-agents/types',
-    '@lucid-agents/cli', // No runtime dependencies; generates code referencing adapters
-
-    // Layer 1: Extensions (only depend on @lucid-agents/types)
-    '@lucid-agents/wallet',
-    '@lucid-agents/payments',
-    '@lucid-agents/analytics',
-    '@lucid-agents/identity',
-    '@lucid-agents/a2a',
-    '@lucid-agents/ap2',
-    '@lucid-agents/http',
-    '@lucid-agents/scheduler',
-
-    // Layer 2: Core runtime (depends on all extensions)
-    '@lucid-agents/core',
-
-    // Layer 3: Adapters (depend on core and extensions)
-    '@lucid-agents/hono',
-    '@lucid-agents/express',
-    '@lucid-agents/tanstack',
-
-    // Layer 4: Examples (depend on all packages for integration testing)
-    '@lucid-agents/examples',
-  ];
-
-  const packagesByName = new Map(packages.map(pkg => [pkg.name, pkg]));
-  const orderedBuildList: PackageInfo[] = [];
-
-  for (const name of preferredOrder) {
-    const pkg = packagesByName.get(name);
-    if (pkg) {
-      orderedBuildList.push(pkg);
-      packagesByName.delete(name);
-    }
-  }
-
-  // Append any remaining packages that weren't explicitly ordered.
-  orderedBuildList.push(...packagesByName.values());
+  const orderedBuildList = orderPackagesForBuild(packages);
 
   for (const { manifest, dir, name } of orderedBuildList) {
     const buildScript = manifest.scripts?.build;
@@ -140,14 +160,16 @@ async function buildPackages() {
   }
 }
 
-const shouldClean =
-  process.argv.includes('--clean') || process.argv.includes('-c');
+if (import.meta.main) {
+  const shouldClean =
+    process.argv.includes('--clean') || process.argv.includes('-c');
 
-if (shouldClean) {
-  await cleanPackages();
+  if (shouldClean) {
+    await cleanPackages();
+  }
+
+  await buildPackages().catch(err => {
+    console.error(err);
+    process.exitCode = 1;
+  });
 }
-
-await buildPackages().catch(err => {
-  console.error(err);
-  process.exitCode = 1;
-});

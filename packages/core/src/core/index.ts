@@ -1,1 +1,2 @@
-export { AgentCore, createAgentCore } from './agent';
+export type { AgentCoreController } from './agent';
+export { createAgentCore } from './agent';

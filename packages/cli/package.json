@@ -8,6 +8,9 @@
     "directory": "packages/cli"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "node"
+  },
   "bin": {
     "create-agent-kit": "dist/index.js"
   },

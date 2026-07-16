@@ -1,13 +1,16 @@
 {
   "name": "@lucid-agents/core",
   "version": "3.0.0",
-  "description": "Build typed agent HTTP apps",
+  "description": "Protocol-neutral typed runtime kernel for Lucid agents",
   "repository": {
     "type": "git",
     "url": "https://github.com/daydreamsai/lucid-agents",
     "directory": "packages/core"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -43,16 +46,7 @@
   },
   "dependencies": {
     "zod": "catalog:",
-    "hono": "catalog:",
-    "@lucid-dreams/agent-auth": "^0.2.24",
-    "@lucid-dreams/client": "latest",
-    "@lucid-agents/types": "workspace:*",
-    "@lucid-agents/a2a": "workspace:*",
-    "@lucid-agents/payments": "workspace:*",
-    "@x402/core": "catalog:",
-    "@x402/fetch": "catalog:",
-    "@x402/evm": "catalog:",
-    "viem": "catalog:"
+    "@lucid-agents/types": "workspace:*"
   },
   "devDependencies": {
     "tsup": "catalog:",
@@ -60,9 +54,11 @@
     "@lucid-agents/eslint-config": "workspace:*",
     "@lucid-agents/prettier-config": "workspace:*",
     "@lucid-agents/analytics": "workspace:*",
+    "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/ap2": "workspace:*",
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/identity": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/wallet": "workspace:*"
   }

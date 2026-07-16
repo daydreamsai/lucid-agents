@@ -23,8 +23,8 @@ describe('createKitchenSinkAgent', () => {
 
     try {
       const agent = await createKitchenSinkAgent();
-      expect(agent.wallets).toBeUndefined();
-      expect(agent.identity).toBeUndefined();
+      expect('wallets' in agent).toBe(false);
+      expect('identity' in agent).toBe(false);
     } finally {
       if (saved.type) process.env.AGENT_WALLET_TYPE = saved.type;
       if (saved.key) process.env.AGENT_WALLET_PRIVATE_KEY = saved.key;

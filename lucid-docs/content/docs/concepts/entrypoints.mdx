@@ -54,11 +54,13 @@ type EntrypointDef = {
   description?: string;     // Human-readable description
   input?: ZodSchema;        // Input validation schema
   output?: ZodSchema;       // Output validation schema
-  streaming?: boolean;      // Whether this entrypoint streams responses
-  price?: EntrypointPrice;  // Optional pricing (x402)
-  handler?: Function;       // Handler for non-streaming entrypoints
-  stream?: Function;        // Handler for streaming entrypoints
+  price?: string | { invoke?: string; stream?: string };
+  paymentProtocol?: 'x402' | 'mpp';
+  network?: Network;
+  handler?: EntrypointHandler;
+  stream?: EntrypointStreamHandler;
   metadata?: Record<string, unknown>;
+  siwx?: SIWxEntrypointConfig;
 };
 ```
 
@@ -102,13 +104,15 @@ addEntrypoint({
 
 ## Handler function
 
-The handler receives a context object with the validated input:
+The handler receives a protocol-neutral context with the validated input:
 
 ```typescript
-async handler({ input, request, headers }) {
+async handler({ input, signal, metadata, runId, runtime, auth }) {
   // input: Validated and typed input data
-  // request: Original HTTP request (if using HTTP extension)
-  // headers: Request headers
+  // signal: Cancellation signal
+  // metadata.headers: Request headers when invoked through HTTP
+  // runtime: Completed runtime with installed capabilities
+  // auth: Verified SIWX/payment subject when present
 
   return {
     output: { /* your output data */ },
@@ -133,7 +137,6 @@ addEntrypoint({
       content: z.string(),
     })).optional(),
   }),
-  streaming: true,
   async stream(ctx, emit) {
     const { input } = ctx;
 
@@ -171,16 +174,18 @@ await emit({
   mime: 'text/plain',
 });
 
-// JSON data
+// Complete text segment
 await emit({
-  kind: 'data',
-  data: { key: 'value' },
+  kind: 'text',
+  text: 'A complete segment',
+  mime: 'text/plain',
 });
 
-// Status update
+// Structured control message
 await emit({
-  kind: 'status',
-  status: 'processing',
+  kind: 'control',
+  control: 'progress',
+  payload: { percent: 50 },
 });
 ```
 
@@ -200,7 +205,8 @@ Response:
 
 ```json
 {
-  "status": "completed",
+  "run_id": "7f3fbb8e-0dd7-4a92-a014-67fd40ba1574",
+  "status": "succeeded",
   "output": {
     "message": "Hello, Alice!"
   }
@@ -215,14 +221,17 @@ curl -X POST http://localhost:3000/entrypoints/chat/stream \
   -d '{"input": {"message": "Hello"}}'
 ```
 
-Response (SSE):
+Response (SSE, abbreviated):
 
 ```
-data: {"kind":"delta","delta":"Hello, ","mime":"text/plain"}
+event: run-start
+data: {"kind":"run-start","runId":"...","sequence":0,"createdAt":"..."}
 
-data: {"kind":"delta","delta":"how can I help?","mime":"text/plain"}
+event: delta
+data: {"kind":"delta","delta":"Hello, ","mime":"text/plain","runId":"...","sequence":1,"createdAt":"..."}
 
-data: {"kind":"done","output":{"completed":true}}
+event: run-end
+data: {"kind":"run-end","status":"succeeded","output":{"completed":true},"runId":"...","sequence":3,"createdAt":"..."}
 ```
 
 ## Adding pricing
@@ -235,9 +244,7 @@ addEntrypoint({
   description: 'Advanced AI analysis',
   input: z.object({ text: z.string() }),
   output: z.object({ analysis: z.string() }),
-  price: {
-    invoke: '$0.01',  // Price per invocation
-  },
+  price: '0.01', // USD decimal string per invocation
   async handler({ input }) {
     return {
       output: { analysis: 'detailed analysis...' },
@@ -247,6 +254,8 @@ addEntrypoint({
 ```
 
 With payments configured, requests without valid payment headers return `402 Payment Required`.
+
+If the runtime installs both x402 and MPP, select the rail explicitly with `paymentProtocol: 'x402' | 'mpp'` on every priced entrypoint.
 
 ## Listing entrypoints
 

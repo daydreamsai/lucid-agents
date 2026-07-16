@@ -8,6 +8,9 @@
     "directory": "packages/a2a"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -33,12 +36,12 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@lucid-agents/core": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@lucid-agents/hono": "workspace:*",
-    "@lucid-agents/core": "workspace:*",
     "@lucid-agents/http": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"

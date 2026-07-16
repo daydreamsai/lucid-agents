@@ -1,58 +1,40 @@
 import type {
+  AgentManifest,
   AgentRuntime,
   BuildContext,
   EntrypointDef,
   Extension,
 } from '@lucid-agents/types/core';
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
 import type {
   PaymentsConfig,
   PaymentsRuntime,
 } from '@lucid-agents/types/payments';
 
 import { createAgentCardWithPayments } from './manifest';
-import { createPaymentsRuntime, entrypointHasExplicitPrice } from './payments';
-import { policiesFromConfig } from './env';
-import type { PaymentStorageConfig } from '@lucid-agents/types/payments';
-import type { PaymentStorage } from './payment-storage';
-
-type PaymentStorageFactory = (
-  storageConfig?: PaymentStorageConfig,
-  agentId?: string
-) => PaymentStorage;
+import {
+  createPaymentsRuntime,
+  entrypointHasExplicitPrice,
+  type PaymentStorageFactory,
+  type SIWxStorageFactory,
+} from './payments';
 
 export function payments(options?: {
   config?: PaymentsConfig | false;
-  policies?: string;
   agentId?: string;
   storageFactory?: PaymentStorageFactory;
-}): Extension<{ payments?: PaymentsRuntime }> {
+  siwxStorageFactory?: SIWxStorageFactory;
+}): Extension<{ payments: PaymentsRuntime | undefined }> {
   let paymentsRuntime: PaymentsRuntime | undefined;
 
   return {
     name: 'payments',
-    build(ctx: BuildContext): { payments?: PaymentsRuntime } {
-      let config = options?.config;
-
-      if (config !== false && config !== undefined && options?.policies) {
-        try {
-          const policyGroups = policiesFromConfig(options.policies);
-          if (policyGroups) {
-            config = { ...config, policyGroups };
-          }
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          throw new Error(`Failed to load policies from config: ${message}`, {
-            cause: error,
-          });
-        }
-      }
-
+    after: ['wallets'],
+    build(ctx: BuildContext): { payments: PaymentsRuntime | undefined } {
       paymentsRuntime = createPaymentsRuntime(
-        config,
+        options?.config,
         options?.agentId,
-        options?.storageFactory
+        options?.storageFactory,
+        options?.siwxStorageFactory
       );
       return { payments: paymentsRuntime };
     },
@@ -62,15 +44,15 @@ export function payments(options?: {
         !paymentsRuntime.isActive &&
         paymentsRuntime.config
       ) {
-        if (entrypointHasExplicitPrice(entrypoint) || entrypoint.siwx?.authOnly) {
+        if (
+          entrypointHasExplicitPrice(entrypoint) ||
+          entrypoint.siwx?.authOnly
+        ) {
           paymentsRuntime.activate(entrypoint);
         }
       }
     },
-    onManifestBuild(
-      card: AgentCardWithEntrypoints,
-      runtime: AgentRuntime
-    ): AgentCardWithEntrypoints {
+    onManifestBuild(card: AgentManifest, runtime: AgentRuntime): AgentManifest {
       if (paymentsRuntime?.config) {
         return createAgentCardWithPayments(
           card,
@@ -79,6 +61,9 @@ export function payments(options?: {
         );
       }
       return card;
+    },
+    async dispose() {
+      await paymentsRuntime?.close();
     },
   };
 }

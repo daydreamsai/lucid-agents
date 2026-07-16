@@ -1,5 +1,6 @@
 import type { Network } from '../core/network';
-import type { SIWxConfig, SIWxStorage } from '../siwx';
+import type { AgentAuthContext, SIWxConfig, SIWxStorage } from '../siwx';
+import type { WalletsRuntime } from '../wallets';
 
 /**
  * Resource URL type for x402 facilitator endpoints
@@ -54,7 +55,7 @@ export type OutgoingLimitsConfig = {
 export type IncomingLimitsConfig = {
   /** Global incoming limits applied to all payments */
   global?: IncomingLimit;
-  /** Per-sender limits keyed by sender address or domain */
+  /** Per-sender limits keyed by a cryptographically verified payer address. */
   perSender?: Record<string, IncomingLimit>;
   /** Per-endpoint limits keyed by full endpoint URL */
   perEndpoint?: Record<string, IncomingLimit>;
@@ -80,8 +81,94 @@ export type PaymentRecord = {
 /**
  * Payment tracker interface for reading payment data.
  */
+export type PaymentReservationResult = {
+  allowed: boolean;
+  reservationId?: string;
+  reason?: string;
+};
+
+export type PaymentLimitCheckResult = {
+  allowed: boolean;
+  reason?: string;
+  currentTotal?: bigint;
+};
+
 export interface PaymentTracker {
+  reserveIncomingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    amount: bigint
+  ): Promise<PaymentReservationResult>;
+  reserveOutgoingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    amount: bigint
+  ): Promise<PaymentReservationResult>;
+  reserveRateLimit(
+    groupName: string,
+    direction: PaymentDirection,
+    maxPayments: number,
+    windowMs: number
+  ): Promise<PaymentReservationResult>;
+  commitReservation(reservationId: string): Promise<void>;
+  commitReservations(
+    reservationIds: readonly string[],
+    records?: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[]
+  ): Promise<void>;
+  releaseReservation(reservationId: string): Promise<void>;
+  checkOutgoingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    requestedAmount: bigint
+  ): Promise<PaymentLimitCheckResult>;
+  checkIncomingLimit(
+    groupName: string,
+    scope: string,
+    maxTotalUsd: number,
+    windowMs: number | undefined,
+    requestedAmount: bigint
+  ): Promise<PaymentLimitCheckResult>;
+  recordOutgoing(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void>;
+  recordIncoming(
+    groupName: string,
+    scope: string,
+    amount: bigint
+  ): Promise<void>;
+  getOutgoingTotal(
+    groupName: string,
+    scope: string,
+    windowMs?: number
+  ): Promise<bigint>;
+  getIncomingTotal(
+    groupName: string,
+    scope: string,
+    windowMs?: number
+  ): Promise<bigint>;
   getAllData(): Promise<PaymentRecord[]>;
+  clear(): Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Public contract for the optional in-process payment rate limiter. */
+export interface PaymentRateLimiter {
+  checkLimit(
+    groupName: string,
+    maxPayments: number,
+    windowMs: number
+  ): { allowed: boolean; reason?: string };
+  recordPayment(groupName: string): void;
+  getCurrentCount(groupName: string, windowMs: number): number;
+  clear(): void;
 }
 
 /**
@@ -109,9 +196,9 @@ export type PaymentPolicyGroup = {
   allowedRecipients?: string[];
   /** Blacklist of blocked recipient addresses or domains (for outgoing payments, takes precedence over whitelist) */
   blockedRecipients?: string[];
-  /** Whitelist of allowed sender addresses or domains (for incoming payments) */
+  /** Whitelist of cryptographically verified payer addresses. */
   allowedSenders?: string[];
-  /** Blacklist of blocked sender addresses or domains (for incoming payments, takes precedence over whitelist) */
+  /** Blacklist of verified payer addresses; takes precedence over the whitelist. */
   blockedSenders?: string[];
   /** Rate limiting configuration (scoped per policy group) */
   rateLimits?: RateLimitConfig;
@@ -121,7 +208,7 @@ export type PaymentPolicyGroup = {
  * Storage configuration for payment tracking.
  */
 export type PaymentStorageConfig = {
-  /** Storage type: 'sqlite' (default), 'in-memory', or 'postgres' */
+  /** Storage type. The portable runtime defaults to 'in-memory'. */
   type: 'sqlite' | 'in-memory' | 'postgres';
   /** SQLite-specific configuration */
   sqlite?: {
@@ -174,7 +261,7 @@ export type PaymentsConfig = {
   network: Network;
   /** Optional policy groups for payment controls and limits */
   policyGroups?: PaymentPolicyGroup[];
-  /** Optional storage configuration (defaults to SQLite) */
+  /** Optional storage configuration (defaults to portable in-memory storage) */
   storage?: PaymentStorageConfig;
   /** Optional SIWX (Sign-In With X) configuration */
   siwx?: SIWxConfig;
@@ -207,6 +294,40 @@ export type RuntimePaymentRequirement =
       response: Response;
     });
 
+/** Result of reserving policy capacity for a verified incoming payment. */
+export type IncomingPaymentAdmission =
+  | { admitted: false; response: Response }
+  | {
+      admitted: true;
+      /** Release provisional policy reservations without settling a payment. */
+      abort: () => Promise<void>;
+      /** Whether payment settlement has become irreversible. */
+      isCommitted?: () => boolean;
+      /** Settle and account for the payment against the application response. */
+      finalize: (response: Response) => Promise<Response>;
+    };
+
+/** Result of verifying an incoming payment or SIWX credential. */
+export type IncomingPaymentAuthorization =
+  | { authorized: false; response: Response }
+  | {
+      authorized: true;
+      /** Stable, verified caller identity used to scope idempotent responses. */
+      subject?: string;
+      auth?: AgentAuthContext;
+      /** Atomically reserve policy capacity before application execution. */
+      admit: () => Promise<IncomingPaymentAdmission>;
+    };
+
+/** A payment verified by another installed rail, such as MPP. */
+export type VerifiedIncomingPayment = {
+  protocol: 'mpp';
+  payer?: string;
+  amount: string;
+  currency: string;
+  network?: string;
+};
+
 /**
  * Payments runtime type.
  * Returned by AgentRuntime.payments when payments are configured.
@@ -223,10 +344,24 @@ export type PaymentsRuntime = {
     entrypoint: EntrypointDef,
     which: 'invoke' | 'stream'
   ) => string | null;
+  /** Verify an incoming credential, then admit and settle it in explicit phases. */
+  authorize: (
+    request: Request,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream',
+    /** Optional verified context supplied by another payment rail. */
+    verifiedPayment?: VerifiedIncomingPayment
+  ) => Promise<IncomingPaymentAuthorization>;
+  /** Verify SIWX independently so alternate payment rails can reuse entitlements. */
+  authorizeSIWx: (
+    request: Request,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ) => Promise<IncomingPaymentAuthorization | undefined>;
+  /** Release payment and SIWX storage resources. */
+  close: () => Promise<void>;
   /** Payment tracker for bi-directional payment tracking (outgoing and incoming) */
-  readonly paymentTracker?: unknown; // PaymentTracker instance (type exported from payments package)
-  /** Optional rate limiter for rate limiting (only present if policy groups have rate limits) */
-  readonly rateLimiter?: unknown; // RateLimiter instance (type exported from payments package)
+  readonly paymentTracker?: PaymentTracker;
   /** Policy groups configured for this runtime */
   readonly policyGroups?: PaymentPolicyGroup[];
   /** SIWX storage instance (if SIWX is enabled) */
@@ -239,7 +374,12 @@ export type PaymentsRuntime = {
    * Returns null if payment context cannot be created (e.g., no wallet configured).
    */
   getFetchWithPayment: (
-    runtime: AgentRuntime,
+    runtime: AgentRuntime<{
+      wallets?: WalletsRuntime;
+      payments?: PaymentsRuntime;
+    }>,
     network?: string
-  ) => Promise<((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null>;
+  ) => Promise<
+    ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | null
+  >;
 };

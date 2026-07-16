@@ -8,6 +8,9 @@
     "directory": "packages/mpp"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -40,11 +43,6 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "viem": "^2.0.0"
-  },
-  "peerDependenciesMeta": {
-    "viem": {
-      "optional": true
-    }
+    "viem": ">=2.44.4"
   }
 }

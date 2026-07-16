@@ -64,11 +64,11 @@ describe('A2A: client calls kitchen-sink', () => {
     const card = await a2aRuntime!.fetchCard(`http://localhost:${PORT}`);
     expect(card.name).toBe('kitchen-sink-agent');
 
-    const { taskId } = await a2aRuntime!.client.sendMessage(card, 'echo', {
+    const taskAccess = await a2aRuntime!.client.sendMessage(card, 'echo', {
       text: 'hello from client',
     });
 
-    const task = await waitForTask(a2aRuntime!.client, card, taskId);
+    const task = await waitForTask(a2aRuntime!.client, card, taskAccess);
     expect(task.status).toBe('completed');
     const output = task.result?.output as
       | { text: string; timestamp: string }

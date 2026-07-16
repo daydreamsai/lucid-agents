@@ -1,13 +1,9 @@
 import type {
-  MppServerMethod,
-  MppClientMethod,
-  TempoServerConfig,
-  TempoClientConfig,
-  StripeServerConfig,
-  StripeClientConfig,
   LightningServerConfig,
-  LightningClientConfig,
-} from './types';
+  MppServerMethod,
+  StripeServerConfig,
+  TempoServerConfig,
+} from '@lucid-agents/types/mpp';
 
 // ─── Server-side method builders ─────────────────────────────────
 
@@ -25,95 +21,51 @@ import type {
  * ```
  */
 export function tempoServer(config: TempoServerConfig): MppServerMethod {
-  return { name: 'tempo', config };
+  return { name: 'tempo', implementation: 'tempo', config };
 }
 
-/**
- * Configure Tempo stablecoin payment method (client-side).
- *
- * @example
- * ```ts
- * import { tempo } from '@lucid-agents/mpp';
- *
- * const method = tempo.client({
- *   account: privateKeyToAccount('0x...'),
- * });
- * ```
- */
-export function tempoClient(config: TempoClientConfig): MppClientMethod {
-  return { name: 'tempo', config };
-}
-
-/**
- * Tempo payment method namespace with server/client builders.
- */
+/** Tempo server payment-method descriptor. */
 export const tempo = {
   server: tempoServer,
-  client: tempoClient,
 };
 
 /**
  * Configure Stripe payment method (server-side).
  */
 export function stripeServer(config: StripeServerConfig): MppServerMethod {
-  return { name: 'stripe', config };
+  return { name: 'stripe', implementation: 'stripe', config };
 }
 
-/**
- * Configure Stripe payment method (client-side).
- */
-export function stripeClient(config: StripeClientConfig): MppClientMethod {
-  return { name: 'stripe', config };
-}
-
-/**
- * Stripe payment method namespace with server/client builders.
- */
+/** Stripe server payment-method descriptor. */
 export const stripe = {
   server: stripeServer,
-  client: stripeClient,
 };
 
 /**
  * Configure Lightning payment method (server-side).
  */
-export function lightningServer(config: LightningServerConfig): MppServerMethod {
-  return { name: 'lightning', config };
+export function lightningServer(
+  config: LightningServerConfig
+): MppServerMethod {
+  return { name: 'lightning', implementation: 'custom', config };
 }
 
-/**
- * Configure Lightning payment method (client-side).
- */
-export function lightningClient(config: LightningClientConfig): MppClientMethod {
-  return { name: 'lightning', config };
-}
-
-/**
- * Lightning payment method namespace with server/client builders.
- */
+/** Lightning server payment-method descriptor. */
 export const lightning = {
   server: lightningServer,
-  client: lightningClient,
 };
 
 /**
  * Create a custom payment method (server-side).
  */
-export function customServer(name: string, config: Record<string, unknown>): MppServerMethod {
-  return { name, config };
+export function customServer(
+  name: string,
+  config: Record<string, unknown>
+): MppServerMethod {
+  return { name, implementation: 'custom', config };
 }
 
-/**
- * Create a custom payment method (client-side).
- */
-export function customClient(name: string, config: Record<string, unknown>): MppClientMethod {
-  return { name, config };
-}
-
-/**
- * Custom payment method namespace with server/client builders.
- */
+/** Custom server payment-method descriptor. */
 export const custom = {
   server: customServer,
-  client: customClient,
 };

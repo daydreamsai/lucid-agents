@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto';
 import type {
   Hire,
   InvokeArgs,
@@ -9,9 +8,16 @@ import type {
   SchedulerStore,
 } from '@lucid-agents/types/scheduler';
 import type { AgentRuntime } from '@lucid-agents/types/core';
+import type { A2ARuntime } from '@lucid-agents/types/a2a';
+import type { PaymentsRuntime } from '@lucid-agents/types/payments';
+
+export type SchedulerAgentRuntime = AgentRuntime<{
+  a2a: A2ARuntime;
+  payments?: PaymentsRuntime;
+}>;
 
 export type CreateSchedulerRuntimeOptions = {
-  runtime: AgentRuntime;
+  runtime: SchedulerAgentRuntime;
   store: SchedulerStore;
   clock?: () => number;
   defaultMaxRetries?: number;
@@ -31,7 +37,7 @@ export function createSchedulerRuntime(
   const agentCardTtlMs = options.agentCardTtlMs ?? 5 * 60_000;
   const defaultConcurrency = options.defaultConcurrency ?? 5;
 
-  const a2aClient = options.runtime.a2a?.client;
+  const a2aClient = options.runtime.a2a.client;
   if (!a2aClient) {
     throw new Error(
       'Scheduler runtime requires A2A extension. Add .use(a2a()) to your agent.'
@@ -43,28 +49,36 @@ export function createSchedulerRuntime(
       | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
       | undefined;
 
-    // Get fetch with payment from payments runtime if available
-    if (options.runtime.payments) {
-      try {
-        fetchFn =
-          (await options.runtime.payments.getFetchWithPayment(
-            options.runtime,
-            options.runtime.payments.config.network
-          )) ?? undefined;
-      } catch (error) {
-        // Payment context creation failed, continue without payment
-        console.warn(
-          '[scheduler] Failed to get fetch with payment:',
-          (error as Error).message
+    try {
+      const payments = options.runtime.payments;
+      if (!payments) {
+        return await a2aClient.invoke(
+          args.manifest,
+          args.entrypointKey,
+          args.input,
+          undefined,
+          { idempotencyKey: args.idempotencyKey }
         );
       }
+      fetchFn =
+        (await payments.getFetchWithPayment(
+          options.runtime,
+          payments.config.network
+        )) ?? undefined;
+    } catch (error) {
+      // Payment context creation failed, continue without payment
+      console.warn(
+        '[scheduler] Failed to get fetch with payment:',
+        (error as Error).message
+      );
     }
 
     await a2aClient.invoke(
       args.manifest,
       args.entrypointKey,
       args.input,
-      fetchFn as typeof fetch | undefined
+      fetchFn as typeof fetch | undefined,
+      { idempotencyKey: args.idempotencyKey }
     );
   };
 
@@ -76,18 +90,27 @@ export function createSchedulerRuntime(
     now: number;
     maxRetries?: number;
     idempotencyKey?: string;
-  }): Job => ({
-    id: randomUUID(),
-    hireId: input.hireId,
-    entrypointKey: input.entrypointKey,
-    input: input.jobInput,
-    schedule: input.schedule,
-    nextRunAt: computeInitialNextRun(input.schedule, input.now),
-    attempts: 0,
-    maxRetries: input.maxRetries ?? defaultMaxRetries,
-    status: 'pending',
-    idempotencyKey: input.idempotencyKey,
-  });
+  }): Job => {
+    const id = crypto.randomUUID();
+    const idempotencyKey =
+      input.idempotencyKey?.trim() ?? `scheduler-job:${id}`;
+    if (idempotencyKey.length < 20 || idempotencyKey.length > 256) {
+      throw new Error('Idempotency key must contain 20 to 256 characters');
+    }
+    return {
+      id,
+      hireId: input.hireId,
+      entrypointKey: input.entrypointKey,
+      input: input.jobInput,
+      schedule: input.schedule,
+      nextRunAt: computeInitialNextRun(input.schedule, input.now),
+      attempts: 0,
+      maxRetries: input.maxRetries ?? defaultMaxRetries,
+      status: 'pending',
+      idempotencyKey,
+      managedIdempotencyKey: input.idempotencyKey === undefined,
+    };
+  };
 
   async function createHire(input: {
     agentCardUrl: string;
@@ -103,13 +126,13 @@ export function createSchedulerRuntime(
     // Validate schedule early to fail fast
     validateSchedule(input.schedule);
 
-    const card = await options.runtime.a2a!.fetchCardWithEntrypoints(
+    const card = await options.runtime.a2a.fetchCardWithEntrypoints(
       input.agentCardUrl
     );
     validateEntrypoint(card, input.entrypointKey);
 
     const hire: Hire = {
-      id: randomUUID(),
+      id: crypto.randomUUID(),
       agent: {
         agentCardUrl: input.agentCardUrl,
         card,
@@ -370,6 +393,9 @@ export function createSchedulerRuntime(
             attempts: 0,
             lastError: undefined,
             nextRunAt,
+            idempotencyKey: claimedJob.managedIdempotencyKey
+              ? `scheduler-job:${claimedJob.id}:${nextRunAt}`
+              : claimedJob.idempotencyKey,
           });
         }
       } catch (error) {
@@ -438,7 +464,7 @@ export function createSchedulerRuntime(
       }
     }
 
-    const card = await options.runtime.a2a!.fetchCardWithEntrypoints(
+    const card = await options.runtime.a2a.fetchCardWithEntrypoints(
       hire.agent.agentCardUrl
     );
     const updated: Hire = {

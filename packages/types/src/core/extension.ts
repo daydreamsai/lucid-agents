@@ -1,30 +1,44 @@
-import type { AgentCardWithEntrypoints } from '../a2a';
-import type { AgentMeta } from '../a2a';
+import type { AgentManifest, AgentMeta } from './manifest';
 import type { EntrypointDef } from './entrypoint';
 import type { AgentRuntime } from './runtime';
 
 /**
  * Build context provided to extensions during build.
  */
-export type BuildContext = {
+export type BuildContext<
+  Capabilities extends object = Record<string, unknown>,
+> = {
   meta: AgentMeta;
-  runtime: Partial<AgentRuntime>;
+  /** Runtime accumulated from the core and all previously built extensions. */
+  runtime: AgentRuntime<Capabilities> & Record<string, unknown>;
 };
 
 /**
  * Extension interface. Each extension contributes a runtime slice.
  */
-export interface Extension<R extends Record<string, unknown> = {}> {
+export interface Extension<
+  R extends Record<string, unknown> = {},
+  Dependencies extends object = {},
+> {
+  /** Type-only marker used by AgentBuilder to validate accumulated dependencies. */
+  readonly __dependencies?: Dependencies;
   /**
    * Unique name of the extension (for debugging and conflict detection).
    */
   name: string;
 
+  /** Extensions that must be installed and initialized first. */
+  requires?: readonly string[];
+
+  /** Optional ordering constraints when the named extension is installed. */
+  after?: readonly string[];
+  before?: readonly string[];
+
   /**
    * Builds the extension's runtime slice.
    * Called during AgentBuilder.build() to construct the runtime.
    */
-  build: (ctx: BuildContext) => R;
+  build: (ctx: BuildContext<Dependencies>) => R | Promise<R>;
 
   /**
    * Optional hook called when an entrypoint is added to the runtime.
@@ -40,16 +54,19 @@ export interface Extension<R extends Record<string, unknown> = {}> {
    * Useful for final setup that requires the complete runtime.
    * Can be async for initialization that requires async operations.
    */
-  onBuild?: (runtime: AgentRuntime) => void | Promise<void>;
+  initialize?: (runtime: AgentRuntime) => void | Promise<void>;
+
+  /** Release resources. Called once, in reverse dependency order. */
+  dispose?: (runtime: AgentRuntime) => void | Promise<void>;
 
   /**
    * Optional hook called when building the manifest/agent card.
    * Can modify the card before it's returned.
    */
   onManifestBuild?: (
-    card: AgentCardWithEntrypoints,
+    card: AgentManifest,
     runtime: AgentRuntime
-  ) => AgentCardWithEntrypoints;
+  ) => AgentManifest;
 }
 
 /**

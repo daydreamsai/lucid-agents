@@ -31,11 +31,7 @@ export const errorResponse = (
 };
 
 export const readJson = async (req: Request): Promise<unknown> => {
-  try {
-    return await req.clone().json();
-  } catch {
-    return undefined;
-  }
+  return req.clone().json();
 };
 
 export const extractInput = (payload: unknown): unknown => {
@@ -80,4 +76,3 @@ export function normalizeOrigin(req: Request): string {
 
   return `${protocol}//${host}`;
 }
-

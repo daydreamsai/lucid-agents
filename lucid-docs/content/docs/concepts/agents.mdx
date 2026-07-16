@@ -57,7 +57,7 @@ const agent = await createAgent({
 
 This metadata is used to:
 
-- Generate the Agent Card (`.well-known/agent.json`) for A2A discovery
+- Generate the Agent Card (`.well-known/agent-card.json`) for A2A discovery
 - Render Open Graph tags for social sharing
 - Display information on the landing page (if enabled)
 
@@ -122,7 +122,7 @@ export default {
 ```typescript
 import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
-export const { runtime, handlers } = await createTanStackRuntime(agent);
+export const { runtime, handlers, routes } = await createTanStackRuntime(agent);
 ```
 
 ### Express
@@ -139,7 +139,7 @@ app.listen(3000);
 
 ## Agent Card
 
-Every agent automatically generates an Agent Card at `/.well-known/agent.json`. This follows the A2A protocol specification and includes:
+An agent with `http()` exposes its Agent Card at `/.well-known/agent-card.json`; `/.well-known/agent.json` remains a legacy alias. The card includes:
 
 - Agent metadata (name, version, description)
 - Supported interfaces and capabilities
@@ -180,14 +180,14 @@ When using the `http()` extension and a framework adapter, your agent exposes th
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/.well-known/agent.json` | GET | Agent Card for A2A discovery |
+| `/.well-known/agent-card.json` | GET | Canonical Agent Card for discovery |
+| `/.well-known/agent.json` | GET | Legacy Agent Card alias |
 | `/entrypoints` | GET | List available entrypoints |
 | `/entrypoints/:key/invoke` | POST | Invoke an entrypoint |
 | `/entrypoints/:key/stream` | POST | Stream from an entrypoint (SSE) |
-| `/tasks` | GET | List tasks |
-| `/tasks/:id` | GET | Get task status |
-| `/tasks/:id/cancel` | POST | Cancel a task |
-| `/tasks/:id/subscribe` | GET | Subscribe to task updates (SSE) |
+| `/favicon.svg` | GET | Agent favicon |
+
+When `a2a()` is installed, the canonical plan also adds `POST /tasks`, `GET /tasks`, and owned get/cancel/subscribe routes under `/tasks/:taskId`. Task creation returns an access token; later task operations require it in `Task-Access-Token`.
 
 ## Next steps
 

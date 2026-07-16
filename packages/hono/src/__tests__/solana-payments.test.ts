@@ -2,16 +2,89 @@ import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { payments } from '@lucid-agents/payments';
 import { createAgentApp } from '@lucid-agents/hono';
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
 describe('Hono Solana Payments', () => {
+  const originalFetch = globalThis.fetch;
   const solanaPayments: PaymentsConfig = {
     payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
     facilitatorUrl: 'https://facilitator.test',
     network: 'solana:devnet',
   };
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    mock.restore();
+  });
+
+  it('returns a real x402 challenge for a priced Solana entrypoint', async () => {
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.endsWith('/supported')) {
+        return Response.json({
+          kinds: [
+            {
+              x402Version: 2,
+              scheme: 'exact',
+              network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+              extra: {
+                feePayer: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
+              },
+            },
+          ],
+          extensions: [],
+          signers: {},
+        });
+      }
+      return Response.json(
+        { error: 'unexpected facilitator call' },
+        { status: 500 }
+      );
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const runtime = await createAgent({
+      name: 'solana-challenge',
+      version: '1.0.0',
+    })
+      .use(http())
+      .use(
+        payments({
+          config: { ...solanaPayments, storage: { type: 'in-memory' } },
+        })
+      )
+      .addEntrypoint({
+        key: 'paid',
+        price: '0.001',
+        handler: async () => ({ output: { ok: true } }),
+      })
+      .build();
+    const { app } = await createAgentApp(runtime);
+
+    const response = await app.request('/entrypoints/paid/invoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(402);
+    const required = JSON.parse(
+      Buffer.from(
+        response.headers.get('PAYMENT-REQUIRED')!,
+        'base64'
+      ).toString()
+    );
+    expect(required.accepts[0].network).toBe(
+      'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'
+    );
+  });
 
   it('creates agent with Solana network configuration', async () => {
     const agent = await createAgent({
@@ -95,10 +168,7 @@ describe('Hono Solana Payments', () => {
   });
 
   it('accepts both Solana mainnet and devnet configurations', async () => {
-    const networks = [
-      'solana:mainnet',
-      'solana:devnet',
-    ] as const;
+    const networks = ['solana:mainnet', 'solana:devnet'] as const;
 
     for (const network of networks) {
       const agent = await createAgent({ name: 'test', version: '1.0.0' })
@@ -150,33 +220,30 @@ describe('Hono Solana Payments', () => {
 
     const payment = manifest.payments[0];
     expect(payment.method).toBe('x402');
-    expect(payment.network).toBe('solana:devnet');
+    expect(payment.network).toBe('solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1');
     expect(payment.payee).toBe('9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz');
   });
 
   it('rejects unsupported network at configuration time', async () => {
-    const invalidPayments = {
+    const invalidPayments: PaymentsConfig = {
       payTo: '9yPGxVrYi7C5JLMGjEZhK8qQ4tn7SzMWwQHvz3vGJCKz',
-      facilitatorUrl: 'https://facilitator.test' as const,
-      network: 'solana-mainnet' as any, // Invalid - should be 'solana'
+      facilitatorUrl: 'https://facilitator.test',
+      network: 'solana-testnet' as unknown as PaymentsConfig['network'],
     };
 
-    const agent = await createAgent({ name: 'test', version: '1.0.0' })
+    const builder = createAgent({ name: 'test', version: '1.0.0' })
       .use(http())
       .use(payments({ config: invalidPayments }))
-      .build();
-    const { addEntrypoint } = await createAgentApp(agent);
-
-    // Should throw when adding a priced entrypoint (validation happens when price is present)
-    expect(() => {
-      addEntrypoint({
+      .addEntrypoint({
         key: 'test',
         price: '1000',
         async handler() {
           return { output: { ok: true } };
         },
       });
-    }).toThrow(/Unsupported payment network: solana-mainnet/);
+
+    await expect(builder.build()).rejects.toThrow(
+      /Unsupported payment network: solana-testnet/
+    );
   });
 });
-

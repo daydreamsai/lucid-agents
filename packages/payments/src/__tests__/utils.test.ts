@@ -42,6 +42,10 @@ describe('paymentsFromEnv', () => {
     resetEnv();
   });
 
+  it('returns undefined when no payment configuration is supplied', () => {
+    expect(paymentsFromEnv({}, {})).toBeUndefined();
+  });
+
   it('reads facilitator auth token from FACILITOR_AUTH', () => {
     process.env.PAYMENTS_RECEIVABLE_ADDRESS =
       '0xabc0000000000000000000000000000000000000';
@@ -51,7 +55,7 @@ describe('paymentsFromEnv', () => {
 
     const config = paymentsFromEnv();
 
-    expect(config.facilitatorAuth).toBe('token-from-typo-env');
+    expect(config?.facilitatorAuth).toBe('token-from-typo-env');
   });
 
   it('prefers explicit config override for facilitator auth token', () => {
@@ -65,7 +69,7 @@ describe('paymentsFromEnv', () => {
       facilitatorAuth: 'override-token',
     });
 
-    expect(config.facilitatorAuth).toBe('override-token');
+    expect(config?.facilitatorAuth).toBe('override-token');
   });
 
   it('falls back to DREAMS_AUTH_TOKEN when facilitator auth envs are not set', () => {
@@ -77,7 +81,7 @@ describe('paymentsFromEnv', () => {
 
     const config = paymentsFromEnv();
 
-    expect(config.facilitatorAuth).toBe('dreams-token');
+    expect(config?.facilitatorAuth).toBe('dreams-token');
   });
 
   it('uses stripe mode when PAYMENTS_DESTINATION=stripe', () => {
@@ -88,10 +92,11 @@ describe('paymentsFromEnv', () => {
 
     const config = paymentsFromEnv();
 
-    expect('stripe' in config).toBe(true);
-    if ('stripe' in config) {
-      expect(config.stripe.secretKey).toBe('sk_test_123');
+    expect(config?.stripe).toBeDefined();
+    if (!config?.stripe) {
+      throw new Error('Expected Stripe destination configuration');
     }
+    expect(config.stripe.secretKey).toBe('sk_test_123');
     expect('payTo' in config).toBe(false);
   });
 
@@ -114,6 +119,8 @@ describe('paymentsFromEnv', () => {
 
     const config = paymentsFromEnv();
 
+    expect(config).toBeDefined();
+    if (!config) throw new Error('Expected payments config');
     expect('payTo' in config).toBe(true);
     if ('payTo' in config) {
       expect(config.payTo).toBe('0xabc0000000000000000000000000000000000000');
@@ -129,8 +136,19 @@ describe('paymentsFromEnv', () => {
 
     const config = paymentsFromEnv();
 
-    expect(config.facilitatorUrl).toBe('https://facilitator.alias.test');
-    expect(config.network).toBe('eip155:84532');
+    expect(config?.facilitatorUrl).toBe('https://facilitator.alias.test');
+    expect(config?.network).toBe('eip155:84532');
+  });
+
+  it('canonicalizes a legacy network alias from the environment', () => {
+    process.env.PAYMENTS_RECEIVABLE_ADDRESS =
+      '0xabc0000000000000000000000000000000000000';
+    process.env.FACILITATOR_URL = 'https://facilitator.test';
+    process.env.NETWORK = 'base-sepolia';
+
+    const config = paymentsFromEnv();
+
+    expect(config?.network).toBe('eip155:84532');
   });
 });
 

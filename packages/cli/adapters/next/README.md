@@ -1,38 +1,58 @@
-# Next.js Adapter Base Layer
+# Next.js adapter template
 
-This adapter scaffolds a full-stack Next.js agent shell with:
+The CLI copies this base layer when scaffolding a full-stack Next.js agent. It
+contains:
 
-- App Router layout and API routes under `app/api/agent/*`
-- Reown AppKit wallet modal wired to Wagmi + Solana adapters
-- Dashboard UI for invoking entrypoints, inspecting manifests, and monitoring health
-- `x402-next` middleware for paywalled invoke/stream routes
-- Session token API (`/api/x402/session-token`) for optional Coinbase Onramp flows
+- App Router API modules under `/api/agent`;
+- root A2A/OASF discovery aliases under `/.well-known`;
+- Reown AppKit with Wagmi and Solana adapters;
+- a dashboard for discovery, health, invoke, and stream operations.
 
-## Files of Interest
+## One runtime contract
 
-- `lib/agent.ts` – Generated at scaffold time with your entrypoints
-- `app/api/agent/*` – HTTP endpoints backed by agent runtime handlers
-- `proxy.ts` – x402 paywall powered by `x402-next`
-- `components/dashboard.tsx` – Client dashboard for testing entrypoints
-- `lib/paywall.ts` – Builds dynamic route pricing for the middleware
+The generated `lib/agent.ts` exports the completed Lucid runtime and its
+`runtime.http.handlers`. Every API route delegates to those handlers. There is
+no Next-specific paywall or duplicate manifest cache: x402, MPP, SIWX, incoming
+policies, settlement, and task authorization all run in the shared HTTP gate.
 
-Update `.env` with:
+The runtime is mounted at `/api/agent`. These root compatibility routes call the
+same manifest/OASF handlers with the incoming request origin:
+
+- `/.well-known/agent-card.json`
+- `/.well-known/agent.json`
+- `/.well-known/oasf-record.json`
+
+Task modules under `/api/agent/tasks` are usable when the generated agent
+installs `a2a()`.
+
+## Client payments
+
+`lib/api.ts` wraps browser Fetch with SIWX and x402 clients when wallet signers
+are available. That client behavior answers a server challenge; it is not the
+server authorization boundary. Never expose a facilitator secret, Stripe secret,
+or server private key through `NEXT_PUBLIC_*` configuration.
+
+Configure the generated app's server environment, for example:
 
 ```bash
-NEXT_PUBLIC_PROJECT_ID=your_wallet_connect_id
+NEXT_PUBLIC_PROJECT_ID=your_wallet_connect_project_id
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
-PAYMENTS_NETWORK=ethereum
-PAYMENTS_DEFAULT_PRICE=0.1
-PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
+NETWORK=base-sepolia
+FACILITATOR_URL=https://facilitator.example
 ```
 
-Run locally:
+Then run:
 
 ```bash
 bun install
 bun run dev
 ```
 
-## Optional Coinbase Onramp
+## Important files
 
-Set `CDP_API_KEY_ID`/`CDP_API_KEY_SECRET` and call the provided `/api/x402/session-token` route to surface the "Get more USDC" button inside the paywall.
+- `lib/agent.ts` — generated agent, runtime, and entrypoints
+- `app/api/agent/*` — thin route modules over HTTP handlers
+- `app/.well-known/*` — root discovery compatibility routes
+- `components/dashboard.tsx` — client dashboard using the manifest's entrypoint
+  record and per-operation pricing
+- `lib/api.ts` — browser invoke/stream and wallet wrapper helpers

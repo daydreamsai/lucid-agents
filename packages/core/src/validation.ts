@@ -1,4 +1,4 @@
-import type { AgentMeta } from '@lucid-agents/types/a2a';
+import type { AgentMeta } from '@lucid-agents/types/core';
 
 /**
  * Validates required agent metadata and throws descriptive errors if invalid.

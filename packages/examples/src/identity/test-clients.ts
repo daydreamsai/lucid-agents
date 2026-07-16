@@ -52,17 +52,21 @@ async function main() {
       )
     );
 
+    const validation = identity.clients.validation;
+    if (!validation) {
+      throw new Error('Validation registry is not configured for this chain');
+    }
+
     // Test Validation Registry Client
     console.log('\nValidation Registry:');
-    console.log('   - Address:', identity.clients.validation.address);
-    console.log('   - Chain ID:', identity.clients.validation.chainId);
+    console.log('   - Address:', validation.address);
+    console.log('   - Chain ID:', validation.chainId);
     console.log(
       '   - Methods:',
-      Object.keys(identity.clients.validation).filter(
+      Object.keys(validation).filter(
         k =>
-          typeof (identity.clients!.validation as Record<string, unknown>)[
-            k
-          ] === 'function'
+          typeof (validation as unknown as Record<string, unknown>)[k] ===
+          'function'
       )
     );
 

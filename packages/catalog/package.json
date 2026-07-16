@@ -8,6 +8,12 @@
     "directory": "packages/catalog"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable",
+    "nodeExports": [
+      "./node"
+    ]
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +22,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
     },
     "./package.json": "./package.json"
   },

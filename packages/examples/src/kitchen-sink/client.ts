@@ -38,11 +38,11 @@ export async function runA2ADemo(kitchenSinkUrl: string) {
   console.log(`[client] Discovered skill: ${echoSkill.id}`);
 
   console.log('[client] Sending A2A task...');
-  const { taskId } = await a2aRuntime.client.sendMessage(card, 'echo', {
+  const taskAccess = await a2aRuntime.client.sendMessage(card, 'echo', {
     text: 'Hello from the client agent!',
   });
 
-  const task = await waitForTask(a2aRuntime.client, card, taskId);
+  const task = await waitForTask(a2aRuntime.client, card, taskAccess);
   if (task.status !== 'completed') {
     throw new Error(
       `A2A task ${task.status}: ${String(task.error?.message ?? 'unknown')}`

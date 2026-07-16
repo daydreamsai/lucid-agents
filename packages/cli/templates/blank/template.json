@@ -4,7 +4,10 @@
   "description": "Start from a minimal Bun HTTP agent with @lucid-dreams/agent-kit wired up.",
   "adapters": ["hono", "express", "tanstack-ui", "tanstack-headless", "next"],
   "package": {
-    "dependencies": {}
+    "dependencies": {
+      "@lucid-agents/http": "latest",
+      "@lucid-agents/payments": "latest"
+    }
   },
   "wizard": {
     "prompts": [
@@ -51,7 +54,10 @@
         "message": "Payment destination mode",
         "choices": [
           { "value": "static", "title": "Static wallet address" },
-          { "value": "stripe", "title": "Stripe dynamic destination (Base only)" }
+          {
+            "value": "stripe",
+            "title": "Stripe dynamic destination (Base only)"
+          }
         ],
         "defaultValue": "static"
       },

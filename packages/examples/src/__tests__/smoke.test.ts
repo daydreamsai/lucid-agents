@@ -7,13 +7,14 @@
  * importing the example files (which have top-level await / start servers).
  */
 import { a2a, waitForTask } from '@lucid-agents/a2a';
-import { analytics, getSummary } from '@lucid-agents/analytics';
+import { analytics } from '@lucid-agents/analytics';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { mpp, tempo } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
+import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import { wallets } from '@lucid-agents/wallet';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { z } from 'zod';
@@ -298,7 +299,7 @@ describe('Example Smoke Tests', () => {
           const workerCard = await facilitatorA2A.fetchCard(
             `http://localhost:${WORKER_PORT}`
           );
-          const { taskId } = await facilitatorA2A.client.sendMessage(
+          const taskAccess = await facilitatorA2A.client.sendMessage(
             workerCard,
             'echo',
             { text: ctx.input.text }
@@ -306,7 +307,7 @@ describe('Example Smoke Tests', () => {
           const task = await waitForTask<{ text: string }>(
             facilitatorA2A.client,
             workerCard,
-            taskId
+            taskAccess
           );
           if (task.status === 'failed') {
             throw new Error(
@@ -371,13 +372,17 @@ describe('Example Smoke Tests', () => {
       );
       expect(facilitatorCard.name).toBe('facilitator-agent');
 
-      const { taskId } = await clientA2A.client.sendMessage(
+      const taskAccess = await clientA2A.client.sendMessage(
         facilitatorCard,
         'echo',
         { text: 'hello from client' }
       );
 
-      const task = await waitForTask(clientA2A.client, facilitatorCard, taskId);
+      const task = await waitForTask(
+        clientA2A.client,
+        facilitatorCard,
+        taskAccess
+      );
       expect(task.status).toBe('completed');
       const output = task.result?.output as { text: string } | undefined;
       expect(output?.text).toBe('Echo: hello from client');
@@ -431,9 +436,9 @@ describe('Example Smoke Tests', () => {
           runtime,
         }: {
           input: { windowHours: number };
-          runtime: { analytics?: { paymentTracker?: unknown } };
+          runtime: { analytics?: AnalyticsRuntime };
         }) {
-          if (!runtime?.analytics?.paymentTracker) {
+          if (!runtime?.analytics) {
             return {
               output: {
                 summary: {
@@ -448,12 +453,7 @@ describe('Example Smoke Tests', () => {
           }
 
           const windowMs = input.windowHours * 60 * 60 * 1000;
-          const summary = await getSummary(
-            runtime.analytics.paymentTracker as Parameters<
-              typeof getSummary
-            >[0],
-            windowMs
-          );
+          const summary = await runtime.analytics.getSummary(windowMs);
 
           return {
             output: {

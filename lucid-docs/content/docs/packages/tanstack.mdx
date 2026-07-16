@@ -1,26 +1,20 @@
 ---
-title: "@lucid-agents/tanstack"
-description: TanStack Start adapter for full-stack agent applications.
+title: '@lucid-agents/tanstack'
+description: TanStack Start handlers for a completed Lucid HTTP runtime.
 icon: Layers
 ---
 
-The TanStack Start adapter integrates agents with TanStack Start, supporting both UI dashboards and headless API-only deployments.
+The TanStack adapter exposes Fetch-native Lucid HTTP handlers in the context shape expected by TanStack Start route modules. It delegates to the completed `runtime.http.handlers`; it does not create a second registry, execute handlers directly, or install an adapter-local paywall.
 
 ## Installation
 
 ```bash
-bun add @lucid-agents/tanstack @tanstack/start
-```
-
-For payments support:
-
-```bash
-bun add x402
+bun add @lucid-agents/core @lucid-agents/http @lucid-agents/tanstack @tanstack/react-start
 ```
 
 ## Basic usage
 
-```typescript
+```typescript title="src/lib/agent.ts"
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { createTanStackRuntime } from '@lucid-agents/tanstack';
@@ -29,246 +23,185 @@ const agent = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
 })
-  .use(http())
+  .use(http({ basePath: '/api/agent' }))
   .build();
 
-export const { runtime, handlers } = await createTanStackRuntime(agent);
+export const { runtime, handlers, routes } =
+  await createTanStackRuntime(agent);
 ```
+
+Always install `http()` before creating the TanStack wrapper. Call `await runtime.close()` during server shutdown.
 
 ## API reference
 
-### createTanStackRuntime(agent)
+### createTanStackRuntime(runtime)
 
-Creates a TanStack Start runtime from an agent.
+Returns the original runtime, adapted handlers, and the canonical route plan.
 
 ```typescript
-function createTanStackRuntime(
-  agent: AgentRuntime
-): Promise<{
-  runtime: TanStackRuntime;
+type TanStackRuntime<TRuntime> = {
+  runtime: TRuntime;
   handlers: TanStackHandlers;
-}>
-```
-
-**Returns:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `runtime` | `TanStackRuntime` | Runtime with agent access |
-| `handlers` | `TanStackHandlers` | Request handlers for routes |
-
-### TanStackHandlers
-
-```typescript
-type TanStackHandlers = {
-  invoke: (key: string, input: unknown) => Promise<InvokeResult>;
-  stream: (key: string, input: unknown) => ReadableStream;
-  manifest: () => AgentCardWithEntrypoints;
-  health: () => { status: 'ok' };
-  entrypoints: () => EntrypointInfo[];
-  getTask: (id: string) => Task | undefined;
-  listTasks: (filters?: ListTasksRequest) => ListTasksResponse;
-  cancelTask: (id: string) => Task | undefined;
-  subscribeTask: (id: string) => ReadableStream;
+  routes: readonly AgentHttpRoute[];
 };
 ```
 
-## Route setup
+| Property | Description |
+| --- | --- |
+| `runtime` | The same completed runtime passed to the adapter. |
+| `handlers` | TanStack-context wrappers around `runtime.http.handlers`. |
+| `routes` | The same route paths, methods, and capability checks used by Hono and Express. |
 
-Create route files in your TanStack Start project:
+### createTanStackHandlers(runtime)
 
-### API routes
-
-```typescript title="app/routes/api/agent/entrypoints.ts"
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { handlers } from '~/lib/agent';
-
-export const APIRoute = createAPIFileRoute('/api/agent/entrypoints')({
-  GET: async () => {
-    return Response.json(handlers.entrypoints());
-  },
-});
-```
-
-```typescript title="app/routes/api/agent/entrypoints/$key/invoke.ts"
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { handlers } from '~/lib/agent';
-
-export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/invoke')({
-  POST: async ({ request, params }) => {
-    const { key } = params;
-    const { input } = await request.json();
-    const result = await handlers.invoke(key, input);
-    return Response.json(result);
-  },
-});
-```
-
-```typescript title="app/routes/api/agent/entrypoints/$key/stream.ts"
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { handlers } from '~/lib/agent';
-
-export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/stream')({
-  POST: async ({ request, params }) => {
-    const { key } = params;
-    const { input } = await request.json();
-    const stream = handlers.stream(key, input);
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    });
-  },
-});
-```
-
-### Well-known routes
-
-```typescript title="app/routes/.well-known/agent.json.ts"
-import { createAPIFileRoute } from '@tanstack/start/api';
-import { handlers } from '~/lib/agent';
-
-export const APIRoute = createAPIFileRoute('/.well-known/agent.json')({
-  GET: async () => {
-    return Response.json(handlers.manifest());
-  },
-});
-```
-
-## Payment middleware
-
-Add x402 payment middleware for paid routes:
+Creates just the adapted handler collection. `createTanStackRuntime()` calls this function for you.
 
 ```typescript
-import { createTanStackPaywall, paymentMiddleware } from '@lucid-agents/tanstack';
+type TanStackRequestHandler = (context: {
+  request: Request;
+}) => Promise<Response>;
 
-const paywall = createTanStackPaywall(agent, {
-  routes: {
-    '/api/agent/entrypoints/premium/invoke': {
-      price: '$0.01',
-      network: 'ethereum',
+type TanStackRouteHandler<Params> = (context: {
+  request: Request;
+  params: Params;
+}) => Promise<Response>;
+```
+
+`TanStackHandlers` includes:
+
+| Handler | Parameters | Purpose |
+| --- | --- | --- |
+| `health` | `{ request }` | Health response. |
+| `entrypoints` | `{ request }` | Entrypoint discovery. |
+| `manifest` | `{ request }` | Agent Card. |
+| `oasf` | `{ request }` | OASF record or `404`. |
+| `favicon` | `{ request }` | SVG favicon. |
+| `landing` | `{ request }` | Optional landing page. |
+| `invoke` | `{ request, params: { key } }` | Canonical invoke flow. |
+| `stream` | `{ request, params: { key } }` | Canonical SSE flow. |
+| `tasks` | `{ request }` | Create a task. |
+| `listTasks` | `{ request }` | List owned tasks. |
+| `getTask` | `{ request, params: { taskId } }` | Read an owned task. |
+| `cancelTask` | `{ request, params: { taskId } }` | Cancel an owned task. |
+| `subscribeTask` | `{ request, params: { taskId } }` | Stream task updates. |
+
+## Route modules
+
+TanStack route files should pass the original request and validated route parameters to the returned handler. The handler already performs body parsing, schema validation, authorization, idempotency, execution, and response formatting.
+
+```typescript title="src/routes/api/agent/entrypoints/$key/invoke.ts"
+import { createFileRoute } from '@tanstack/react-router';
+import { handlers } from '@/lib/agent';
+
+export const Route = createFileRoute(
+  '/api/agent/entrypoints/$key/invoke'
+)({
+  server: {
+    handlers: {
+      POST: async ({ request, params }) => {
+        const key = params.key;
+        if (typeof key !== 'string') {
+          return new Response('Missing or invalid key parameter', {
+            status: 400,
+          });
+        }
+        return handlers.invoke({ request, params: { key } });
+      },
     },
   },
 });
+```
 
-// Use in route
-export const APIRoute = createAPIFileRoute('/api/agent/entrypoints/$key/invoke')({
-  POST: async ({ request, params }) => {
-    const { key } = params;
+Streaming uses the same delegation; do not build a second `ReadableStream` or rewrite SSE headers:
 
-    // Check payment for paid routes
-    const paymentResult = await paymentMiddleware(request, key, agent);
-    if (paymentResult) {
-      return paymentResult;  // 402 Payment Required
-    }
-
-    // Process request
-    const { input } = await request.json();
-    const result = await handlers.invoke(key, input);
-    return Response.json(result);
+```typescript title="src/routes/api/agent/entrypoints/$key/stream.ts"
+export const Route = createFileRoute(
+  '/api/agent/entrypoints/$key/stream'
+)({
+  server: {
+    handlers: {
+      POST: ({ request, params }) =>
+        handlers.stream({ request, params: { key: params.key } }),
+    },
   },
 });
 ```
 
-### createTanStackPaywall(agent, config)
+Discovery routes delegate in the same way:
 
-Creates a paywall configuration for routes.
-
-```typescript
-function createTanStackPaywall(
-  agent: AgentRuntime,
-  config: PaywallConfig
-): TanStackPaywall
-
-type PaywallConfig = {
-  routes: {
-    [path: string]: {
-      price?: string;    // e.g., "$0.01"
-      network?: Network;
-    };
-  };
-};
+```typescript title="src/routes/[.]well-known/agent-card[.]json.ts"
+export const Route = createFileRoute('/.well-known/agent-card.json')({
+  server: {
+    handlers: {
+      GET: ({ request }) => handlers.manifest({ request }),
+    },
+  },
+});
 ```
 
-### paymentMiddleware(request, entrypointKey, agent)
+Root discovery routes may delegate to a runtime configured with `/api/agent` because the handler itself is transport-neutral. `routes` reports the canonical base-path-prefixed plan for inspection and tooling.
 
-Middleware function that checks payment requirements.
+## Payments and authentication
 
-```typescript
-async function paymentMiddleware(
-  request: Request,
-  entrypointKey: string,
-  agent: AgentRuntime
-): Promise<Response | null>
-```
+Payments are configured as a runtime extension. TanStack routes need no payment wrapper:
 
-Returns:
-- `Response` with 402 status if payment required and invalid
-- `null` if payment is valid or not required
-
-## UI template
-
-The `tanstack-ui` CLI template includes a dashboard for:
-
-- Viewing agent metadata
-- Testing entrypoints
-- Monitoring tasks
-- Viewing logs
-
-## Headless template
-
-The `tanstack-headless` CLI template provides API-only routes without UI components.
-
-## Full example
-
-```typescript title="app/lib/agent.ts"
-import { z } from 'zod';
+```typescript title="src/lib/agent.ts"
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
 import { createTanStackRuntime } from '@lucid-agents/tanstack';
 
 const agent = await createAgent({
-  name: 'my-agent',
+  name: 'paid-agent',
   version: '1.0.0',
 })
-  .use(http())
   .use(payments({ config: paymentsFromEnv() }))
+  .use(http({ basePath: '/api/agent' }))
+  .addEntrypoint({
+    key: 'premium',
+    price: '0.01',
+    async handler() {
+      return { output: { result: 'premium content' } };
+    },
+  })
   .build();
 
-// Add entrypoints
-agent.entrypoints.add({
-  key: 'chat',
-  input: z.object({ message: z.string() }),
-  streaming: true,
-  async stream(ctx, emit) {
-    await emit({ kind: 'delta', delta: 'Hello!', mime: 'text/plain' });
-    return { output: { completed: true } };
-  },
-});
+export const { runtime, handlers, routes } =
+  await createTanStackRuntime(agent);
+```
 
-export const { runtime, handlers } = await createTanStackRuntime(agent);
-export { agent };
+The HTTP runtime uses one authorization path for invoke, stream, and task creation. x402, MPP, SIWX entitlements, payment-policy admission, settlement, and idempotency therefore match Hono and Express. If both x402 and MPP are installed, each priced entrypoint must set `paymentProtocol: 'x402' | 'mpp'`.
+
+## Tasks
+
+The canonical route plan includes task routes only when `a2a()` is installed. A generated route module can still call a task handler without A2A, but it receives a structured `404` capability response.
+
+Task creation accepts a 20–256 character `Task-Access-Token` header or generates a token and returns it with the task. List, get, cancel, and subscribe operations require the same token.
+
+## CLI templates
+
+The CLI supplies two composable TanStack Start shells:
+
+- `tanstack-headless` provides the runtime route modules without a dashboard.
+- `tanstack-ui` layers the dashboard, wallet integration, and schema forms over the same headless route modules.
+
+```bash
+bunx @lucid-agents/cli my-agent --adapter=tanstack-headless
+bunx @lucid-agents/cli my-agent --adapter=tanstack-ui
 ```
 
 ## Exports
 
 ```typescript
-// Main API
-export { createTanStackRuntime } from '@lucid-agents/tanstack';
-export { createTanStackHandlers } from '@lucid-agents/tanstack';
+export {
+  createTanStackRuntime,
+  createTanStackHandlers,
+} from '@lucid-agents/tanstack';
 
-// Payment middleware
-export { createTanStackPaywall, paymentMiddleware } from '@lucid-agents/tanstack';
-
-// Types
 export type {
-  TanStackRuntime,
   TanStackHandlers,
-  TanStackPaywall,
-  PaywallConfig,
+  TanStackRequestHandler,
+  TanStackRouteHandler,
+  TanStackRuntime,
 } from '@lucid-agents/tanstack';
 ```

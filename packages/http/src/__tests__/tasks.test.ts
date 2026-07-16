@@ -1,23 +1,34 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  A2ARuntime,
   SendMessageRequest,
   Task,
   TaskStatus,
 } from '@lucid-agents/types/a2a';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import type { AgentHttpRuntime } from '@lucid-agents/types/http';
+import type { PaymentsRuntime } from '@lucid-agents/types/payments';
 import { afterEach, describe, expect, it, mock } from 'bun:test';
 import { z } from 'zod';
 
 import { http } from '../index';
 import type { InvokeResult } from '../invoke';
 import { ZodValidationError } from '@lucid-agents/types/core';
+import { createInMemoryTaskStore, createTaskRuntime } from '@lucid-agents/a2a';
 
 const meta = {
   name: 'test-agent',
   version: '1.0.0',
   description: 'Test agent',
 };
+const TASK_ACCESS_TOKEN = 'http-task-access-token-0001';
+
+function withTaskAccess(request: Request): Request {
+  const headers = new Headers(request.headers);
+  headers.set('Task-Access-Token', TASK_ACCESS_TOKEN);
+  return new Request(request, { headers });
+}
 
 const makeMockRuntime = (
   entrypoints: Map<string, EntrypointDef>,
@@ -43,7 +54,7 @@ const makeMockRuntime = (
       input,
       signal: options.signal,
       metadata: {
-      headers: options.headers || new Headers(),
+        headers: options.headers || new Headers(),
       },
       runId: options.runId,
       runtime: options.runtime,
@@ -70,7 +81,7 @@ const makeMockRuntime = (
         Array.from(entrypoints.values()).map(e => ({
           key: e.key,
           description: e.description,
-          streaming: !!e.streaming,
+          streaming: Boolean(e.stream),
         })),
       snapshot: () => Array.from(entrypoints.values()),
     },
@@ -82,6 +93,7 @@ const makeMockRuntime = (
       }),
       invalidate: () => {},
     },
+    close: async () => {},
   } as AgentRuntime;
 };
 
@@ -94,22 +106,145 @@ const makeTestHandlers = (
 ) => {
   const entrypoints = new Map<string, EntrypointDef>();
   const ext = http();
-  ext.build({
-    meta,
-    runtime: {},
-  });
-  const runtime = makeMockRuntime(entrypoints, invokeFn);
-  ext.onBuild?.(runtime);
-  // Handlers are attached to runtime in onBuild
+  const runtime = makeMockRuntime(entrypoints, invokeFn) as AgentRuntime<{
+    a2a: A2ARuntime;
+  }>;
+  runtime.a2a = {
+    tasks: createTaskRuntime({
+      store: createInMemoryTaskStore({ maxTasks: 1_000 }),
+    }),
+  } as A2ARuntime;
+  const slice = ext.build({ meta, runtime }) as {
+    http: AgentHttpRuntime;
+  };
+  const rawHandlers = slice.http.handlers;
+  const handlers: AgentHttpRuntime['handlers'] = {
+    ...rawHandlers,
+    tasks: request => rawHandlers.tasks(withTaskAccess(request)),
+    getTask: (request, params) =>
+      rawHandlers.getTask(withTaskAccess(request), params),
+    listTasks: request => rawHandlers.listTasks(withTaskAccess(request)),
+    cancelTask: (request, params) =>
+      rawHandlers.cancelTask(withTaskAccess(request), params),
+    subscribeTask: (request, params) =>
+      rawHandlers.subscribeTask(withTaskAccess(request), params),
+  };
   return {
-    handlers: (runtime as any).handlers!,
+    handlers,
+    rawHandlers,
     runtime,
     entrypoints,
   };
 };
 
 describe('Task Operations', () => {
+  it('requires the opaque owner capability for task reads and lists', async () => {
+    const { rawHandlers, entrypoints } = makeTestHandlers();
+    entrypoints.set('owned', {
+      key: 'owned',
+      handler: async () => ({ output: { ok: true } }),
+    });
+    const createResponse = await rawHandlers.tasks(
+      new Request('http://localhost/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
+        },
+        body: JSON.stringify({
+          skillId: 'owned',
+          message: { role: 'user', content: { text: '{}' } },
+        }),
+      })
+    );
+    const created = (await createResponse.json()) as {
+      taskId: string;
+      accessToken: string;
+    };
+    expect(created.accessToken).toBe(TASK_ACCESS_TOKEN);
+
+    const missing = await rawHandlers.getTask(
+      new Request(`http://localhost/tasks/${created.taskId}`),
+      { taskId: created.taskId }
+    );
+    expect(missing.status).toBe(401);
+
+    const wrong = await rawHandlers.getTask(
+      new Request(`http://localhost/tasks/${created.taskId}`, {
+        headers: { 'Task-Access-Token': 'http-task-access-token-wrong' },
+      }),
+      { taskId: created.taskId }
+    );
+    expect(wrong.status).toBe(404);
+
+    const wrongList = await rawHandlers.listTasks(
+      new Request('http://localhost/tasks', {
+        headers: { 'Task-Access-Token': 'http-task-access-token-wrong' },
+      })
+    );
+    expect((await wrongList.json()).tasks).toEqual([]);
+  });
+
   describe('POST /tasks - Create Task', () => {
+    it('finalizes authorization when task capacity reservation fails', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      let releaseFirst!: () => void;
+      const firstCanFinish = new Promise<void>(resolve => {
+        releaseFirst = resolve;
+      });
+      entrypoints.set('occupy-capacity', {
+        key: 'occupy-capacity',
+        handler: async () => {
+          await firstCanFinish;
+          return { output: { ok: true } };
+        },
+      });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createInMemoryTaskStore({ maxTasks: 1 }),
+      });
+      const finalizedStatuses: number[] = [];
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => ({
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => {
+              finalizedStatuses.push(response.status);
+              return response;
+            },
+          }),
+        }),
+      } as unknown as PaymentsRuntime;
+      const request = () =>
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'occupy-capacity',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        });
+
+      const admitted = await rawHandlers.tasks(request());
+      const rejected = await rawHandlers.tasks(request());
+
+      expect(admitted.status).toBe(200);
+      expect(rejected.status).toBe(503);
+      expect(finalizedStatuses).toEqual([200, 503]);
+      releaseFirst();
+      await runtime.a2a.tasks.close();
+    });
+
     it('creates a task and returns taskId with running status', async () => {
       const { handlers, entrypoints } = makeTestHandlers();
       entrypoints.set('echo', {
@@ -242,6 +377,26 @@ describe('Task Operations', () => {
 
       const response = await handlers.tasks(request);
       expect(response.status).toBe(400);
+    });
+
+    it('returns 400 for malformed message objects instead of throwing', async () => {
+      const { handlers } = makeTestHandlers();
+      const request = new Request('http://localhost/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillId: 'echo', message: null }),
+      });
+
+      const response = await handlers.tasks(request);
+
+      expect(response.status).toBe(400);
+      expect(
+        (await response.json()) as {
+          error: { code: string; message: string };
+        }
+      ).toEqual({
+        error: { code: 'invalid_request', message: 'Invalid request body' },
+      });
     });
   });
 

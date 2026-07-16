@@ -49,10 +49,18 @@ export const createX402Fetch = ({
   const networksToRegister = networks ?? Object.keys(SUPPORTED_EVM_NETWORKS);
 
   for (const network of networksToRegister) {
-    const caip2Id = SUPPORTED_EVM_NETWORKS[network];
-    if (caip2Id) {
-      client.register(caip2Id as `${string}:${string}`, new ExactEvmScheme(signer));
+    const caip2Id =
+      SUPPORTED_EVM_NETWORKS[network.toLowerCase()] ??
+      (/^eip155:\d+$/u.test(network) ? network : undefined);
+    if (!caip2Id) {
+      throw new Error(
+        `[agent-kit-payments] Unsupported EVM payment network: ${network}`
+      );
     }
+    client.register(
+      caip2Id as `${string}:${string}`,
+      new ExactEvmScheme(signer)
+    );
   }
 
   console.info(

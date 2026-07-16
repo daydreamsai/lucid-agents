@@ -12,9 +12,38 @@ import type {
   ListTasksResponse,
   CancelTaskRequest,
   CancelTaskResponse,
+  A2AInvokeOptions,
+  TaskAccess,
 } from '@lucid-agents/types/a2a';
 
 import { fetchAgentCard, findSkill } from './card';
+
+function resolveAgentRoute(baseUrl: string, path: string): URL {
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  return new URL(path.replace(/^\/+/, ''), normalizedBase);
+}
+
+function resolveAgentBaseUrl(card: AgentCard): string {
+  const interfaceUrl = card.supportedInterfaces?.find(agentInterface =>
+    agentInterface.protocolBinding.toUpperCase().includes('HTTP')
+  )?.url;
+  const baseUrl = interfaceUrl ?? card.url;
+  if (!baseUrl) {
+    throw new Error('Agent Card missing an HTTP interface URL');
+  }
+  return baseUrl;
+}
+
+function normalizeIdempotencyKey(
+  value: string | undefined
+): string | undefined {
+  if (value === undefined) return undefined;
+  const key = value.trim();
+  if (key.length < 20 || key.length > 256) {
+    throw new Error('Idempotency key must contain 20 to 256 characters');
+  }
+  return key;
+}
 
 /**
  * Invokes an agent's entrypoint using the Agent Card.
@@ -23,29 +52,31 @@ export async function invokeAgent(
   card: AgentCard,
   skillId: string,
   input: unknown,
-  fetchImpl?: FetchFunction
+  fetchImpl?: FetchFunction,
+  options?: A2AInvokeOptions
 ): Promise<InvokeAgentResult> {
   const skill = findSkill(card, skillId);
   if (!skill) {
     throw new Error(`Skill "${skillId}" not found in Agent Card`);
   }
 
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL(`/entrypoints/${skillId}/invoke`, baseUrl);
+  const url = resolveAgentRoute(baseUrl, `entrypoints/${skillId}/invoke`);
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  const idempotencyKey = normalizeIdempotencyKey(options?.idempotencyKey);
+  if (idempotencyKey) {
+    headers.set('Idempotency-Key', idempotencyKey);
+  }
   const response = await fetchFn(url.toString(), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ input }),
   });
 
@@ -73,17 +104,14 @@ export async function streamAgent(
     throw new Error(`Skill "${skillId}" not found in Agent Card`);
   }
 
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL(`/entrypoints/${skillId}/stream`, baseUrl);
+  const url = resolveAgentRoute(baseUrl, `entrypoints/${skillId}/stream`);
   const response = await fetchFn(url.toString(), {
     method: 'POST',
     headers: {
@@ -176,17 +204,18 @@ export async function sendMessage(
   skillId: string,
   input: unknown,
   fetchImpl?: FetchFunction,
-  options?: { contextId?: string; metadata?: Record<string, unknown> }
+  options?: {
+    contextId?: string;
+    metadata?: Record<string, unknown>;
+    accessToken?: string;
+  }
 ): Promise<SendMessageResponse> {
   const skill = findSkill(card, skillId);
   if (!skill) {
     throw new Error(`Skill "${skillId}" not found in Agent Card`);
   }
 
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
@@ -208,11 +237,13 @@ export async function sendMessage(
     metadata: options?.metadata,
   };
 
-  const url = new URL('/tasks', baseUrl);
+  const url = resolveAgentRoute(baseUrl, 'tasks');
+  const accessToken = options?.accessToken ?? globalThis.crypto.randomUUID();
   const response = await fetchFn(url.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Task-Access-Token': accessToken,
     },
     body: JSON.stringify(requestBody),
   });
@@ -223,7 +254,8 @@ export async function sendMessage(
     );
   }
 
-  return (await response.json()) as SendMessageResponse;
+  const result = (await response.json()) as SendMessageResponse;
+  return { ...result, accessToken: result.accessToken ?? accessToken };
 }
 
 /**
@@ -231,24 +263,22 @@ export async function sendMessage(
  */
 export async function getTask(
   card: AgentCard,
-  taskId: string,
+  access: TaskAccess,
   fetchImpl?: FetchFunction
 ): Promise<Task> {
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL(`/tasks/${taskId}`, baseUrl);
+  const url = resolveAgentRoute(baseUrl, `tasks/${access.taskId}`);
   const response = await fetchFn(url.toString(), {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
+      'Task-Access-Token': access.accessToken,
     },
   });
 
@@ -266,25 +296,23 @@ export async function getTask(
  */
 export async function subscribeTask(
   card: AgentCard,
-  taskId: string,
+  access: TaskAccess,
   emit: (chunk: TaskUpdateEvent) => Promise<void> | void,
   fetchImpl?: FetchFunction
 ): Promise<void> {
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL(`/tasks/${taskId}/subscribe`, baseUrl);
+  const url = resolveAgentRoute(baseUrl, `tasks/${access.taskId}/subscribe`);
   const response = await fetchFn(url.toString(), {
     method: 'GET',
     headers: {
       Accept: 'text/event-stream',
+      'Task-Access-Token': access.accessToken,
     },
   });
 
@@ -332,7 +360,7 @@ export async function subscribeTask(
             await emit({
               type: currentEvent.type,
               data: {
-                taskId,
+                taskId: access.taskId,
                 error: {
                   code: 'parse_error',
                   message: currentEvent.data || 'Failed to parse event data',
@@ -354,7 +382,7 @@ export async function subscribeTask(
         await emit({
           type: currentEvent.type,
           data: {
-            taskId,
+            taskId: access.taskId,
             error: {
               code: 'parse_error',
               message: currentEvent.data || 'Failed to parse event data',
@@ -386,20 +414,18 @@ export async function fetchAndSendMessage(
  */
 export async function listTasks(
   card: AgentCard,
+  accessToken: string,
   filters?: ListTasksRequest,
   fetchImpl?: FetchFunction
 ): Promise<ListTasksResponse> {
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL('/tasks', baseUrl);
+  const url = resolveAgentRoute(baseUrl, 'tasks');
   if (filters?.contextId) url.searchParams.set('contextId', filters.contextId);
   if (filters?.status) {
     const statusArray = Array.isArray(filters.status)
@@ -412,7 +438,10 @@ export async function listTasks(
 
   const response = await fetchFn(url.toString(), {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Task-Access-Token': accessToken,
+    },
   });
 
   if (!response.ok) {
@@ -429,23 +458,23 @@ export async function listTasks(
  */
 export async function cancelTask(
   card: AgentCard,
-  taskId: string,
+  access: TaskAccess,
   fetchImpl?: FetchFunction
 ): Promise<Task> {
-  const baseUrl = card.url;
-  if (!baseUrl) {
-    throw new Error('Agent Card missing url field');
-  }
+  const baseUrl = resolveAgentBaseUrl(card);
 
   const fetchFn = fetchImpl ?? globalThis.fetch;
   if (!fetchFn) {
     throw new Error('fetch is not available');
   }
 
-  const url = new URL(`/tasks/${taskId}/cancel`, baseUrl);
+  const url = resolveAgentRoute(baseUrl, `tasks/${access.taskId}/cancel`);
   const response = await fetchFn(url.toString(), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Task-Access-Token': access.accessToken,
+    },
   });
 
   if (!response.ok) {
@@ -459,21 +488,27 @@ export async function cancelTask(
 
 /**
  * Helper function to wait for a task to complete.
- * Polls task status until it's completed or failed.
+ * Polls task status until it reaches any terminal state.
  */
 export async function waitForTask<TOutput = unknown>(
   client: A2AClient,
   card: AgentCard,
-  taskId: string,
+  access: TaskAccess,
   maxWaitMs = 30000
 ): Promise<Task<TOutput>> {
   const startTime = Date.now();
   while (Date.now() - startTime < maxWaitMs) {
-    const task = await client.getTask(card, taskId);
-    if (task.status === 'completed' || task.status === 'failed') {
+    const task = await client.getTask(card, access);
+    if (
+      task.status === 'completed' ||
+      task.status === 'failed' ||
+      task.status === 'cancelled'
+    ) {
       return task as Task<TOutput>;
     }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  throw new Error(`Task ${taskId} did not complete within ${maxWaitMs}ms`);
+  throw new Error(
+    `Task ${access.taskId} did not complete within ${maxWaitMs}ms`
+  );
 }

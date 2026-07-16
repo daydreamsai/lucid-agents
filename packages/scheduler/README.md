@@ -1,44 +1,134 @@
 # @lucid-agents/scheduler
 
-Pull-style scheduler for hiring agents via their `agent-card.json`, binding a wallet for payment, and invoking entrypoints on a schedule.
+A pull-style, lease-based scheduler for invoking remote Lucid agents through
+their A2A agent cards.
 
-## Usage
+## Runtime extension
+
+The scheduler requires `a2a()`. Install `payments()` before it when scheduled
+invocations may need x402 payment handling.
+
+```ts
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import {
+  createMemoryStore,
+  createSchedulerWorker,
+  scheduler,
+} from '@lucid-agents/scheduler';
+
+const agent = await createAgent({ name: 'buyer', version: '1.0.0' })
+  .use(a2a())
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(
+    scheduler({
+      store: createMemoryStore(),
+      leaseMs: 30_000,
+      defaultMaxRetries: 3,
+      defaultConcurrency: 5,
+    })
+  )
+  .build();
+
+const { hire, job } = await agent.scheduler.createHire({
+  agentCardUrl: 'https://worker.example',
+  entrypointKey: 'daily-report',
+  schedule: { kind: 'interval', everyMs: 86_400_000 },
+  jobInput: { accountId: 'acct-123' },
+});
+
+const worker = createSchedulerWorker(agent.scheduler, 5_000);
+worker.start();
+
+// On shutdown:
+worker.stop();
+await agent.close();
+```
+
+If the buyer does not make paid calls, omit `payments()` entirely. The scheduler
+uses `runtime.a2a.client.invoke` and automatically asks `runtime.payments` for a
+payment-aware Fetch implementation when that capability exists.
+
+## Jobs and schedules
+
+Supported schedules are:
+
+```ts
+{ kind: 'once', at: Date.now() + 30_000 }
+{ kind: 'interval', everyMs: 60_000 }
+```
+
+Cron expressions are not supported. Use `addJob` to add work to an existing
+hire, and `pauseHire`, `resumeHire`, `cancelHire`, `pauseJob`, or `resumeJob` for
+lifecycle control.
+
+```ts
+await agent.scheduler.addJob({
+  hireId: hire.id,
+  entrypointKey: 'hourly-sync',
+  schedule: { kind: 'once', at: Date.now() + 30_000 },
+  jobInput: { accountId: 'acct-123' },
+  maxRetries: 5,
+});
+```
+
+Agent cards are cached per hire and refreshed after `agentCardTtlMs`. The card's
+HTTP `supportedInterfaces` URL is used for invocation, including any base path.
+
+## Delivery and idempotency
+
+Workers claim jobs through `SchedulerStore.claimJob`. A lease makes concurrent
+workers safe from intentionally executing the same due record at once, but a
+worker can fail after the remote call and before it saves completion. Delivery
+is therefore at least once.
+
+Every job gets an idempotency key unless the caller supplies one:
+
+- retries of the same occurrence reuse the same key;
+- a successful interval occurrence rotates an automatically managed key for the
+  next occurrence;
+- caller-supplied keys remain stable and must contain 20–256 characters after
+  trimming.
+
+The key is sent as `Idempotency-Key` by the A2A client. Lucid HTTP runtimes
+deduplicate it by default; other remote agents must provide an equivalent
+target-side idempotency boundary.
+
+## Durable stores
+
+`createMemoryStore()` is suitable for tests and one-process development. A
+production scheduler should inject a durable implementation of `SchedulerStore`
+from `@lucid-agents/types/scheduler`.
+
+The critical store operation is an atomic `claimJob(jobId, workerId, leaseMs,
+now)`. `recoverExpiredLeases()` returns expired leased jobs to pending state for
+another worker. The extension calls an optional store `close()` method from
+`runtime.close()`.
+
+For an externally managed worker loop, call:
+
+```ts
+await agent.scheduler.recoverExpiredLeases();
+await agent.scheduler.tick({ workerId: 'worker-7', concurrency: 10 });
+```
+
+## Standalone construction
+
+`createSchedulerRuntime` is available when an application already has a Lucid
+runtime and wants to construct the scheduler without the extension helper:
 
 ```ts
 import {
   createMemoryStore,
   createSchedulerRuntime,
-  createSchedulerWorker,
 } from '@lucid-agents/scheduler';
 
-const runtime = createSchedulerRuntime({
+const schedulerRuntime = createSchedulerRuntime({
+  runtime: agent,
   store: createMemoryStore(),
-  invoke: async ({ manifest, entrypointKey, input, wallet }) => {
-    // Bridge into your agent runtime: resolve entrypoint and charge via the bound wallet.
-    console.log(`Invoke ${entrypointKey} on ${manifest.name} using ${wallet.address}`, input);
-  },
 });
-
-const { hire } = await runtime.createHire({
-  agentCardUrl: 'https://agent.example.com',
-  wallet: { walletId: 'w1', network: 'base', address: '0xabc' },
-  entrypointKey: 'daily-report',
-  schedule: { kind: 'interval', everyMs: 86_400_000 },
-  jobInput: { userId: 'u1' },
-});
-
-await runtime.addJob({
-  hireId: hire.id,
-  entrypointKey: 'hourly-sync',
-  schedule: { kind: 'once', at: Date.now() + 30_000 },
-  jobInput: { accountId: 'acct-123' },
-});
-
-const worker = createSchedulerWorker(runtime, 5_000);
-worker.start();
 ```
 
-Notes:
-- Agent discovery uses `.well-known/agent-card.json` (with fallbacks) and caches the card per hire.
-- Wallet bindings ride along each invocation so payments/x402 can charge that wallet.
-- Supported schedules: `interval` and `once` (cron parsing is not implemented yet).
+The supplied runtime must contain the A2A capability. Scheduler contracts are
+defined in `@lucid-agents/types/scheduler`.

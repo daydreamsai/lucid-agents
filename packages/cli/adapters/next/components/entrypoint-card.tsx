@@ -56,7 +56,7 @@ export function EntrypointCard({
   >('idle');
   const [streamingEvents, setStreamingEvents] = useState<string[]>([]);
   const [streamingError, setStreamingError] = useState<string | null>(null);
-  const streamCancelRef = useRef<() => void>();
+  const streamCancelRef = useRef<(() => void) | undefined>(undefined);
   const { copyValue: copyCurl, copied: curlCopied } = useCopyFeedback();
   const { copyValue: copyStream, copied: streamCopied } = useCopyFeedback();
 
@@ -215,7 +215,7 @@ export function EntrypointCard({
       </div>
 
       <SchemaForm
-        schema={card.inputSchema}
+        schema={card.inputSchema ?? null}
         value={payload}
         onChange={setPayload}
       />

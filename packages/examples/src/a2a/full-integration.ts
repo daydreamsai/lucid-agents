@@ -122,7 +122,6 @@ async function main() {
     description: 'Streams characters back',
     input: z.object({ prompt: z.string() }),
     output: z.object({ done: z.boolean() }),
-    streaming: true,
     stream: async (ctx, emit) => {
       const prompt = ctx.input.prompt || '';
       console.log(`[Agent 1] stream handler called with: "${prompt}"`);
@@ -188,19 +187,19 @@ async function main() {
       const agent1Url = 'http://localhost:8787';
       const agent1Card = await a2a2ForAgent1.fetchCard(agent1Url);
 
-      const { taskId } = await a2a2ForAgent1.client.sendMessage(
+      const taskAccess = await a2a2ForAgent1.client.sendMessage(
         agent1Card,
         'echo',
         {
           text: ctx.input.text,
         }
       );
-      console.log(`[Agent 2] Created task ${taskId} for Agent 1`);
+      console.log(`[Agent 2] Created task ${taskAccess.taskId} for Agent 1`);
 
       const task = await waitForTask<{ text: string }>(
         a2a2ForAgent1.client,
         agent1Card,
-        taskId
+        taskAccess
       );
 
       if (task.status === 'failed') {
@@ -236,19 +235,19 @@ async function main() {
       const agent1Url = 'http://localhost:8787';
       const agent1Card = await a2a2ForAgent1.fetchCard(agent1Url);
 
-      const { taskId } = await a2a2ForAgent1.client.sendMessage(
+      const taskAccess = await a2a2ForAgent1.client.sendMessage(
         agent1Card,
         'process',
         {
           data: ctx.input.data,
         }
       );
-      console.log(`[Agent 2] Created task ${taskId} for Agent 1`);
+      console.log(`[Agent 2] Created task ${taskAccess.taskId} for Agent 1`);
 
       const task = await waitForTask<{ result: number }>(
         a2a2ForAgent1.client,
         agent1Card,
-        taskId
+        taskAccess
       );
 
       if (task.status === 'failed') {
@@ -318,7 +317,9 @@ async function main() {
     console.log(`  Description: ${manifest1.description || 'N/A'}`);
     console.log(`  Version: ${manifest1.version}`);
     console.log(`  URL: ${manifest1.url}`);
-    console.log(`  Skills: ${manifest1.skills.map(s => s.id).join(', ')}`);
+    console.log(
+      `  Skills: ${(manifest1.skills ?? []).map(s => s.id).join(', ')}`
+    );
     // Show AP2 extensions if present
     if (manifest1.capabilities?.extensions?.length) {
       const ap2Ext = manifest1.capabilities.extensions.find(
@@ -337,7 +338,9 @@ async function main() {
     console.log(`  Description: ${manifest2.description || 'N/A'}`);
     console.log(`  Version: ${manifest2.version}`);
     console.log(`  URL: ${manifest2.url}`);
-    console.log(`  Skills: ${manifest2.skills.map(s => s.id).join(', ')}`);
+    console.log(
+      `  Skills: ${(manifest2.skills ?? []).map(s => s.id).join(', ')}`
+    );
     // Show AP2 extensions if present
     if (manifest2.capabilities?.extensions?.length) {
       const ap2Ext = manifest2.capabilities.extensions.find(
@@ -459,7 +462,7 @@ async function main() {
     const echoTask = await waitForTask(
       a2a3.client,
       fetchedCard2,
-      echoTaskResponse.taskId
+      echoTaskResponse
     );
 
     if (echoTask.status === 'failed') {
@@ -493,7 +496,7 @@ async function main() {
     const processTask = await waitForTask(
       a2a3.client,
       fetchedCard2,
-      processTaskResponse.taskId
+      processTaskResponse
     );
 
     if (processTask.status === 'failed') {
@@ -519,6 +522,7 @@ async function main() {
     console.log('');
 
     const contextId = `conversation-${Date.now()}`;
+    const conversationAccessToken = globalThis.crypto.randomUUID();
 
     console.log('7.1: Create first message in conversation');
     const turn1TaskResponse = await a2a3.client.sendMessage(
@@ -528,7 +532,7 @@ async function main() {
         text: 'First message in conversation',
       },
       undefined,
-      { contextId }
+      { contextId, accessToken: conversationAccessToken }
     );
     console.log(
       `  Task created: ${turn1TaskResponse.taskId} (contextId: ${contextId})`
@@ -537,7 +541,7 @@ async function main() {
     const turn1Task = await waitForTask(
       a2a3.client,
       fetchedCard2,
-      turn1TaskResponse.taskId
+      turn1TaskResponse
     );
     console.log(`  Response: ${JSON.stringify(turn1Task.result?.output)}`);
     console.log('');
@@ -550,7 +554,7 @@ async function main() {
         text: 'Second message in conversation',
       },
       undefined,
-      { contextId }
+      { contextId, accessToken: conversationAccessToken }
     );
     console.log(
       `  Task created: ${turn2TaskResponse.taskId} (contextId: ${contextId})`
@@ -559,15 +563,17 @@ async function main() {
     const turn2Task = await waitForTask(
       a2a3.client,
       fetchedCard2,
-      turn2TaskResponse.taskId
+      turn2TaskResponse
     );
     console.log(`  Response: ${JSON.stringify(turn2Task.result?.output)}`);
     console.log('');
 
     console.log('7.3: List all tasks in conversation');
-    const conversationTasks = await a2a3.client.listTasks(fetchedCard2, {
-      contextId,
-    });
+    const conversationTasks = await a2a3.client.listTasks(
+      fetchedCard2,
+      conversationAccessToken,
+      { contextId }
+    );
     console.log(
       `  Found ${conversationTasks.tasks.length} tasks in conversation`
     );
@@ -611,16 +617,13 @@ async function main() {
     try {
       const cancelledTask = await a2a3.client.cancelTask(
         fetchedCard2,
-        slowTaskResponse.taskId
+        slowTaskResponse
       );
       console.log(
         `  Task cancelled: ${cancelledTask.taskId} (status: ${cancelledTask.status})`
       );
     } catch {
-      const task = await a2a3.client.getTask(
-        fetchedCard2,
-        slowTaskResponse.taskId
-      );
+      const task = await a2a3.client.getTask(fetchedCard2, slowTaskResponse);
       console.log(
         `  Task already completed (status: ${task.status}) - cancellation only works on running tasks`
       );

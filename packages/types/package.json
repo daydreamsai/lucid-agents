@@ -3,6 +3,9 @@
   "version": "1.8.0",
   "description": "Shared types for lucid-agents framework",
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
   "exports": {
@@ -86,7 +89,7 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "viem": "^2.41.2",
+    "viem": "^2.44.4",
     "zod": "^4.0.0"
   },
   "devDependencies": {

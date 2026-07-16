@@ -60,7 +60,11 @@ async function main() {
   console.log('\nInitializing wallet (this may take a moment)...');
   let address: string | null = null;
   try {
-    address = await agent.wallets.agent.connector.getAddress();
+    const getAddress = agent.wallets.agent.connector.getAddress;
+    if (!getAddress) {
+      throw new Error('Wallet connector does not expose getAddress()');
+    }
+    address = await getAddress.call(agent.wallets.agent.connector);
     if (address) {
       console.log('Wallet address:', address);
     } else {
@@ -129,6 +133,10 @@ async function main() {
       throw new Error('Wallet connector did not return a wallet client');
     }
     const chainForReads = walletClient.chain;
+    const account = walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client did not expose an account');
+    }
 
     // Create public client for reading
     const publicClient = createPublicClient({
@@ -140,7 +148,7 @@ async function main() {
     const amount = parseUnits(AMOUNT, USDC_DECIMALS);
 
     const txHash = await walletClient.writeContract({
-      account: walletClient.account,
+      account,
       chain: walletClient.chain,
       address: USDC_ADDRESS,
       abi: erc20Abi,

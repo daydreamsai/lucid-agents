@@ -5,6 +5,10 @@ import type { EntrypointPrice } from '../payments';
 import type { StreamPushEnvelope, StreamResult } from '../http';
 import type { SIWxEntrypointConfig } from '../siwx';
 import type { AgentContext, Usage } from './context';
+import type { AgentRuntime } from './runtime';
+
+/** Payment protocol used to protect a priced entrypoint. */
+export type PaymentProtocol = 'x402' | 'mpp';
 
 /**
  * Handler function for non-streaming entrypoints.
@@ -13,8 +17,9 @@ import type { AgentContext, Usage } from './context';
 export type EntrypointHandler<
   TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
   TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TRuntime extends object = AgentRuntime,
 > = (
-  ctx: Omit<AgentContext, 'input'> & {
+  ctx: Omit<AgentContext<TRuntime>, 'input'> & {
     input: TInput extends z.ZodTypeAny ? z.infer<TInput> : unknown;
   }
 ) => Promise<{
@@ -32,8 +37,9 @@ export type EntrypointHandler<
  */
 export type EntrypointStreamHandler<
   TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TRuntime extends object = AgentRuntime,
 > = (
-  ctx: Omit<AgentContext, 'input'> & {
+  ctx: Omit<AgentContext<TRuntime>, 'input'> & {
     input: TInput extends z.ZodTypeAny ? z.infer<TInput> : unknown;
   },
   emit: (chunk: StreamPushEnvelope) => Promise<void> | void
@@ -45,16 +51,18 @@ export type EntrypointStreamHandler<
 export type EntrypointDef<
   TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
   TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TRuntime extends object = AgentRuntime,
 > = {
   key: string;
   description?: string;
   input?: TInput;
   output?: TOutput;
-  streaming?: boolean;
   price?: EntrypointPrice;
+  /** Required when both x402 and MPP extensions are installed. */
+  paymentProtocol?: PaymentProtocol;
   network?: Network;
-  handler?: EntrypointHandler<TInput, TOutput>;
-  stream?: EntrypointStreamHandler<TInput>;
+  handler?: EntrypointHandler<TInput, TOutput, TRuntime>;
+  stream?: EntrypointStreamHandler<TInput, TRuntime>;
   metadata?: Record<string, unknown>;
   siwx?: SIWxEntrypointConfig;
 };
@@ -63,8 +71,13 @@ export type EntrypointDef<
  * Entrypoints runtime type.
  * Returned by AgentRuntime.entrypoints.
  */
-export type EntrypointsRuntime = {
-  add: (def: EntrypointDef) => void;
+export type EntrypointsRuntime<Capabilities extends object = {}> = {
+  add: <
+    TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+    TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  >(
+    def: EntrypointDef<TInput, TOutput, AgentRuntime<Capabilities>>
+  ) => void;
   list: () => Array<{
     key: string;
     description?: string;

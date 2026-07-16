@@ -1,10 +1,14 @@
 import { z } from 'zod';
-import type { EntrypointDef } from '@lucid-agents/types/core';
+import type {
+  EntrypointDef,
+  PaymentProtocol,
+} from '@lucid-agents/types/core';
 import type { CatalogItem, HandlerFactory } from './types';
 
 export type GenerateOptions = {
   keyPrefix?: string;
   network?: string;
+  paymentProtocol?: PaymentProtocol;
   handlerFactory?: HandlerFactory;
   inputSchema?: z.ZodTypeAny;
 };
@@ -17,11 +21,19 @@ export function generateEntrypoints(
   items: CatalogItem[],
   options?: GenerateOptions,
 ): EntrypointDef[] {
-  const { keyPrefix, network, handlerFactory, inputSchema } = options ?? {};
+  const {
+    keyPrefix,
+    network,
+    paymentProtocol,
+    handlerFactory,
+    inputSchema,
+  } = options ?? {};
 
   return items.map((item): EntrypointDef => {
     const key = keyPrefix ? `${keyPrefix}${item.key}` : item.key;
     const entrypointNetwork = item.network ?? network;
+    const entrypointPaymentProtocol =
+      item.paymentProtocol ?? paymentProtocol;
 
     const metadata = {
       ...item.metadata,
@@ -35,10 +47,13 @@ export function generateEntrypoints(
       input: inputSchema ?? defaultInputSchema,
       metadata,
       ...(entrypointNetwork ? { network: entrypointNetwork as EntrypointDef['network'] } : {}),
+      ...(entrypointPaymentProtocol
+        ? { paymentProtocol: entrypointPaymentProtocol }
+        : {}),
     };
 
     if (handlerFactory) {
-      entrypoint.handler = handlerFactory(item) as EntrypointDef['handler'];
+      entrypoint.handler = handlerFactory(item);
     }
 
     return entrypoint;

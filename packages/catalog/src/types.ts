@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import type {
+  EntrypointHandler,
+  PaymentProtocol,
+} from '@lucid-agents/types/core';
 
 export const CatalogItemSchema = z.object({
   key: z.string(),
@@ -14,6 +18,7 @@ export const CatalogItemSchema = z.object({
     ])
     .optional(),
   network: z.string().optional(),
+  paymentProtocol: z.enum(['x402', 'mpp']).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -23,12 +28,15 @@ export type CatalogConfig = {
   items: CatalogItem[];
 };
 
-export type HandlerFactory = (item: CatalogItem) => (...args: any[]) => any;
+export type HandlerFactory = (
+  item: CatalogItem
+) => EntrypointHandler<undefined, undefined>;
 
 export type CatalogExtensionOptions = {
   file: string;
   keyPrefix?: string;
   network?: string;
+  paymentProtocol?: PaymentProtocol;
   handlerFactory?: HandlerFactory;
   inputSchema?: z.ZodTypeAny;
 };

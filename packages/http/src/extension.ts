@@ -1,12 +1,8 @@
-import { Buffer } from 'node:buffer';
-import { randomUUID } from 'node:crypto';
-
 import type {
   SendMessageRequest,
-  Task,
   TaskError,
-  TaskResult,
   TaskStatus,
+  TaskUpdateEvent,
 } from '@lucid-agents/types/a2a';
 import type {
   AgentRuntime,
@@ -17,31 +13,132 @@ import type {
 import type {
   HttpExtensionOptions,
   AgentHttpHandlers,
-  StreamResult,
+  AgentHttpRuntime,
+  HttpIdempotencyStore,
 } from '@lucid-agents/types/http';
-import {
-  DEFAULT_OASF_RECORD_PATH,
-  DEFAULT_OASF_VERSION,
-  OASF_STRICT_MODE_ERROR,
-} from '@lucid-agents/types/identity';
-
+import type { IdentityRuntime } from '@lucid-agents/types/identity';
+import type { A2ARuntime } from '@lucid-agents/types/a2a';
+import type { MppRuntime } from '@lucid-agents/types/mpp';
+import type { PaymentsRuntime } from '@lucid-agents/types/payments';
 import { ZodValidationError } from '@lucid-agents/types/core';
+import { authorizeEntrypointRequest } from './authorization';
 import { invoke, invokeHandler } from './invoke';
-import {
-  errorResponse,
-  extractInput,
-  jsonResponse,
-  normalizeOrigin,
-  readJson,
-} from './utils';
+import { jsonResponse, normalizeOrigin, readJson } from './utils';
 import { renderLandingPage } from './landing-page';
 import { stream } from './stream';
 import { createSSEStream, type SSEStreamRunnerContext } from './sse';
+import { createAgentRoutePlan } from './route-plan';
+import { createInMemoryHttpIdempotencyStore } from './idempotency';
 
-type TaskEntry = {
-  task: Task;
-  controller?: AbortController;
+type HttpDependencies = {
+  payments?: PaymentsRuntime;
+  mpp?: MppRuntime;
+  identity?: IdentityRuntime;
+  a2a?: A2ARuntime;
 };
+
+function hasExplicitPrice(entrypoint: EntrypointDef): boolean {
+  if (typeof entrypoint.price === 'string') {
+    return entrypoint.price.trim().length > 0;
+  }
+  return Boolean(
+    entrypoint.price &&
+    ((typeof entrypoint.price.invoke === 'string' &&
+      entrypoint.price.invoke.trim().length > 0) ||
+      (typeof entrypoint.price.stream === 'string' &&
+        entrypoint.price.stream.trim().length > 0))
+  );
+}
+
+const TASK_STATUSES = new Set<TaskStatus>([
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+const TASK_ACCESS_HEADER = 'Task-Access-Token';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSendMessageRequest(value: unknown): value is SendMessageRequest {
+  if (!isRecord(value) || typeof value.skillId !== 'string') return false;
+  if (!value.skillId.trim() || !isRecord(value.message)) return false;
+  const { role, content } = value.message;
+  if (role !== 'user' && role !== 'assistant' && role !== 'system')
+    return false;
+  if (!isRecord(content)) return false;
+  const validContent =
+    typeof content.text === 'string' || Array.isArray(content.parts);
+  if (!validContent) return false;
+  if (value.contextId !== undefined && typeof value.contextId !== 'string') {
+    return false;
+  }
+  if (value.metadata !== undefined && !isRecord(value.metadata)) return false;
+  return true;
+}
+
+function readTaskAccessToken(
+  request: Request,
+  options: { generate?: boolean } = {}
+): { accessToken: string } | { response: Response } {
+  const supplied = request.headers.get(TASK_ACCESS_HEADER)?.trim();
+  const accessToken =
+    supplied || (options.generate ? globalThis.crypto.randomUUID() : undefined);
+  if (!accessToken || accessToken.length < 20 || accessToken.length > 256) {
+    return {
+      response: jsonResponse(
+        {
+          error: {
+            code: 'task_access_required',
+            message: `${TASK_ACCESS_HEADER} must contain 20 to 256 characters`,
+          },
+        },
+        { status: supplied ? 400 : 401 }
+      ),
+    };
+  }
+  return { accessToken };
+}
+
+function toBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function taskErrorFrom(error: unknown): TaskError {
+  if (error instanceof ZodValidationError) {
+    return {
+      code: error.kind === 'input' ? 'invalid_input' : 'invalid_output',
+      message: error.kind === 'input' ? 'Invalid input' : 'Invalid output',
+      details: error.issues,
+    };
+  }
+  return {
+    code: 'internal_error',
+    message: error instanceof Error ? error.message : 'Task failed',
+  };
+}
+
+function taskCapabilityUnavailable(): Response {
+  return jsonResponse(
+    {
+      error: {
+        code: 'a2a_tasks_not_enabled',
+        message: 'A2A task operations require the a2a() extension',
+      },
+    },
+    { status: 404 }
+  );
+}
+
+function normalizeBasePath(basePath: string | undefined): string {
+  if (!basePath || basePath === '/') return '';
+  return `/${basePath.replace(/^\/+|\/+$/g, '')}`;
+}
 
 const resolveFaviconSvg = (icon?: string): string => {
   const defaultFaviconSvg = `
@@ -57,176 +154,68 @@ const resolveFaviconSvg = (icon?: string): string => {
   return defaultFaviconSvg;
 };
 
-type OASFConfig = {
-  endpoint?: string;
-  version: string;
-  authors: string[];
-  skills: string[];
-  domains: string[];
-  modules: string[];
-  locators: string[];
-};
-
-type IdentityRegistrationConfig = {
-  selectedServices?: string[];
-  oasf?:
-    | string
-    | {
-        endpoint?: string;
-        version?: string;
-        authors?: string[];
-        skills?: string[];
-        domains?: string[];
-        modules?: string[];
-        locators?: string[];
-      };
-  oasfVersion?: string;
-};
-
-type IdentityRuntimeSlice = {
-  identity?: {
-    registration?: IdentityRegistrationConfig;
-  };
-};
-
-function normalizeString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized ? normalized : undefined;
-}
-
-function assertUri(value: string, key: string): void {
-  try {
-    new URL(value);
-  } catch {
-    throw new Error(
-      `[agent-kit-http] Invalid ${key}. Expected a valid URI string.`
-    );
-  }
-}
-
-function parseRequiredStringArray(
-  value: string[] | undefined,
-  key: string,
-  requireUri = false
-): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error(
-      `[agent-kit-http] Missing ${key}. OASF strict mode requires JSON-array values.`
-    );
-  }
-
-  return value.map((entry, index) => {
-    if (typeof entry !== 'string' || !entry.trim()) {
-      throw new Error(
-        `[agent-kit-http] Invalid ${key}[${index}]. Expected a non-empty string.`
-      );
-    }
-
-    const normalized = entry.trim();
-    if (requireUri) {
-      assertUri(normalized, `${key}[${index}]`);
-    }
-
-    return normalized;
-  });
-}
-
-function isOASFSelected(selectedServices: string[] | undefined): boolean {
-  if (!Array.isArray(selectedServices)) {
-    return false;
-  }
-  return selectedServices.some(
-    service => typeof service === 'string' && service.toLowerCase() === 'oasf'
-  );
-}
-
-function resolveOASFConfig(
-  registration: IdentityRegistrationConfig | undefined
-): { enabled: false } | ({ enabled: true } & OASFConfig) {
-  const selected = isOASFSelected(registration?.selectedServices);
-  const rawOASF = registration?.oasf;
-  const enabled = selected || rawOASF !== undefined;
-
-  if (!enabled) {
-    return { enabled: false };
-  }
-
-  if (typeof rawOASF === 'string') {
-    throw new Error(`[agent-kit-http] ${OASF_STRICT_MODE_ERROR}`);
-  }
-
-  if (rawOASF === undefined) {
-    throw new Error(
-      '[agent-kit-http] OASF selected but no registration.oasf config provided.'
-    );
-  }
-
-  const endpoint = normalizeString(rawOASF?.endpoint);
-  if (endpoint) {
-    assertUri(endpoint, 'registration.oasf.endpoint');
-  }
-
-  return {
-    enabled: true,
-    endpoint,
-    version:
-      normalizeString(rawOASF?.version) ??
-      normalizeString(registration?.oasfVersion) ??
-      DEFAULT_OASF_VERSION,
-    authors: parseRequiredStringArray(
-      rawOASF?.authors,
-      'registration.oasf.authors'
-    ),
-    skills: parseRequiredStringArray(
-      rawOASF?.skills,
-      'registration.oasf.skills'
-    ),
-    domains: parseRequiredStringArray(
-      rawOASF?.domains,
-      'registration.oasf.domains'
-    ),
-    modules: parseRequiredStringArray(
-      rawOASF?.modules,
-      'registration.oasf.modules',
-      true
-    ),
-    locators: parseRequiredStringArray(
-      rawOASF?.locators,
-      'registration.oasf.locators',
-      true
-    ),
-  };
-}
-
 export function http(
   options?: HttpExtensionOptions
-): Extension<{ handlers: AgentHttpHandlers }> {
-  // Task state stored in extension closure (not in runtime)
-  const tasks = new Map<string, TaskEntry>();
-
+): Extension<{ http: AgentHttpRuntime }, HttpDependencies> {
   let faviconSvg: string | undefined;
   let faviconDataUrl: string | undefined;
   const landingEnabled = options?.landingPage !== false;
-  let handlers: AgentHttpHandlers | undefined;
+  const basePath = normalizeBasePath(options?.basePath);
+  const idempotencyOptions = options?.idempotency;
+  const configuredIdempotency =
+    idempotencyOptions === false ? undefined : idempotencyOptions;
+  const idempotencyEnabled = idempotencyOptions !== false;
+  const inProgressTtlMs =
+    idempotencyOptions === false
+      ? 0
+      : (configuredIdempotency?.inProgressTtlMs ?? 15 * 60 * 1_000);
+  const retentionMs =
+    idempotencyOptions === false
+      ? 0
+      : (configuredIdempotency?.retentionMs ?? 24 * 60 * 60 * 1_000);
+  let idempotencyStore: HttpIdempotencyStore | undefined;
+
+  if (
+    idempotencyEnabled &&
+    (!Number.isFinite(inProgressTtlMs) || inProgressTtlMs <= 0)
+  ) {
+    throw new Error('idempotency.inProgressTtlMs must be a positive number');
+  }
+  if (
+    idempotencyEnabled &&
+    (!Number.isFinite(retentionMs) || retentionMs <= 0)
+  ) {
+    throw new Error('idempotency.retentionMs must be a positive number');
+  }
 
   return {
     name: 'http',
-    build(_ctx: BuildContext): { handlers: AgentHttpHandlers } {
-      // Handlers will be created in onBuild hook after runtime is fully constructed
-      // Return placeholder - will be replaced in onBuild
-      handlers = {} as AgentHttpHandlers;
-      return { handlers };
-    },
-    onBuild(runtime: AgentRuntime) {
+    after: [
+      'wallets',
+      'payments',
+      'mpp',
+      'identity',
+      'a2a',
+      'ap2',
+      'analytics',
+      'catalog',
+      'scheduler',
+    ],
+    build(ctx: BuildContext<HttpDependencies>): { http: AgentHttpRuntime } {
+      const runtime = ctx.runtime;
       const meta = runtime.agent.config.meta;
+      idempotencyStore = idempotencyEnabled
+        ? (configuredIdempotency?.store ??
+          createInMemoryHttpIdempotencyStore({
+            maxEntries: configuredIdempotency?.maxEntries,
+          }))
+        : undefined;
 
       // Compute favicon once
       faviconSvg = resolveFaviconSvg(meta.icon);
-      faviconDataUrl = `data:image/svg+xml;base64,${Buffer.from(
-        faviconSvg
-      ).toString('base64')}`;
+      faviconDataUrl = `data:image/svg+xml;base64,${toBase64(faviconSvg)}`;
 
-      const manifestPath = '/.well-known/agent-card.json';
+      const manifestPath = `${basePath}/.well-known/agent-card.json`;
       const x402ClientExample = [
         'import { config } from "dotenv";',
         'import {',
@@ -279,10 +268,7 @@ export function http(
       ].join('\n');
 
       const activePayments = runtime.payments?.config;
-      const identityRegistration = (
-        runtime as AgentRuntime & IdentityRuntimeSlice
-      ).identity?.registration;
-      const oasfConfig = resolveOASFConfig(identityRegistration);
+      const identityRuntime = runtime.identity;
 
       const actualHandlers: AgentHttpHandlers = {
         health: async () => {
@@ -292,11 +278,12 @@ export function http(
           return jsonResponse({ items: runtime.entrypoints.list() });
         },
         manifest: async req => {
-          const origin = normalizeOrigin(req);
-          return jsonResponse(runtime.manifest.build(origin));
+          const publicBaseUrl = `${normalizeOrigin(req)}${basePath}`;
+          return jsonResponse(runtime.manifest.build(publicBaseUrl));
         },
         oasf: async req => {
-          if (!oasfConfig.enabled) {
+          const record = identityRuntime?.buildOASFRecord?.(req.url);
+          if (!record) {
             return jsonResponse(
               {
                 error: {
@@ -307,39 +294,11 @@ export function http(
               { status: 404 }
             );
           }
-
-          const origin = normalizeOrigin(req);
-          const endpoint =
-            oasfConfig.endpoint ?? `${origin}${DEFAULT_OASF_RECORD_PATH}`;
-          const entrypoints = runtime.entrypoints.snapshot();
-
-          return jsonResponse({
-            type: 'https://docs.agntcy.org/oasf/oasf-server/',
-            name: meta.name,
-            description: meta.description,
-            version: oasfConfig.version,
-            endpoint,
-            authors: oasfConfig.authors,
-            skills:
-              oasfConfig.skills.length > 0
-                ? oasfConfig.skills
-                : entrypoints.map(entry => entry.key),
-            domains: oasfConfig.domains,
-            modules: oasfConfig.modules,
-            locators:
-              oasfConfig.locators.length > 0 ? oasfConfig.locators : [endpoint],
-            entrypoints: entrypoints.map(entry => ({
-              key: entry.key,
-              description: entry.description,
-              streaming: Boolean(entry.stream ?? entry.streaming),
-              input: entry.input,
-              output: entry.output,
-            })),
-          });
+          return jsonResponse(record);
         },
         landing: landingEnabled
           ? async req => {
-              const origin = normalizeOrigin(req);
+              const origin = `${normalizeOrigin(req)}${basePath}`;
               const entrypoints = runtime.entrypoints.snapshot();
               const html = await renderLandingPage({
                 meta,
@@ -364,21 +323,23 @@ export function http(
           });
         },
         invoke: async (req, params) => {
-          return invoke(req, params.key, runtime);
+          return invoke(req, params.key, runtime, {
+            idempotency: idempotencyStore
+              ? { store: idempotencyStore, inProgressTtlMs, retentionMs }
+              : undefined,
+          });
         },
         stream: async (req, params) => {
           return stream(req, params.key, runtime);
         },
         tasks: async req => {
+          const taskRuntime = runtime.a2a?.tasks;
+          if (!taskRuntime) return taskCapabilityUnavailable();
+
           let requestBody: SendMessageRequest;
           try {
             const body = await readJson(req);
-            if (
-              !body ||
-              typeof body !== 'object' ||
-              !('message' in body) ||
-              !('skillId' in body)
-            ) {
+            if (!isSendMessageRequest(body)) {
               return jsonResponse(
                 {
                   error: {
@@ -389,7 +350,7 @@ export function http(
                 { status: 400 }
               );
             }
-            requestBody = body as SendMessageRequest;
+            requestBody = body;
           } catch {
             return jsonResponse(
               { error: { code: 'invalid_request', message: 'Invalid JSON' } },
@@ -398,6 +359,9 @@ export function http(
           }
 
           const { skillId, message, contextId } = requestBody;
+          const taskAccess = readTaskAccessToken(req, { generate: true });
+          if ('response' in taskAccess) return taskAccess.response;
+          const { accessToken } = taskAccess;
 
           const taskEntrypoint = runtime.agent.getEntrypoint(skillId);
           if (!taskEntrypoint) {
@@ -423,6 +387,34 @@ export function http(
               { status: 501 }
             );
           }
+
+          const authorization = await authorizeEntrypointRequest(
+            req.clone(),
+            taskEntrypoint,
+            'invoke',
+            runtime
+          );
+          if (authorization.authorized === false) {
+            return authorization.response;
+          }
+          let admission: Awaited<ReturnType<typeof authorization.admit>>;
+          try {
+            admission = await authorization.admit();
+          } catch (error) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'authorization_admission_failed',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Authorization admission failed',
+                },
+              },
+              { status: 503 }
+            );
+          }
+          if (!admission.admitted) return admission.response;
 
           let rawInput: unknown;
           // Guard: message.content must be an object to use 'in' operator
@@ -464,22 +456,41 @@ export function http(
             rawInput = message.content;
           }
 
-          const taskId = randomUUID();
-          const abortController = new AbortController();
-          const now = new Date().toISOString();
+          const taskId = globalThis.crypto.randomUUID();
 
-          const task: Task = {
+          try {
+            await taskRuntime.reserve({ taskId, contextId, accessToken });
+          } catch (error) {
+            return admission.finalize(
+              jsonResponse(
+                {
+                  error: {
+                    code:
+                      error instanceof Error &&
+                      error.name === 'TaskCapacityError'
+                        ? 'task_capacity_exhausted'
+                        : 'task_creation_failed',
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : 'Unable to reserve task capacity',
+                  },
+                },
+                { status: 503 }
+              )
+            );
+          }
+
+          let taskResponse = jsonResponse({
             taskId,
-            status: 'running',
-            contextId,
-            createdAt: now,
-            updatedAt: now,
-          };
-
-          tasks.set(taskId, {
-            task,
-            controller: abortController,
+            accessToken,
+            status: 'running' as TaskStatus,
           });
+          taskResponse = await admission.finalize(taskResponse);
+          if (taskResponse.status < 200 || taskResponse.status >= 300) {
+            await taskRuntime.cancel(taskId, accessToken);
+            return taskResponse;
+          }
 
           console.info(
             '[agent-kit:task] create',
@@ -487,117 +498,51 @@ export function http(
             `skillId=${skillId}`
           );
 
-          invokeHandler(taskEntrypoint, rawInput, {
-            signal: abortController.signal,
-            headers: req.headers,
-            runId: taskId,
-            runtime,
-          })
-            .then(result => {
-              const entry = tasks.get(taskId);
-              if (!entry) return;
-
-              const currentStatus = entry.task.status;
-              if (
-                currentStatus === 'completed' ||
-                currentStatus === 'failed' ||
-                currentStatus === 'cancelled'
-              ) {
-                return;
-              }
-
-              const updatedTask: Task = {
-                ...entry.task,
-                status: 'completed',
-                result: {
+          try {
+            await taskRuntime.execute(taskId, {
+              execute: async signal => {
+                const result = await invokeHandler(taskEntrypoint, rawInput, {
+                  signal,
+                  headers: req.headers,
+                  runId: taskId,
+                  runtime,
+                  auth: authorization.auth,
+                });
+                return {
                   output: result.output,
                   usage: result.usage,
                   model: result.model,
-                } as TaskResult,
-                updatedAt: new Date().toISOString(),
-              };
-              tasks.set(taskId, {
-                task: updatedTask,
-                controller: entry.controller,
-              });
-              console.info('[agent-kit:task] completed', `taskId=${taskId}`);
-            })
-            .catch(err => {
-              const entry = tasks.get(taskId);
-              if (!entry) return;
-
-              const currentStatus = entry.task.status;
-              if (
-                currentStatus === 'completed' ||
-                currentStatus === 'failed' ||
-                currentStatus === 'cancelled'
-              ) {
-                return;
-              }
-
-              if (err.name === 'AbortError') {
-                const updatedTask: Task = {
-                  ...entry.task,
-                  status: 'cancelled',
-                  updatedAt: new Date().toISOString(),
                 };
-                tasks.set(taskId, {
-                  task: updatedTask,
-                  controller: entry.controller,
-                });
-                console.info('[agent-kit:task] cancelled', `taskId=${taskId}`);
-                return;
-              }
-
-              let error: TaskError;
-              if (err instanceof ZodValidationError) {
-                if (err.kind === 'input') {
-                  error = {
-                    code: 'invalid_input',
-                    message: 'Invalid input',
-                    details: err.issues,
-                  };
-                } else {
-                  error = {
-                    code: 'invalid_output',
-                    message: 'Invalid output',
-                    details: err.issues,
-                  };
-                }
-              } else {
-                error = {
-                  code: 'internal_error',
-                  message: (err as Error)?.message || 'error',
-                };
-              }
-
-              const updatedTask: Task = {
-                ...entry.task,
-                status: 'failed',
-                error,
-                updatedAt: new Date().toISOString(),
-              };
-              tasks.set(taskId, {
-                task: updatedTask,
-                controller: entry.controller,
-              });
-              console.info(
-                '[agent-kit:task] failed',
-                `taskId=${taskId}`,
-                `error=${error.code}`
-              );
+              },
+              mapError: taskErrorFrom,
             });
+          } catch (error) {
+            await taskRuntime.cancel(taskId, accessToken);
+            return jsonResponse(
+              {
+                error: {
+                  code: 'task_execution_failed',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Unable to start task execution',
+                },
+              },
+              { status: 503 }
+            );
+          }
 
-          return jsonResponse({
-            taskId,
-            status: 'running' as TaskStatus,
-          });
+          return taskResponse;
         },
         getTask: async (req, params) => {
+          const taskRuntime = runtime.a2a?.tasks;
+          if (!taskRuntime) return taskCapabilityUnavailable();
+          const taskAccess = readTaskAccessToken(req);
+          if ('response' in taskAccess) return taskAccess.response;
           const { taskId } = params;
-          const entry = tasks.get(taskId);
+          const task = await taskRuntime.get(taskId, taskAccess.accessToken);
 
-          if (!entry) {
+          if (!task) {
             return jsonResponse(
               {
                 error: {
@@ -609,52 +554,71 @@ export function http(
             );
           }
 
-          return jsonResponse(entry.task);
+          return jsonResponse(task);
         },
         listTasks: async req => {
+          const taskRuntime = runtime.a2a?.tasks;
+          if (!taskRuntime) return taskCapabilityUnavailable();
+          const taskAccess = readTaskAccessToken(req);
+          if ('response' in taskAccess) return taskAccess.response;
           const url = new URL(req.url);
           const contextId = url.searchParams.get('contextId') || undefined;
           const statusParam = url.searchParams.get('status');
-          const status = statusParam
-            ? ((statusParam.includes(',')
-                ? statusParam.split(',')
-                : statusParam) as TaskStatus | TaskStatus[])
+          const statuses = statusParam
+            ? statusParam.split(',').filter(Boolean)
             : undefined;
-          const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-          const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+          if (
+            statuses?.some(status => !TASK_STATUSES.has(status as TaskStatus))
+          ) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'invalid_request',
+                  message: 'status contains an unsupported task state',
+                },
+              },
+              { status: 400 }
+            );
+          }
+          const limit = Number(url.searchParams.get('limit') ?? 50);
+          const offset = Number(url.searchParams.get('offset') ?? 0);
+          if (
+            !Number.isSafeInteger(limit) ||
+            limit < 0 ||
+            limit > 1_000 ||
+            !Number.isSafeInteger(offset) ||
+            offset < 0
+          ) {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'invalid_request',
+                  message:
+                    'limit must be an integer from 0 to 1000 and offset must be a non-negative integer',
+                },
+              },
+              { status: 400 }
+            );
+          }
 
-          let filteredTasks = Array.from(tasks.values()).map(
-            entry => entry.task
+          return jsonResponse(
+            await taskRuntime.list(taskAccess.accessToken, {
+              contextId,
+              status: statuses as TaskStatus[] | undefined,
+              limit,
+              offset,
+            })
           );
-
-          if (contextId) {
-            filteredTasks = filteredTasks.filter(
-              t => t.contextId === contextId
-            );
-          }
-
-          if (status) {
-            const statusArray = Array.isArray(status) ? status : [status];
-            filteredTasks = filteredTasks.filter(t =>
-              statusArray.includes(t.status)
-            );
-          }
-
-          const total = filteredTasks.length;
-          const paginatedTasks = filteredTasks.slice(offset, offset + limit);
-          const hasMore = offset + limit < total;
-
-          return jsonResponse({
-            tasks: paginatedTasks,
-            total,
-            hasMore,
-          });
         },
         cancelTask: async (req, params) => {
+          const taskRuntime = runtime.a2a?.tasks;
+          if (!taskRuntime) return taskCapabilityUnavailable();
+          const taskAccess = readTaskAccessToken(req);
+          if ('response' in taskAccess) return taskAccess.response;
           const { taskId } = params;
-          const entry = tasks.get(taskId);
+          const task = await taskRuntime.get(taskId, taskAccess.accessToken);
 
-          if (!entry) {
+          if (!task) {
             return jsonResponse(
               {
                 error: {
@@ -666,7 +630,7 @@ export function http(
             );
           }
 
-          if (entry.task.status !== 'running') {
+          if (task.status !== 'running') {
             return jsonResponse(
               {
                 error: {
@@ -678,29 +642,34 @@ export function http(
             );
           }
 
-          if (entry.controller) {
-            entry.controller.abort();
+          const updatedTask = await taskRuntime.cancel(
+            taskId,
+            taskAccess.accessToken
+          );
+          if (!updatedTask || updatedTask.status !== 'cancelled') {
+            return jsonResponse(
+              {
+                error: {
+                  code: 'invalid_state',
+                  message: `Task "${taskId}" is not running`,
+                },
+              },
+              { status: 409 }
+            );
           }
-
-          const updatedTask: Task = {
-            ...entry.task,
-            status: 'cancelled',
-            updatedAt: new Date().toISOString(),
-          };
-
-          tasks.set(taskId, {
-            task: updatedTask,
-            controller: entry.controller,
-          });
           console.info('[agent-kit:task] cancelled', `taskId=${taskId}`);
 
           return jsonResponse(updatedTask);
         },
         subscribeTask: async (req, params) => {
+          const taskRuntime = runtime.a2a?.tasks;
+          if (!taskRuntime) return taskCapabilityUnavailable();
+          const taskAccess = readTaskAccessToken(req);
+          if ('response' in taskAccess) return taskAccess.response;
           const { taskId } = params;
-          const entry = tasks.get(taskId);
+          const task = await taskRuntime.get(taskId, taskAccess.accessToken);
 
-          if (!entry) {
+          if (!task) {
             return jsonResponse(
               {
                 error: {
@@ -712,139 +681,124 @@ export function http(
             );
           }
 
-          const task = entry.task;
           return createSSEStream(
             async ({ write, close }: SSEStreamRunnerContext) => {
-              let lastStatus = task.status;
+              let finished = false;
+              let lastEvent = '';
+              let unsubscribe = () => {};
+              const safetyTimeout = setTimeout(finish, 5 * 60 * 1_000);
 
-              write({
-                event: 'statusUpdate',
-                data: JSON.stringify({
-                  taskId,
-                  status: task.status,
-                }),
-              });
-
-              if (task.status === 'completed' && task.result) {
-                write({
-                  event: 'resultUpdate',
-                  data: JSON.stringify({
-                    taskId,
-                    status: task.status,
-                    result: task.result,
-                  }),
-                });
+              function finish(): void {
+                if (finished) return;
+                finished = true;
+                clearTimeout(safetyTimeout);
+                unsubscribe();
                 close();
-                return;
               }
 
-              if (task.status === 'failed' && task.error) {
-                write({
-                  event: 'error',
-                  data: JSON.stringify({
-                    taskId,
-                    status: task.status,
-                    error: task.error,
-                  }),
-                });
-                close();
-                return;
-              }
-
-              if (task.status === 'cancelled') {
-                write({
-                  event: 'statusUpdate',
-                  data: JSON.stringify({
-                    taskId,
-                    status: task.status,
-                  }),
-                });
-                close();
-                return;
-              }
-
-              const checkInterval = setInterval(() => {
-                const currentEntry = tasks.get(taskId);
-                if (!currentEntry) {
-                  clearInterval(checkInterval);
-                  close();
-                  return;
+              const emit = (event: TaskUpdateEvent): void => {
+                if (finished) return;
+                const serialized = JSON.stringify(event.data);
+                const signature = `${event.type}:${serialized}`;
+                if (signature === lastEvent) return;
+                lastEvent = signature;
+                write({ event: event.type, data: serialized });
+                if (
+                  (event.type === 'resultUpdate' &&
+                    event.data.status === 'completed') ||
+                  (event.type === 'error' && event.data.status === 'failed') ||
+                  (event.type === 'statusUpdate' &&
+                    event.data.status === 'cancelled')
+                ) {
+                  finish();
                 }
+              };
 
-                const currentTask = currentEntry.task;
-                if (currentTask.status !== lastStatus) {
-                  write({
-                    event: 'statusUpdate',
-                    data: JSON.stringify({
-                      taskId,
-                      status: currentTask.status,
-                    }),
-                  });
-                  lastStatus = currentTask.status;
-                }
-
-                if (currentTask.status === 'completed' && currentTask.result) {
-                  write({
-                    event: 'resultUpdate',
-                    data: JSON.stringify({
-                      taskId,
-                      status: currentTask.status,
-                      result: currentTask.result,
-                    }),
-                  });
-                  clearInterval(checkInterval);
-                  close();
-                  return;
-                }
-
-                if (currentTask.status === 'failed' && currentTask.error) {
-                  write({
-                    event: 'error',
-                    data: JSON.stringify({
-                      taskId,
-                      status: currentTask.status,
-                      error: currentTask.error,
-                    }),
-                  });
-                  clearInterval(checkInterval);
-                  close();
-                  return;
-                }
-
-                if (currentTask.status === 'cancelled') {
-                  write({
-                    event: 'statusUpdate',
-                    data: JSON.stringify({
-                      taskId,
-                      status: currentTask.status,
-                    }),
-                  });
-                  clearInterval(checkInterval);
-                  close();
-                  return;
-                }
-              }, 100);
-
-              req.signal?.addEventListener('abort', () => {
-                clearInterval(checkInterval);
-                close();
-              });
-
-              setTimeout(
-                () => {
-                  clearInterval(checkInterval);
-                  close();
-                },
-                5 * 60 * 1000
+              unsubscribe = await taskRuntime.subscribe(
+                taskId,
+                taskAccess.accessToken,
+                emit
               );
+              if (finished) {
+                unsubscribe();
+                return;
+              }
+              const current = await taskRuntime.get(
+                taskId,
+                taskAccess.accessToken
+              );
+              if (!current) {
+                finish();
+                return;
+              }
+
+              emit({
+                type: 'statusUpdate',
+                data: { taskId, status: current.status },
+              });
+              if (current.status === 'completed' && current.result) {
+                emit({
+                  type: 'resultUpdate',
+                  data: {
+                    taskId,
+                    status: current.status,
+                    result: current.result,
+                  },
+                });
+              } else if (current.status === 'failed' && current.error) {
+                emit({
+                  type: 'error',
+                  data: {
+                    taskId,
+                    status: current.status,
+                    error: current.error,
+                  },
+                });
+              }
+
+              req.signal.addEventListener('abort', finish, { once: true });
             }
           );
         },
       };
 
-      // Update runtime with actual handlers
-      handlers = actualHandlers;
-      runtime.handlers = actualHandlers;
+      return {
+        http: {
+          basePath,
+          handlers: actualHandlers,
+          routes: createAgentRoutePlan({
+            basePath,
+            handlers: actualHandlers,
+            hasTasks: Boolean(runtime.a2a?.tasks),
+          }),
+        },
+      };
+    },
+    onEntrypointAdded(entrypoint, runtime) {
+      const capabilities = runtime as AgentRuntime<HttpDependencies>;
+      if (
+        hasExplicitPrice(entrypoint) &&
+        capabilities.payments &&
+        capabilities.mpp &&
+        !entrypoint.paymentProtocol
+      ) {
+        throw new Error(
+          `Entrypoint "${entrypoint.key}" is priced while both x402 and MPP are installed. ` +
+            'Set paymentProtocol to "x402" or "mpp".'
+        );
+      }
+      if (
+        entrypoint.siwx?.authOnly &&
+        (!capabilities.payments?.siwxConfig?.enabled ||
+          !capabilities.payments.siwxStorage)
+      ) {
+        throw new Error(
+          `Entrypoint "${entrypoint.key}" is authOnly but no enabled SIWX runtime is configured.`
+        );
+      }
+    },
+    async dispose() {
+      await idempotencyStore?.close?.();
     },
   };
 }

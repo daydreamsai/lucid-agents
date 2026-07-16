@@ -49,14 +49,14 @@ function normalizeOrigin(value: unknown): string {
 
 async function loadDashboardPayload(origin: string): Promise<DashboardPayload> {
   const resolvedOrigin = normalizeOrigin(origin);
-  const manifest = ensureSerializable(runtime.manifest.build(resolvedOrigin));
-  const manifestEntrypoints = manifest.entrypoints || [];
+  const manifest = ensureSerializable(
+    runtime.manifest.build(`${resolvedOrigin}${BASE_PATH}`)
+  );
+  const manifestEntrypoints = manifest.entrypoints || {};
 
   const rawEntrypoints = agent.listEntrypoints();
   const entrypoints = rawEntrypoints.map(entry => {
-    const manifestEntry = manifestEntrypoints.find(
-      (candidate: any) => candidate.key === entry.key
-    );
+    const manifestEntry = manifestEntrypoints[entry.key];
 
     return {
       key: String(entry.key),
@@ -72,8 +72,8 @@ async function loadDashboardPayload(origin: string): Promise<DashboardPayload> {
               }
             : null,
       network: entry.network ? String(entry.network) : null,
-      inputSchema: manifestEntry?.input || null,
-      outputSchema: manifestEntry?.output || null,
+      inputSchema: manifestEntry?.input_schema || null,
+      outputSchema: manifestEntry?.output_schema || null,
     };
   });
 
@@ -83,9 +83,6 @@ async function loadDashboardPayload(origin: string): Promise<DashboardPayload> {
       ? {
           network: configPayments.network
             ? String(configPayments.network)
-            : null,
-          defaultPrice: configPayments.defaultPrice
-            ? String(configPayments.defaultPrice)
             : null,
           payTo: configPayments.payTo ? String(configPayments.payTo) : null,
         }

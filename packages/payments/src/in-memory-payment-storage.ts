@@ -1,5 +1,13 @@
-import type { PaymentRecord, PaymentDirection } from '@lucid-agents/types/payments';
+import type {
+  PaymentRecord,
+  PaymentDirection,
+} from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
+import type {
+  PaymentAccountingRecord,
+  PaymentLimitReservation,
+  PaymentLimitReservationResult,
+} from './payment-storage';
 
 type PaymentEntry = {
   amount: bigint;
@@ -15,10 +23,30 @@ type ScopeKey = string;
  */
 export class InMemoryPaymentStorage implements PaymentStorage {
   private payments: Map<string, Map<ScopeKey, PaymentEntry[]>> = new Map();
+  private reservations = new Map<
+    string,
+    PaymentLimitReservation & { timestamp: number; expiresAt: number }
+  >();
+  private operationQueue: Promise<void> = Promise.resolve();
 
-  async recordPayment(
-    record: Omit<PaymentRecord, 'id' | 'timestamp'>
-  ): Promise<void> {
+  private async withLock<T>(operation: () => T | Promise<T>): Promise<T> {
+    const previous = this.operationQueue;
+    let release: () => void = () => {};
+    this.operationQueue = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  private appendPayment(
+    record: Omit<PaymentRecord, 'id' | 'timestamp'>,
+    timestamp = Date.now()
+  ): void {
     const key = `${record.groupName}:${record.direction}`;
     let groupPayments = this.payments.get(key);
     if (!groupPayments) {
@@ -32,11 +60,106 @@ export class InMemoryPaymentStorage implements PaymentStorage {
       groupPayments.set(record.scope, entries);
     }
 
-    entries.push({
-      amount: record.amount,
-      timestamp: Date.now(),
+    entries.push({ amount: record.amount, timestamp });
+  }
+
+  async recordPayment(
+    record: Omit<PaymentRecord, 'id' | 'timestamp'>
+  ): Promise<void> {
+    await this.withLock(() => {
+      this.appendPayment(record);
     });
-    return Promise.resolve();
+  }
+
+  async reservePaymentLimit(
+    reservation: PaymentLimitReservation
+  ): Promise<PaymentLimitReservationResult> {
+    return this.withLock(() => {
+      const now = Date.now();
+      for (const [id, pending] of this.reservations) {
+        if (pending.expiresAt <= now) this.reservations.delete(id);
+      }
+      const cutoff =
+        reservation.windowMs === undefined
+          ? undefined
+          : now - reservation.windowMs;
+      const paymentKey = `${reservation.groupName}:${reservation.direction}`;
+      const recorded =
+        this.payments
+          .get(paymentKey)
+          ?.get(reservation.scope)
+          ?.filter(entry => cutoff === undefined || entry.timestamp > cutoff)
+          .reduce((total, entry) => total + entry.amount, 0n) ?? 0n;
+      let pending = 0n;
+      for (const candidate of this.reservations.values()) {
+        if (
+          candidate.groupName === reservation.groupName &&
+          candidate.scope === reservation.scope &&
+          candidate.direction === reservation.direction &&
+          (cutoff === undefined || candidate.timestamp > cutoff)
+        ) {
+          pending += candidate.amount;
+        }
+      }
+      if (recorded + pending + reservation.amount > reservation.maxTotal) {
+        return { allowed: false };
+      }
+      const reservationId = crypto.randomUUID();
+      this.reservations.set(reservationId, {
+        ...reservation,
+        timestamp: now,
+        expiresAt: now + reservation.ttlMs,
+      });
+      return { allowed: true, reservationId };
+    });
+  }
+
+  async commitPaymentReservation(reservationId: string): Promise<boolean> {
+    return this.commitPaymentReservations([reservationId]);
+  }
+
+  async commitPaymentReservations(
+    reservationIds: readonly string[],
+    records: readonly PaymentAccountingRecord[] = []
+  ): Promise<boolean> {
+    return this.withLock(() => {
+      if (new Set(reservationIds).size !== reservationIds.length) return false;
+      const now = Date.now();
+      const reservations = reservationIds.map(id => this.reservations.get(id));
+      if (
+        reservations.some(
+          reservation => !reservation || reservation.expiresAt <= now
+        )
+      ) {
+        for (const id of reservationIds) {
+          const reservation = this.reservations.get(id);
+          if (reservation?.expiresAt && reservation.expiresAt <= now) {
+            this.reservations.delete(id);
+          }
+        }
+        return false;
+      }
+      for (const reservation of reservations) {
+        this.appendPayment(
+          {
+            groupName: reservation!.groupName,
+            scope: reservation!.scope,
+            direction: reservation!.direction,
+            amount: reservation!.amount,
+          },
+          now
+        );
+      }
+      for (const record of records) this.appendPayment(record, now);
+      for (const id of reservationIds) this.reservations.delete(id);
+      return true;
+    });
+  }
+
+  async releasePaymentReservation(reservationId: string): Promise<void> {
+    await this.withLock(() => {
+      this.reservations.delete(reservationId);
+    });
   }
 
   async getTotal(
@@ -119,8 +242,10 @@ export class InMemoryPaymentStorage implements PaymentStorage {
   }
 
   async clear(): Promise<void> {
-    this.payments.clear();
-    return Promise.resolve();
+    await this.withLock(() => {
+      this.payments.clear();
+      this.reservations.clear();
+    });
   }
 }
 

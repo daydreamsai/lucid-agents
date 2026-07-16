@@ -1,9 +1,17 @@
 export { http } from './extension';
+export { createAgentRoutePlan } from './route-plan';
 export type { HttpExtensionOptions } from '@lucid-agents/types/http';
 export type { AgentHttpHandlers } from '@lucid-agents/types/http';
 export { invoke, invokeHandler } from './invoke';
-export type { InvokeResult } from './invoke';
+export type { InvokeOptions, InvokeResult } from './invoke';
+export {
+  createInMemoryHttpIdempotencyStore,
+  HttpIdempotencyCapacityError,
+} from './idempotency';
+export type { InMemoryHttpIdempotencyStoreOptions } from './idempotency';
 export { stream } from './stream';
+export { authorizeEntrypointRequest } from './authorization';
+export type { EntrypointAuthorization } from './authorization';
 
 export {
   createSSEStream,
@@ -12,4 +20,3 @@ export {
   type SSEStreamRunnerContext,
   type SSEWriteOptions,
 } from './sse';
-

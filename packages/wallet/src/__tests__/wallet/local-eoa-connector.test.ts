@@ -41,7 +41,7 @@ describe('LocalEoaWalletConnector', () => {
 
     const signature = await connector.signChallenge(baseChallenge);
     expect(signature).toBe('0xsigned');
-    expect(signedPayload).toBe('Sign this message');
+    expect(signedPayload as unknown).toBe('Sign this message');
 
     const metadata = await connector.getWalletMetadata();
     expect(metadata).toEqual(

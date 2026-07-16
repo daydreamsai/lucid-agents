@@ -1,37 +1,439 @@
 import type {
+  AgentManifest,
   AgentRuntime,
   BuildContext,
   EntrypointDef,
   Extension,
 } from '@lucid-agents/types/core';
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
-import type { MppConfig, MppRuntime, MppPaymentRequirement, MppClientConfig } from './types';
-import { resolveEntrypointPrice, resolveEntrypointMppConfig, buildChallengeResponse } from './challenge';
-import { buildManifestWithMpp } from './manifest';
+import type { FetchFunction } from '@lucid-agents/types/http';
+import type {
+  MppClientConfig,
+  MppConfig,
+  MppPaymentRequirement,
+  MppRuntime,
+  MppServerMethod,
+  StripeServerConfig,
+  TempoServerConfig,
+} from '@lucid-agents/types/mpp';
+import { Challenge } from 'mppx';
+import type { MethodIntent } from 'mppx';
 
-/**
- * Check if an entrypoint has a price that should trigger MPP payment.
- */
+import {
+  buildChallengeSet,
+  resolveEntrypointMppConfig,
+  resolveEntrypointPrice,
+  type MppWireChallenge,
+} from './challenge';
+import { buildManifestWithMpp } from './manifest';
+import { decodeMppCredential } from './middleware';
+
+const MAX_OUTSTANDING_CHALLENGES = 10_000;
+const CONTENT_RESPONSE_MARKER = 'x-lucid-mpp-content-response';
+
+type NativeServerIntent = MethodIntent.AnyServer;
+type RuntimeRail = {
+  descriptor: MppServerMethod;
+  native?: NativeServerIntent;
+};
+type ChallengeRecord = {
+  challenge: MppWireChallenge;
+  entrypointKey: string;
+  kind: 'invoke' | 'stream';
+  expiresAt: number;
+  state: 'issued' | 'verifying' | 'verified';
+  idempotencyKey?: string;
+  authorization?: VerifiedMppAuthorization;
+};
+type VerifiedMppAuthorization = {
+  authorized: true;
+  receipt?: string;
+  payer?: string;
+  network?: string;
+  handled?: Response;
+};
+type ChallengeClaim =
+  | { state: 'claimed' }
+  | { state: 'cached'; authorization: VerifiedMppAuthorization }
+  | { state: 'in_progress' }
+  | { state: 'invalid' };
+type NativePaymentResult =
+  | { status: 402; challenge: Response }
+  | {
+      status: 200;
+      withReceipt: (response?: Response) => Response;
+    };
+type NativeHandlerFactory = (
+  options: Record<string, unknown>
+) => (request: Request) => Promise<NativePaymentResult>;
+
 function entrypointRequiresPayment(entrypoint: EntrypointDef): boolean {
+  if (entrypoint.paymentProtocol === 'x402') return false;
   const { price } = entrypoint;
   if (!price) return false;
-
   if (typeof price === 'string') return price.trim().length > 0;
-
-  if (typeof price === 'object') {
-    const hasInvoke = typeof price.invoke === 'string' && price.invoke.trim().length > 0;
-    const hasStream = typeof price.stream === 'string' && price.stream.trim().length > 0;
-    return hasInvoke || hasStream;
-  }
-
-  return false;
+  const hasInvoke =
+    typeof price.invoke === 'string' && price.invoke.trim().length > 0;
+  const hasStream =
+    typeof price.stream === 'string' && price.stream.trim().length > 0;
+  return hasInvoke || hasStream;
 }
 
-/**
- * Create the MPP runtime instance.
- */
-function createMppRuntime(config: MppConfig): MppRuntime {
+function implementationOf(
+  method: MppServerMethod
+): 'tempo' | 'stripe' | 'custom' {
+  if (method.implementation) return method.implementation;
+  if (method.name === 'tempo') return 'tempo';
+  if (method.name === 'stripe') return 'stripe';
+  return 'custom';
+}
+
+async function materializeRails(config: MppConfig): Promise<{
+  rails: RuntimeRail[];
+  server?: typeof import('mppx/server');
+}> {
+  const needsNative = config.methods.some(
+    method => implementationOf(method) !== 'custom'
+  );
+  const server = needsNative ? await import('mppx/server') : undefined;
+  const rails: RuntimeRail[] = [];
+
+  for (const descriptor of config.methods) {
+    const implementation = implementationOf(descriptor);
+    if (implementation === 'custom') {
+      rails.push({ descriptor });
+      continue;
+    }
+    if (!server) throw new Error('mppx server runtime was not loaded');
+
+    if (implementation === 'tempo') {
+      const value = descriptor.config as TempoServerConfig;
+      const parameters: Record<string, unknown> = {
+        currency: value.currency,
+        recipient: value.recipient,
+        decimals: value.decimals ?? 6,
+        ...(value.testnet !== undefined ? { testnet: value.testnet } : {}),
+      };
+      const nativeMethods = server.tempo(
+        parameters as Parameters<typeof server.tempo>[0]
+      );
+      for (const native of nativeMethods) rails.push({ descriptor, native });
+      continue;
+    }
+
+    const value = descriptor.config as StripeServerConfig;
+    const parameters: Record<string, unknown> = {
+      secretKey: value.secretKey,
+      networkId: value.networkId,
+      currency: value.currency ?? config.currency ?? 'usd',
+      decimals: value.decimals ?? 2,
+      paymentMethodTypes: value.paymentMethodTypes ?? ['card'],
+      ...(value.metadata ? { metadata: value.metadata } : {}),
+    };
+    const nativeMethods = server.stripe(
+      parameters as Parameters<typeof server.stripe>[0]
+    );
+    for (const native of nativeMethods) rails.push({ descriptor, native });
+  }
+
+  return { rails, server };
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, nested]) => nested !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalJson(nested)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function verifiedIdentity(source?: string): {
+  payer?: string;
+  network?: string;
+} {
+  if (!source) return {};
+  const match = source.match(/^did:pkh:([^:]+:[^:]+):(.+)$/);
+  if (!match?.[1] || !match[2]) return { payer: source };
+  return { network: match[1], payer: match[2] };
+}
+
+function withoutPaymentCredential(request: Request): Request {
+  const headers = new Headers(request.headers);
+  const authorization = headers.get('Authorization');
+  if (authorization && /(?:^|,)\s*Payment\s+/i.test(authorization)) {
+    headers.delete('Authorization');
+  }
+  return new Request(request, { headers });
+}
+
+function configurationResponse(message: string): Response {
+  return Response.json(
+    {
+      error: {
+        code: 'mpp_configuration_error',
+        message,
+      },
+    },
+    { status: 503 }
+  );
+}
+
+async function createMppRuntime(
+  config: MppConfig,
+  agentName: string
+): Promise<MppRuntime> {
+  if (config.methods.length === 0) {
+    throw new Error('MPP config requires at least one payment method');
+  }
+
   let isActive = false;
+  const { rails, server } = await materializeRails(config);
+  const outstandingChallenges = new Map<string, ChallengeRecord>();
+  const realm = config.realm?.trim() || agentName;
+  const secretKey = (() => {
+    const configured = config.secretKey?.trim();
+    if (configured) return configured;
+    if (typeof globalThis.crypto?.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+    throw new Error('MPP requires a secretKey when Web Crypto is unavailable');
+  })();
+
+  const pruneChallenges = (): void => {
+    const now = Date.now();
+    for (const [id, record] of outstandingChallenges) {
+      if (record.expiresAt <= now) outstandingChallenges.delete(id);
+    }
+    while (outstandingChallenges.size >= MAX_OUTSTANDING_CHALLENGES) {
+      const oldest = outstandingChallenges.keys().next().value;
+      if (typeof oldest !== 'string') break;
+      outstandingChallenges.delete(oldest);
+    }
+  };
+
+  const rememberChallenge = (
+    challenge: MppWireChallenge,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ): void => {
+    pruneChallenges();
+    const expiresAt = Date.parse(challenge.expires ?? '');
+    outstandingChallenges.set(challenge.id, {
+      challenge,
+      entrypointKey: entrypoint.key,
+      kind,
+      state: 'issued',
+      expiresAt: Number.isFinite(expiresAt)
+        ? expiresAt
+        : Date.now() + (config.challengeExpirySeconds ?? 300) * 1000,
+    });
+  };
+
+  const claimChallenge = (
+    credential: NonNullable<ReturnType<typeof decodeMppCredential>>,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream',
+    request: Request
+  ): ChallengeClaim => {
+    const record = outstandingChallenges.get(credential.challengeId);
+    if (!record) return { state: 'invalid' };
+    if (
+      record.expiresAt <= Date.now() ||
+      record.entrypointKey !== entrypoint.key ||
+      record.kind !== kind ||
+      canonicalJson(record.challenge) !== canonicalJson(credential.challenge)
+    ) {
+      outstandingChallenges.delete(credential.challengeId);
+      return { state: 'invalid' };
+    }
+    const idempotencyKey = request.headers.get('Idempotency-Key')?.trim();
+    if (record.state === 'verified') {
+      if (
+        idempotencyKey &&
+        record.idempotencyKey === idempotencyKey &&
+        record.authorization
+      ) {
+        return {
+          state: 'cached',
+          authorization: {
+            ...record.authorization,
+            ...(record.authorization.handled
+              ? { handled: record.authorization.handled.clone() }
+              : {}),
+          },
+        };
+      }
+      return { state: 'invalid' };
+    }
+    if (record.state === 'verifying') return { state: 'in_progress' };
+
+    // Fence concurrent replay before verification or settlement begins.
+    record.state = 'verifying';
+    if (idempotencyKey) record.idempotencyKey = idempotencyKey;
+    return { state: 'claimed' };
+  };
+
+  const completeChallenge = (
+    credential: NonNullable<ReturnType<typeof decodeMppCredential>>,
+    authorization: VerifiedMppAuthorization
+  ): VerifiedMppAuthorization => {
+    const record = outstandingChallenges.get(credential.challengeId);
+    if (!record || record.state !== 'verifying') return authorization;
+    if (!record.idempotencyKey) {
+      outstandingChallenges.delete(credential.challengeId);
+      return authorization;
+    }
+    record.state = 'verified';
+    record.authorization = {
+      ...authorization,
+      ...(authorization.handled
+        ? { handled: authorization.handled.clone() }
+        : {}),
+    };
+    return authorization;
+  };
+
+  const rejectChallenge = (
+    credential: NonNullable<ReturnType<typeof decodeMppCredential>>
+  ): void => {
+    outstandingChallenges.delete(credential.challengeId);
+  };
+
+  const matchingRails = (
+    requirement: Extract<MppPaymentRequirement, { required: true }>
+  ): RuntimeRail[] =>
+    rails.filter(
+      rail =>
+        requirement.methods.includes(rail.descriptor.name) &&
+        (!rail.native || rail.native.name === requirement.intent)
+    );
+
+  const challengeWithCustomVerifier = (
+    rail: RuntimeRail,
+    requirement: Extract<MppPaymentRequirement, { required: true }>,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ): Response => {
+    const set = buildChallengeSet({
+      amount: requirement.amount,
+      currency: requirement.currency,
+      intent: requirement.intent,
+      methods: [rail.descriptor],
+      realm,
+      description: requirement.description,
+      expirySeconds: config.challengeExpirySeconds,
+    });
+    rememberChallenge(set.challenges[0]!, entrypoint, kind);
+    return set.response;
+  };
+
+  const nativeHandler = (
+    rail: RuntimeRail,
+    requirement: Extract<MppPaymentRequirement, { required: true }>
+  ): ((request: Request) => Promise<NativePaymentResult>) => {
+    if (!server || !rail.native) {
+      throw new Error('Missing native MPP payment method');
+    }
+    type NativeMethods = Parameters<typeof server.Mppx.create>[0]['methods'];
+    const payment = server.Mppx.create({
+      methods: [rail.native] as NativeMethods,
+      realm,
+      secretKey,
+    });
+    const factory = (payment as unknown as Record<string, unknown>)[
+      requirement.intent
+    ];
+    if (typeof factory !== 'function') {
+      throw new Error(
+        `MPP method ${rail.descriptor.name} does not support ${requirement.intent}`
+      );
+    }
+    const descriptorConfig = rail.descriptor.config as Record<string, unknown>;
+    const options: Record<string, unknown> = {
+      amount: requirement.amount,
+      currency: requirement.currency,
+      expires: new Date(
+        Date.now() + (config.challengeExpirySeconds ?? 300) * 1000
+      ).toISOString(),
+      ...(requirement.description
+        ? { description: requirement.description }
+        : {}),
+      ...(requirement.intent === 'session' && config.session
+        ? config.session
+        : {}),
+      ...(descriptorConfig.chainId !== undefined
+        ? { chainId: descriptorConfig.chainId }
+        : {}),
+    };
+    return (factory as NativeHandlerFactory)(options);
+  };
+
+  const challengeFor = async (
+    rail: RuntimeRail,
+    request: Request,
+    requirement: Extract<MppPaymentRequirement, { required: true }>,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ): Promise<Response> => {
+    if (!rail.native) {
+      return challengeWithCustomVerifier(rail, requirement, entrypoint, kind);
+    }
+    const result = await nativeHandler(
+      rail,
+      requirement
+    )(withoutPaymentCredential(request));
+    if (result.status !== 402) {
+      throw new Error('MPP verifier did not return a payment challenge');
+    }
+    const challenge = Challenge.fromResponse(result.challenge);
+    rememberChallenge(challenge, entrypoint, kind);
+    return result.challenge;
+  };
+
+  const requirements = (
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ): MppPaymentRequirement => {
+    if (!isActive || entrypoint.paymentProtocol === 'x402') {
+      return { required: false };
+    }
+    const price = resolveEntrypointPrice(entrypoint, kind);
+    if (!price) return { required: false };
+
+    const entrypointConfig = resolveEntrypointMppConfig(entrypoint);
+    const intent = entrypointConfig?.intent ?? config.defaultIntent ?? 'charge';
+    const configured = rails
+      .filter(rail => !rail.native || rail.native.name === intent)
+      .map(rail => rail.descriptor.name);
+    const methods = [...new Set(entrypointConfig?.methods ?? configured)];
+    const firstRail = rails.find(
+      rail =>
+        methods.includes(rail.descriptor.name) &&
+        (!rail.native || rail.native.name === intent)
+    );
+    const methodCurrency = (
+      firstRail?.descriptor.config as { currency?: unknown } | undefined
+    )?.currency;
+    const currency =
+      entrypointConfig?.currency ??
+      (typeof methodCurrency === 'string' ? methodCurrency : undefined) ??
+      config.currency ??
+      'usd';
+
+    return {
+      required: true,
+      amount: entrypointConfig?.amount ?? price,
+      currency,
+      intent,
+      methods,
+      description: entrypointConfig?.description ?? entrypoint.description,
+    };
+  };
 
   return {
     get config() {
@@ -40,73 +442,199 @@ function createMppRuntime(config: MppConfig): MppRuntime {
     get isActive() {
       return isActive;
     },
-    requirements(
-      entrypoint: EntrypointDef,
-      kind: 'invoke' | 'stream'
-    ): MppPaymentRequirement {
-      if (!isActive) return { required: false };
-
-      const price = resolveEntrypointPrice(entrypoint, kind);
-      if (!price) return { required: false };
-
-      const mppConfig = resolveEntrypointMppConfig(entrypoint);
-      const intent = mppConfig?.intent ?? config.defaultIntent ?? 'charge';
-      const currency = mppConfig?.currency ?? config.currency ?? 'usd';
-      const description = mppConfig?.description ?? entrypoint.description;
-      const methods = mppConfig?.methods ?? config.methods.map(m => m.name);
-
-      const response = buildChallengeResponse({
-        amount: mppConfig?.amount ?? price,
-        currency,
-        intent,
-        methods,
-        description,
-        expirySeconds: config.challengeExpirySeconds,
-      });
-
-      return {
-        required: true,
-        amount: mppConfig?.amount ?? price,
-        currency,
-        intent,
-        methods,
-        description,
-        response,
-      };
-    },
+    requirements,
     activate(entrypoint: EntrypointDef) {
-      if (isActive) return;
-      if (entrypointRequiresPayment(entrypoint)) {
-        isActive = true;
-      }
+      if (!isActive && entrypointRequiresPayment(entrypoint)) isActive = true;
     },
     resolvePrice(entrypoint: EntrypointDef, which: 'invoke' | 'stream') {
+      if (entrypoint.paymentProtocol === 'x402') return null;
       return resolveEntrypointPrice(entrypoint, which);
     },
-    async getMppFetch(clientConfig: MppClientConfig) {
-      // Dynamically import mppx client to avoid hard dependency at build time
-      try {
-        const { Mppx } = await import('mppx/client');
+    async authorize(
+      request: Request,
+      entrypoint: EntrypointDef,
+      kind: 'invoke' | 'stream',
+      resolvedRequirement?: MppPaymentRequirement
+    ) {
+      const requirement = resolvedRequirement ?? requirements(entrypoint, kind);
+      if (!requirement.required) return { authorized: true } as const;
 
-        // Validate that we're not accidentally passing server configs
-        for (const m of clientConfig.methods) {
-          const cfg = m.config as Record<string, unknown>;
-          if ('recipient' in cfg || 'nodeUrl' in cfg || 'macaroon' in cfg) {
-            console.warn(
-              `[lucid-agents/mpp] Method "${m.name}" config contains server-side fields. ` +
-              'Use client-side method builders (e.g., tempo.client()) for getMppFetch.'
-            );
+      const available = matchingRails(requirement);
+      if (available.length === 0) {
+        return {
+          authorized: false,
+          response: configurationResponse(
+            `No configured MPP method supports ${requirement.intent} for entrypoint "${entrypoint.key}".`
+          ),
+        } as const;
+      }
+
+      const credential = decodeMppCredential(request);
+      const selected = credential
+        ? available.find(
+            rail =>
+              rail.descriptor.name === credential.challenge.method &&
+              (!rail.native || rail.native.name === credential.challenge.intent)
+          )
+        : available[0];
+
+      if (!credential || !selected) {
+        try {
+          return {
+            authorized: false,
+            response: await challengeFor(
+              available[0]!,
+              request,
+              requirement,
+              entrypoint,
+              kind
+            ),
+          } as const;
+        } catch (error) {
+          return {
+            authorized: false,
+            response: configurationResponse(
+              `Failed to create MPP challenge: ${error instanceof Error ? error.message : String(error)}`
+            ),
+          } as const;
+        }
+      }
+
+      const claim = claimChallenge(credential, entrypoint, kind, request);
+      if (claim.state === 'cached') return claim.authorization;
+      if (claim.state === 'in_progress') {
+        return {
+          authorized: false,
+          response: Response.json(
+            {
+              error: {
+                code: 'mpp_verification_in_progress',
+                message: 'Payment verification is already in progress.',
+              },
+            },
+            { status: 409, headers: { 'Retry-After': '1' } }
+          ),
+        } as const;
+      }
+      if (claim.state === 'invalid') {
+        return {
+          authorized: false,
+          response: await challengeFor(
+            available[0]!,
+            request,
+            requirement,
+            entrypoint,
+            kind
+          ),
+        } as const;
+      }
+
+      if (!selected.native) {
+        if (!config.verifyCredential) {
+          rejectChallenge(credential);
+          return {
+            authorized: false,
+            response: challengeWithCustomVerifier(
+              selected,
+              requirement,
+              entrypoint,
+              kind
+            ),
+          } as const;
+        }
+        try {
+          const verification = await config.verifyCredential({
+            request,
+            entrypoint,
+            kind,
+            requirement,
+            credential,
+          });
+          if (verification.valid === false) {
+            rejectChallenge(credential);
+            return {
+              authorized: false,
+              response:
+                verification.response?.clone() ??
+                challengeWithCustomVerifier(
+                  selected,
+                  requirement,
+                  entrypoint,
+                  kind
+                ),
+            } as const;
           }
+          const identity = verifiedIdentity(credential.source);
+          return completeChallenge(credential, {
+            authorized: true,
+            receipt: verification.receipt,
+            payer: verification.payer ?? identity.payer,
+            network: verification.network ?? identity.network,
+          });
+        } catch (error) {
+          return {
+            authorized: false,
+            response: configurationResponse(
+              `MPP verification failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            ),
+          } as const;
+        }
+      }
+
+      try {
+        const result = await nativeHandler(selected, requirement)(request);
+        if (result.status === 402) {
+          rejectChallenge(credential);
+          const challenge = Challenge.fromResponse(result.challenge);
+          rememberChallenge(challenge, entrypoint, kind);
+          return { authorized: false, response: result.challenge } as const;
         }
 
-        const mppxClient = Mppx.create({
-          methods: clientConfig.methods.map(m => {
-            // Return the raw config - mppx expects its own method objects
-            // Users should pass mppx method instances directly
-            return m.config as any;
-          }),
+        const marker = new Response(null, {
+          status: 299,
+          headers: { [CONTENT_RESPONSE_MARKER]: 'true' },
         });
-        return mppxClient.fetch.bind(mppxClient);
+        const receiptResponse = result.withReceipt(marker);
+        const receipt = receiptResponse.headers.get('Payment-Receipt');
+        if (!receipt) throw new Error('MPP verifier omitted its receipt');
+        const identity = verifiedIdentity(credential.source);
+        const handled = receiptResponse.headers.has(CONTENT_RESPONSE_MARKER)
+          ? undefined
+          : receiptResponse;
+        return completeChallenge(credential, {
+          authorized: true,
+          receipt,
+          payer: identity.payer,
+          network: identity.network,
+          ...(handled ? { handled } : {}),
+        });
+      } catch (error) {
+        return {
+          authorized: false,
+          response: configurationResponse(
+            `MPP verification failed: ${error instanceof Error ? error.message : String(error)}`
+          ),
+        } as const;
+      }
+    },
+    async getMppFetch(clientConfig: MppClientConfig) {
+      if (clientConfig.methods.length === 0) {
+        console.warn(
+          '[lucid-agents/mpp] At least one native mppx client method is required'
+        );
+        return null;
+      }
+      try {
+        const { Mppx } = await import('mppx/client');
+        type NativeMethods = Parameters<typeof Mppx.create>[0]['methods'];
+        const mppxClient = Mppx.create({
+          methods: clientConfig.methods as NativeMethods,
+          fetch: clientConfig.fetch as typeof globalThis.fetch | undefined,
+          polyfill: false,
+        });
+        return mppxClient.fetch.bind(mppxClient) as FetchFunction;
       } catch (error) {
         console.warn(
           '[lucid-agents/mpp] Failed to create MPP fetch client:',
@@ -118,37 +646,12 @@ function createMppRuntime(config: MppConfig): MppRuntime {
   };
 }
 
-/**
- * MPP extension options.
- */
 export type MppExtensionOptions = {
   /** MPP configuration. Pass `false` to explicitly disable. */
   config?: MppConfig | false;
 };
 
-/**
- * Create the MPP extension for the Lucid Agents builder.
- *
- * @example
- * ```ts
- * import { mpp, tempo } from '@lucid-agents/mpp';
- *
- * const agent = await createAgent({ name: 'my-agent', version: '1.0.0' })
- *   .use(http())
- *   .use(mpp({
- *     config: {
- *       methods: [
- *         tempo.server({
- *           currency: '0x20c0000000000000000000000000000000000000',
- *           recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
- *         }),
- *       ],
- *       currency: 'usd',
- *     },
- *   }))
- *   .build();
- * ```
- */
+/** Create the Machine Payments Protocol extension. */
 export function mpp(
   options?: MppExtensionOptions
 ): Extension<{ mpp?: MppRuntime }> {
@@ -156,42 +659,27 @@ export function mpp(
 
   return {
     name: 'mpp',
-    build(ctx: BuildContext): { mpp?: MppRuntime } {
-      if (options?.config === false) {
-        return {};
-      }
-
+    async build(ctx: BuildContext): Promise<{ mpp?: MppRuntime }> {
+      if (options?.config === false) return {};
       if (!options?.config) {
-        console.warn(
-          '[lucid-agents/mpp] mpp() extension registered without config. ' +
-          'Paid entrypoints will NOT enforce payment. ' +
-          'Pass config or use mppFromEnv(), or pass false to explicitly disable.'
+        throw new Error(
+          'mpp() requires a config. Pass config from mppFromEnv(), or pass ' +
+            '{ config: false } to explicitly disable the extension.'
         );
-        return {};
       }
-
-      mppRuntime = createMppRuntime(options.config);
+      mppRuntime = await createMppRuntime(options.config, ctx.meta.name);
       return { mpp: mppRuntime };
     },
-    onEntrypointAdded(entrypoint: EntrypointDef, runtime: AgentRuntime) {
-      if (mppRuntime && !mppRuntime.isActive) {
-        if (entrypointRequiresPayment(entrypoint)) {
-          mppRuntime.activate(entrypoint);
-        }
-      }
+    onEntrypointAdded(entrypoint: EntrypointDef, _runtime: AgentRuntime) {
+      mppRuntime?.activate(entrypoint);
     },
-    onManifestBuild(
-      card: AgentCardWithEntrypoints,
-      runtime: AgentRuntime
-    ): AgentCardWithEntrypoints {
-      if (mppRuntime?.config) {
-        return buildManifestWithMpp(
-          card,
-          mppRuntime.config,
-          runtime.entrypoints.snapshot()
-        );
-      }
-      return card;
+    onManifestBuild(card: AgentManifest, runtime: AgentRuntime): AgentManifest {
+      if (!mppRuntime) return card;
+      return buildManifestWithMpp(
+        card,
+        mppRuntime.config,
+        runtime.entrypoints.snapshot()
+      );
     },
   };
 }

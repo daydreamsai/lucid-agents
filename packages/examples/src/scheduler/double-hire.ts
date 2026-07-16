@@ -107,8 +107,9 @@ async function main() {
     throw new Error('Scheduler extension not initialized');
   }
 
-  const walletAddress = schedulerAgent.wallets?.agent?.connector
-    ? await schedulerAgent.wallets.agent.connector.getAddress()
+  const walletConnector = schedulerAgent.wallets?.agent?.connector;
+  const walletAddress = walletConnector?.getAddress
+    ? await walletConnector.getAddress()
     : null;
   console.log(
     `[example] Scheduler agent wallet address: ${walletAddress || 'N/A'}`

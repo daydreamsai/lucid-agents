@@ -1,4 +1,5 @@
 import { buildSIWxMessage, type SIWxPayload } from './siwx-verify';
+import { decodeBase64Utf8, encodeBase64Utf8 } from './base64';
 
 export type SIWxSigner = {
   signMessage: (message: string) => Promise<string>;
@@ -41,9 +42,10 @@ export async function parseSIWxExtension(
   const siwxHeader = response.headers.get('X-SIWX-EXTENSION');
   if (siwxHeader) {
     try {
-      return JSON.parse(
-        Buffer.from(siwxHeader, 'base64').toString('utf-8')
-      ) as Record<string, unknown>;
+      return JSON.parse(decodeBase64Utf8(siwxHeader)) as Record<
+        string,
+        unknown
+      >;
     } catch {
       // fall through
     }
@@ -65,10 +67,8 @@ export async function parseSIWxExtension(
 /**
  * Build a SIWX header value from a signed payload.
  */
-export function buildSIWxHeaderValue(
-  payload: Record<string, unknown>
-): string {
-  return Buffer.from(JSON.stringify(payload)).toString('base64');
+export function buildSIWxHeaderValue(payload: Record<string, unknown>): string {
+  return encodeBase64Utf8(JSON.stringify(payload));
 }
 
 /**
@@ -76,7 +76,10 @@ export function buildSIWxHeaderValue(
  * When a 402 response includes a SIWX extension, the wrapper will attempt
  * to sign and retry before falling through to payment.
  */
-type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+type FetchFn = (
+  input: RequestInfo | URL,
+  init?: RequestInit
+) => Promise<Response>;
 
 export function wrapFetchWithSIWx(
   baseFetch: FetchFn,
@@ -114,7 +117,9 @@ export function wrapFetchWithSIWx(
     };
 
     // Sign the payload
-    const signature = await signer.signMessage(buildSIWxMessage(payload as unknown as SIWxPayload));
+    const signature = await signer.signMessage(
+      buildSIWxMessage(payload as unknown as SIWxPayload)
+    );
     payload.signature = signature;
 
     // Retry with SIWX header

@@ -1,12 +1,11 @@
 {{TEMPLATE_IMPORTS}}
 import { createAgent } from "@lucid-agents/core";
 import { http } from "@lucid-agents/http";
+import { payments, paymentsFromEnv } from "@lucid-agents/payments";
 import { wallets } from "@lucid-agents/wallet";
 import { walletsFromEnv } from "@lucid-agents/wallet";
 import { identity, identityFromEnv } from "@lucid-agents/identity";
 import {
-  createAgentIdentity,
-  getTrustConfig,
   generateAgentRegistration,
   type AgentRegistrationOptions,
 } from "@lucid-agents/identity";
@@ -95,8 +94,8 @@ const agent = await createAgent({
   version: process.env.AGENT_VERSION ?? "0.1.0",
   description: process.env.AGENT_DESCRIPTION,
 })
-  .use(http())
   .use(wallets({ config: walletsFromEnv() }))
+  .use(payments({ config: paymentsFromEnv() }))
   .use(identity({
     config: {
       ...identityFromEnv(),
@@ -104,20 +103,20 @@ const agent = await createAgent({
       registration: registrationOptions,
     }
   }))
+  .use(http())
   .build();
 
 {{TEMPLATE_POST_SETUP}}
 // Identity feature setup
 // Note: The identity extension has already been configured above
 // This section creates the on-chain identity using the agent's wallets
-const identityResult = await createAgentIdentity({
-  runtime: agent,
-  domain: process.env.AGENT_DOMAIN,
-  autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
-  rpcUrl: process.env.RPC_URL,
-  chainId: process.env.CHAIN_ID ? parseInt(process.env.CHAIN_ID) : undefined,
-  registration: registrationOptions,
-});
+const identityResult = agent.identity?.result;
+
+if (!identityResult) {
+  throw new Error(
+    "Identity extension did not produce a result. Check wallet, domain, RPC, and chain configuration."
+  );
+}
 
 if (identityResult.didRegister) {
   console.log("Registered agent on-chain!");
@@ -140,88 +139,6 @@ if (identityResult.didRegister) {
   if (identityResult.record?.agentURI) {
     console.log("Agent URI:", identityResult.record.agentURI);
     console.log("Ensure registration file is hosted at the agentURI location.");
-  }
-}
-
-const trustConfig = getTrustConfig(identityResult);
-
-// Example: Query validation summary (read operation)
-// This demonstrates that the validation client is configured with the agent wallet
-if (identityResult.clients?.validation && identityResult.record?.agentId) {
-  console.log(
-    "Fetching validation summary for agent ID:",
-    identityResult.record.agentId.toString()
-  );
-  try {
-    const summary = await identityResult.clients.validation.getSummary(
-      identityResult.record.agentId
-    );
-    console.log("Validation summary:", {
-      count: summary.count.toString(),
-      averageResponse: summary.avgResponse,
-    });
-  } catch (error) {
-    console.warn("Could not fetch validation summary:", error);
-  }
-} else {
-  console.log("Validation client or agent ID not available:", {
-    hasValidationClient: !!identityResult.clients?.validation,
-    hasAgentId: !!identityResult.record?.agentId,
-  });
-}
-
-// Example: Create validation request (write operation using agent wallet)
-// This demonstrates write operations with the agent's private key
-//
-// IMPORTANT: The validatorAddress must be the address of a validator contract that will validate the request.
-// This is typically a validator smart contract (e.g., stake-secured inference re-execution,
-// zkML verifier, or TEE oracle). The validator will later respond with validationResponse.
-//
-// The agent (owner of agentId) calls this to request validation from a validator.
-// The validator address should NOT be the agent's own address - it should be a separate validator.
-//
-// Note: This example uses a placeholder validator address for demonstration.
-// In production, replace this with the actual validator contract address.
-if (identityResult.clients?.validation && identityResult.record?.agentId) {
-  try {
-    const agentId = identityResult.record.agentId;
-
-    // Placeholder validator address (replace with actual validator contract address in production)
-    const validatorAddress =
-      "0x0000000000000000000000000000000000000001" as const;
-
-    // URI pointing to the validation request content (e.g., IPFS hash)
-    const timestamp = Date.now();
-    const requestUri = `https://${
-      process.env.AGENT_DOMAIN || "agent.example.com"
-    }/validation-request-${timestamp}.json`;
-
-    console.log("Creating validation request...");
-    console.log("Validator address:", validatorAddress);
-    console.log("Agent ID:", agentId.toString());
-    console.log("Request URI:", requestUri);
-
-    // requestHash will be computed automatically from requestUri
-    // Note: Function renamed: createRequest → validationRequest
-    const txHash = await identityResult.clients.validation.validationRequest({
-      validatorAddress,
-      agentId,
-      requestUri,
-    });
-    console.log("Created validation request! Transaction:", txHash);
-    console.log(
-      "Note: The validator at",
-      validatorAddress,
-      "should respond with validationResponse() (function renamed from submitResponse)"
-    );
-  } catch (error: any) {
-    console.error("Could not create validation request:", error);
-    if (error?.message) {
-      console.error("Error message:", error.message);
-    }
-    if (error?.reason) {
-      console.error("Error reason:", error.reason);
-    }
   }
 }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
 
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import type { AgentHttpRuntime } from '@lucid-agents/types/http';
+import type { IdentityRuntime, OASFRecord } from '@lucid-agents/types/identity';
 
 import { http } from '../extension';
 
@@ -10,20 +12,9 @@ const meta = {
   description: 'OASF test agent',
 };
 
-function makeRuntime(
-  registration?: {
-    selectedServices?: string[];
-    oasf?: {
-      endpoint?: string;
-      version?: string;
-      authors?: string[];
-      skills?: string[];
-      domains?: string[];
-      modules?: string[];
-      locators?: string[];
-    };
-  }
-): AgentRuntime {
+type IdentityAwareRuntime = AgentRuntime<{ identity?: IdentityRuntime }>;
+
+function makeRuntime(record?: OASFRecord): IdentityAwareRuntime {
   const entrypoints: EntrypointDef[] = [
     {
       key: 'echo',
@@ -36,16 +27,15 @@ function makeRuntime(
     agent: {
       config: { meta },
       getEntrypoint: key => entrypoints.find(entry => entry.key === key),
-    } as any,
+      listEntrypoints: () => [...entrypoints],
+    },
     entrypoints: {
-      add: def => {
-        entrypoints.push(def);
-      },
+      add: def => entrypoints.push(def),
       list: () =>
         entrypoints.map(entry => ({
           key: entry.key,
           description: entry.description,
-          streaming: Boolean(entry.stream ?? entry.streaming),
+          streaming: Boolean(entry.stream),
         })),
       snapshot: () => [...entrypoints],
     },
@@ -53,68 +43,50 @@ function makeRuntime(
       build: origin => ({ ...meta, url: `${origin}/`, entrypoints: {} }),
       invalidate: () => {},
     },
-    identity: registration ? { registration } : undefined,
-  } as AgentRuntime;
+    close: async () => {},
+    identity: record ? { buildOASFRecord: () => record } : undefined,
+  } as IdentityAwareRuntime;
+}
+
+function attachHttp(runtime: IdentityAwareRuntime) {
+  const extension = http();
+  const slice = extension.build({ meta, runtime }) as {
+    http: AgentHttpRuntime;
+  };
+  return slice.http.handlers;
 }
 
 describe('http OASF handler', () => {
-  it('returns 404 when OASF is not enabled', async () => {
-    const extension = http();
-    extension.build({ meta, runtime: {} as AgentRuntime });
-    const runtime = makeRuntime();
-    extension.onBuild?.(runtime);
-
-    const response = await runtime.handlers!.oasf(
+  it('returns 404 when the identity capability does not expose OASF', async () => {
+    const handlers = attachHttp(makeRuntime());
+    const response = await handlers.oasf(
       new Request('https://agent.example.com/.well-known/oasf-record.json')
     );
 
     expect(response.status).toBe(404);
   });
 
-  it('returns generated OASF record when enabled', async () => {
-    const extension = http();
-    extension.build({ meta, runtime: {} as AgentRuntime });
-    const runtime = makeRuntime({
-      selectedServices: ['OASF'],
-      oasf: {
-        version: '0.8.0',
-        authors: ['ops@agent.example.com'],
-        skills: ['reasoning'],
-        domains: ['finance'],
-        modules: ['https://agent.example.com/modules/core'],
-        locators: ['https://agent.example.com/.well-known/oasf-record.json'],
-      },
-    });
-    extension.onBuild?.(runtime);
+  it('serves the identity-owned OASF record without reinterpreting it', async () => {
+    const record: OASFRecord = {
+      type: 'https://docs.agntcy.org/oasf/oasf-server/',
+      name: meta.name,
+      description: meta.description,
+      version: '0.8.0',
+      endpoint: 'https://agent.example.com/.well-known/oasf-record.json',
+      authors: ['ops@agent.example.com'],
+      skills: ['reasoning'],
+      domains: ['finance'],
+      modules: ['https://agent.example.com/modules/core'],
+      locators: ['https://agent.example.com/.well-known/oasf-record.json'],
+      entrypoints: [{ key: 'echo', description: 'Echo input' }],
+    };
+    const handlers = attachHttp(makeRuntime(record));
 
-    const response = await runtime.handlers!.oasf(
+    const response = await handlers.oasf(
       new Request('https://agent.example.com/.well-known/oasf-record.json')
     );
+
     expect(response.status).toBe(200);
-    const body = await response.json();
-
-    expect(body.name).toBe(meta.name);
-    expect(body.version).toBe('0.8.0');
-    expect(body.entrypoints?.[0]?.key).toBe('echo');
-    expect(body.endpoint).toBe(
-      'https://agent.example.com/.well-known/oasf-record.json'
-    );
-  });
-
-  it('fails fast on invalid strict OASF config', () => {
-    const extension = http();
-    extension.build({ meta, runtime: {} as AgentRuntime });
-    const runtime = makeRuntime({
-      selectedServices: ['OASF'],
-      oasf: {
-        version: '0.8.0',
-        skills: ['reasoning'],
-        domains: ['finance'],
-        modules: ['https://agent.example.com/modules/core'],
-        locators: ['https://agent.example.com/.well-known/oasf-record.json'],
-      },
-    });
-
-    expect(() => extension.onBuild?.(runtime)).toThrow(/authors/);
+    expect(await response.json()).toEqual(record);
   });
 });

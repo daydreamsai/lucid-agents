@@ -45,7 +45,7 @@ Open a new terminal and try these commands:
 ### View the agent manifest
 
 ```bash
-curl http://localhost:3000/.well-known/agent.json
+curl http://localhost:3000/.well-known/agent-card.json
 ```
 
 This returns the Agent Card describing your agent's capabilities, entrypoints, and metadata.
@@ -132,7 +132,6 @@ agent.entrypoints.add({
   output: z.object({
     completed: z.boolean(),
   }),
-  streaming: true,
   async stream({ input }, emit) {
     await emit({
       kind: 'delta',

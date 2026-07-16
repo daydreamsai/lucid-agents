@@ -12,6 +12,8 @@ The catalog extension generates entrypoint routes from YAML or CSV product catal
 bun add @lucid-agents/catalog
 ```
 
+The root export contains portable parsers, schemas, types, and entrypoint generation. File-backed loading uses Node filesystem APIs and is available explicitly from `@lucid-agents/catalog/node`.
+
 ## Basic usage
 
 Define a product catalog in YAML:
@@ -22,13 +24,13 @@ products:
   - key: sentiment
     name: Sentiment Analysis
     description: Analyze text sentiment
-    price: "0.05"
+    price: '0.05'
   - key: summarize
     name: Text Summarizer
     description: Summarize long-form content
     price:
-      invoke: "0.50"
-      stream: "0.10"
+      invoke: '0.50'
+      stream: '0.10'
   - key: health
     name: Health Check
     description: Free health endpoint
@@ -39,7 +41,7 @@ Wire it into your agent:
 ```typescript
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { catalog } from '@lucid-agents/catalog';
+import { catalog } from '@lucid-agents/catalog/node';
 import { createAgentApp } from '@lucid-agents/hono';
 
 const agent = await createAgent({
@@ -64,8 +66,9 @@ products:
   - key: translate
     name: Quick Translate
     description: Translate text between languages
-    price: "0.10"
-    network: "eip155:8453"
+    price: '0.10'
+    network: 'eip155:8453'
+    paymentProtocol: x402
     metadata:
       category: nlp
       rateLimit: 200
@@ -73,14 +76,15 @@ products:
 
 ### Supported fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `key` | `string` | Yes | Unique route identifier. Becomes the entrypoint key. |
-| `name` | `string` | Yes | Human-readable display name. |
-| `description` | `string` | No | Description shown in the agent manifest. |
-| `price` | `string` or `object` | No | Flat USD price, or `{ invoke, stream }` for per-mode pricing. |
-| `network` | `string` | No | CAIP-2 network identifier (e.g., `eip155:8453`). |
-| `metadata` | `object` | No | Arbitrary key-value pairs attached to the entrypoint. |
+| Field             | Type                 | Required | Description                                                                                                     |
+| ----------------- | -------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `key`             | `string`             | Yes      | Unique route identifier. Becomes the entrypoint key.                                                            |
+| `name`            | `string`             | Yes      | Human-readable display name.                                                                                    |
+| `description`     | `string`             | No       | Description shown in the agent manifest.                                                                        |
+| `price`           | `string` or `object` | No       | Flat USD price, or `{ invoke, stream }` for per-mode pricing.                                                   |
+| `network`         | `string`             | No       | CAIP-2 network identifier (e.g., `eip155:8453`).                                                                |
+| `paymentProtocol` | `"x402"` or `"mpp"`  | No       | Payment rail for a priced item. Required when both rails are installed unless the extension supplies a default. |
+| `metadata`        | `object`             | No       | Arbitrary key-value pairs attached to the entrypoint.                                                           |
 
 ### Price variants
 
@@ -89,7 +93,7 @@ Flat price (same for invoke and stream):
 ```yaml
 - key: summarize
   name: Summarize
-  price: "0.50"
+  price: '0.50'
 ```
 
 Separate invoke and stream prices:
@@ -98,8 +102,8 @@ Separate invoke and stream prices:
 - key: generate
   name: Generate Text
   price:
-    invoke: "1.00"
-    stream: "0.20"
+    invoke: '1.00'
+    stream: '0.20'
 ```
 
 No price (free entrypoint):
@@ -114,20 +118,21 @@ No price (free entrypoint):
 CSV catalogs use a header row. Metadata columns use the `meta_` prefix convention:
 
 ```csv
-key,name,description,price,network,meta_category,meta_tier
-ocr,OCR Scan,Extract text from images,0.50,,vision,standard
-embed,Text Embedding,Generate vector embeddings,0.02,,ml,basic
-classify,Text Classifier,Classify text,0.10,,nlp,basic
+key,name,description,price,network,paymentProtocol,meta_category,meta_tier
+ocr,OCR Scan,Extract text from images,0.50,,x402,vision,standard
+embed,Text Embedding,Generate vector embeddings,0.02,,mpp,ml,basic
+classify,Text Classifier,Classify text,0.10,,x402,nlp,basic
 ```
 
-| Column | Required | Description |
-|--------|----------|-------------|
-| `key` | Yes | Unique route identifier. |
-| `name` | Yes | Display name. |
-| `description` | No | Route description. |
-| `price` | No | USD price string. Empty = free. |
-| `network` | No | CAIP-2 network identifier. |
-| `meta_*` | No | Collected into `metadata` with prefix stripped. `meta_category` becomes `metadata.category`. |
+| Column            | Required | Description                                                                                  |
+| ----------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `key`             | Yes      | Unique route identifier.                                                                     |
+| `name`            | Yes      | Display name.                                                                                |
+| `description`     | No       | Route description.                                                                           |
+| `price`           | No       | USD price string. Empty = free.                                                              |
+| `network`         | No       | CAIP-2 network identifier.                                                                   |
+| `paymentProtocol` | No       | `x402` or `mpp`.                                                                             |
+| `meta_*`          | No       | Collected into `metadata` with prefix stripped. `meta_category` becomes `metadata.category`. |
 
 <Callout type="info">
 CSV does not support the `{ invoke, stream }` price object syntax. Use YAML if you need per-mode pricing.
@@ -139,21 +144,23 @@ CSV does not support the `{ invoke, stream }` price object syntax. Use YAML if y
 
 ```typescript
 type CatalogExtensionOptions = {
-  file: string;               // Path to .yaml, .yml, or .csv file
-  keyPrefix?: string;         // Prefix for all item keys
-  network?: string;           // Default CAIP-2 network
-  handlerFactory?: HandlerFactory;  // Generate handlers from items
+  file: string; // Path to .yaml, .yml, or .csv file
+  keyPrefix?: string; // Prefix for all item keys
+  network?: string; // Default CAIP-2 network
+  paymentProtocol?: 'x402' | 'mpp'; // Default payment rail
+  handlerFactory?: HandlerFactory; // Generate handlers from items
   inputSchema?: z.ZodTypeAny; // Custom input schema for all routes
 };
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `file` | (required) | Path to the catalog file. Supports `.yaml`, `.yml`, and `.csv`. |
-| `keyPrefix` | `undefined` | Prepended to every item key. `"store/"` turns `"widget"` into `"store/widget"`. |
-| `network` | `undefined` | Default network for items that don't specify their own. |
-| `handlerFactory` | `undefined` | Function receiving a `CatalogItem`, returning a handler function. |
-| `inputSchema` | `z.object({ params: z.record(...).optional() })` | Zod schema applied as input to all generated entrypoints. |
+| Option            | Default                                          | Description                                                                     |
+| ----------------- | ------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `file`            | (required)                                       | Path to the catalog file. Supports `.yaml`, `.yml`, and `.csv`.                 |
+| `keyPrefix`       | `undefined`                                      | Prepended to every item key. `"store/"` turns `"widget"` into `"store/widget"`. |
+| `network`         | `undefined`                                      | Default network for items that don't specify their own.                         |
+| `paymentProtocol` | `undefined`                                      | Default payment rail for items that do not specify their own.                   |
+| `handlerFactory`  | `undefined`                                      | Function receiving a `CatalogItem`, returning a handler function.               |
+| `inputSchema`     | `z.object({ params: z.record(...).optional() })` | Zod schema applied as input to all generated entrypoints.                       |
 
 ### Handler factory
 
@@ -164,7 +171,7 @@ import type { CatalogItem } from '@lucid-agents/catalog';
 
 const handlerFactory = (item: CatalogItem) => {
   return async (ctx: { input: { params?: Record<string, unknown> } }) => {
-    const model = item.metadata?.model as string ?? 'gpt-4o-mini';
+    const model = (item.metadata?.model as string) ?? 'gpt-4o-mini';
 
     // Route to different backends based on catalog metadata
     const result = await callModel(model, ctx.input);
@@ -178,10 +185,12 @@ const handlerFactory = (item: CatalogItem) => {
   };
 };
 
-agent.use(catalog({
-  file: './products.yaml',
-  handlerFactory,
-}));
+agent.use(
+  catalog({
+    file: './products.yaml',
+    handlerFactory,
+  })
+);
 ```
 
 ### Key prefix
@@ -206,7 +215,7 @@ Combine with the payments extension for x402 payment gating. Any catalog item wi
 
 ```typescript
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
-import { catalog } from '@lucid-agents/catalog';
+import { catalog } from '@lucid-agents/catalog/node';
 
 const agent = await createAgent({
   name: 'paid-catalog',
@@ -214,45 +223,58 @@ const agent = await createAgent({
 })
   .use(http())
   .use(payments({ config: paymentsFromEnv() }))
-  .use(catalog({
-    file: './products.yaml',
-    handlerFactory: (item) => async ({ input }) => ({
-      output: { product: item.name, data: 'processed' },
-    }),
-  }))
+  .use(
+    catalog({
+      file: './products.yaml',
+      paymentProtocol: 'x402',
+      handlerFactory:
+        item =>
+        async ({ input }) => ({
+          output: { product: item.name, data: 'processed' },
+        }),
+    })
+  )
   .build();
 ```
 
 ### With MPP
 
-Combine with the MPP extension for multi-method payments (Tempo, Stripe, Lightning):
+Combine with the MPP extension for built-in Tempo/Stripe or application-verified custom payments:
 
 ```typescript
 import { mpp, tempo } from '@lucid-agents/mpp';
-import { catalog } from '@lucid-agents/catalog';
+import { catalog } from '@lucid-agents/catalog/node';
 
 const agent = await createAgent({
   name: 'mpp-catalog',
   version: '1.0.0',
 })
   .use(http())
-  .use(mpp({
-    config: {
-      methods: [tempo.server({ currency: '0x...', recipient: '0x...' })],
-      currency: 'usd',
-    },
-  }))
-  .use(catalog({
-    file: './products.yaml',
-    keyPrefix: 'store/',
-    handlerFactory: (item) => async ({ input }) => ({
-      output: { product: item.key, price: item.price },
-    }),
-  }))
+  .use(
+    mpp({
+      config: {
+        methods: [tempo.server({ currency: '0x...', recipient: '0x...' })],
+        currency: 'usd',
+        secretKey: process.env.MPP_SECRET_KEY,
+      },
+    })
+  )
+  .use(
+    catalog({
+      file: './products.yaml',
+      keyPrefix: 'store/',
+      paymentProtocol: 'mpp',
+      handlerFactory:
+        item =>
+        async ({ input }) => ({
+          output: { product: item.key, price: item.price },
+        }),
+    })
+  )
   .build();
 ```
 
-Both x402 and MPP can coexist on the same agent alongside catalog.
+x402 and MPP can coexist on the same agent. When both are installed, set `paymentProtocol` on every priced catalog item or provide a catalog-wide default. An item-level value takes precedence over the extension default.
 
 ## Runtime access
 
@@ -264,7 +286,7 @@ const agent = await createAgent({ ... })
   .build();
 
 // Access parsed catalog items
-const items = (agent as any).catalog.items;
+const items = agent.catalog?.items ?? [];
 console.log(`Loaded ${items.length} products`);
 
 for (const item of items) {
@@ -306,9 +328,11 @@ import { generateEntrypoints } from '@lucid-agents/catalog';
 const entrypoints = generateEntrypoints(items, {
   keyPrefix: 'api/',
   network: 'eip155:8453',
-  handlerFactory: (item) => async ({ input }) => ({
-    output: { result: item.name },
-  }),
+  handlerFactory:
+    item =>
+    async ({ input }) => ({
+      output: { result: item.name },
+    }),
 });
 ```
 
@@ -330,21 +354,22 @@ const result = CatalogItemSchema.safeParse({
 
 Network identifiers use [CAIP-2](https://chainagnostic.org/CAIPs/caip-2) format:
 
-| Network | CAIP-2 ID |
-|---------|-----------|
-| Base | `eip155:8453` |
-| Base Sepolia | `eip155:84532` |
-| Ethereum | `eip155:1` |
+| Network        | CAIP-2 ID        |
+| -------------- | ---------------- |
+| Base           | `eip155:8453`    |
+| Base Sepolia   | `eip155:84532`   |
+| Ethereum       | `eip155:1`       |
 | Solana Mainnet | `solana:mainnet` |
-| Solana Devnet | `solana:devnet` |
+| Solana Devnet  | `solana:devnet`  |
 
 Set a default via the `network` option, or override per item in your catalog file. Item-level network always takes precedence over the global default.
 
 ## Exports
 
 ```typescript
-// Extension
-export { catalog } from '@lucid-agents/catalog';
+// Node-only file-backed extension
+export { catalog } from '@lucid-agents/catalog/node';
+export type { CatalogRuntime } from '@lucid-agents/catalog/node';
 
 // Parsers
 export { parseCatalogYaml, parseCatalogCsv } from '@lucid-agents/catalog';

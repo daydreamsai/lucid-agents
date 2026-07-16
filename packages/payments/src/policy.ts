@@ -5,7 +5,7 @@ import type {
   IncomingLimit,
   IncomingLimitsConfig,
 } from '@lucid-agents/types/payments';
-import type { PaymentTracker } from './payment-tracker';
+import type { PaymentTracker } from '@lucid-agents/types/payments';
 import type { RateLimiter } from './rate-limiter';
 
 /**
@@ -98,6 +98,15 @@ export function evaluateSender(
   senderAddress?: string,
   senderDomain?: string
 ): PolicyEvaluationResult {
+  return evaluateSenderForPhase(group, senderAddress, senderDomain, false);
+}
+
+function evaluateSenderForPhase(
+  group: PaymentPolicyGroup,
+  senderAddress: string | undefined,
+  senderDomain: string | undefined,
+  deferUnknownSenderAddress: boolean
+): PolicyEvaluationResult {
   if (group.blockedSenders && group.blockedSenders.length > 0) {
     for (const blocked of group.blockedSenders) {
       const blockedDomain = extractDomainFromUrlOrDomain(blocked);
@@ -143,6 +152,10 @@ export function evaluateSender(
           break;
         }
       }
+    }
+
+    if (!isAllowed && deferUnknownSenderAddress && !senderAddress) {
+      return { allowed: true };
     }
 
     if (!isAllowed) {
@@ -509,7 +522,7 @@ export async function evaluateIncomingLimits(
 export async function evaluatePolicyGroups(
   groups: PaymentPolicyGroup[],
   paymentTracker: PaymentTracker,
-  rateLimiter: RateLimiter,
+  rateLimiter?: RateLimiter,
   targetUrl?: string,
   endpointUrl?: string,
   requestedAmount?: bigint,
@@ -541,9 +554,11 @@ export async function evaluatePolicyGroups(
       return outgoingResult;
     }
 
-    const rateResult = evaluateRateLimit(group, rateLimiter);
-    if (!rateResult.allowed) {
-      return rateResult;
+    if (rateLimiter) {
+      const rateResult = evaluateRateLimit(group, rateLimiter);
+      if (!rateResult.allowed) {
+        return rateResult;
+      }
     }
   }
 
@@ -567,10 +582,17 @@ export async function evaluateIncomingPolicyGroups(
   senderAddress?: string,
   senderDomain?: string,
   endpointUrl?: string,
-  requestedAmount?: bigint
+  requestedAmount?: bigint,
+  rateLimiter?: RateLimiter,
+  options?: { deferUnknownSenderAddress?: boolean }
 ): Promise<PolicyEvaluationResult> {
   for (const group of groups) {
-    const senderResult = evaluateSender(group, senderAddress, senderDomain);
+    const senderResult = evaluateSenderForPhase(
+      group,
+      senderAddress,
+      senderDomain,
+      options?.deferUnknownSenderAddress ?? false
+    );
     if (!senderResult.allowed) {
       return senderResult;
     }
@@ -585,6 +607,13 @@ export async function evaluateIncomingPolicyGroups(
     );
     if (!incomingResult.allowed) {
       return incomingResult;
+    }
+
+    if (rateLimiter) {
+      const rateResult = evaluateRateLimit(group, rateLimiter);
+      if (!rateResult.allowed) {
+        return rateResult;
+      }
     }
   }
 

@@ -8,6 +8,9 @@
     "directory": "packages/tanstack"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -32,16 +35,13 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lucid-agents/core": "workspace:*",
-    "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/types": "workspace:*",
-    "@tanstack/react-start": "^1.134.13",
-    "@x402/core": "catalog:",
-    "viem": "catalog:",
-    "zod": "catalog:"
+    "@tanstack/react-start": "^1.134.13"
   },
   "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
     "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }

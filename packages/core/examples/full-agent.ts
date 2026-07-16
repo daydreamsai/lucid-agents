@@ -304,7 +304,6 @@ async function main() {
       key: 'stream',
       description: 'Streams characters back to the caller',
       input: z.object({ prompt: z.string() }),
-      streaming: true,
       async stream(ctx, emit) {
         const prompt = String(ctx.input.prompt ?? '');
         console.log(`[examples] stream prompt -> ${prompt}`);

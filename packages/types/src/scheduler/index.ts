@@ -82,6 +82,8 @@ export type Job = {
   maxRetries: number;
   status: JobStatus;
   idempotencyKey?: string;
+  /** @internal True when the scheduler should rotate the key per interval run. */
+  managedIdempotencyKey?: boolean;
   lease?: {
     workerId: string;
     expiresAt: number;
@@ -104,6 +106,8 @@ export type SchedulerStore = {
     now: number
   ): Promise<boolean>;
   getExpiredLeases?(now: number): Promise<Job[]>;
+  /** Release persistent store resources. */
+  close?(): Promise<void> | void;
 };
 
 /**
@@ -169,6 +173,7 @@ export type SchedulerRuntime = {
     /** Optional wallet metadata for auditing. Payment is handled by paymentContext. */
     wallet?: WalletRef;
     maxRetries?: number;
+    /** Stable 20–256 character key accepted by the target HTTP runtime. */
     idempotencyKey?: string;
     metadata?: Record<string, JsonValue>;
   }): Promise<{ hire: Hire; job: Job }>;
@@ -178,6 +183,7 @@ export type SchedulerRuntime = {
     schedule: Schedule;
     jobInput: JsonValue;
     maxRetries?: number;
+    /** Stable 20–256 character key accepted by the target HTTP runtime. */
     idempotencyKey?: string;
   }): Promise<Job>;
   pauseHire(hireId: string): Promise<OperationResult>;
@@ -198,4 +204,3 @@ export type PaymentContext = {
   walletAddress: `0x${string}` | null;
   chainId: number | null;
 };
-

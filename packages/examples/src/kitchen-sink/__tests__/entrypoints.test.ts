@@ -112,7 +112,7 @@ describe('ask entrypoint', () => {
     const agentApp = await createAgentApp(agent);
 
     // Mock Anthropic client — no real API call
-    const mockCreate = mock(async () => ({
+    const mockCreate = mock(async (_params: unknown) => ({
       content: [{ type: 'text', text: 'Paris' }],
     }));
     const mockAnthropic = { messages: { create: mockCreate } };

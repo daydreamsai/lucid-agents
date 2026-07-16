@@ -8,6 +8,15 @@
     "directory": "packages/payments"
   },
   "type": "module",
+  "lucidAgents": {
+    "runtime": "portable",
+    "nodeExports": [
+      "./node",
+      "./storage/sqlite",
+      "./storage/postgres",
+      "./providers/stripe"
+    ]
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +25,26 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
+    },
+    "./storage/sqlite": {
+      "types": "./dist/storage/sqlite.d.ts",
+      "import": "./dist/storage/sqlite.js",
+      "default": "./dist/storage/sqlite.js"
+    },
+    "./storage/postgres": {
+      "types": "./dist/storage/postgres.d.ts",
+      "import": "./dist/storage/postgres.js",
+      "default": "./dist/storage/postgres.js"
+    },
+    "./providers/stripe": {
+      "types": "./dist/providers/stripe.d.ts",
+      "import": "./dist/providers/stripe.js",
+      "default": "./dist/providers/stripe.js"
     },
     "./package.json": "./package.json"
   },
@@ -33,17 +62,30 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "pg": "^8.13.1",
     "viem": "catalog:",
     "@x402/core": "catalog:",
     "@x402/fetch": "catalog:",
     "@x402/evm": "catalog:",
-    "stripe": "catalog:",
+    "@x402/svm": "catalog:",
     "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "pg": "^8.13.1",
+    "stripe": "^20.3.1"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    },
+    "stripe": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/pg": "^8.11.10"
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
+    "stripe": "catalog:"
   }
 }

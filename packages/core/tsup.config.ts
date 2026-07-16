@@ -11,17 +11,7 @@ export default definePackageConfig({
     entry: entryPoints,
   },
   external: [
-    '@lucid-dreams/client',
     '@lucid-agents/types',
-    '@lucid-agents/a2a',
-    '@lucid-agents/ap2',
-    '@lucid-agents/identity',
-    '@lucid-agents/payments',
-    'hono',
-    'viem',
-    '@x402/core',
-    '@x402/fetch',
-    '@x402/hono',
     'zod',
   ],
 });

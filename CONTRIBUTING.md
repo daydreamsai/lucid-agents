@@ -70,6 +70,7 @@ lucid-agents/
 ```
 
 Each package has its own:
+
 - `package.json` - Dependencies and scripts
 - `src/` - Source code
 - `__tests__/` - Test files (where applicable)
@@ -132,6 +133,7 @@ Use descriptive branch names that indicate the type of change:
 Write clear, concise commit messages following these guidelines:
 
 **Format:**
+
 ```
 <type>: <subject>
 
@@ -141,6 +143,7 @@ Write clear, concise commit messages following these guidelines:
 ```
 
 **Types:**
+
 - `feat` - New feature
 - `fix` - Bug fix
 - `docs` - Documentation changes
@@ -174,6 +177,7 @@ Fixes #123
 When working on a specific package:
 
 1. **Navigate to the package directory**
+
    ```bash
    cd packages/core
    ```
@@ -218,20 +222,21 @@ bun test --watch
 Tests are located in `__tests__/` directories within each package.
 
 **Test file naming:**
+
 - `*.test.ts` - Unit tests
 - `*.integration.test.ts` - Integration tests
 
 **Example test structure:**
 
 ```typescript
-import { describe, test, expect } from "bun:test";
-import { createAgentApp } from "../src/app";
+import { describe, test, expect } from 'bun:test';
+import { createAgentApp } from '../src/app';
 
-describe("createAgentApp", () => {
-  test("creates app with metadata", () => {
+describe('createAgentApp', () => {
+  test('creates app with metadata', () => {
     const { app, config } = createAgentApp({
-      name: "test-agent",
-      version: "1.0.0",
+      name: 'test-agent',
+      version: '1.0.0',
     });
 
     expect(app).toBeDefined();
@@ -243,26 +248,33 @@ describe("createAgentApp", () => {
 ### Test Coverage
 
 Aim for good test coverage, especially for:
+
 - Public APIs
 - Core functionality
 - Edge cases and error handling
 - Breaking changes
+
+`bun run test:coverage` enforces aggregate source coverage of at least 70% of
+lines and 78% of functions. Compiled output and test files are excluded.
 
 ## Pull Requests
 
 ### Before Submitting
 
 1. **Test your changes**
+
    ```bash
-   bun test
+   bun run test:coverage
    ```
 
 2. **Build packages**
+
    ```bash
    bun run build:packages
    ```
 
 3. **Check TypeScript types**
+
    ```bash
    bunx tsc --noEmit
    ```
@@ -283,19 +295,24 @@ Aim for good test coverage, especially for:
 
 ```markdown
 ## Description
+
 Brief description of what this PR does.
 
 ## Motivation
+
 Why is this change needed?
 
 ## Changes
+
 - List of specific changes made
 - Can be bullet points
 
 ## Testing
+
 How was this tested?
 
 ## Related Issues
+
 Closes #123
 Fixes #456
 ```
@@ -318,6 +335,7 @@ Releases are managed by maintainers using [Changesets](https://github.com/change
 When making changes that should be included in release notes:
 
 1. **Create a changeset**
+
    ```bash
    bun run changeset
    ```
@@ -417,14 +435,12 @@ export function createAgentApp(
 ```typescript
 // Good
 if (!config.payTo) {
-  throw new Error(
-    "PaymentsConfig.payTo is required when payments are enabled"
-  );
+  throw new Error('PaymentsConfig.payTo is required when payments are enabled');
 }
 
 // Avoid
 if (!config.payTo) {
-  throw new Error("Missing payTo");
+  throw new Error('Missing payTo');
 }
 ```
 
@@ -446,4 +462,3 @@ If you have questions or need help:
 ## License
 
 By contributing, you agree that your contributions will be licensed under the same license as the project (MIT).
-

@@ -1,6 +1,8 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { AgentAuthContext } from '@lucid-agents/types/siwx';
-import { invoke as httpInvoke, stream as httpStream } from '@lucid-agents/http';
+import type {
+  AgentHttpRoute,
+  AgentHttpRuntime,
+} from '@lucid-agents/types/http';
 
 export type TanStackRequestHandler = (ctx: {
   request: Request;
@@ -9,7 +11,6 @@ export type TanStackRequestHandler = (ctx: {
 export type TanStackRouteHandler<P extends Record<string, string>> = (ctx: {
   request: Request;
   params: P;
-  auth?: AgentAuthContext;
 }) => Promise<Response>;
 
 export type TanStackHandlers = {
@@ -28,10 +29,15 @@ export type TanStackHandlers = {
   subscribeTask: TanStackRouteHandler<{ taskId: string }>;
 };
 
-export type TanStackRuntime = {
-  runtime: AgentRuntime;
+export type TanStackRuntime<
+  TRuntime extends HttpAgentRuntime = HttpAgentRuntime,
+> = {
+  runtime: TRuntime;
   handlers: TanStackHandlers;
+  routes: readonly AgentHttpRoute[];
 };
+
+type HttpAgentRuntime = AgentRuntime<{ http: AgentHttpRuntime }>;
 
 function adaptRequestHandler(
   handler: (req: Request) => Promise<Response>
@@ -45,16 +51,17 @@ function adaptRouteHandler<P extends Record<string, string>>(
   return async ({ request, params }) => handler(request, params);
 }
 
-export function createTanStackHandlers(
-  runtime: AgentRuntime
+/** Adapt a completed Fetch-native HTTP runtime to TanStack route handlers. */
+export function createTanStackHandlers<TRuntime extends HttpAgentRuntime>(
+  runtime: TRuntime
 ): TanStackHandlers {
-  if (!runtime.handlers) {
+  if (!runtime.http) {
     throw new Error(
       'HTTP extension is required. Use app.use(http()) when building the runtime.'
     );
   }
 
-  const { handlers } = runtime;
+  const { handlers } = runtime.http;
   return {
     health: adaptRequestHandler(handlers.health),
     entrypoints: adaptRequestHandler(handlers.entrypoints),
@@ -78,10 +85,8 @@ export function createTanStackHandlers(
     landing: handlers.landing
       ? adaptRequestHandler(handlers.landing)
       : undefined,
-    invoke: async ({ request, params, auth }) =>
-      httpInvoke(request, params.key, runtime, auth ? { auth } : undefined),
-    stream: async ({ request, params, auth }) =>
-      httpStream(request, params.key, runtime, auth ? { auth } : undefined),
+    invoke: adaptRouteHandler(handlers.invoke),
+    stream: adaptRouteHandler(handlers.stream),
     tasks: adaptRequestHandler(handlers.tasks),
     getTask: adaptRouteHandler(handlers.getTask),
     listTasks: adaptRequestHandler(handlers.listTasks),
@@ -90,12 +95,16 @@ export function createTanStackHandlers(
   };
 }
 
-export async function createTanStackRuntime(
-  runtime: AgentRuntime
-): Promise<TanStackRuntime> {
-
+/**
+ * Expose TanStack handlers and the canonical route plan for a completed agent
+ * runtime. This function does not create a second registry or paywall.
+ */
+export async function createTanStackRuntime<TRuntime extends HttpAgentRuntime>(
+  runtime: TRuntime
+): Promise<TanStackRuntime<TRuntime>> {
   return {
     runtime,
     handlers: createTanStackHandlers(runtime),
+    routes: runtime.http.routes,
   };
 }

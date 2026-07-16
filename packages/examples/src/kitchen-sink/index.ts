@@ -36,6 +36,7 @@ async function main() {
   const agent = await createKitchenSinkAgent();
   const { app, addEntrypoint } = await createAgentApp(agent);
   registerEntrypoints(addEntrypoint, agent);
+  const hasWallets = 'wallets' in agent && Boolean(agent.wallets);
 
   const server = Bun.serve({ port: PORT, fetch: app.fetch.bind(app) });
 
@@ -43,10 +44,10 @@ async function main() {
   const hr = '─'.repeat(52);
   console.log(`[kitchen-sink] ${hr}`);
   console.log(
-    `[kitchen-sink] Wallet:    ${agent.wallets ? 'configured' : 'not configured (set AGENT_WALLET_TYPE + AGENT_WALLET_PRIVATE_KEY)'}`
+    `[kitchen-sink] Wallet:    ${hasWallets ? 'configured' : 'not configured (set AGENT_WALLET_TYPE + AGENT_WALLET_PRIVATE_KEY)'}`
   );
   console.log(
-    `[kitchen-sink] Identity:  ${agent.wallets ? 'enabled' : 'disabled (no wallet)'}`
+    `[kitchen-sink] Identity:  ${hasWallets ? 'enabled' : 'disabled (no wallet)'}`
   );
   console.log(`[kitchen-sink] Payments:  x402 ready`);
   console.log(`[kitchen-sink] Analytics: ready`);

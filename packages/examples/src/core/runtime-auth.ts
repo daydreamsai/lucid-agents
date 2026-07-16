@@ -265,7 +265,7 @@ async function main() {
   const agents = await runtime.api.listAgents();
   console.log(
     '[runtime-demo] agents from API',
-    agents.items?.map(item => item.ref)
+    agents.items?.map((item: { ref?: string }) => item.ref)
   );
 
   const invokeResponse = await fetch(

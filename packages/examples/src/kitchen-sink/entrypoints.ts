@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getSummary } from '@lucid-agents/analytics';
+import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import type { SchedulerRuntime } from '@lucid-agents/types/scheduler';
 import { z } from 'zod';
 
 // Minimal interface covering the Anthropic API surface we use.
@@ -39,7 +40,10 @@ type AddEntrypoint = <
  */
 export function registerEntrypoints(
   addEntrypoint: AddEntrypoint,
-  runtime: AgentRuntime,
+  runtime: AgentRuntime<{
+    analytics?: AnalyticsRuntime;
+    scheduler?: SchedulerRuntime;
+  }>,
   options?: { anthropic?: AnthropicLike }
 ): void {
   // Lazily resolve the Anthropic client: use the injected mock (for tests) or
@@ -112,8 +116,8 @@ export function registerEntrypoints(
   // ------------------------------------------------------------------
   // 3. stream — demonstrates: streaming entrypoint (SSE / delta chunks)
   //    Shows how to use the `stream` handler and `emit` helper to push
-  //    incremental StreamDeltaEnvelope chunks over SSE. The `streaming`
-  //    flag advertises streaming support in the agent card.
+  //    incremental StreamDeltaEnvelope chunks over SSE. The handler itself
+  //    advertises streaming support in the agent card.
   // ------------------------------------------------------------------
   addEntrypoint({
     key: 'stream',
@@ -122,7 +126,6 @@ export function registerEntrypoints(
       prompt: z.string(),
     }),
     output: z.object({ done: z.boolean() }),
-    streaming: true,
     async stream({ input }, emit) {
       for (const char of input.prompt) {
         await emit({ kind: 'delta', delta: char, mime: 'text/plain' });
@@ -133,7 +136,7 @@ export function registerEntrypoints(
 
   // ------------------------------------------------------------------
   // 4. analytics-report — demonstrates: analytics extension
-  //    Reads from runtime.analytics.paymentTracker via getSummary() to
+  //    Reads from the analytics runtime's bound summary API to
   //    return aggregated payment totals. Falls back to zeros when the
   //    tracker is unavailable (e.g. no payment history yet).
   // ------------------------------------------------------------------
@@ -149,9 +152,7 @@ export function registerEntrypoints(
       transactionCount: z.number(),
     }),
     async handler() {
-      const tracker = runtime.analytics?.paymentTracker;
-
-      if (!tracker) {
+      if (!runtime.analytics) {
         // Graceful fallback: analytics extension present but no tracker yet
         return {
           output: {
@@ -163,7 +164,7 @@ export function registerEntrypoints(
         };
       }
 
-      const summary = await getSummary(tracker);
+      const summary = await runtime.analytics.getSummary();
       return {
         output: {
           outgoingTotal: summary.outgoingTotal.toString(),

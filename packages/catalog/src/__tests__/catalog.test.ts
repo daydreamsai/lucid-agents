@@ -3,6 +3,7 @@ import { writeFileSync, mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { z } from 'zod';
+import type { BuildContext } from '@lucid-agents/types/core';
 
 // Types we'll implement
 import {
@@ -12,8 +13,8 @@ import {
   type CatalogConfig,
   CatalogItemSchema,
   generateEntrypoints,
-  catalog,
 } from '../index';
+import { catalog } from '../node';
 
 describe('CatalogItemSchema', () => {
   it('validates a complete catalog item', () => {
@@ -77,6 +78,35 @@ describe('CatalogItemSchema', () => {
     };
     const result = CatalogItemSchema.safeParse(item);
     expect(result.success).toBe(true);
+  });
+
+  it('validates supported payment protocols', () => {
+    expect(
+      CatalogItemSchema.safeParse({
+        key: 'x402-item',
+        name: 'x402 Item',
+        price: '1.00',
+        paymentProtocol: 'x402',
+      }).success
+    ).toBe(true);
+    expect(
+      CatalogItemSchema.safeParse({
+        key: 'mpp-item',
+        name: 'MPP Item',
+        price: '1.00',
+        paymentProtocol: 'mpp',
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejects unsupported payment protocols', () => {
+    const result = CatalogItemSchema.safeParse({
+      key: 'invalid-protocol',
+      name: 'Invalid Protocol',
+      price: '1.00',
+      paymentProtocol: 'cash',
+    });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -144,6 +174,17 @@ products:
     expect(items[0].network).toBe('solana:devnet');
   });
 
+  it('parses YAML with a payment protocol', () => {
+    const items = parseCatalogYaml(`
+products:
+  - key: tempo-product
+    name: Tempo Product
+    price: "1.00"
+    paymentProtocol: mpp
+`);
+    expect(items[0].paymentProtocol).toBe('mpp');
+  });
+
   it('supports flat array format (no products wrapper)', () => {
     const yamlContent = `
 - key: item-1
@@ -204,6 +245,21 @@ sol-item,Sol Item,On Solana,1.00,solana:devnet`;
     expect(items[0].network).toBe('solana:devnet');
   });
 
+  it('parses CSV with a payment protocol column', () => {
+    const csvContent = `key,name,description,price,paymentProtocol
+paid-item,Paid Item,Protected by x402,1.00,x402`;
+    const items = parseCatalogCsv(csvContent);
+    expect(items[0].paymentProtocol).toBe('x402');
+  });
+
+  it('rejects an unsupported CSV payment protocol', () => {
+    const csvContent = `key,name,price,paymentProtocol
+paid-item,Paid Item,1.00,cash`;
+    expect(() => parseCatalogCsv(csvContent)).toThrow(
+      'Invalid CSV row for key "paid-item"'
+    );
+  });
+
   it('parses CSV with metadata columns (prefixed with meta_)', () => {
     const csvContent = `key,name,description,price,meta_category,meta_tier
 premium,Premium,Top tier,10.00,ai,premium`;
@@ -220,8 +276,18 @@ Widget,A widget,1.00`;
 
 describe('generateEntrypoints', () => {
   const sampleItems: CatalogItem[] = [
-    { key: 'widget-a', name: 'Widget A', description: 'A widget', price: '1.00' },
-    { key: 'widget-b', name: 'Widget B', description: 'B widget', price: '2.50' },
+    {
+      key: 'widget-a',
+      name: 'Widget A',
+      description: 'A widget',
+      price: '1.00',
+    },
+    {
+      key: 'widget-b',
+      name: 'Widget B',
+      description: 'B widget',
+      price: '2.50',
+    },
   ];
 
   it('generates one entrypoint per catalog item', () => {
@@ -244,26 +310,36 @@ describe('generateEntrypoints', () => {
 
   it('generates entrypoints with invoke/stream pricing', () => {
     const items: CatalogItem[] = [
-      { key: 'stream-api', name: 'Stream', price: { invoke: '5.00', stream: '0.50' } },
+      {
+        key: 'stream-api',
+        name: 'Stream',
+        price: { invoke: '5.00', stream: '0.50' },
+      },
     ];
     const entrypoints = generateEntrypoints(items);
     expect(entrypoints[0].price).toEqual({ invoke: '5.00', stream: '0.50' });
   });
 
   it('generates entrypoints without price for free items', () => {
-    const items: CatalogItem[] = [
-      { key: 'free-item', name: 'Free' },
-    ];
+    const items: CatalogItem[] = [{ key: 'free-item', name: 'Free' }];
     const entrypoints = generateEntrypoints(items);
     expect(entrypoints[0].price).toBeUndefined();
   });
 
   it('passes metadata through to entrypoint', () => {
     const items: CatalogItem[] = [
-      { key: 'meta-item', name: 'Meta', price: '1.00', metadata: { tier: 'gold' } },
+      {
+        key: 'meta-item',
+        name: 'Meta',
+        price: '1.00',
+        metadata: { tier: 'gold' },
+      },
     ];
     const entrypoints = generateEntrypoints(items);
-    expect(entrypoints[0].metadata).toEqual({ tier: 'gold', catalogItem: items[0] });
+    expect(entrypoints[0].metadata).toEqual({
+      tier: 'gold',
+      catalogItem: items[0],
+    });
   });
 
   it('applies custom handler factory when provided', () => {
@@ -275,13 +351,17 @@ describe('generateEntrypoints', () => {
   });
 
   it('applies key prefix when provided', () => {
-    const entrypoints = generateEntrypoints(sampleItems, { keyPrefix: 'shop/' });
+    const entrypoints = generateEntrypoints(sampleItems, {
+      keyPrefix: 'shop/',
+    });
     expect(entrypoints[0].key).toBe('shop/widget-a');
     expect(entrypoints[1].key).toBe('shop/widget-b');
   });
 
   it('applies network override to all entrypoints', () => {
-    const entrypoints = generateEntrypoints(sampleItems, { network: 'eip155:84532' });
+    const entrypoints = generateEntrypoints(sampleItems, {
+      network: 'eip155:84532',
+    });
     expect(entrypoints[0].network).toBe('eip155:84532');
     expect(entrypoints[1].network).toBe('eip155:84532');
   });
@@ -294,6 +374,29 @@ describe('generateEntrypoints', () => {
     expect(entrypoints[0].network).toBe('solana:devnet');
   });
 
+  it('applies a default payment protocol to generated entrypoints', () => {
+    const entrypoints = generateEntrypoints(sampleItems, {
+      paymentProtocol: 'x402',
+    });
+    expect(entrypoints[0].paymentProtocol).toBe('x402');
+    expect(entrypoints[1].paymentProtocol).toBe('x402');
+  });
+
+  it('lets an item payment protocol override the catalog default', () => {
+    const items: CatalogItem[] = [
+      {
+        key: 'item',
+        name: 'Item',
+        price: '1.00',
+        paymentProtocol: 'mpp',
+      },
+    ];
+    const entrypoints = generateEntrypoints(items, {
+      paymentProtocol: 'x402',
+    });
+    expect(entrypoints[0].paymentProtocol).toBe('mpp');
+  });
+
   it('sets default input schema with product key', () => {
     const entrypoints = generateEntrypoints(sampleItems);
     // Should have a basic input schema
@@ -302,7 +405,9 @@ describe('generateEntrypoints', () => {
 
   it('applies custom input schema when provided', () => {
     const customInput = z.object({ quantity: z.number() });
-    const entrypoints = generateEntrypoints(sampleItems, { inputSchema: customInput });
+    const entrypoints = generateEntrypoints(sampleItems, {
+      inputSchema: customInput,
+    });
     expect(entrypoints[0].input).toBe(customInput);
   });
 });
@@ -323,20 +428,30 @@ describe('catalog extension', () => {
 
   it('creates a valid extension object', () => {
     const yamlPath = join(tmpDir, 'products.yaml');
-    writeFileSync(yamlPath, `
+    writeFileSync(
+      yamlPath,
+      `
 products:
   - key: test
     name: Test
     price: "1.00"
-`);
+`
+    );
     const ext = catalog({ file: yamlPath });
     expect(ext.name).toBe('catalog');
     expect(ext.build).toBeDefined();
   });
 
-  it('build returns catalog runtime with items', () => {
+  const buildContext: BuildContext = {
+    meta: { name: 'test', version: '1.0.0' },
+    runtime: {} as BuildContext['runtime'],
+  };
+
+  it('build returns catalog runtime with items', async () => {
     const yamlPath = join(tmpDir, 'products.yaml');
-    writeFileSync(yamlPath, `
+    writeFileSync(
+      yamlPath,
+      `
 products:
   - key: test-product
     name: Test Product
@@ -344,17 +459,20 @@ products:
   - key: another
     name: Another
     price: "2.00"
-`);
+`
+    );
     const ext = catalog({ file: yamlPath });
-    const result = ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    const result = await ext.build(buildContext);
     expect(result.catalog).toBeDefined();
     expect(result.catalog!.items).toHaveLength(2);
     expect(result.catalog!.items[0].key).toBe('test-product');
   });
 
-  it('onBuild registers entrypoints from catalog', async () => {
+  it('initialize registers entrypoints from catalog', async () => {
     const yamlPath = join(tmpDir, 'products.yaml');
-    writeFileSync(yamlPath, `
+    writeFileSync(
+      yamlPath,
+      `
 products:
   - key: alpha
     name: Alpha
@@ -364,9 +482,10 @@ products:
     name: Beta
     description: Beta product
     price: "2.00"
-`);
+`
+    );
     const ext = catalog({ file: yamlPath });
-    ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    await ext.build(buildContext);
 
     // Simulate runtime with entrypoints.add
     const added: any[] = [];
@@ -378,7 +497,7 @@ products:
       },
     } as any;
 
-    await ext.onBuild!(mockRuntime);
+    await ext.initialize!(mockRuntime);
     expect(added).toHaveLength(2);
     expect(added[0].key).toBe('alpha');
     expect(added[0].price).toBe('1.00');
@@ -387,11 +506,14 @@ products:
 
   it('loads CSV files and populates catalog.items', async () => {
     const csvPath = join(tmpDir, 'products.csv');
-    writeFileSync(csvPath, `key,name,description,price
+    writeFileSync(
+      csvPath,
+      `key,name,description,price
 item-1,Item 1,First item,1.00
-item-2,Item 2,Second item,2.00`);
+item-2,Item 2,Second item,2.00`
+    );
     const ext = catalog({ file: csvPath });
-    const result = ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    const result = await ext.build(buildContext);
 
     // CSV is now parsed synchronously — catalog.items should be populated immediately
     expect(result.catalog!.items).toHaveLength(2);
@@ -406,24 +528,27 @@ item-2,Item 2,Second item,2.00`);
       },
     } as any;
 
-    await ext.onBuild!(mockRuntime);
+    await ext.initialize!(mockRuntime);
     expect(added).toHaveLength(2);
     expect(added[0].key).toBe('item-1');
   });
 
   it('applies handlerFactory from options', async () => {
     const yamlPath = join(tmpDir, 'products.yaml');
-    writeFileSync(yamlPath, `
+    writeFileSync(
+      yamlPath,
+      `
 products:
   - key: test
     name: Test
     price: "1.00"
-`);
+`
+    );
     const handlerFactory = (item: CatalogItem) => {
       return async () => ({ output: { product: item.key, price: item.price } });
     };
     const ext = catalog({ file: yamlPath, handlerFactory });
-    ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    await ext.build(buildContext);
 
     const added: any[] = [];
     const mockRuntime = {
@@ -434,7 +559,7 @@ products:
       },
     } as any;
 
-    await ext.onBuild!(mockRuntime);
+    await ext.initialize!(mockRuntime);
     expect(added[0].handler).toBeDefined();
     const result = await added[0].handler({});
     expect(result.output.product).toBe('test');
@@ -442,14 +567,17 @@ products:
 
   it('applies keyPrefix from options', async () => {
     const yamlPath = join(tmpDir, 'products.yaml');
-    writeFileSync(yamlPath, `
+    writeFileSync(
+      yamlPath,
+      `
 products:
   - key: test
     name: Test
     price: "1.00"
-`);
+`
+    );
     const ext = catalog({ file: yamlPath, keyPrefix: 'store/' });
-    ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} });
+    await ext.build(buildContext);
 
     const added: any[] = [];
     const mockRuntime = {
@@ -460,12 +588,39 @@ products:
       },
     } as any;
 
-    await ext.onBuild!(mockRuntime);
+    await ext.initialize!(mockRuntime);
     expect(added[0].key).toBe('store/test');
+  });
+
+  it('applies a default payment protocol from extension options', async () => {
+    const yamlPath = join(tmpDir, 'products.yaml');
+    writeFileSync(
+      yamlPath,
+      `
+products:
+  - key: test
+    name: Test
+    price: "1.00"
+`
+    );
+    const ext = catalog({ file: yamlPath, paymentProtocol: 'mpp' });
+    await ext.build(buildContext);
+
+    const added: Array<{ paymentProtocol?: string }> = [];
+    const mockRuntime = {
+      entrypoints: {
+        add: (def: { paymentProtocol?: string }) => added.push(def),
+        list: () => [],
+        snapshot: () => [],
+      },
+    } as any;
+
+    await ext.initialize!(mockRuntime);
+    expect(added[0].paymentProtocol).toBe('mpp');
   });
 
   it('throws if file does not exist', () => {
     const ext = catalog({ file: '/nonexistent/path.yaml' });
-    expect(() => ext.build({ meta: { name: 'test', version: '1.0.0' }, runtime: {} })).toThrow();
+    expect(() => ext.build(buildContext)).toThrow();
   });
 });

@@ -2,13 +2,11 @@ import type {
   AgentCard,
   AgentCardWithEntrypoints,
   AgentCapabilities,
-  AgentMeta,
   Manifest,
 } from '@lucid-agents/types/a2a';
-import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { FetchFunction } from '@lucid-agents/types/http';
 import type { BuildAgentCardOptions } from '@lucid-agents/types/a2a';
-import { z } from 'zod';
+import { buildAgentManifest } from '@lucid-agents/core';
 
 /**
  * Builds base Agent Card following A2A protocol.
@@ -19,63 +17,14 @@ export function buildAgentCard({
   meta,
   registry,
   origin,
+  supportsTasks = false,
 }: BuildAgentCardOptions): AgentCardWithEntrypoints {
-  const entrypoints: Manifest['entrypoints'] = {};
-  const entrypointList: EntrypointDef[] = Array.from(registry);
-  const anyStreaming = entrypointList.some(e => Boolean(e.stream));
-
-  for (const e of entrypointList) {
-    const manifestEntry: Manifest['entrypoints'][string] = {
-      description: e.description,
-      streaming: Boolean(e.stream),
-      input_schema: e.input ? z.toJSONSchema(e.input) : undefined,
-      output_schema: e.output ? z.toJSONSchema(e.output) : undefined,
-    };
-    // Note: pricing is NOT added here - that's payments package responsibility
-    entrypoints[e.key] = manifestEntry;
-  }
-
-  const defaultInputModes = ['application/json'];
-  const defaultOutputModes = ['application/json', 'text/plain'];
-  const skills = entrypointList.map(e => ({
-    id: e.key,
-    name: e.key,
-    description: e.description,
-    inputModes: defaultInputModes,
-    outputModes: defaultOutputModes,
-    streaming: Boolean(e.stream),
-    x_input_schema: e.input ? z.toJSONSchema(e.input) : undefined,
-    x_output_schema: e.output ? z.toJSONSchema(e.output) : undefined,
-  }));
-
-  const capabilities: AgentCapabilities = {
-    streaming: anyStreaming,
-    pushNotifications: false,
-    stateTransitionHistory: true,
-  };
-
-  const card: AgentCardWithEntrypoints = {
-    protocolVersion: '1.0',
-    name: meta.name,
-    description: meta.description,
-    url: origin.endsWith('/') ? origin : `${origin}/`,
-    supportedInterfaces: [
-      {
-        url: origin.endsWith('/') ? origin : `${origin}/`,
-        protocolBinding: 'HTTP+JSON',
-      },
-    ],
-    version: meta.version,
-    provider: undefined,
-    capabilities,
-    defaultInputModes,
-    defaultOutputModes,
-    skills,
-    supportsAuthenticatedExtendedCard: false,
-    entrypoints,
-  };
-
-  return card;
+  return buildAgentManifest({
+    meta,
+    registry,
+    origin,
+    stateTransitionHistory: supportsTasks,
+  }) as AgentCardWithEntrypoints;
 }
 
 /**
@@ -116,10 +65,14 @@ export function parseAgentCard(json: unknown): AgentCardWithEntrypoints {
   }
 
   return {
+    ...(obj as AgentCard),
     name: obj.name,
     description:
       typeof obj.description === 'string' ? obj.description : undefined,
     url: typeof obj.url === 'string' ? obj.url : undefined,
+    supportedInterfaces: Array.isArray(obj.supportedInterfaces)
+      ? (obj.supportedInterfaces as AgentCardWithEntrypoints['supportedInterfaces'])
+      : undefined,
     version: typeof obj.version === 'string' ? obj.version : undefined,
     provider: obj.provider as AgentCardWithEntrypoints['provider'],
     capabilities: obj.capabilities as AgentCardWithEntrypoints['capabilities'],
@@ -165,7 +118,7 @@ export function parseAgentCard(json: unknown): AgentCardWithEntrypoints {
 export function findSkill(
   card: AgentCard,
   skillId: string
-): AgentCard['skills'][number] | undefined {
+): NonNullable<AgentCard['skills']>[number] | undefined {
   return card.skills?.find(skill => skill.id === skillId);
 }
 

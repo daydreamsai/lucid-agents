@@ -1,5 +1,6 @@
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { createStripePayToAddress } from './stripe-payto';
+import { decodeBase64Utf8 } from './base64';
 
 export type DynamicPayToContext = {
   paymentHeader?: string | null;
@@ -15,7 +16,7 @@ function parsePaymentHeader(payload: string): unknown {
     return JSON.parse(payload);
   } catch {
     try {
-      const decoded = Buffer.from(payload, 'base64').toString('utf8');
+      const decoded = decodeBase64Utf8(payload);
       return JSON.parse(decoded);
     } catch {
       return undefined;

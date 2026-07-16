@@ -1,4 +1,9 @@
-import type { MppConfig, MppServerMethod, TempoServerConfig, StripeServerConfig } from './types';
+import type {
+  MppConfig,
+  MppServerMethod,
+  StripeServerConfig,
+  TempoServerConfig,
+} from '@lucid-agents/types/mpp';
 
 /**
  * Load MPP configuration from environment variables.
@@ -8,6 +13,8 @@ import type { MppConfig, MppServerMethod, TempoServerConfig, StripeServerConfig 
  * - MPP_CURRENCY: Default currency (default: 'usd')
  * - MPP_DEFAULT_INTENT: Default intent ('charge' or 'session', default: 'charge')
  * - MPP_CHALLENGE_EXPIRY: Challenge expiry in seconds (default: 300)
+ * - MPP_SECRET_KEY: HMAC key for built-in mppx challenge verification
+ * - MPP_REALM: Payment-Auth realm
  *
  * Tempo-specific:
  * - MPP_TEMPO_CURRENCY: Token address for Tempo
@@ -20,10 +27,9 @@ import type { MppConfig, MppServerMethod, TempoServerConfig, StripeServerConfig 
  * @param overrides - Optional config overrides
  */
 export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
-  const methodNames = (
+  const methodNames =
     overrides?.methods?.map(m => m.name) ??
-    (process.env.MPP_METHOD ?? 'tempo').split(',').map(s => s.trim())
-  );
+    (process.env.MPP_METHOD ?? 'tempo').split(',').map(s => s.trim());
 
   const methods: MppServerMethod[] = overrides?.methods ?? [];
 
@@ -51,22 +57,30 @@ export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
           const chainId = process.env.MPP_TEMPO_CHAIN_ID;
           if (chainId) config.chainId = parseInt(chainId, 10);
 
-          methods.push({ name: 'tempo', config });
+          methods.push({
+            name: 'tempo',
+            implementation: 'tempo',
+            config,
+          });
           break;
         }
         case 'stripe': {
           const secretKey =
-            process.env.MPP_STRIPE_SECRET_KEY ??
-            process.env.STRIPE_SECRET_KEY;
+            process.env.MPP_STRIPE_SECRET_KEY ?? process.env.STRIPE_SECRET_KEY;
+          const networkId = process.env.MPP_STRIPE_NETWORK_ID;
 
-          if (!secretKey) {
+          if (!secretKey || !networkId) {
             console.warn(
-              '[lucid-agents/mpp] Stripe method requires MPP_STRIPE_SECRET_KEY or STRIPE_SECRET_KEY env var'
+              '[lucid-agents/mpp] Stripe method requires MPP_STRIPE_SECRET_KEY (or STRIPE_SECRET_KEY) and MPP_STRIPE_NETWORK_ID env vars'
             );
             break;
           }
 
-          methods.push({ name: 'stripe', config: { secretKey } as StripeServerConfig });
+          methods.push({
+            name: 'stripe',
+            implementation: 'stripe',
+            config: { secretKey, networkId } as StripeServerConfig,
+          });
           break;
         }
         default: {
@@ -78,8 +92,7 @@ export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
     }
   }
 
-  const currency =
-    overrides?.currency ?? process.env.MPP_CURRENCY ?? 'usd';
+  const currency = overrides?.currency ?? process.env.MPP_CURRENCY ?? 'usd';
   const defaultIntent =
     overrides?.defaultIntent ??
     (process.env.MPP_DEFAULT_INTENT as 'charge' | 'session' | undefined) ??
@@ -92,9 +105,18 @@ export function mppFromEnv(overrides?: Partial<MppConfig>): MppConfig {
 
   return {
     methods,
+    ...((overrides?.realm ?? process.env.MPP_REALM)
+      ? { realm: overrides?.realm ?? process.env.MPP_REALM }
+      : {}),
+    ...((overrides?.secretKey ?? process.env.MPP_SECRET_KEY)
+      ? { secretKey: overrides?.secretKey ?? process.env.MPP_SECRET_KEY }
+      : {}),
     currency,
     defaultIntent,
     challengeExpirySeconds,
+    ...(overrides?.verifyCredential
+      ? { verifyCredential: overrides.verifyCredential }
+      : {}),
     ...(overrides?.session ? { session: overrides.session } : {}),
   };
 }

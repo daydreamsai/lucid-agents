@@ -10,12 +10,17 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - **@lucid-agents/http** - HTTP extension for request/response handling
 - **@lucid-agents/identity** - ERC-8004 identity and trust layer
 - **@lucid-agents/payments** - x402 payment utilities
+- **@lucid-agents/mpp** - MPP challenge and credential-verification runtime
 - **@lucid-agents/wallet** - Wallet SDK for agent and developer wallets
 - **@lucid-agents/a2a** - A2A Protocol client for agent-to-agent communication
 - **@lucid-agents/ap2** - AP2 (Agent Payments Protocol) extension
+- **@lucid-agents/analytics** - Bound analytics over payment tracking
+- **@lucid-agents/scheduler** - Leased, idempotent scheduled A2A calls
+- **@lucid-agents/catalog** - YAML/CSV catalog-driven entrypoints
 - **@lucid-agents/hono** - Hono HTTP server adapter
 - **@lucid-agents/express** - Express HTTP server adapter
 - **@lucid-agents/tanstack** - TanStack Start adapter
+- **@lucid-agents/api-sdk** - Generated Runtime API client
 - **@lucid-agents/cli** - CLI for scaffolding new agent projects
 
 **Tech Stack:**
@@ -30,14 +35,15 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 
 ### Package Dependencies
 
-```
-cli (scaffolding tool)
-    ↓ scaffolds projects using
-hono OR express OR tanstack (adapters)
-    ↓ both use
-core (protocol-agnostic runtime)
-    ↓ uses extensions
-http, identity, payments, wallet, a2a, ap2 (extensions)
+```text
+types (shared contracts)
+  ├─ core (typed extension kernel + one entrypoint registry)
+  ├─ http, payments, mpp, identity, wallet, a2a, ap2,
+  │  analytics, scheduler, catalog (domain extensions)
+  └─ hono, express, tanstack (route/handler adapters)
+
+cli scaffolds projects that compose the packages above.
+api-sdk is generated independently from the Runtime API schema.
 ```
 
 ### Extension System
@@ -47,17 +53,22 @@ The framework uses an extension-based architecture where features are added via 
 - **http** (`@lucid-agents/http`) - HTTP request/response handling, streaming, SSE
 - **wallets** (`@lucid-agents/wallet`) - Wallet management for agents
 - **payments** (`@lucid-agents/payments`) - x402 payment verification and pricing
+- **mpp** (`@lucid-agents/mpp`) - Standard MPP challenges with native Tempo/Stripe or custom credential verification
 - **identity** (`@lucid-agents/identity`) - ERC-8004 on-chain identity and trust
 - **a2a** (`@lucid-agents/a2a`) - Agent-to-agent communication protocol
 - **ap2** (`@lucid-agents/ap2`) - Agent Payments Protocol extension
+- **analytics** (`@lucid-agents/analytics`) - Operations bound to the payments tracker
+- **scheduler** (`@lucid-agents/scheduler`) - Leased A2A invocation jobs
+- **catalog** (`@lucid-agents/catalog`) - Catalog-driven entrypoint registration
 
 ### Adapter System
 
 The framework supports multiple runtime adapters:
 
 - **Hono** (`@lucid-agents/hono`) - Traditional HTTP server
-- **Express** (`@lucid-agents/express`) - Node.js/Express server with x402 middleware
+- **Express** (`@lucid-agents/express`) - Node.js/Express bridge for the canonical route plan
 - **TanStack Start** (`@lucid-agents/tanstack`) - Full-stack React with dashboard (UI) or API-only (headless)
+- **Next.js** (CLI adapter template) - App Router modules over the same HTTP handlers
 
 Templates are adapter-agnostic and work with any compatible adapter.
 
@@ -66,15 +77,15 @@ Templates are adapter-agnostic and work with any compatible adapter.
 ```
 HTTP Request
     ↓
-Adapter Router (Hono, Express, or TanStack)
+Adapter binds runtime.http.routes or delegates to runtime.http.handlers
     ↓
-x402 Paywall Middleware (if configured)
+Shared HTTP authorization transaction (SIWX / x402 / MPP / policies)
     ↓
-Runtime Handler (core)
+Canonical entrypoint handler or A2A task reservation
     ↓
-Entrypoint Handler
+Finalize settlement + reservations, or release on failure
     ↓
-Response (JSON or SSE stream)
+Response (JSON or SSE)
 ```
 
 ### Key Architectural Decisions
@@ -85,6 +96,8 @@ Response (JSON or SSE stream)
 4. **Server-Sent Events for streaming** - Standard SSE for real-time responses
 5. **ERC-8004 for identity** - On-chain agent identity and reputation
 6. **x402 for payments** - HTTP-native payment protocol supporting both EVM and Solana networks
+7. **One route and authorization contract** - Adapters do not own paywalls or duplicate registries
+8. **Bounded state with durable ports** - Portable in-memory defaults; explicit SQLite/Postgres/task stores
 
 ### Supported Payment Networks
 
@@ -300,82 +313,31 @@ type PaymentsRuntime = {
 ```
 /
 ├── packages/
-│   ├── core/               # Protocol-agnostic runtime
-│   │   ├── src/
-│   │   │   ├── core/            # AgentCore, entrypoint management
-│   │   │   ├── extensions/      # AgentBuilder, extension system
-│   │   │   ├── config/          # Config management
-│   │   │   └── utils/           # Helper utilities
-│   │   └── AGENTS.md            # Package-specific guide
-│   │
-│   ├── http/               # HTTP extension
-│   │   ├── src/
-│   │   │   ├── extension.ts     # HTTP extension definition
-│   │   │   ├── invoke.ts        # HTTP invocation logic
-│   │   │   ├── stream.ts        # HTTP streaming logic
-│   │   │   └── sse.ts           # Server-Sent Events
-│   │   └── examples/
-│   │
-│   ├── wallet/             # Wallet SDK
-│   │   ├── src/
-│   │   │   └── env.ts           # Wallet config from env
-│   │   └── examples/
-│   │
-│   ├── payments/           # x402 payment utilities
-│   │   ├── src/
-│   │   │   └── extension.ts     # Payments extension
-│   │   └── examples/
-│   │
-│   ├── identity/           # ERC-8004 identity
-│   │   ├── src/
-│   │   │   ├── init.ts          # createAgentIdentity()
-│   │   │   ├── extension.ts     # Identity extension
-│   │   │   ├── registries/      # Registry clients
-│   │   │   └── utils/           # Identity utilities
-│   │   └── examples/
-│   │
-│   ├── a2a/                # A2A Protocol client
-│   │   ├── src/
-│   │   │   ├── extension.ts     # A2A extension
-│   │   │   └── client.ts        # A2A client
-│   │   └── examples/
-│   │
+│   ├── types/              # Canonical shared contracts by protocol subpath
+│   ├── core/               # Extension kernel + canonical entrypoint registry
+│   ├── http/               # Fetch handlers, route plan, auth gate, SSE
+│   ├── payments/           # x402, SIWX, policies, tracking, storage ports
+│   ├── mpp/                # MPP challenge and credential-verifier runtime
+│   ├── wallet/             # Wallet connectors and runtime
+│   ├── identity/           # ERC-8004 initialization and registries
+│   ├── a2a/                # Cards, client, bounded/durable task runtime
 │   ├── ap2/                # AP2 extension
-│   │   └── src/
-│   │       └── extension.ts     # AP2 extension
-│   │
-│   ├── hono/               # Hono adapter
-│   │   ├── src/
-│   │   │   ├── app.ts           # createAgentApp() for Hono
-│   │   │   └── paywall.ts       # x402 Hono middleware
-│   │   └── examples/
-│   │
-│   ├── express/            # Express adapter
-│   │   ├── src/
-│   │   │   ├── app.ts           # createAgentApp() for Express
-│   │   │   └── paywall.ts       # x402 Express middleware
-│   │   └── __tests__/
-│   │
-│   ├── tanstack/           # TanStack adapter
-│   │   ├── src/
-│   │   │   ├── runtime.ts       # createTanStackRuntime()
-│   │   │   └── paywall.ts       # x402 TanStack middleware
-│   │   └── examples/
-│   │
-│   └── cli/                # CLI scaffolding tool
-│       ├── src/
-│       │   ├── index.ts         # CLI implementation
-│       │   └── adapters.ts      # Adapter definitions
-│       └── templates/           # Project templates
-│           ├── blank/           # Minimal agent
-│           ├── identity/        # Identity-enabled agent
-│           ├── trading-data-agent/      # Trading data merchant
-│           └── trading-recommendation-agent/  # Trading shopper
+│   ├── analytics/          # Bound payment analytics runtime
+│   ├── scheduler/          # Leased scheduled A2A calls
+│   ├── catalog/            # Catalog-driven entrypoint registration
+│   ├── hono/               # Hono binder for runtime.http.routes
+│   ├── express/            # Express/Web Request bridge and route binder
+│   ├── tanstack/           # TanStack wrapper over runtime.http.handlers
+│   ├── api-sdk/            # Generated Runtime API client
+│   ├── examples/           # Cross-package smoke/integration examples
+│   └── cli/                # CLI and Hono/Express/TanStack/Next templates
 │
 ├── scripts/
-│   ├── build-packages.ts   # Build script
+│   ├── build-packages.ts   # Manifest-derived topological workspace build
+│   ├── check-runtime-portability.ts # Node/edge-like import checks
 │   └── changeset-publish.ts # Publish script
 │
+├── docs/ARCHITECTURE.md    # Maintainer architecture and invariants
 └── package.json            # Workspace config
 ```
 
@@ -859,29 +821,31 @@ type Parsed = z.infer<typeof schema>;
 
 ## How Packages Interact
 
-### core → identity
+### core → extensions
 
 ```typescript
-// core imports identity types
-import type { TrustConfig } from '@lucid-agents/identity';
+const runtime = await createAgent(meta)
+  .use(payments({ config }))
+  .use(identity({ config: identityConfig }))
+  .use(http())
+  .build();
 
-// core accepts trust config
-createAgentApp(meta, {
-  trust: trustConfig, // From identity
-});
+// Core attaches complete slices directly; packages own domain behavior.
+runtime.payments?.authorize(request, entrypoint, 'invoke');
+runtime.identity?.result;
+runtime.http.routes;
 ```
 
-### cli → core + identity
-
-Templates reference both packages:
+### adapters → HTTP route contract
 
 ```typescript
-// In generated agent.ts
-import { createAgentApp } from '@lucid-agents/core';
-import { createAgentIdentity } from '@lucid-agents/identity';
+for (const route of runtime.http.routes) {
+  adapter.bind(route.method, route.path, route.handle);
+}
 ```
 
-The CLI doesn't directly import these; it scaffolds code that uses them.
+Do not add adapter-local paywalls, manifests, or entrypoint registries. Generated
+framework routes must delegate to `runtime.http.handlers`.
 
 ## Common Development Tasks
 
@@ -892,6 +856,7 @@ When developing changes to packages and testing them in external projects (e.g.,
 **Workflow:**
 
 1. **Register packages globally** - In the lucid-agents monorepo, register the packages you want to link:
+
    ```bash
    cd lucid-agents/packages/types
    bun link
@@ -904,6 +869,7 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 2. **Update your test project's `package.json`** to use the `link:` protocol:
+
    ```json
    {
      "dependencies": {
@@ -915,12 +881,14 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 3. **Install dependencies** in your test project:
+
    ```bash
    cd my-test-agent
    bun install
    ```
 
 4. **Make changes** in the linked package:
+
    ```bash
    cd lucid-agents/packages/identity
    # Make your changes to source code
@@ -941,6 +909,7 @@ When developing changes to packages and testing them in external projects (e.g.,
    ```
 
 **How it works:**
+
 - `bun link` registers a package globally by name
 - The `link:@package-name` protocol in package.json references the globally registered package
 - Any changes you make and build in the linked package are immediately available
@@ -1011,29 +980,45 @@ Check:
 
 ## Key Files and Their Purposes
 
-### packages/core/src/http/runtime.ts
+### packages/core/src/extensions/builder.ts
 
-Core HTTP runtime that adapters wrap. Handles manifest building, entrypoint registry, streaming helpers, and payment evaluation.
+Typed extension DAG, sequential lifecycle, rollback, runtime composition, and manifest hooks.
+
+### packages/core/src/core/agent.ts
+
+Canonical entrypoint registry and duplicate-key enforcement.
+
+### packages/http/src/extension.ts
+
+Fetch-native handlers for health, discovery, invoke, stream, and owned tasks.
+
+### packages/http/src/authorization.ts
+
+Single SIWX/x402/MPP authorization transaction shared by invoke, stream, and tasks.
+
+### packages/http/src/route-plan.ts
+
+Canonical framework-neutral route/capability plan, including base paths.
 
 ### packages/hono/src/app.ts
 
-Hono-specific `createAgentApp()` implementation. Wires Fetch handlers to Hono routes and installs the x402 middleware.
+Hono-specific `createAgentApp()` implementation. Binds the canonical route plan.
 
 ### packages/express/src/app.ts
 
-Express-specific `createAgentApp()` implementation. Bridges Node requests/responses to the Fetch-based runtime and installs the x402 Express middleware.
+Express-specific `createAgentApp()` implementation. Bridges Node requests/responses and binds the canonical route plan.
 
-### packages/core/src/manifest.ts
+### packages/payments/src/incoming.ts
 
-Generates AgentCard and manifest JSON. Includes A2A skills, payments metadata, trust registrations.
+Fetch-native x402/SIWX verification, verified-sender policies, atomic reservations, settlement, and recording.
 
-### packages/core/src/paywall.ts
+### packages/a2a/src/tasks.ts
 
-x402 payment middleware. Checks payment headers, validates with facilitator, enforces pricing.
+Owned task state machine and bounded in-memory `TaskStore` implementation.
 
-### packages/core/src/types.ts
+### packages/types/src/
 
-Core type definitions: `EntrypointDef`, `AgentContext`, `AgentMeta`, `PaymentsConfig`, etc.
+Canonical cross-package contracts. Add concepts to their owning protocol subpath; do not duplicate or re-export them.
 
 ### packages/identity/src/init.ts
 

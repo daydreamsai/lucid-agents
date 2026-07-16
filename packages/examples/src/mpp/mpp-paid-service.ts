@@ -44,6 +44,7 @@ const agent = await createAgent({
         ],
         currency: 'usd',
         defaultIntent: 'charge',
+        secretKey: process.env.MPP_SECRET_KEY,
       },
     })
   )
@@ -84,15 +85,16 @@ addEntrypoint({
  *
  * When a client calls this without payment, the server returns:
  *   HTTP 402 Payment Required
- *   WWW-Authenticate: Payment id="...", method="tempo", intent="charge",
- *                     amount="0.01", currency="usd"
+ *   WWW-Authenticate: Payment id="...", realm="...", method="tempo",
+ *                     intent="charge", request="...", expires="..."
  *
- * The client then submits payment proof in the Payment header and retries.
+ * The client then retries with `Authorization: Payment <credential>`.
  */
 addEntrypoint({
   key: 'summarize',
   description: 'Summarize text — $0.01 per call',
   price: '0.01',
+  paymentProtocol: 'mpp',
   input: z.object({
     text: z.string(),
   }),
@@ -122,7 +124,7 @@ addEntrypoint({
   key: 'analyze',
   description: 'Analyze text with word frequency — $0.05 invoke, $0.02 stream',
   price: { invoke: '0.05', stream: '0.02' },
-  streaming: true,
+  paymentProtocol: 'mpp',
   input: z.object({
     text: z.string(),
   }),
@@ -165,14 +167,14 @@ addEntrypoint({
  */
 addEntrypoint({
   key: 'premium-generate',
-  description: 'Premium content generation — $1.00, accepts tempo or stripe',
+  description: 'Premium content generation — $1.00 via Tempo',
   price: '1.00',
+  paymentProtocol: 'mpp',
   metadata: {
     mpp: {
       intent: 'charge' as const,
       description: 'Premium AI content generation',
-      // Restrict to specific payment methods for this entrypoint
-      methods: ['tempo', 'stripe'],
+      methods: ['tempo'],
     },
   },
   input: z.object({

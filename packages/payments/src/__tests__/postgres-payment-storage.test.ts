@@ -17,9 +17,9 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
 
   beforeEach(async () => {
     // Create storage instances with and without agentId
-    storageWithAgent = createPostgresPaymentStorage(TEST_DB_URL, agentIdA);
-    storageWithoutAgent = createPostgresPaymentStorage(TEST_DB_URL);
-    storageAgentB = createPostgresPaymentStorage(TEST_DB_URL, agentIdB);
+    storageWithAgent = createPostgresPaymentStorage(TEST_DB_URL!, agentIdA);
+    storageWithoutAgent = createPostgresPaymentStorage(TEST_DB_URL!);
+    storageAgentB = createPostgresPaymentStorage(TEST_DB_URL!, agentIdB);
 
     // Clear all data before each test
     await storageWithAgent.clear();
@@ -378,10 +378,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(total).toBe(0n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(records).toHaveLength(1);
       expect(records[0].amount).toBe(0n);
     });
@@ -394,10 +402,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'incoming');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'incoming'
+      );
       expect(total).toBe(0n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'incoming');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'incoming'
+      );
       expect(records).toHaveLength(1);
       expect(records[0].amount).toBe(0n);
     });
@@ -428,10 +444,18 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
         amount: 0n,
       });
 
-      const total = await storageWithAgent.getTotal('group1', 'global', 'outgoing');
+      const total = await storageWithAgent.getTotal(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(total).toBe(3000n);
 
-      const records = await storageWithAgent.getAllRecords('group1', 'global', 'outgoing');
+      const records = await storageWithAgent.getAllRecords(
+        'group1',
+        'global',
+        'outgoing'
+      );
       expect(records).toHaveLength(4);
       const zeroRecords = records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(2);

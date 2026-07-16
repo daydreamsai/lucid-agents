@@ -118,6 +118,14 @@ export type OASFRecord = {
   entrypoints: OASFSkillRecord[];
 };
 
+/** Identity-owned runtime capability exposed to transport extensions. */
+export type IdentityRuntime = {
+  /** Resolved ERC-8004 registration document, when configured. */
+  registration?: AgentRegistration;
+  /** Build the current OASF record from the live entrypoint registry. */
+  buildOASFRecord?: (requestUrl: string) => OASFRecord | undefined;
+};
+
 /**
  * Trust configuration for ERC-8004 identity and reputation.
  */

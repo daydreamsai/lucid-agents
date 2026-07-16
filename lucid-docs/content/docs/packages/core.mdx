@@ -160,7 +160,6 @@ Streaming is handled by the HTTP runtime and your entrypoint implementation:
 ```typescript
 addEntrypoint({
   key: 'status-stream',
-  streaming: true,
   async stream(ctx, emit) {
     await emit({
       kind: 'delta',

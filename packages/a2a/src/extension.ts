@@ -1,25 +1,32 @@
+import type { BuildContext, Extension } from '@lucid-agents/types/core';
 import type {
-  AgentRuntime,
-  BuildContext,
-  Extension,
-} from '@lucid-agents/types/core';
-import type { A2ARuntime } from '@lucid-agents/types/a2a';
+  A2ARuntime,
+  CreateA2ARuntimeOptions,
+} from '@lucid-agents/types/a2a';
 
 import { createA2ARuntime } from './runtime';
 
-export function a2a(): Extension<{ a2a: A2ARuntime }> {
+export function a2a(
+  options?: CreateA2ARuntimeOptions
+): Extension<{ a2a: A2ARuntime }> {
+  let a2aRuntime: A2ARuntime | undefined;
   return {
     name: 'a2a',
-    build(_ctx: BuildContext): { a2a: A2ARuntime } {
-      // A2A runtime needs the full runtime, so we create it in onBuild
-      // Return placeholder - will be replaced in onBuild
+    build(ctx: BuildContext): { a2a: A2ARuntime } {
+      a2aRuntime = createA2ARuntime(ctx.runtime, options);
+      return { a2a: a2aRuntime };
+    },
+    onManifestBuild(card) {
       return {
-        a2a: {} as A2ARuntime,
+        ...card,
+        capabilities: {
+          ...card.capabilities,
+          stateTransitionHistory: true,
+        },
       };
     },
-    onBuild(runtime: AgentRuntime) {
-      const a2aRuntime = createA2ARuntime(runtime);
-      runtime.a2a = a2aRuntime;
+    async dispose() {
+      await a2aRuntime?.tasks.close();
     },
   };
 }

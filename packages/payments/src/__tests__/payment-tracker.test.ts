@@ -2,6 +2,10 @@ import { describe, expect, it, beforeEach } from 'bun:test';
 import { createPaymentTracker } from '../payment-tracker';
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
+import { createSQLitePaymentStorage } from '../sqlite-payment-storage';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // Postgres integration tests are opt-in. Set TEST_POSTGRES_URL to enable.
 const TEST_DB_URL = process.env.TEST_POSTGRES_URL;
@@ -185,7 +189,11 @@ describe('PaymentTracker', () => {
       // Verify the transaction is actually recorded
       const allData = await tracker.getAllData();
       const zeroAmountRecords = allData.filter(
-        r => r.groupName === 'group1' && r.scope === 'global' && r.direction === 'outgoing' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.scope === 'global' &&
+          r.direction === 'outgoing' &&
+          r.amount === 0n
       );
       expect(zeroAmountRecords).toHaveLength(1);
       expect(zeroAmountRecords[0].amount).toBe(0n);
@@ -217,7 +225,10 @@ describe('PaymentTracker', () => {
       await tracker.recordOutgoing('group1', 'global', 0n);
       const allData = await tracker.getAllData();
       const zeroRecords = allData.filter(
-        r => r.groupName === 'group1' && r.direction === 'outgoing' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.direction === 'outgoing' &&
+          r.amount === 0n
       );
       expect(zeroRecords).toHaveLength(1);
     });
@@ -232,7 +243,9 @@ describe('PaymentTracker', () => {
       expect(total).toBe(150_000_000n);
 
       const allData = await tracker.getAllData();
-      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'outgoing');
+      const group1Records = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'outgoing'
+      );
       expect(group1Records).toHaveLength(4);
       const zeroRecords = group1Records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(2);
@@ -257,7 +270,10 @@ describe('PaymentTracker', () => {
       await tracker.recordIncoming('group1', 'global', 0n);
       const allData = await tracker.getAllData();
       const zeroRecords = allData.filter(
-        r => r.groupName === 'group1' && r.direction === 'incoming' && r.amount === 0n
+        r =>
+          r.groupName === 'group1' &&
+          r.direction === 'incoming' &&
+          r.amount === 0n
       );
       expect(zeroRecords).toHaveLength(1);
     });
@@ -271,7 +287,9 @@ describe('PaymentTracker', () => {
       expect(total).toBe(150_000_000n);
 
       const allData = await tracker.getAllData();
-      const group1Records = allData.filter(r => r.groupName === 'group1' && r.direction === 'incoming');
+      const group1Records = allData.filter(
+        r => r.groupName === 'group1' && r.direction === 'incoming'
+      );
       expect(group1Records).toHaveLength(3);
       const zeroRecords = group1Records.filter(r => r.amount === 0n);
       expect(zeroRecords).toHaveLength(1);
@@ -300,6 +318,229 @@ describe('PaymentTracker', () => {
       );
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('limit exceeded');
+    });
+  });
+
+  describe('incoming limit reservations', () => {
+    it('coordinates concurrent trackers sharing in-memory storage', async () => {
+      const storage = createInMemoryPaymentStorage();
+      const first = createPaymentTracker(storage);
+      const second = createPaymentTracker(storage);
+
+      const results = await Promise.all([
+        first.reserveIncomingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+        second.reserveIncomingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+      ]);
+
+      expect(results.filter(result => result.allowed)).toHaveLength(1);
+    });
+
+    it('coordinates concurrent SQLite connections', async () => {
+      const dbPath = join(
+        tmpdir(),
+        `lucid-payment-reservations-${crypto.randomUUID()}.db`
+      );
+      const firstStorage = createSQLitePaymentStorage(dbPath);
+      const secondStorage = createSQLitePaymentStorage(dbPath);
+      const first = createPaymentTracker(firstStorage);
+      const second = createPaymentTracker(secondStorage);
+
+      try {
+        const results = await Promise.all([
+          first.reserveIncomingLimit(
+            'group1',
+            'global',
+            1.5,
+            undefined,
+            1_000_000n
+          ),
+          second.reserveIncomingLimit(
+            'group1',
+            'global',
+            1.5,
+            undefined,
+            1_000_000n
+          ),
+        ]);
+
+        expect(results.filter(result => result.allowed)).toHaveLength(1);
+      } finally {
+        (firstStorage as { close?: () => void }).close?.();
+        (secondStorage as { close?: () => void }).close?.();
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+      }
+    });
+  });
+
+  describe('atomic policy reservations', () => {
+    it('coordinates concurrent outgoing totals across trackers', async () => {
+      const storage = createInMemoryPaymentStorage();
+      const first = createPaymentTracker(storage);
+      const second = createPaymentTracker(storage);
+
+      const results = await Promise.all([
+        first.reserveOutgoingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+        second.reserveOutgoingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+      ]);
+
+      expect(results.filter(result => result.allowed)).toHaveLength(1);
+    });
+
+    it('reserves and commits rate capacity atomically', async () => {
+      const storage = createInMemoryPaymentStorage();
+      const first = createPaymentTracker(storage);
+      const second = createPaymentTracker(storage);
+
+      const results = await Promise.all([
+        first.reserveRateLimit('group1', 'outgoing', 1, 60_000),
+        second.reserveRateLimit('group1', 'outgoing', 1, 60_000),
+      ]);
+      expect(results.filter(result => result.allowed)).toHaveLength(1);
+
+      const accepted = results.find(result => result.reservationId);
+      await first.commitReservation(accepted!.reservationId!);
+      expect(
+        (await second.reserveRateLimit('group1', 'outgoing', 1, 60_000)).allowed
+      ).toBe(false);
+      expect(await first.getAllData()).toEqual([]);
+    });
+
+    it('commits reservations and payment records as one accounting batch', async () => {
+      const storage = createInMemoryPaymentStorage();
+      const batchTracker = createPaymentTracker(storage);
+      const total = await batchTracker.reserveOutgoingLimit(
+        'total',
+        'global',
+        10,
+        undefined,
+        1_000_000n
+      );
+      const rate = await batchTracker.reserveRateLimit(
+        'rate',
+        'outgoing',
+        10,
+        60_000
+      );
+
+      await expect(
+        batchTracker.commitReservations(
+          [total.reservationId!, rate.reservationId!, 'missing'],
+          [
+            {
+              groupName: 'history',
+              scope: 'global',
+              direction: 'outgoing',
+              amount: 1_000_000n,
+            },
+          ]
+        )
+      ).rejects.toThrow('expired');
+      expect(await batchTracker.getOutgoingTotal('total', 'global')).toBe(0n);
+      expect(await batchTracker.getOutgoingTotal('history', 'global')).toBe(0n);
+
+      await batchTracker.commitReservations(
+        [total.reservationId!, rate.reservationId!],
+        [
+          {
+            groupName: 'history',
+            scope: 'global',
+            direction: 'outgoing',
+            amount: 1_000_000n,
+          },
+        ]
+      );
+      expect(await batchTracker.getOutgoingTotal('total', 'global')).toBe(
+        1_000_000n
+      );
+      expect(await batchTracker.getOutgoingTotal('history', 'global')).toBe(
+        1_000_000n
+      );
+    });
+
+    it('rolls back an invalid accounting batch in SQLite', async () => {
+      const dbPath = join(
+        tmpdir(),
+        `lucid-payment-batch-${crypto.randomUUID()}.db`
+      );
+      const storage = createSQLitePaymentStorage(dbPath);
+      const sqliteTracker = createPaymentTracker(storage);
+      try {
+        const reservation = await sqliteTracker.reserveIncomingLimit(
+          'total',
+          'global',
+          10,
+          undefined,
+          1_000_000n
+        );
+        await expect(
+          sqliteTracker.commitReservations(
+            [reservation.reservationId!, 'missing'],
+            [
+              {
+                groupName: 'history',
+                scope: 'global',
+                direction: 'incoming',
+                amount: 1_000_000n,
+              },
+            ]
+          )
+        ).rejects.toThrow('expired');
+
+        expect(await sqliteTracker.getIncomingTotal('total', 'global')).toBe(
+          0n
+        );
+        expect(await sqliteTracker.getIncomingTotal('history', 'global')).toBe(
+          0n
+        );
+        await sqliteTracker.commitReservations(
+          [reservation.reservationId!],
+          [
+            {
+              groupName: 'history',
+              scope: 'global',
+              direction: 'incoming',
+              amount: 1_000_000n,
+            },
+          ]
+        );
+        expect(await sqliteTracker.getIncomingTotal('total', 'global')).toBe(
+          1_000_000n
+        );
+        expect(await sqliteTracker.getIncomingTotal('history', 'global')).toBe(
+          1_000_000n
+        );
+      } finally {
+        (storage as { close?: () => void }).close?.();
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+      }
     });
   });
 
@@ -332,7 +573,10 @@ describe('PaymentTracker', () => {
     const agentId = 'test-agent-123';
 
     beforeEach(async () => {
-      const storageWithAgent = createPostgresPaymentStorage(TEST_DB_URL!, agentId);
+      const storageWithAgent = createPostgresPaymentStorage(
+        TEST_DB_URL!,
+        agentId
+      );
       const storageWithoutAgent = createPostgresPaymentStorage(TEST_DB_URL!);
       trackerWithAgent = createPaymentTracker(storageWithAgent);
       trackerWithoutAgent = createPaymentTracker(storageWithoutAgent);
@@ -399,7 +643,11 @@ describe('PaymentTracker', () => {
       const tracker2 = createPaymentTracker(storage2);
 
       // Agent 1 records payment
-      await trackerWithAgent.recordOutgoing('shared-group', 'global', 50_000_000n);
+      await trackerWithAgent.recordOutgoing(
+        'shared-group',
+        'global',
+        50_000_000n
+      );
 
       // Agent 2 should still be able to make payments (separate tracking)
       const result = await tracker2.checkOutgoingLimit(
@@ -421,6 +669,103 @@ describe('PaymentTracker', () => {
       // Agent 2 should see 0 (no payments yet)
       const total2 = await tracker2.getOutgoingTotal('shared-group', 'global');
       expect(total2).toBe(0n);
+    });
+
+    it('coordinates incoming reservations across Postgres clients', async () => {
+      const firstStorage = createPostgresPaymentStorage(
+        TEST_DB_URL!,
+        'reservation-agent'
+      );
+      const secondStorage = createPostgresPaymentStorage(
+        TEST_DB_URL!,
+        'reservation-agent'
+      );
+      await firstStorage.clear();
+      const first = createPaymentTracker(firstStorage);
+      const second = createPaymentTracker(secondStorage);
+
+      const results = await Promise.all([
+        first.reserveIncomingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+        second.reserveIncomingLimit(
+          'group1',
+          'global',
+          1.5,
+          undefined,
+          1_000_000n
+        ),
+      ]);
+
+      expect(results.filter(result => result.allowed)).toHaveLength(1);
+      await Promise.all(
+        results
+          .map(result => result.reservationId)
+          .filter((id): id is string => Boolean(id))
+          .map(id => first.releaseReservation(id))
+      );
+      await (firstStorage as { close?: () => Promise<void> }).close?.();
+      await (secondStorage as { close?: () => Promise<void> }).close?.();
+    });
+
+    it('rolls back an invalid accounting batch in Postgres', async () => {
+      const storage = createPostgresPaymentStorage(
+        TEST_DB_URL!,
+        'accounting-batch-agent'
+      );
+      await storage.clear();
+      const postgresTracker = createPaymentTracker(storage);
+      try {
+        const reservation = await postgresTracker.reserveIncomingLimit(
+          'total',
+          'global',
+          10,
+          undefined,
+          1_000_000n
+        );
+        await expect(
+          postgresTracker.commitReservations(
+            [reservation.reservationId!, 'missing'],
+            [
+              {
+                groupName: 'history',
+                scope: 'global',
+                direction: 'incoming',
+                amount: 1_000_000n,
+              },
+            ]
+          )
+        ).rejects.toThrow('expired');
+        expect(await postgresTracker.getIncomingTotal('total', 'global')).toBe(
+          0n
+        );
+        expect(
+          await postgresTracker.getIncomingTotal('history', 'global')
+        ).toBe(0n);
+        await postgresTracker.commitReservations(
+          [reservation.reservationId!],
+          [
+            {
+              groupName: 'history',
+              scope: 'global',
+              direction: 'incoming',
+              amount: 1_000_000n,
+            },
+          ]
+        );
+        expect(await postgresTracker.getIncomingTotal('total', 'global')).toBe(
+          1_000_000n
+        );
+        expect(
+          await postgresTracker.getIncomingTotal('history', 'global')
+        ).toBe(1_000_000n);
+      } finally {
+        await storage.close?.();
+      }
     });
   });
 });

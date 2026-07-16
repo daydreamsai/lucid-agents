@@ -1,18 +1,25 @@
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { WalletConnector } from '@lucid-agents/types/wallets';
+import type {
+  WalletConnector,
+  WalletsRuntime,
+} from '@lucid-agents/types/wallets';
+import type { PaymentsRuntime } from '@lucid-agents/types/payments';
 import { privateKeyToAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
 import type { ClientEvmSigner } from '@x402/evm';
 import { sanitizeAddress, ZERO_ADDRESS, type Hex } from './crypto';
 import { wrapBaseFetchWithPolicy } from './policy-wrapper';
-import type { PaymentTracker } from './payment-tracker';
-import type { RateLimiter } from './rate-limiter';
 
 type FetchLike = (
   input: RequestInfo | URL,
   init?: RequestInit
 ) => Promise<Response>;
+
+export type PaymentClientRuntime = AgentRuntime<{
+  wallets?: WalletsRuntime;
+  payments?: PaymentsRuntime;
+}>;
 
 type TypedDataPayload = {
   domain?: Record<string, unknown>;
@@ -38,7 +45,7 @@ export type RuntimePaymentOptions = {
    * Existing AgentRuntime instance used to fulfil wallet requests.
    * Required unless `privateKey` is provided.
    */
-  runtime?: AgentRuntime;
+  runtime?: PaymentClientRuntime;
   /**
    * Optional override for the network used to infer the payment chain.
    */
@@ -356,7 +363,10 @@ export async function createRuntimePaymentContext(
 
       // Create x402 client and register the network
       const client = new x402Client();
-      client.register(caip2Network as `${string}:${string}`, new ExactEvmScheme(signer));
+      client.register(
+        caip2Network as `${string}:${string}`,
+        new ExactEvmScheme(signer)
+      );
 
       const fetchWithPayment = attachPreconnect(
         wrapFetchWithPayment(baseFetch as typeof fetch, client) as FetchLike,
@@ -507,33 +517,28 @@ export async function createRuntimePaymentContext(
     // Wrap base fetch with policy checking if policies are configured
     let fetchWithPolicy = baseFetch;
     const policyGroups = runtime.payments?.policyGroups;
-    const paymentTracker = runtime.payments?.paymentTracker as
-      | PaymentTracker
-      | undefined;
-    const rateLimiter = runtime.payments?.rateLimiter as
-      | RateLimiter
-      | undefined;
+    const paymentTracker = runtime.payments?.paymentTracker;
 
-    if (
-      policyGroups &&
-      policyGroups.length > 0 &&
-      paymentTracker &&
-      rateLimiter
-    ) {
+    if (policyGroups && policyGroups.length > 0 && paymentTracker) {
       fetchWithPolicy = wrapBaseFetchWithPolicy(
         baseFetch,
         policyGroups,
-        paymentTracker,
-        rateLimiter
+        paymentTracker
       );
     }
 
     // Create x402 client and register the network
     const client = new x402Client();
-    client.register(caip2Network as `${string}:${string}`, new ExactEvmScheme(signer));
+    client.register(
+      caip2Network as `${string}:${string}`,
+      new ExactEvmScheme(signer)
+    );
 
     const fetchWithPayment = attachPreconnect(
-      wrapFetchWithPayment(fetchWithPolicy as typeof fetch, client) as FetchLike,
+      wrapFetchWithPayment(
+        fetchWithPolicy as typeof fetch,
+        client
+      ) as FetchLike,
       baseFetch
     );
 

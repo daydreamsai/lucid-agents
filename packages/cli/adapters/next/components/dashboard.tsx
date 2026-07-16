@@ -7,8 +7,7 @@ import {
 } from '@/components/entrypoint-card';
 import { WalletSummary } from '@/components/wallet-summary';
 import type { DashboardData } from '@/lib/dashboard-types';
-import type { AgentPayments } from '@/lib/api';
-import type { AgentHealth } from '@/lib/api';
+import type { AgentHealth, AgentPayments } from '@/lib/api';
 import { getNetworkInfo } from '@/lib/network';
 
 const DEFAULT_PAYLOAD = JSON.stringify({ input: {} }, null, 2);
@@ -20,25 +19,19 @@ const indentPayload = (payload: string) =>
     .map((line, index) => (index === 0 ? line : `  ${line}`))
     .join('\n');
 
-const derivePriceLabel = (
-  entrypoint: DashboardData['entrypoints'][number],
-  payments?: AgentPayments | null
-) => {
+const derivePriceLabel = (entrypoint: DashboardData['entrypoints'][number]) => {
   const price = entrypoint.price;
-  const defaultPrice = payments?.defaultPrice ?? undefined;
 
   const normalize = (value?: string | null) =>
     typeof value === 'string' && value.length > 0 ? value : undefined;
 
   const invokePrice =
-    typeof price === 'string'
-      ? price
-      : (normalize(price?.invoke) ?? defaultPrice);
+    typeof price === 'string' ? price : normalize(price?.invoke);
 
   const streamPrice = entrypoint.streaming
     ? typeof price === 'string'
       ? price
-      : (normalize(price?.stream) ?? defaultPrice)
+      : normalize(price?.stream)
     : undefined;
 
   if (!invokePrice && !streamPrice) return 'Free';
@@ -57,7 +50,7 @@ const derivePriceLabel = (
 const buildEntrypointCards = (
   origin: string,
   entrypoints: DashboardData['entrypoints'],
-  payments?: AgentPayments | null
+  payments: AgentPayments | null
 ): EntrypointCardData[] => {
   const payloadIndented = indentPayload(DEFAULT_PAYLOAD);
 
@@ -67,7 +60,7 @@ const buildEntrypointCards = (
       ? `/api/agent/entrypoints/${entrypoint.key}/stream`
       : undefined;
     const streaming = Boolean(entrypoint.streaming);
-    const priceLabel = derivePriceLabel(entrypoint, payments);
+    const priceLabel = derivePriceLabel(entrypoint);
     const invokeCurl = [
       'curl -s -X POST \\',
       `  '${origin}${invokePath}' \\`,
@@ -134,7 +127,7 @@ export default function Dashboard({
   const cards = buildEntrypointCards(
     origin,
     initialData.entrypoints,
-    initialData.payments ?? undefined
+    initialData.payments
   );
   const entrypointCount = cards.length;
   const entrypointLabel = entrypointCount === 1 ? 'Entrypoint' : 'Entrypoints';
@@ -172,8 +165,8 @@ export default function Dashboard({
           </h1>
           <p className="text-sm text-zinc-500 max-w-lg leading-relaxed">
             {entrypointCount} {entrypointLabel.toLowerCase()} available.{' '}
-            {initialData.payments?.defaultPrice
-              ? `Default price: ${initialData.payments.defaultPrice}.`
+            {initialData.payments
+              ? 'Pricing is declared per entrypoint.'
               : 'Free tier.'}{' '}
             Network: {networkInfo.label}.
           </p>

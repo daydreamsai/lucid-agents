@@ -1,4 +1,4 @@
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import type { AgentManifest } from '@lucid-agents/types/core';
 import type { TrustConfig } from '@lucid-agents/types/identity';
 
 /**
@@ -6,10 +6,10 @@ import type { TrustConfig } from '@lucid-agents/types/identity';
  * Immutable - returns new card, doesn't mutate input.
  */
 export function createAgentCardWithIdentity(
-  card: AgentCardWithEntrypoints,
+  card: AgentManifest,
   trustConfig: TrustConfig
-): AgentCardWithEntrypoints {
-  const enhanced: AgentCardWithEntrypoints = {
+): AgentManifest {
+  const enhanced: AgentManifest = {
     ...card,
   };
 

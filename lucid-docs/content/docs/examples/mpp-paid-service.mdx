@@ -16,8 +16,9 @@ Set environment variables:
 
 ```bash
 # Tempo stablecoin method
-MPP_TEMPO_CURRENCY=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913  # USDC on Base
+MPP_TEMPO_CURRENCY=0x20c0000000000000000000000000000000000000  # pathUSD on Tempo
 MPP_TEMPO_RECIPIENT=0xYourAddress...
+MPP_SECRET_KEY=replace-with-a-long-random-secret
 ```
 
 ## Full example
@@ -43,14 +44,13 @@ const agent = await createAgent({
           tempo.server({
             currency:
               process.env.MPP_TEMPO_CURRENCY ??
-              '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-            recipient:
-              process.env.MPP_TEMPO_RECIPIENT ??
-              '0xYourAddress...',
+              '0x20c0000000000000000000000000000000000000',
+            recipient: process.env.MPP_TEMPO_RECIPIENT ?? '0xYourAddress...',
           }),
         ],
         currency: 'usd',
         defaultIntent: 'charge',
+        secretKey: process.env.MPP_SECRET_KEY,
       },
     })
   )
@@ -74,6 +74,7 @@ addEntrypoint({
   key: 'summarize',
   description: 'Summarize text — $0.01 per call',
   price: '0.01',
+  paymentProtocol: 'mpp',
   input: z.object({ text: z.string() }),
   output: z.object({
     wordCount: z.number(),
@@ -100,7 +101,7 @@ addEntrypoint({
   key: 'analyze',
   description: 'Analyze text — $0.05 invoke, $0.02 stream',
   price: { invoke: '0.05', stream: '0.02' },
-  streaming: true,
+  paymentProtocol: 'mpp',
   input: z.object({ text: z.string() }),
   output: z.object({
     frequencies: z.record(z.string(), z.number()),
@@ -132,13 +133,14 @@ addEntrypoint({
 // 5. Entrypoint with metadata overrides
 addEntrypoint({
   key: 'premium-generate',
-  description: 'Premium generation — $1.00, accepts tempo or stripe',
+  description: 'Premium generation — $1.00 via Tempo',
   price: '1.00',
+  paymentProtocol: 'mpp',
   metadata: {
     mpp: {
       intent: 'charge',
       description: 'Premium AI content generation',
-      methods: ['tempo', 'stripe'],
+      methods: ['tempo'],
     },
   },
   input: z.object({
@@ -162,7 +164,7 @@ export default app;
 1. **Free entrypoints** (`health`) — served without payment checks.
 2. **Priced entrypoints** (`summarize`, `analyze`, `premium-generate`) — the MPP extension automatically returns a `402 Payment Required` response with `WWW-Authenticate: Payment` headers when no valid payment credential is present.
 3. **Per-mode pricing** (`analyze`) — invoke and stream have independent prices. A `402` challenge includes the correct amount for the requested mode.
-4. **Metadata overrides** (`premium-generate`) — restricts accepted methods to `tempo` and `stripe` and adds a human-readable description to the challenge.
+4. **Metadata overrides** (`premium-generate`) — restricts the accepted method to `tempo` and adds a human-readable description to the challenge.
 
 ## Using environment config
 
@@ -184,19 +186,18 @@ This reads `MPP_METHOD`, `MPP_TEMPO_CURRENCY`, `MPP_TEMPO_RECIPIENT`, etc. from 
 From a client, use `getMppFetch` to get a payment-enabled fetch wrapper:
 
 ```typescript
-import { tempo } from '@lucid-agents/mpp';
+import { tempo } from 'mppx/client';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const mppFetch = await agent.mpp.getMppFetch({
   methods: [
-    tempo.client({
+    tempo({
       account: privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`),
-      chainId: 8453,
     }),
   ],
 });
 
-const response = await mppFetch(
+const response = await mppFetch?.(
   'http://localhost:3000/entrypoints/summarize/invoke',
   {
     method: 'POST',

@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getAdapterDefinition } from '../src/adapters.js';
 import { runCli, type PromptApi } from '../src/index.js';
 
 const tempPaths: string[] = [];
@@ -323,9 +324,13 @@ describe('create-agent-kit CLI', () => {
 
     expect(tanstackAgent).toContain('createAgent');
     expect(tanstackAgent).toContain('createTanStackRuntime');
+    expect(tanstackAgent).toContain('basePath: "/api/agent"');
     expect(
       Object.prototype.hasOwnProperty.call(deps, '@lucid-agents/tanstack')
     ).toBe(true);
+    expect(Object.values(deps)).not.toContain('catalog:');
+    expect(Object.values(deps)).not.toContain('workspace:*');
+    expect(getAdapterDefinition('tanstack-ui').baseFilesDirs).toHaveLength(1);
   });
 
   it('scaffolds projects with the Next.js adapter', async () => {
@@ -341,7 +346,26 @@ describe('create-agent-kit CLI', () => {
 
     const projectDir = join(cwd, 'demo-agent');
     const agentSrc = await readFile(join(projectDir, 'lib/agent.ts'), 'utf8');
-    const proxySrc = await readFile(join(projectDir, 'proxy.ts'), 'utf8');
+    const invokeRouteSrc = await readFile(
+      join(projectDir, 'app/api/agent/entrypoints/[key]/invoke/route.ts'),
+      'utf8'
+    );
+    const taskRouteSrc = await readFile(
+      join(projectDir, 'app/api/agent/tasks/route.ts'),
+      'utf8'
+    );
+    const cardRouteSrc = await readFile(
+      join(projectDir, 'app/.well-known/agent-card.json/route.ts'),
+      'utf8'
+    );
+    const legacyCardRouteSrc = await readFile(
+      join(projectDir, 'app/.well-known/agent.json/route.ts'),
+      'utf8'
+    );
+    const oasfRouteSrc = await readFile(
+      join(projectDir, 'app/.well-known/oasf-record.json/route.ts'),
+      'utf8'
+    );
     const envFile = await readFile(join(projectDir, '.env'), 'utf8');
     const pkg = (await readJson(join(projectDir, 'package.json'))) as Record<
       string,
@@ -349,9 +373,24 @@ describe('create-agent-kit CLI', () => {
     >;
 
     expect(agentSrc).toContain('createAgent');
-    expect(proxySrc).toContain('createNextPaywall');
+    expect(agentSrc).toContain('basePath: "/api/agent"');
+    expect(agentSrc).toContain('const { handlers } = runtime.http');
+    expect(agentSrc).not.toContain('resolveManifest');
+    expect(invokeRouteSrc).toContain('handlers.invoke');
+    expect(taskRouteSrc).toContain('handlers.tasks');
+    expect(cardRouteSrc).toContain('handlers.manifest(request)');
+    expect(legacyCardRouteSrc).toContain('handlers.manifest(request)');
+    expect(oasfRouteSrc).toContain('handlers.oasf(request)');
+    await expect(
+      readFile(join(projectDir, 'proxy.ts'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(projectDir, 'lib/paywall.ts'), 'utf8')
+    ).rejects.toThrow();
     expect(pkg.dependencies?.next).toBeDefined();
-    expect(pkg.dependencies?.['@x402/next']).toBeDefined();
+    expect(pkg.dependencies?.['@x402/next']).toBeUndefined();
+    expect(Object.values(pkg.dependencies ?? {})).not.toContain('catalog:');
+    expect(Object.values(pkg.dependencies ?? {})).not.toContain('workspace:*');
     expect(envFile).toContain('OPENAI_API_KEY=');
     expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=');
   });
@@ -765,6 +804,12 @@ describe('create-agent-kit CLI', () => {
 
     const projectDir = join(cwd, 'identity-agent');
     const envFile = await readFile(join(projectDir, '.env'), 'utf8');
+    const agentSrc = await readFile(
+      join(projectDir, 'src/lib/agent.ts'),
+      'utf8'
+    );
+    const pkg = await readJson(join(projectDir, 'package.json'));
+    const dependencies = pkg.dependencies as Record<string, string>;
 
     expect(envFile).toContain('AGENT_DOMAIN=agent.example.com');
     expect(envFile).toContain('RPC_URL=https://sepolia.base.org');
@@ -794,6 +839,11 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain('IDENTITY_TWITTER=@lucidagents');
     expect(envFile).toContain('IDENTITY_INCLUDE_EMAIL=true');
     expect(envFile).toContain('IDENTITY_EMAIL=ops@agent.example.com');
+    expect(agentSrc).toContain('.use(payments(');
+    expect(agentSrc).toContain('agent.identity?.result');
+    expect(agentSrc).not.toContain('createAgentIdentity(');
+    expect(dependencies['@lucid-agents/http']).toBeDefined();
+    expect(dependencies['@lucid-agents/payments']).toBeDefined();
   });
 
   it('omits gated OASF fields when OASF is disabled', async () => {
