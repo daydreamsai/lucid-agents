@@ -2,36 +2,43 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { getNetworkInfo } from '@/lib/network';
 
-export const Route = createFileRoute('/')({
-  loader: async () => {
-    'use server';
-    const { runtime } = await import('@/lib/agent');
-    const manifest = runtime.manifest.build('http://localhost');
-    const manifestEntrypoints = manifest.entrypoints || {};
-    const entrypoints = runtime.entrypoints.snapshot().map(entry => {
-      const manifestEntry = manifestEntrypoints[entry.key];
-      return {
-        key: String(entry.key),
-        description: entry.description ? String(entry.description) : null,
-        streaming: Boolean(entry.stream),
-        price: entry.price ?? manifestEntry?.pricing?.invoke ?? null,
-      };
-    });
-
+async function loadDashboardData() {
+  'use server';
+  const { runtime } = await import('@/lib/agent');
+  const manifest = runtime.manifest.build('http://localhost');
+  const manifestEntrypoints = manifest.entrypoints || {};
+  const entrypoints = runtime.entrypoints.snapshot().map(entry => {
+    const manifestEntry = manifestEntrypoints[entry.key];
     return {
-      meta: {
-        name: manifest.name,
-        version: manifest.version,
-        description: manifest.description ?? null,
-      },
-      entrypoints,
+      key: String(entry.key),
+      description: entry.description ? String(entry.description) : null,
+      streaming: Boolean(entry.stream),
+      price:
+        typeof entry.price === 'string'
+          ? entry.price
+          : (entry.price?.invoke ?? manifestEntry?.pricing?.invoke ?? null),
     };
-  },
+  });
+
+  return {
+    meta: {
+      name: manifest.name,
+      version: manifest.version,
+      description: manifest.description ?? null,
+    },
+    entrypoints,
+  };
+}
+
+type HeadlessDashboardData = Awaited<ReturnType<typeof loadDashboardData>>;
+
+export const Route = createFileRoute('/')({
+  loader: loadDashboardData,
   component: HeadlessDashboard,
 });
 
 function HeadlessDashboard() {
-  const loaderData = Route.useLoaderData();
+  const loaderData: HeadlessDashboardData = Route.useLoaderData();
   const network = getNetworkInfo();
 
   const agentName = loaderData.meta?.name ?? 'Agent';
@@ -126,9 +133,7 @@ function HeadlessDashboard() {
             {loaderData.entrypoints.length !== 1 ? 's' : ''}
             {' \u00B7 '}
             {
-              loaderData.entrypoints.filter(
-                (e: { streaming: boolean }) => e.streaming
-              ).length
+              loaderData.entrypoints.filter(entry => entry.streaming).length
             }{' '}
             streaming
           </span>

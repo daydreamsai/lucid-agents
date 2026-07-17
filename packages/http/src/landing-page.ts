@@ -1,6 +1,6 @@
 import type { AgentMeta } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
-import { html } from 'hono/html';
+import { html, raw } from 'hono/html';
 import type { HtmlEscapedString } from 'hono/utils/html';
 
 import { z } from 'zod';
@@ -953,7 +953,9 @@ export const renderLandingPage = ({
           </footer>
         </main>
         <script>
-          const manifestUrl = ${JSON.stringify(manifestPath)};
+          const manifestUrl = ${raw(
+            JSON.stringify(manifestPath).replace(/</gu, '\\u003c')
+          )};
           document.addEventListener('DOMContentLoaded', () => {
             const pre = document.getElementById('agent-manifest');
             const status = document.getElementById('manifest-status');

@@ -4,6 +4,8 @@ import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { SchedulerRuntime } from '@lucid-agents/types/scheduler';
 import { z } from 'zod';
 
+import type { KitchenSinkProfile } from './agent';
+
 // Minimal interface covering the Anthropic API surface we use.
 // Accepting this interface (rather than the concrete Anthropic class) lets
 // tests inject a lightweight mock without importing the full SDK.
@@ -44,7 +46,7 @@ export function registerEntrypoints(
     analytics?: AnalyticsRuntime;
     scheduler?: SchedulerRuntime;
   }>,
-  options?: { anthropic?: AnthropicLike }
+  options?: { anthropic?: AnthropicLike; profile?: KitchenSinkProfile }
 ): void {
   // Lazily resolve the Anthropic client: use the injected mock (for tests) or
   // defer construction until the ask handler is actually invoked so that a
@@ -98,7 +100,13 @@ export function registerEntrypoints(
       charCount: z.number(),
       preview: z.string(),
     }),
-    // price: '1000', // Uncomment in production: 0.001 USDC via x402 payments
+    ...(options?.profile === 'x402' || options?.profile === 'mpp'
+      ? {
+          price: '1000',
+          paymentProtocol: options.profile,
+          ...(options.profile === 'x402' ? { siwx: { enabled: true } } : {}),
+        }
+      : {}),
     async handler({ input }) {
       const words = input.text.trim().split(/\s+/).filter(Boolean);
       const preview =

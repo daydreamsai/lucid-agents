@@ -4,17 +4,6 @@
  * Demonstrates: identity · payments · A2A · AP2 · wallet · scheduler · analytics · Hono HTTP
  *
  * Run: bun run packages/examples/src/kitchen-sink/index.ts
- *
- * Environment variables (all optional — agent starts without them):
- *   AGENT_WALLET_TYPE=local            Wallet type (local | thirdweb | lucid)
- *   AGENT_WALLET_PRIVATE_KEY=0x...     Private key for identity + payments
- *   AGENT_DOMAIN=my-agent.example.com  ERC-8004 domain
- *   AUTO_REGISTER=true                 Auto-register identity on startup
- *   FACILITATOR_URL=...                x402 facilitator (default: daydreams.systems)
- *   PAYMENTS_RECEIVABLE_ADDRESS=0x...  Address to receive payments
- *   NETWORK=base-sepolia               Chain network identifier
- *   PORT=8787                          Kitchen-sink server port
- *   CLIENT_PORT=8788                   Client agent port
  */
 
 import { createAgentApp } from '@lucid-agents/hono';
@@ -23,24 +12,32 @@ import { createKitchenSinkAgent } from './agent';
 import { createClientAgent, runA2ADemo } from './client';
 import { registerEntrypoints } from './entrypoints';
 
-const PORT = Number.parseInt(process.env.PORT ?? '8787', 10);
-const CLIENT_PORT = Number.parseInt(process.env.CLIENT_PORT ?? '8788', 10);
-if (!Number.isFinite(PORT) || PORT < 1 || PORT > 65535)
-  throw new Error(`Invalid PORT: ${process.env.PORT}`);
-if (!Number.isFinite(CLIENT_PORT) || CLIENT_PORT < 1 || CLIENT_PORT > 65535)
-  throw new Error(`Invalid CLIENT_PORT: ${process.env.CLIENT_PORT}`);
-const ORIGIN = `http://localhost:${PORT}`;
+export type StartKitchenSinkOptions = {
+  port?: number;
+  clientPort?: number;
+  runDemo?: boolean;
+  quiet?: boolean;
+};
 
-async function main() {
-  // ── 1. Kitchen-sink agent ──────────────────────────────────────────────────
-  const agent = await createKitchenSinkAgent();
-  const { app, addEntrypoint } = await createAgentApp(agent);
-  registerEntrypoints(addEntrypoint, agent);
-  const hasWallets = 'wallets' in agent && Boolean(agent.wallets);
+export type RunningKitchenSink = {
+  origin: string;
+  clientOrigin: string;
+  close(): Promise<void>;
+};
 
-  const server = Bun.serve({ port: PORT, fetch: app.fetch.bind(app) });
+function parsePort(value: string | undefined, fallback: number): number {
+  const port = value === undefined ? fallback : Number.parseInt(value, 10);
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    throw new Error(`Invalid port: ${value}`);
+  }
+  return port;
+}
 
-  // ── 2. Startup banner ─────────────────────────────────────────────────────
+function printBanner(
+  origin: string,
+  clientOrigin: string,
+  hasWallets: boolean
+) {
   const hr = '─'.repeat(52);
   console.log(`[kitchen-sink] ${hr}`);
   console.log(
@@ -54,51 +51,104 @@ async function main() {
   console.log(`[kitchen-sink] Scheduler: ready`);
   console.log(`[kitchen-sink] A2A:       ready`);
   console.log(`[kitchen-sink] AP2:       roles: merchant`);
-  console.log(`[kitchen-sink] Server:    ${ORIGIN}`);
+  console.log(`[kitchen-sink] Server:    ${origin}`);
+  console.log(`[client]       Server:    ${clientOrigin}`);
   console.log(`[kitchen-sink] ${hr}`);
   console.log(`[kitchen-sink] Try it:`);
-  console.log(`[kitchen-sink]   curl ${ORIGIN}/entrypoints/echo/invoke \\`);
+  console.log(`[kitchen-sink]   curl ${origin}/entrypoints/echo/invoke \\`);
   console.log(`[kitchen-sink]        -H 'Content-Type: application/json' \\`);
   console.log(`[kitchen-sink]        -d '{"input":{"text":"hello"}}'`);
   console.log(
-    `[kitchen-sink]   curl ${ORIGIN}/.well-known/agent-card.json | jq .`
+    `[kitchen-sink]   curl ${origin}/.well-known/agent-card.json | jq .`
   );
   console.log(`[kitchen-sink] ${hr}`);
+}
 
-  // ── 3. Client agent ────────────────────────────────────────────────────────
+/** Start both kitchen-sink agents and return their origins plus a close hook. */
+export async function startKitchenSink(
+  options: StartKitchenSinkOptions = {}
+): Promise<RunningKitchenSink> {
+  const port = options.port ?? parsePort(process.env.PORT, 8787);
+  const clientPort =
+    options.clientPort ?? parsePort(process.env.CLIENT_PORT, 8788);
+
+  const agent = await createKitchenSinkAgent();
+  const { app, addEntrypoint } = await createAgentApp(agent);
+  registerEntrypoints(addEntrypoint, agent);
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port,
+    fetch: app.fetch.bind(app),
+  });
+
   const clientAgent = await createClientAgent();
   const { app: clientApp } = await createAgentApp(clientAgent);
   const clientServer = Bun.serve({
-    port: CLIENT_PORT,
+    hostname: '127.0.0.1',
+    port: clientPort,
     fetch: clientApp.fetch.bind(clientApp),
   });
-  console.log(`[client]       Server:    http://localhost:${CLIENT_PORT}`);
 
-  // Give the kitchen-sink server a moment before the demo call
-  await new Promise(resolve => setTimeout(resolve, 200));
-
-  // ── 4. A2A demo ────────────────────────────────────────────────────────────
-  try {
-    await runA2ADemo(ORIGIN);
-  } catch (err) {
-    console.warn(
-      '[client]       A2A demo skipped:',
-      err instanceof Error ? err.message : String(err)
-    );
+  if (server.port === undefined || clientServer.port === undefined) {
+    server.stop(true);
+    clientServer.stop(true);
+    await Promise.all([agent.close(), clientAgent.close()]);
+    throw new Error('Bun did not bind the kitchen-sink servers');
   }
 
-  console.log(`[kitchen-sink] ${hr}`);
+  const origin = `http://127.0.0.1:${server.port}`;
+  const clientOrigin = `http://127.0.0.1:${clientServer.port}`;
+  const hasWallets = 'wallets' in agent && Boolean(agent.wallets);
+
+  if (!options.quiet) printBanner(origin, clientOrigin, hasWallets);
+  if (options.runDemo !== false) {
+    try {
+      await runA2ADemo(origin);
+    } catch (error) {
+      if (!options.quiet) {
+        console.warn(
+          '[client]       A2A demo skipped:',
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+  }
+
+  let closed = false;
+  return {
+    origin,
+    clientOrigin,
+    async close() {
+      if (closed) return;
+      closed = true;
+      server.stop(true);
+      clientServer.stop(true);
+      await Promise.all([agent.close(), clientAgent.close()]);
+    },
+  };
+}
+
+async function main() {
+  const running = await startKitchenSink({
+    runDemo: process.env.RUN_A2A_DEMO !== 'false',
+    quiet: process.env.QUIET === 'true',
+  });
   console.log(`[kitchen-sink] All capabilities running. Press Ctrl+C to stop.`);
 
-  process.on('SIGINT', () => {
+  process.once('SIGINT', async () => {
     console.log('\n[kitchen-sink] Shutting down...');
-    server.stop();
-    clientServer.stop();
+    await running.close();
+    process.exit(0);
+  });
+  process.once('SIGTERM', async () => {
+    await running.close();
     process.exit(0);
   });
 }
 
-main().catch(err => {
-  console.error('[kitchen-sink] Fatal error:', err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch(error => {
+    console.error('[kitchen-sink] Fatal error:', error);
+    process.exit(1);
+  });
+}

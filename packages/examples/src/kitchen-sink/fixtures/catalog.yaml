@@ -1,0 +1,6 @@
+products:
+  - key: yaml-widget
+    name: YAML Widget
+    description: Deterministic YAML catalog fixture
+    metadata:
+      format: yaml

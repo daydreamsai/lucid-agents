@@ -120,7 +120,12 @@ async function createStripeClient(
   stripeConfig: StripePaymentsConfig,
   secretKey: string
 ): Promise<Stripe> {
-  const { default: StripeClient } = await import('stripe');
+  // Keep the optional peer out of consumer bundles. A literal dynamic import
+  // is still resolved eagerly by Next/Turbopack even when Stripe mode is off.
+  const stripePackage = ['stri', 'pe'].join('');
+  const { default: StripeClient } = (await import(stripePackage)) as {
+    default: typeof Stripe;
+  };
   const config: Stripe.StripeConfig = {};
   if (stripeConfig.apiVersion) {
     config.apiVersion =

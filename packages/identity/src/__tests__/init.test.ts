@@ -291,35 +291,27 @@ describe('createAgentIdentity', () => {
     expect(result.trust).toBeDefined(); // Should have trust config now
   });
 
-  it.skip('returns empty when registry lookup fails', async () => {
+  it('returns an identity-free result when registry lookup fails', async () => {
     const publicClient: PublicClientLike = {
       async readContract() {
         throw new Error('network error');
       },
     };
-
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
-          return '0xsignature' as const;
-        },
-      },
-      async writeContract() {
-        return '0xtxhash' as const;
       },
       async signMessage() {
         return '0xsignature' as const;
       },
     };
-
     const mockRuntime = {
       wallets: {
         developer: {
           kind: 'local' as const,
           connector: {
             async getWalletMetadata() {
-              return { address: '0x0000000000000000000000000000000000000007' };
+              return { address: mockWalletClient.account.address };
             },
             async signChallenge() {
               return '0xsignature';
@@ -335,13 +327,16 @@ describe('createAgentIdentity', () => {
       },
     } as any;
 
+    currentTestPublicClient = publicClient;
     const result = await createAgentIdentity({
       runtime: mockRuntime,
       domain: 'fallback.example',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
       chainId: 84532,
+      autoRegister: false,
       env: {},
+      logger: { warn() {} },
     });
 
     expect(result.trust).toBeUndefined();

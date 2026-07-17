@@ -13,6 +13,7 @@ const meta = { name: 'tester', version: '0.0.1', description: 'test agent' };
 const mockFacilitatorResponse = {
   kinds: [
     {
+      x402Version: 2,
       scheme: 'exact',
       network: 'eip155:84532',
       asset: {
@@ -51,7 +52,7 @@ beforeAll(() => {
 
     if (url.includes('facilitator') && url.includes('/verify')) {
       return new Response(
-        JSON.stringify({ valid: false, reason: 'No payment' }),
+        JSON.stringify({ isValid: false, invalidReason: 'No payment' }),
         {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -262,7 +263,7 @@ describe('createAgentApp invoke/stream routes', () => {
     expect(body.model).toBe('unit-test');
   });
 
-  it.skip('surfaces entrypoint price in manifest', async () => {
+  it('surfaces entrypoint price in manifest', async () => {
     const agent = await createAgent(meta)
       .use(http())
       .use(
@@ -289,7 +290,7 @@ describe('createAgentApp invoke/stream routes', () => {
     expect(manifest.entrypoints?.priced?.pricing?.invoke).toBe('123');
   });
 
-  it.skip('surfaces price in manifest when payments are configured', async () => {
+  it('surfaces price in manifest when payments are configured', async () => {
     const agent = await createAgent(meta)
       .use(http())
       .use(
@@ -318,7 +319,7 @@ describe('createAgentApp invoke/stream routes', () => {
     );
   });
 
-  it.skip('requires payment when entrypoint price is set', async () => {
+  it('requires payment when entrypoint price is set', async () => {
     const agent = await createAgent(meta)
       .use(http())
       .use(
@@ -346,12 +347,15 @@ describe('createAgentApp invoke/stream routes', () => {
     });
 
     expect(res.status).toBe(402);
-    const body = await res.json();
-    expect(body.error).toBeTruthy();
-    expect(body.accepts?.[0]?.maxAmountRequired).toBeDefined();
+    const requiredHeader = res.headers.get('PAYMENT-REQUIRED');
+    expect(requiredHeader).toBeTruthy();
+    const required = JSON.parse(
+      Buffer.from(requiredHeader!, 'base64').toString('utf8')
+    );
+    expect(required.accepts?.[0]?.amount).toBeDefined();
   });
 
-  it.skip('auto-paywalls priced entrypoints when payments configured', async () => {
+  it('auto-paywalls priced entrypoints when payments configured', async () => {
     const agent = await createAgent(meta)
       .use(http())
       .use(

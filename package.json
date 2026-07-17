@@ -41,6 +41,10 @@
     "type-check": "bun run --filter='./packages/*' type-check",
     "test": "bun test",
     "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov && bun run scripts/check-coverage.ts",
+    "test:ci": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --reporter=junit --reporter-outfile=reports/junit.xml && bun run scripts/check-coverage.ts && bun run scripts/check-test-results.ts reports/junit.xml",
+    "test:e2e": "bun test packages/examples/src/__tests__ packages/examples/src/kitchen-sink/__tests__",
+    "test:browser": "bash scripts/test-browser-smoke.sh",
+    "test:generated": "bun run scripts/test-generated-project.ts all",
     "test:portability": "bun run scripts/check-runtime-portability.ts",
     "prepare": "husky"
   },

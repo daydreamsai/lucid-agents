@@ -2,25 +2,8 @@ name: CI
 
 on:
   push:
-    branches:
-      - master
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.MD'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
+    branches: [master]
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - '**/*.MD'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.gif'
-      - '**/*.svg'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,7 +12,126 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  BUN_VERSION: 1.3.10
+
 jobs:
+  static_checks:
+    name: Build, types, lint, and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run type-check
+      - run: bun run lint
+      - run: bun run format:check
+
+  tests:
+    name: Unit and integration tests with coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: lucid_agents_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lucid_agents_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      TEST_POSTGRES_URL: postgresql://postgres:test_password@localhost:5432/lucid_agents_test
+      TEST_DATABASE_URL: postgresql://postgres:test_password@localhost:5432/lucid_agents_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - name: Run the zero-skip coverage gate
+        run: |
+          mkdir -p reports
+          bun run test:ci
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-and-coverage-reports
+          path: |
+            reports/junit.xml
+            coverage/lcov.info
+          if-no-files-found: warn
+
+  examples_e2e:
+    name: Kitchen sink and examples E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run test:e2e
+
+  generated_projects:
+    name: Generated ${{ matrix.adapter }} project
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        adapter: [hono, express, tanstack-ui, tanstack-headless, next]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run --cwd packages/cli build
+      - run: bun run scripts/test-generated-project.ts ${{ matrix.adapter }}
+
+  browser_smoke:
+    name: Chromium landing-page smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - name: Install Chromium
+        run: npx --yes --package @playwright/cli@0.1.17 playwright-cli install-browser chromium
+      - run: bun run test:browser
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-artifacts
+          path: output/playwright
+          if-no-files-found: warn
+
   runtime_compatibility:
     name: Node ${{ matrix.node-version }} and edge-like imports
     runs-on: ubuntu-latest
@@ -38,79 +140,26 @@ jobs:
       matrix:
         node-version: [20, 22]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run test:portability
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build packages
-        run: bun run build:packages
-
-      - name: Verify portable entrypoints
-        run: bun run test:portability
-
-  quality_checks:
-    name: Code Quality, Build & Test
+  docs:
+    name: Documentation types and build
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.10
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Start PostgreSQL test database
-        run: |
-          docker compose -f platform/dev/docker-compose.yml up -d test-db
-          echo "Waiting for PostgreSQL to be ready..."
-          timeout 60 bash -c 'until docker exec lucid-agents-test-db pg_isready -U postgres -d lucid_agents_test; do sleep 2; done' || exit 1
-          echo "PostgreSQL is ready!"
-
-      - name: Build packages
-        run: bun run build:packages
-
-      - name: Typecheck packages
-        run: bun run type-check
-
-      - name: Lint packages
-        run: bun run lint
-
-      - name: Format check
-        run: bun run format:check
-
-      - name: Test packages with coverage
-        env:
-          TEST_POSTGRES_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
-          TEST_DATABASE_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
-        run: bun run test:coverage
-
-      - name: E2E example smoke tests
-        env:
-          TEST_POSTGRES_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
-          TEST_DATABASE_URL: postgresql://postgres:test_password@localhost:5435/lucid_agents_test
-          PAYMENTS_RECEIVABLE_ADDRESS: '0x0000000000000000000000000000000000000001'
-          FACILITATOR_URL: https://facilitator.example.com
-          NETWORK: base-sepolia
-        run: bun test packages/examples/src/__tests__/
-
-      - name: Stop PostgreSQL test database
-        if: always()
-        run: |
-          docker compose -f platform/dev/docker-compose.yml stop test-db || true
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd lucid-docs types:check
+      - run: bun run --cwd lucid-docs build

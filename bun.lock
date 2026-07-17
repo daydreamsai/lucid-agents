@@ -199,6 +199,7 @@
         "@x402/core": "catalog:",
         "@x402/evm": "catalog:",
         "@x402/fetch": "catalog:",
+        "mppx": "^0.1.0",
         "thirdweb": "^5.113.0",
         "viem": "catalog:",
         "zod": "catalog:",

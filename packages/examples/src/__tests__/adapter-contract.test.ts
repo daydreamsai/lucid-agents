@@ -30,6 +30,20 @@ async function createContractRuntime(name: string): Promise<ContractRuntime> {
       key: 'echo',
       handler: async ({ input }) => ({ output: input }),
     })
+    .addEntrypoint({
+      key: 'stream',
+      stream: async ({ input }, emit) => {
+        await emit({ kind: 'delta', delta: input });
+        return { output: input };
+      },
+    })
+    .addEntrypoint({
+      key: 'slow',
+      handler: async ({ input }) => {
+        await Bun.sleep(100);
+        return { output: input };
+      },
+    })
     .build();
 }
 
@@ -116,7 +130,7 @@ const adapters = [
 ] as const;
 
 describe.each(adapters)('%s adapter contract', (_name, createHarness) => {
-  it('honors the canonical base path, discovery, invoke, and task routes', async () => {
+  it('binds every canonical route and preserves success and error behavior', async () => {
     const harness = await createHarness();
     try {
       expect((await harness.request('/health')).status).toBe(404);
@@ -130,6 +144,7 @@ describe.each(adapters)('%s adapter contract', (_name, createHarness) => {
       );
       expect(card.status).toBe(200);
       const cardPayload = (await card.json()) as {
+        name: string;
         url: string;
         skills: Array<{ id: string }>;
       };
@@ -137,6 +152,34 @@ describe.each(adapters)('%s adapter contract', (_name, createHarness) => {
       expect(cardPayload.skills).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: 'echo' })])
       );
+
+      const legacyCard = await harness.request(
+        '/api/agent/.well-known/agent.json'
+      );
+      expect(legacyCard.status).toBe(200);
+      expect(await legacyCard.json()).toMatchObject({ name: cardPayload.name });
+
+      const entrypoints = await harness.request('/api/agent/entrypoints');
+      expect(entrypoints.status).toBe(200);
+      expect(await entrypoints.json()).toMatchObject({
+        items: expect.arrayContaining([
+          expect.objectContaining({ key: 'echo' }),
+          expect.objectContaining({ key: 'stream' }),
+        ]),
+      });
+
+      const landing = await harness.request('/api/agent/');
+      expect(landing.status).toBe(200);
+      expect(landing.headers.get('content-type')).toContain('text/html');
+
+      const favicon = await harness.request('/api/agent/favicon.svg');
+      expect(favicon.status).toBe(200);
+      expect(favicon.headers.get('content-type')).toContain('image/svg+xml');
+
+      const oasf = await harness.request(
+        '/api/agent/.well-known/oasf-record.json'
+      );
+      expect(oasf.status).toBe(404);
 
       const invoked = await harness.request(
         '/api/agent/entrypoints/echo/invoke',
@@ -152,19 +195,90 @@ describe.each(adapters)('%s adapter contract', (_name, createHarness) => {
         output: { text: 'hello' },
       });
 
+      const missingEntrypoint = await harness.request(
+        '/api/agent/entrypoints/missing/invoke',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input: {} }),
+        }
+      );
+      expect(missingEntrypoint.status).toBe(404);
+
+      const stream = await harness.request(
+        '/api/agent/entrypoints/stream/stream',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ input: { text: 'streamed' } }),
+        }
+      );
+      expect(stream.status).toBe(200);
+      expect(stream.headers.get('content-type')).toContain('text/event-stream');
+      expect(await stream.text()).toContain('event: run-end');
+
       const task = await harness.request('/api/agent/tasks', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          skillId: 'echo',
+          skillId: 'slow',
           message: { role: 'user', content: { text: '{"text":"task"}' } },
         }),
       });
       expect(task.status).toBe(200);
-      expect(await task.json()).toMatchObject({
-        taskId: expect.any(String),
-        accessToken: expect.any(String),
+      const access = (await task.json()) as {
+        taskId: string;
+        accessToken: string;
+      };
+      expect(typeof access.taskId).toBe('string');
+      expect(typeof access.accessToken).toBe('string');
+      if (!access.accessToken || access.accessToken.length < 20) {
+        throw new Error(
+          `Invalid task access response: ${JSON.stringify(access)}`
+        );
+      }
+      const taskHeaders = { 'Task-Access-Token': access.accessToken };
+
+      const listed = await harness.request(
+        '/api/agent/tasks?limit=50&offset=0',
+        { headers: taskHeaders }
+      );
+      if (!listed.ok) {
+        throw new Error(
+          `Task listing failed for token ${JSON.stringify(access.accessToken)} (${access.accessToken.length}): ${await listed.clone().text()}`
+        );
+      }
+      expect(listed.status).toBe(200);
+      expect(await listed.json()).toMatchObject({
+        tasks: [expect.objectContaining({ taskId: access.taskId })],
       });
+
+      const fetched = await harness.request(
+        `/api/agent/tasks/${access.taskId}`,
+        { headers: taskHeaders }
+      );
+      expect(fetched.status).toBe(200);
+      expect(await fetched.json()).toMatchObject({ taskId: access.taskId });
+
+      const cancelled = await harness.request(
+        `/api/agent/tasks/${access.taskId}/cancel`,
+        { method: 'POST', headers: taskHeaders }
+      );
+      expect(cancelled.status).toBe(200);
+      expect(await cancelled.json()).toMatchObject({ status: 'cancelled' });
+
+      const subscribed = await harness.request(
+        `/api/agent/tasks/${access.taskId}/subscribe`,
+        { headers: taskHeaders }
+      );
+      expect(subscribed.status).toBe(200);
+      expect(subscribed.headers.get('content-type')).toContain(
+        'text/event-stream'
+      );
+      expect(await subscribed.text()).toContain('event: statusUpdate');
+
+      const denied = await harness.request(`/api/agent/tasks/${access.taskId}`);
+      expect(denied.status).toBe(401);
     } finally {
       await harness.close();
     }

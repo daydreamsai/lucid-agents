@@ -96,6 +96,9 @@ describe('renderLandingPage', () => {
     expect(page).toContain('https://example.com');
     expect(page).toContain('&quot;count&quot;: 2');
     expect(page).toContain('const response = await fetch(url);');
+    expect(page).toContain(
+      'const manifestUrl = "/api/agent/.well-known/agent-card.json";'
+    );
   });
 
   it('renders the empty and metadata fallback states', async () => {

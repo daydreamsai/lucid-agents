@@ -1,0 +1,2 @@
+key,name,description,meta_format
+csv-widget,CSV Widget,Deterministic CSV catalog fixture,csv
