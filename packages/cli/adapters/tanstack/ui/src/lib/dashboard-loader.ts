@@ -33,44 +33,36 @@ export const loadDashboard = createServerFn({ method: 'GET' }).handler(
   async () => {
     'use server';
     // Import agent only inside the server function to avoid serialization
-    const { agent } = await import('@/lib/agent');
+    const { runtime } = await import('@/lib/agent');
 
     // Step 1: Get entrypoints list (this might be causing issues)
     let entrypoints: DashboardEntry[] = [];
     try {
-      const rawEntrypoints = agent.listEntrypoints();
+      const rawEntrypoints = runtime.entrypoints.snapshot();
 
-      entrypoints = rawEntrypoints.map(
-        (entry: {
-          key: string;
-          description?: string;
-          stream?: boolean;
-          price?: any;
-          network?: string;
-        }) => {
-          // Explicitly extract only serializable data
-          const serializable: DashboardEntry = {
-            key: String(entry.key),
-            description: entry.description ? String(entry.description) : null,
-            streaming: Boolean(entry.stream),
-            price:
-              typeof entry.price === 'string'
-                ? String(entry.price)
-                : entry.price
-                  ? {
-                      invoke: entry.price.invoke
-                        ? String(entry.price.invoke)
-                        : null,
-                      stream: entry.price.stream
-                        ? String(entry.price.stream)
-                        : null,
-                    }
-                  : null,
-            network: entry.network ? String(entry.network) : null,
-          };
-          return serializable;
-        }
-      );
+      entrypoints = rawEntrypoints.map(entry => {
+        // Explicitly extract only serializable data
+        const serializable: DashboardEntry = {
+          key: String(entry.key),
+          description: entry.description ? String(entry.description) : null,
+          streaming: Boolean(entry.stream),
+          price:
+            typeof entry.price === 'string'
+              ? String(entry.price)
+              : entry.price
+                ? {
+                    invoke: entry.price.invoke
+                      ? String(entry.price.invoke)
+                      : null,
+                    stream: entry.price.stream
+                      ? String(entry.price.stream)
+                      : null,
+                  }
+                : null,
+          network: entry.network ? String(entry.network) : null,
+        };
+        return serializable;
+      });
     } catch (error) {
       console.error('[loadDashboard] Error getting entrypoints:', error);
       throw error;
@@ -88,9 +80,7 @@ export const loadDashboard = createServerFn({ method: 'GET' }).handler(
               network: configPayments.network
                 ? String(configPayments.network)
                 : null,
-              defaultPrice: configPayments.defaultPrice
-                ? String(configPayments.defaultPrice)
-                : null,
+              defaultPrice: null,
               payTo: configPayments.payTo ? String(configPayments.payTo) : null,
             }
           : null;
@@ -102,7 +92,7 @@ export const loadDashboard = createServerFn({ method: 'GET' }).handler(
     // Step 3: Get meta
     let meta = null;
     try {
-      const rawMeta = agent.config.meta;
+      const rawMeta = runtime.agent.config.meta;
       // Use JSON parse/stringify to ensure no functions leak through
       meta = rawMeta ? serializableClone(rawMeta) : null;
     } catch (error) {

@@ -98,9 +98,9 @@ The HTTP extension owns one authorization transaction for invoke, stream, and ta
 2. An invoke wins its idempotency claim.
 3. `admit()` evaluates incoming policies and atomically reserves capacity.
 4. The entrypoint executes, or asynchronous stream/task work is accepted.
-5. `finalize()` settles and commits accounting, while `abort()` releases a pre-settlement reservation.
+5. `finalize()` first moves accounting into a durable, non-expiring staged batch, then settles and commits it; `abort()` releases a pre-settlement reservation.
 
-Invalid input, failed handlers/output validation, failed admission, failed settlement, and storage errors do not consume a provisional reservation. A stream or task finalizes when its asynchronous work is successfully admitted because its HTTP operation is already live or accepted.
+Invalid input, failed handlers/output validation, failed admission, and failed settlement release provisional or staged capacity. If final accounting fails after an irreversible settlement, the staged batch remains counted until reconciliation instead of expiring open. A stream or task finalizes when its asynchronous work is successfully admitted because its HTTP operation is already live or accepted.
 
 SIWX entitlements are checked before either x402 or MPP challenges, allowing both rails to reuse the same paid entitlement. If settlement becomes irreversible and later response persistence fails, HTTP retains the idempotency claim so a retry cannot execute or charge twice.
 
@@ -171,7 +171,7 @@ payments({
 
 Use a stable `agentId` to isolate agents sharing one database. Postgres transactions and advisory locking enforce the same reservation contract across processes.
 
-All backends provide atomic total/rate reservations and an all-or-nothing accounting batch. Settlement commits every applicable limit, rate, and history record together; an expired reservation or storage error cannot leave partial policy state. `agent.close()` releases storage resources.
+All backends provide atomic total/rate reservations and durable staged settlement batches. Before payment, every applicable limit, rate, and history record moves into one non-expiring batch; after payment, that batch commits to history atomically. A post-settlement storage error leaves the staged amount counted instead of failing open after the reservation TTL. `agent.close()` releases storage resources.
 
 ## Payment policies
 

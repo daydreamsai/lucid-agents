@@ -1,9 +1,14 @@
 import { describe, expect, it, mock } from 'bun:test';
-import type { AgentRuntime } from '@lucid-agents/types/core';
+import type {
+  AgentManifest,
+  AgentRuntime,
+  BuildContext,
+} from '@lucid-agents/types/core';
 import { z } from 'zod';
 
 import { createA2ARuntime } from '../runtime';
 import { buildAgentCard } from '../card';
+import { a2a as a2aExtension } from '../extension';
 
 describe('createA2ARuntime', () => {
   const mockRuntime: Partial<AgentRuntime> = {
@@ -48,6 +53,27 @@ describe('createA2ARuntime', () => {
     expect(a2a?.buildCard).toBeDefined();
     expect(a2a?.fetchCard).toBeDefined();
     expect(a2a?.client).toBeDefined();
+  });
+
+  it('composes the A2A runtime and manifest capability as an extension', async () => {
+    const extension = a2aExtension();
+    const slice = await extension.build({
+      meta: mockRuntime.agent!.config.meta,
+      runtime: mockRuntime as AgentRuntime,
+    } as BuildContext);
+    const card = extension.onManifestBuild!(
+      {
+        name: 'test-agent',
+        version: '1.0.0',
+        entrypoints: {},
+      },
+      mockRuntime as AgentRuntime
+    ) as AgentManifest;
+
+    expect(extension.name).toBe('a2a');
+    expect(slice.a2a.buildCard).toBeFunction();
+    expect(card.capabilities?.stateTransitionHistory).toBe(true);
+    await extension.dispose?.(mockRuntime as AgentRuntime);
   });
 
   it('buildCard builds base Agent Card', () => {

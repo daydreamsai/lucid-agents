@@ -542,6 +542,61 @@ describe('PaymentTracker', () => {
         rmSync(`${dbPath}-wal`, { force: true });
       }
     });
+
+    it('keeps staged settlement capacity across TTL expiry and SQLite restart', async () => {
+      const dbPath = join(
+        tmpdir(),
+        `lucid-payment-staged-settlement-${crypto.randomUUID()}.db`
+      );
+      const originalNow = Date.now;
+      let now = 1_000_000;
+      Date.now = () => now;
+      let storage = createSQLitePaymentStorage(dbPath);
+      try {
+        const first = createPaymentTracker(storage);
+        const reservation = await first.reserveOutgoingLimit(
+          'settled-capacity',
+          'global',
+          1,
+          undefined,
+          1_000_000n
+        );
+        const settlementId = await first.stageSettlement([
+          reservation.reservationId!,
+        ]);
+
+        now += 5 * 60_000 + 1;
+        await storage.close?.();
+        storage = createSQLitePaymentStorage(dbPath);
+        const reopened = createPaymentTracker(storage);
+
+        expect(
+          await reopened.getOutgoingTotal('settled-capacity', 'global')
+        ).toBe(1_000_000n);
+        expect(
+          (
+            await reopened.reserveOutgoingLimit(
+              'settled-capacity',
+              'global',
+              1,
+              undefined,
+              1n
+            )
+          ).allowed
+        ).toBe(false);
+
+        await reopened.commitSettlement(settlementId);
+        expect(
+          await reopened.getOutgoingTotal('settled-capacity', 'global')
+        ).toBe(1_000_000n);
+      } finally {
+        Date.now = originalNow;
+        await storage.close?.();
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+      }
+    });
   });
 
   describe('group names with colons', () => {

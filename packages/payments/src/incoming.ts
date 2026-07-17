@@ -11,6 +11,7 @@ import { ExactEvmScheme } from '@x402/evm/exact/server';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type {
   IncomingPaymentAdmission,
+  IncomingPaymentAuthorizer,
   IncomingPaymentAuthorization,
   PaymentTracker,
   PaymentsConfig,
@@ -114,26 +115,6 @@ function responseFromInstructions(
   });
 }
 
-function extractVerifiedPayer(paymentPayload: unknown): string | undefined {
-  if (!paymentPayload || typeof paymentPayload !== 'object') return undefined;
-  const payload = paymentPayload as Record<string, unknown>;
-  const nested =
-    payload.payload && typeof payload.payload === 'object'
-      ? (payload.payload as Record<string, unknown>)
-      : undefined;
-  const authorization =
-    nested?.authorization && typeof nested.authorization === 'object'
-      ? (nested.authorization as Record<string, unknown>)
-      : undefined;
-  const payer =
-    payload.payer ??
-    payload.from ??
-    nested?.payer ??
-    nested?.from ??
-    authorization?.from;
-  return typeof payer === 'string' ? payer : undefined;
-}
-
 function paymentSubject(payer?: string, network?: string): string | undefined {
   const trimmedPayer = payer?.trim();
   if (!trimmedPayer) return undefined;
@@ -149,6 +130,22 @@ function noOpAdmission(): IncomingPaymentAdmission {
     abort: async () => {},
     finalize: async response => response,
   };
+}
+
+function incomingPoliciesRequireUsdAmount(config: PaymentsConfig): boolean {
+  return (config.policyGroups ?? []).some(group => {
+    const limits = group.incomingLimits;
+    if (!limits) return false;
+    const configured = [
+      limits.global,
+      ...Object.values(limits.perSender ?? {}),
+      ...Object.values(limits.perEndpoint ?? {}),
+    ];
+    return configured.some(
+      limit =>
+        limit?.maxPaymentUsd !== undefined || limit?.maxTotalUsd !== undefined
+    );
+  });
 }
 
 function siwxEntitlementResource(
@@ -199,6 +196,7 @@ async function addSIWxChallenge(
 type CachedServer = {
   server: x402HTTPResourceServer;
   ready: Promise<void>;
+  verifiedPayers: WeakMap<object, string>;
 };
 
 type IncomingSettlement = {
@@ -229,7 +227,7 @@ export function createIncomingPaymentAuthorizer(
     siwxStorage?: SIWxStorage;
     siwxConfig?: SIWxConfig;
   }
-) {
+): IncomingPaymentAuthorizer {
   const servers = new Map<string, Promise<CachedServer>>();
 
   const getServer = async (
@@ -274,6 +272,10 @@ export function createIncomingPaymentAuthorizer(
     const value = (async (): Promise<CachedServer> => {
       const facilitator = new HTTPFacilitatorClient(facilitatorConfig(config));
       const resourceServer = new x402ResourceServer(facilitator);
+      const verifiedPayers = new WeakMap<object, string>();
+      resourceServer.onAfterVerify(async ({ paymentPayload, result }) => {
+        if (result.payer) verifiedPayers.set(paymentPayload, result.payer);
+      });
       if (network.startsWith('solana:')) {
         // The SVM server pulls in Node-oriented WebSocket support. Keep it off
         // the portable root import path and load it only for Solana receivers.
@@ -285,7 +287,9 @@ export function createIncomingPaymentAuthorizer(
       const server = new x402HTTPResourceServer(resourceServer, {
         [`${request.method.toUpperCase()} ${path}`]: route,
       });
-      return { server, ready: server.initialize() };
+      const ready = server.initialize();
+      await ready;
+      return { server, ready, verifiedPayers };
     })();
     servers.set(key, value);
     try {
@@ -349,9 +353,10 @@ export function createIncomingPaymentAuthorizer(
     const outstandingReservations = new Set<string>();
     const groupsWithTotalReservations = new Set<string>();
     const policyScopes = new Map<string, string>();
+    let committed = false;
 
     const releaseOutstanding = async (): Promise<void> => {
-      if (!tracker || outstandingReservations.size === 0) return;
+      if (committed || !tracker || outstandingReservations.size === 0) return;
       const ids = [...outstandingReservations];
       const results = await Promise.allSettled(
         ids.map(id => tracker.releaseReservation(id))
@@ -442,7 +447,6 @@ export function createIncomingPaymentAuthorizer(
       }
     }
 
-    let committed = false;
     return {
       admitted: true,
       abort: releaseOutstanding,
@@ -463,6 +467,44 @@ export function createIncomingPaymentAuthorizer(
           }
         }
 
+        const accountingRecords =
+          groups.length > 0 && tracker
+            ? groups
+                .filter(
+                  group =>
+                    group.incomingLimits &&
+                    !groupsWithTotalReservations.has(group.name)
+                )
+                .map(group => ({
+                  groupName: group.name,
+                  scope: policyScopes.get(group.name) ?? 'global',
+                  direction: 'incoming' as const,
+                  amount: payment.amount,
+                }))
+            : [];
+        let settlementId: string | undefined;
+        if (
+          tracker &&
+          (outstandingReservations.size > 0 || accountingRecords.length > 0)
+        ) {
+          try {
+            settlementId = await tracker.stageSettlement(
+              [...outstandingReservations],
+              accountingRecords
+            );
+            outstandingReservations.clear();
+          } catch (error) {
+            await releaseOutstanding().catch(() => undefined);
+            return paymentErrorResponse(
+              'payment_recording_failed',
+              error instanceof Error
+                ? error.message
+                : 'Payment accounting could not be staged',
+              503
+            );
+          }
+        }
+
         let settlement: IncomingSettlement = {
           success: true,
           payer: payment.payer,
@@ -472,7 +514,13 @@ export function createIncomingPaymentAuthorizer(
         try {
           if (payment.settle) settlement = await payment.settle();
         } catch (error) {
-          await releaseOutstanding().catch(() => undefined);
+          if (settlementId) {
+            await tracker
+              ?.releaseSettlement(settlementId)
+              .catch(() => undefined);
+          } else {
+            await releaseOutstanding().catch(() => undefined);
+          }
           return paymentErrorResponse(
             'settlement_failed',
             error instanceof Error ? error.message : 'Settlement failed',
@@ -481,7 +529,13 @@ export function createIncomingPaymentAuthorizer(
         }
 
         if (!settlement.success) {
-          await releaseOutstanding().catch(() => undefined);
+          if (settlementId) {
+            await tracker
+              ?.releaseSettlement(settlementId)
+              .catch(() => undefined);
+          } else {
+            await releaseOutstanding().catch(() => undefined);
+          }
           return paymentErrorResponse(
             'settlement_failed',
             settlement.errorReason ?? 'Settlement failed',
@@ -496,27 +550,12 @@ export function createIncomingPaymentAuthorizer(
           settledResponse.headers.set(name, value);
         }
 
-        if (groups.length > 0 && tracker) {
+        if (settlementId && tracker) {
           try {
-            const records = groups
-              .filter(
-                group =>
-                  group.incomingLimits &&
-                  !groupsWithTotalReservations.has(group.name)
-              )
-              .map(group => ({
-                groupName: group.name,
-                scope: policyScopes.get(group.name) ?? 'global',
-                direction: 'incoming' as const,
-                amount: payment.amount,
-              }));
-            await tracker.commitReservations(
-              [...outstandingReservations],
-              records
-            );
-            outstandingReservations.clear();
+            await tracker.commitSettlement(settlementId);
           } catch (error) {
-            await releaseOutstanding().catch(() => undefined);
+            // Settlement is irreversible. The durable staged batch remains
+            // counted without a TTL until accounting can be reconciled.
             return paymentErrorResponse(
               'payment_recording_failed',
               error instanceof Error
@@ -699,16 +738,21 @@ export function createIncomingPaymentAuthorizer(
     try {
       if (verifiedPayment) {
         const currency = verifiedPayment.currency.trim().toLowerCase();
-        const amount = parsePriceAmount(verifiedPayment.amount);
-        if (!amount || (currency !== 'usd' && currency !== 'usdc')) {
-          return {
-            authorized: false,
-            response: paymentErrorResponse(
-              'payment_configuration_error',
-              `Incoming payment policies require a positive USD-denominated amount; received ${verifiedPayment.amount} ${verifiedPayment.currency}.`,
-              503
-            ),
-          };
+        const requiresUsdAmount = incomingPoliciesRequireUsdAmount(config);
+        let amount = 0n;
+        if (requiresUsdAmount) {
+          const parsedAmount = parsePriceAmount(verifiedPayment.amount);
+          if (!parsedAmount || (currency !== 'usd' && currency !== 'usdc')) {
+            return {
+              authorized: false,
+              response: paymentErrorResponse(
+                'payment_configuration_error',
+                `Incoming payment policies require a positive USD-denominated amount; received ${verifiedPayment.amount} ${verifiedPayment.currency}.`,
+                503
+              ),
+            };
+          }
+          amount = parsedAmount;
         }
         const payment = {
           payer: verifiedPayment.payer,
@@ -801,14 +845,14 @@ export function createIncomingPaymentAuthorizer(
       }
 
       const amount = parsePriceAmount(price);
-      const verifiedPayer = extractVerifiedPayer(result.paymentPayload);
+      const verifiedPayer = cached.verifiedPayers.get(result.paymentPayload);
       if (amount === undefined) {
         throw new Error(`Entrypoint "${entrypoint.key}" has an invalid price`);
       }
       const payment = {
         payer: verifiedPayer,
         amount,
-        network: config.network,
+        network: result.paymentRequirements.network,
         settle: async () =>
           (await cached.server.processSettlement(
             result.paymentPayload,
@@ -817,7 +861,7 @@ export function createIncomingPaymentAuthorizer(
       };
       return {
         authorized: true,
-        subject: paymentSubject(payment.payer, config.network),
+        subject: paymentSubject(payment.payer, payment.network),
         admit: () => admitVerifiedIncoming(request, entrypoint, kind, payment),
       };
     } catch (error) {

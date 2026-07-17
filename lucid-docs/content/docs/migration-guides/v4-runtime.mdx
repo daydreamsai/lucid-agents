@@ -1,0 +1,95 @@
+---
+title: Lucid Agents v4 Runtime Migration
+description: Migrate to the extension-owned runtime and canonical HTTP authorization layer.
+icon: ArrowRight
+---
+
+This guide covers the breaking runtime and adapter changes introduced with the
+Lucid Agents v4 package line.
+
+## Build one completed runtime
+
+Configuration now belongs to the extension that owns it. Compose extensions,
+register entrypoints through the core registry, and build once:
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const runtime = await createAgent({
+  name: 'paid-agent',
+  version: '1.0.0',
+})
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(http({ basePath: '/api/agent' }))
+  .addEntrypoint({
+    key: 'premium',
+    price: '0.01',
+    async handler() {
+      return { output: { result: 'premium content' } };
+    },
+  })
+  .build();
+```
+
+## Runtime property changes
+
+| Before | After |
+|--------|-------|
+| `runtime.handlers` | `runtime.http.handlers` |
+| adapter-owned route registries | `runtime.http.routes` |
+| `runtime.config.meta` | `runtime.agent.config.meta` |
+| `runtime.listEntrypoints()` | `runtime.entrypoints.snapshot()` |
+| adapter-local paywalls | `payments()` plus the shared HTTP authorization gate |
+
+Use `runtime.entrypoints.add()` for dynamic registration and
+`runtime.entrypoints.list()` for serializable discovery summaries.
+
+## Bind adapters without another paywall
+
+```typescript
+import { createAgentApp as createHonoApp } from '@lucid-agents/hono';
+const { app: honoApp } = await createHonoApp(runtime);
+
+import { createAgentApp as createExpressApp } from '@lucid-agents/express';
+const { app: expressApp } = await createExpressApp(runtime);
+
+import { createTanStackRuntime } from '@lucid-agents/tanstack';
+const { handlers, routes } = await createTanStackRuntime(runtime);
+```
+
+Remove `withPayments()`, `createHonoPaywall()`, `createExpressPaywall()`,
+`createTanStackPaywall()`, and adapter-level `paymentMiddleware()` wrappers from
+Lucid routes. Invoke, stream, and task creation all use the same runtime-owned
+authorization transaction.
+
+## Server-only subpaths
+
+Portable package roots no longer import Node-only storage or filesystem code.
+Import these capabilities from their documented subpaths:
+
+```typescript
+import {
+  createPostgresPaymentStorage,
+  createSqlitePaymentStorage,
+  policiesFromConfig,
+} from '@lucid-agents/payments/node';
+
+import { loadCatalogFile } from '@lucid-agents/catalog/node';
+```
+
+## Protocol runtime changes
+
+- A2A tasks are owner-capability protected and include leased, fenced state
+  transitions. Treat both `failed` and `cancelled` as terminal outcomes.
+- MPP uses standard Payment-Auth challenges and credentials. Configure native
+  Tempo/Stripe methods or provide an application credential verifier.
+- Payment policies are supplied as `config.policyGroups`; the removed
+  `payments({ policies })` option is not accepted.
+- Analytics is installed as a runtime extension bound to the payments tracker.
+
+## Shutdown
+
+Call `await runtime.close()` during application shutdown. Extension resources
+are disposed once in reverse dependency order.

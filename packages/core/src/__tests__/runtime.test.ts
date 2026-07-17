@@ -42,7 +42,7 @@ const makeRuntimeStub = (): {
           async getWalletMetadata() {
             return await getWalletMetadata();
           },
-          async signChallenge(_challenge) {
+          async signChallenge(_challenge: unknown) {
             return await signChallenge(_challenge);
           },
           async supportsCaip2() {
@@ -572,6 +572,21 @@ describe('createAgentRuntime manifest', () => {
     const manifest2 = agent.manifest.build('https://other.com');
 
     expect(manifest1).not.toBe(manifest2);
+  });
+
+  it('bounds caller-derived manifest origins and evicts the oldest entry', async () => {
+    const agent = await createAgent({ name: 'test', version: '1.0.0' }).build();
+    const first = agent.manifest.build('https://origin-0.example.com');
+
+    for (let index = 1; index <= 100; index += 1) {
+      agent.manifest.build(`https://origin-${index}.example.com`);
+    }
+
+    const newest = agent.manifest.build('https://origin-100.example.com');
+    expect(newest).toBe(agent.manifest.build('https://origin-100.example.com'));
+    expect(agent.manifest.build('https://origin-0.example.com')).not.toBe(
+      first
+    );
   });
 
   it('includes payments in manifest when active', async () => {

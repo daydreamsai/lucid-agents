@@ -33,6 +33,11 @@ export type EntrypointAuthorization =
       admit: () => Promise<EntrypointAdmission>;
     };
 
+export type EntrypointAuthorizationOptions = {
+  /** Enable MPP replay recovery only for a validated, store-backed invoke. */
+  allowMppIdempotencyRecovery?: boolean;
+};
+
 function normalizeAddress(address: string): string {
   const trimmed = address.trim();
   return /^0x[0-9a-f]{40}$/i.test(trimmed) ? trimmed.toLowerCase() : trimmed;
@@ -83,7 +88,8 @@ export async function authorizeEntrypointRequest(
   entrypoint: EntrypointDef,
   kind: 'invoke' | 'stream',
   runtime: AuthorizationRuntime,
-  trustedAuth?: AgentAuthContext
+  trustedAuth?: AgentAuthContext,
+  options?: EntrypointAuthorizationOptions
 ): Promise<EntrypointAuthorization> {
   const priced = hasConfiguredPrice(entrypoint, kind);
   if (priced && entrypoint.paymentProtocol === 'mpp' && !runtime.mpp) {
@@ -171,7 +177,10 @@ export async function authorizeEntrypointRequest(
       request,
       entrypoint,
       kind,
-      mppRequirement
+      mppRequirement,
+      {
+        allowIdempotencyRecovery: options?.allowMppIdempotencyRecovery === true,
+      }
     );
     if (authorization.authorized === false) return authorization;
     if (authorization.handled) {

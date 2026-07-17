@@ -193,49 +193,6 @@ const paymentContext = await createRuntimePaymentContext({
 const response = await paymentContext.fetchWithPayment(url, options);
 ```
 
-## Framework-Specific Changes
-
-Lucid Agents no longer exposes adapter-local paywall factories. Configure x402 once on the agent runtime, then bind that completed runtime to Hono, Express, or TanStack. All adapters delegate invoke, stream, and task creation to the same HTTP authorization flow.
-
-```typescript
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { payments, paymentsFromEnv } from '@lucid-agents/payments';
-
-const runtime = await createAgent({
-  name: 'paid-agent',
-  version: '1.0.0',
-})
-  .use(payments({ config: paymentsFromEnv() }))
-  .use(http({ basePath: '/api/agent' }))
-  .addEntrypoint({
-    key: 'premium',
-    price: '0.01',
-    async handler() {
-      return { output: { result: 'premium content' } };
-    },
-  })
-  .build();
-```
-
-Bind the runtime without another payment wrapper:
-
-```typescript
-// Hono
-import { createAgentApp as createHonoApp } from '@lucid-agents/hono';
-const { app: honoApp } = await createHonoApp(runtime);
-
-// Express
-import { createAgentApp as createExpressApp } from '@lucid-agents/express';
-const { app: expressApp } = await createExpressApp(runtime);
-
-// TanStack Start
-import { createTanStackRuntime } from '@lucid-agents/tanstack';
-const { handlers, routes } = await createTanStackRuntime(runtime);
-```
-
-Do not add `withPayments()`, `createHonoPaywall()`, `createExpressPaywall()`, `createTanStackPaywall()`, or `paymentMiddleware()` around Lucid routes. Those adapter-local APIs are not part of the current package surface.
-
 ## Test Updates
 
 ### Mock Facilitator Responses

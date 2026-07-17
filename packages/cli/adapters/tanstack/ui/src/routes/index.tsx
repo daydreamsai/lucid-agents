@@ -6,7 +6,6 @@ import {
   getManifest,
   invokeEntrypointWithBody,
   streamEntrypointWithBody,
-  type AgentHealth,
   type AgentPayments,
 } from '@/lib/api';
 import { WalletSummary } from '@/components/wallet-summary';
@@ -45,47 +44,39 @@ function ensureSerializable<T>(obj: T): T {
 export const Route = createFileRoute('/')({
   loader: async () => {
     'use server';
-    const { agent, runtime } = await import('@/lib/agent');
+    const { runtime } = await import('@/lib/agent');
 
     // Get manifest to extract schemas
     const manifest = runtime.manifest.build('http://localhost');
     const manifestEntrypoints = manifest.entrypoints || {};
 
-    const rawEntrypoints = agent.listEntrypoints();
-    const entrypoints: DashboardEntry[] = rawEntrypoints.map(
-      (entry: {
-        key: string;
-        description?: string;
-        stream?: boolean;
-        price?: any;
-        network?: string;
-      }) => {
-        // Find corresponding manifest entry for schema info
-        const manifestEntry = manifestEntrypoints[entry.key];
+    const rawEntrypoints = runtime.entrypoints.snapshot();
+    const entrypoints: DashboardEntry[] = rawEntrypoints.map(entry => {
+      // Find corresponding manifest entry for schema info
+      const manifestEntry = manifestEntrypoints[entry.key];
 
-        return {
-          key: String(entry.key),
-          description: entry.description ? String(entry.description) : null,
-          streaming: Boolean(entry.stream),
-          price:
-            typeof entry.price === 'string'
-              ? String(entry.price)
-              : entry.price
-                ? {
-                    invoke: entry.price.invoke
-                      ? String(entry.price.invoke)
-                      : null,
-                    stream: entry.price.stream
-                      ? String(entry.price.stream)
-                      : null,
-                  }
-                : null,
-          network: entry.network ? String(entry.network) : null,
-          inputSchema: manifestEntry?.input_schema || null,
-          outputSchema: manifestEntry?.output_schema || null,
-        };
-      }
-    );
+      return {
+        key: String(entry.key),
+        description: entry.description ? String(entry.description) : null,
+        streaming: Boolean(entry.stream),
+        price:
+          typeof entry.price === 'string'
+            ? String(entry.price)
+            : entry.price
+              ? {
+                  invoke: entry.price.invoke
+                    ? String(entry.price.invoke)
+                    : null,
+                  stream: entry.price.stream
+                    ? String(entry.price.stream)
+                    : null,
+                }
+              : null,
+        network: entry.network ? String(entry.network) : null,
+        inputSchema: manifestEntry?.input_schema || null,
+        outputSchema: manifestEntry?.output_schema || null,
+      };
+    });
 
     const configPayments = runtime.payments?.config;
     const payments: AgentPayments | null =
@@ -94,14 +85,12 @@ export const Route = createFileRoute('/')({
             network: configPayments.network
               ? String(configPayments.network)
               : null,
-            defaultPrice: configPayments.defaultPrice
-              ? String(configPayments.defaultPrice)
-              : null,
+            defaultPrice: null,
             payTo: configPayments.payTo ? String(configPayments.payTo) : null,
           }
         : null;
 
-    const rawMeta = agent.config.meta;
+    const rawMeta = runtime.agent.config.meta;
     const meta = rawMeta
       ? {
           name: String(rawMeta.name || ''),
@@ -343,10 +332,8 @@ function HomePage() {
   );
 
   const entrypointCount = cards?.length ?? 0;
-  const entrypointLabel = entrypointCount === 1 ? 'Entrypoint' : 'Entrypoints';
 
   const [healthState, setHealthState] = useState<HealthState>('loading');
-  const [healthData, setHealthData] = useState<AgentHealth | null>(null);
   const [manifestState, setManifestState] = useState<ManifestState>('idle');
   const [manifestText, setManifestText] = useState<string>(
     'Manifest unavailable.'
@@ -391,7 +378,6 @@ function HomePage() {
       try {
         const health = await getHealth();
         if (cancelled) return;
-        setHealthData(health);
         const ok =
           health.ok === true ||
           (health.status && health.status.toLowerCase().includes('ok')) ||
@@ -584,12 +570,22 @@ function HomePage() {
 
   const appKitSnippet = [
     'import { useWalletClient } from "wagmi";',
-    'import { wrapFetchWithPayment } from "x402-fetch";',
+    'import { x402Client, wrapFetchWithPayment } from "@x402/fetch";',
+    'import { ExactEvmScheme } from "@x402/evm";',
     '',
     'const { data: walletClient } = useWalletClient();',
     '',
     'if (walletClient) {',
-    '  const fetchWithPayment = wrapFetchWithPayment(fetch, walletClient);',
+    '  const signer = {',
+    '    address: walletClient.account.address,',
+    '    signTypedData: (message) => walletClient.signTypedData({',
+    '      ...message, account: walletClient.account,',
+    '    }),',
+    '  };',
+    '  const client = new x402Client().register(',
+    '    "eip155:*", new ExactEvmScheme(signer)',
+    '  );',
+    '  const fetchWithPayment = wrapFetchWithPayment(fetch, client);',
     '  // await fetchWithPayment(...)',
     '}',
     '',

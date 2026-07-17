@@ -5,27 +5,18 @@ import { getNetworkInfo } from '@/lib/network';
 export const Route = createFileRoute('/')({
   loader: async () => {
     'use server';
-    const { agent, runtime } = await import('@/lib/agent');
+    const { runtime } = await import('@/lib/agent');
     const manifest = runtime.manifest.build('http://localhost');
     const manifestEntrypoints = manifest.entrypoints || {};
-    const entrypoints = agent
-      .listEntrypoints()
-      .map(
-        (entry: {
-          key: string;
-          description?: string;
-          stream?: boolean;
-          price?: any;
-        }) => {
-          const manifestEntry = manifestEntrypoints[entry.key];
-          return {
-            key: String(entry.key),
-            description: entry.description ? String(entry.description) : null,
-            streaming: Boolean(entry.stream),
-            price: entry.price ?? manifestEntry?.pricing?.invoke ?? null,
-          };
-        }
-      );
+    const entrypoints = runtime.entrypoints.snapshot().map(entry => {
+      const manifestEntry = manifestEntrypoints[entry.key];
+      return {
+        key: String(entry.key),
+        description: entry.description ? String(entry.description) : null,
+        streaming: Boolean(entry.stream),
+        price: entry.price ?? manifestEntry?.pricing?.invoke ?? null,
+      };
+    });
 
     return {
       meta: {
@@ -88,42 +79,32 @@ function HeadlessDashboard() {
             <span />
           </div>
 
-          {loaderData.entrypoints.map(
-            (
-              entry: {
-                key: string;
-                description?: string | null;
-                streaming: boolean;
-                price?: string | null;
-              },
-              i: number
-            ) => (
-              <div
-                key={entry.key}
-                className="grid grid-cols-[1fr_120px_100px] items-center border-b border-[#1a1a1a] transition-colors hover:bg-[rgba(34,197,94,0.08)] hover:border-[#2a2a2a]"
-              >
-                <div className="flex items-center gap-3 py-5 text-sm font-medium">
-                  <span className="text-[10px] text-[#444] w-5 shrink-0">
-                    {String(i + 1).padStart(2, '0')}
+          {loaderData.entrypoints.map((entry, i) => (
+            <div
+              key={entry.key}
+              className="grid grid-cols-[1fr_120px_100px] items-center border-b border-[#1a1a1a] transition-colors hover:bg-[rgba(34,197,94,0.08)] hover:border-[#2a2a2a]"
+            >
+              <div className="flex items-center gap-3 py-5 text-sm font-medium">
+                <span className="text-[10px] text-[#444] w-5 shrink-0">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="text-[#e5e5e5]">{entry.key}</span>
+                {entry.description && (
+                  <span className="text-[11px] text-[#666] ml-2 hidden md:inline">
+                    {entry.description}
                   </span>
-                  <span className="text-[#e5e5e5]">{entry.key}</span>
-                  {entry.description && (
-                    <span className="text-[11px] text-[#666] ml-2 hidden md:inline">
-                      {entry.description}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[13px] font-medium text-right text-[#22c55e] tabular-nums">
-                  {entry.price != null ? `$${entry.price}` : 'free'}
-                </div>
-                <div className="text-right pr-1">
-                  <span className="text-sm text-[#444] inline-block transition-all hover:text-[#22c55e] hover:translate-x-0.5">
-                    &rarr;
-                  </span>
-                </div>
+                )}
               </div>
-            )
-          )}
+              <div className="text-[13px] font-medium text-right text-[#22c55e] tabular-nums">
+                {entry.price != null ? `$${entry.price}` : 'free'}
+              </div>
+              <div className="text-right pr-1">
+                <span className="text-sm text-[#444] inline-block transition-all hover:text-[#22c55e] hover:translate-x-0.5">
+                  &rarr;
+                </span>
+              </div>
+            </div>
+          ))}
 
           {loaderData.entrypoints.length === 0 && (
             <div className="py-12 text-center text-xs text-[#444]">

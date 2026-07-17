@@ -17,6 +17,8 @@ type RequiredKeys<T extends object> = {
 }[keyof T];
 type RequiredDependencies<T extends object> = Pick<T, RequiredKeys<T>>;
 
+const MAX_MANIFEST_CACHE_ENTRIES = 100;
+
 function orderExtensions(
   extensions: readonly Extension<Record<string, unknown>>[]
 ): Extension<Record<string, unknown>>[] {
@@ -206,6 +208,10 @@ export class AgentBuilder<
             if (extension.onManifestBuild) {
               card = extension.onManifestBuild(card, knownRuntime);
             }
+          }
+          if (manifestCache.size >= MAX_MANIFEST_CACHE_ENTRIES) {
+            const oldest = manifestCache.keys().next().value;
+            if (typeof oldest === 'string') manifestCache.delete(oldest);
           }
           manifestCache.set(origin, card);
           return card;

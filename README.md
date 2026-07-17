@@ -257,7 +257,7 @@ order from package manifests. CI additionally imports portable package roots on
 Node 20 and 22, performs an edge-like dependency check, and runs Postgres
 integration tests. Coverage is measured from TypeScript sources (compiled
 `dist/` artifacts and tests are excluded); `scripts/check-coverage.ts` enforces
-aggregate minimums of 70% lines and 78% functions.
+aggregate minimums of 90% lines and 90% functions.
 
 New SDK surface requires unit/integration coverage, an examples smoke test,
 documentation, and a changeset. See [CONTRIBUTING.md](CONTRIBUTING.md).

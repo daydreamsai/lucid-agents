@@ -9,21 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root';
-import { Route as TestRouteImport } from './routes/test';
 import { Route as AboutRouteImport } from './routes/about';
 import { Route as IndexRouteImport } from './routes/index';
+import { Route as DotwellKnownOasfRecordDotjsonRouteImport } from './routes/[.]well-known/oasf-record[.]json';
+import { Route as DotwellKnownAgentDotjsonRouteImport } from './routes/[.]well-known/agent[.]json';
 import { Route as DotwellKnownAgentCardDotjsonRouteImport } from './routes/[.]well-known/agent-card[.]json';
+import { Route as ApiAgentIndexRouteImport } from './routes/api/agent/index';
+import { Route as ApiAgentTasksRouteImport } from './routes/api/agent/tasks';
 import { Route as ApiAgentManifestRouteImport } from './routes/api/agent/manifest';
 import { Route as ApiAgentHealthRouteImport } from './routes/api/agent/health';
+import { Route as ApiAgentFaviconDotsvgRouteImport } from './routes/api/agent/favicon[.]svg';
 import { Route as ApiAgentEntrypointsRouteImport } from './routes/api/agent/entrypoints';
+import { Route as ApiAgentTasksTaskIdRouteImport } from './routes/api/agent/tasks/$taskId';
+import { Route as ApiAgentDotwellKnownOasfRecordDotjsonRouteImport } from './routes/api/agent/[.]well-known/oasf-record[.]json';
+import { Route as ApiAgentDotwellKnownAgentDotjsonRouteImport } from './routes/api/agent/[.]well-known/agent[.]json';
+import { Route as ApiAgentDotwellKnownAgentCardDotjsonRouteImport } from './routes/api/agent/[.]well-known/agent-card[.]json';
+import { Route as ApiAgentTasksTaskIdSubscribeRouteImport } from './routes/api/agent/tasks/$taskId/subscribe';
+import { Route as ApiAgentTasksTaskIdCancelRouteImport } from './routes/api/agent/tasks/$taskId/cancel';
 import { Route as ApiAgentEntrypointsKeyStreamRouteImport } from './routes/api/agent/entrypoints/$key/stream';
 import { Route as ApiAgentEntrypointsKeyInvokeRouteImport } from './routes/api/agent/entrypoints/$key/invoke';
 
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
-  getParentRoute: () => rootRouteImport,
-} as any);
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -34,12 +39,34 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any);
+const DotwellKnownOasfRecordDotjsonRoute =
+  DotwellKnownOasfRecordDotjsonRouteImport.update({
+    id: '/.well-known/oasf-record.json',
+    path: '/.well-known/oasf-record.json',
+    getParentRoute: () => rootRouteImport,
+  } as any);
+const DotwellKnownAgentDotjsonRoute =
+  DotwellKnownAgentDotjsonRouteImport.update({
+    id: '/.well-known/agent.json',
+    path: '/.well-known/agent.json',
+    getParentRoute: () => rootRouteImport,
+  } as any);
 const DotwellKnownAgentCardDotjsonRoute =
   DotwellKnownAgentCardDotjsonRouteImport.update({
     id: '/.well-known/agent-card.json',
     path: '/.well-known/agent-card.json',
     getParentRoute: () => rootRouteImport,
   } as any);
+const ApiAgentIndexRoute = ApiAgentIndexRouteImport.update({
+  id: '/api/agent/',
+  path: '/api/agent/',
+  getParentRoute: () => rootRouteImport,
+} as any);
+const ApiAgentTasksRoute = ApiAgentTasksRouteImport.update({
+  id: '/api/agent/tasks',
+  path: '/api/agent/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAgentManifestRoute = ApiAgentManifestRouteImport.update({
   id: '/api/agent/manifest',
   path: '/api/agent/manifest',
@@ -50,11 +77,51 @@ const ApiAgentHealthRoute = ApiAgentHealthRouteImport.update({
   path: '/api/agent/health',
   getParentRoute: () => rootRouteImport,
 } as any);
+const ApiAgentFaviconDotsvgRoute = ApiAgentFaviconDotsvgRouteImport.update({
+  id: '/api/agent/favicon.svg',
+  path: '/api/agent/favicon.svg',
+  getParentRoute: () => rootRouteImport,
+} as any);
 const ApiAgentEntrypointsRoute = ApiAgentEntrypointsRouteImport.update({
   id: '/api/agent/entrypoints',
   path: '/api/agent/entrypoints',
   getParentRoute: () => rootRouteImport,
 } as any);
+const ApiAgentTasksTaskIdRoute = ApiAgentTasksTaskIdRouteImport.update({
+  id: '/$taskId',
+  path: '/$taskId',
+  getParentRoute: () => ApiAgentTasksRoute,
+} as any);
+const ApiAgentDotwellKnownOasfRecordDotjsonRoute =
+  ApiAgentDotwellKnownOasfRecordDotjsonRouteImport.update({
+    id: '/api/agent/.well-known/oasf-record.json',
+    path: '/api/agent/.well-known/oasf-record.json',
+    getParentRoute: () => rootRouteImport,
+  } as any);
+const ApiAgentDotwellKnownAgentDotjsonRoute =
+  ApiAgentDotwellKnownAgentDotjsonRouteImport.update({
+    id: '/api/agent/.well-known/agent.json',
+    path: '/api/agent/.well-known/agent.json',
+    getParentRoute: () => rootRouteImport,
+  } as any);
+const ApiAgentDotwellKnownAgentCardDotjsonRoute =
+  ApiAgentDotwellKnownAgentCardDotjsonRouteImport.update({
+    id: '/api/agent/.well-known/agent-card.json',
+    path: '/api/agent/.well-known/agent-card.json',
+    getParentRoute: () => rootRouteImport,
+  } as any);
+const ApiAgentTasksTaskIdSubscribeRoute =
+  ApiAgentTasksTaskIdSubscribeRouteImport.update({
+    id: '/subscribe',
+    path: '/subscribe',
+    getParentRoute: () => ApiAgentTasksTaskIdRoute,
+  } as any);
+const ApiAgentTasksTaskIdCancelRoute =
+  ApiAgentTasksTaskIdCancelRouteImport.update({
+    id: '/cancel',
+    path: '/cancel',
+    getParentRoute: () => ApiAgentTasksTaskIdRoute,
+  } as any);
 const ApiAgentEntrypointsKeyStreamRoute =
   ApiAgentEntrypointsKeyStreamRouteImport.update({
     id: '/$key/stream',
@@ -71,92 +138,152 @@ const ApiAgentEntrypointsKeyInvokeRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute;
   '/about': typeof AboutRoute;
-  '/test': typeof TestRoute;
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute;
+  '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute;
+  '/.well-known/oasf-record.json': typeof DotwellKnownOasfRecordDotjsonRoute;
   '/api/agent/entrypoints': typeof ApiAgentEntrypointsRouteWithChildren;
+  '/api/agent/favicon.svg': typeof ApiAgentFaviconDotsvgRoute;
   '/api/agent/health': typeof ApiAgentHealthRoute;
   '/api/agent/manifest': typeof ApiAgentManifestRoute;
+  '/api/agent/tasks': typeof ApiAgentTasksRouteWithChildren;
+  '/api/agent': typeof ApiAgentIndexRoute;
+  '/api/agent/.well-known/agent-card.json': typeof ApiAgentDotwellKnownAgentCardDotjsonRoute;
+  '/api/agent/.well-known/agent.json': typeof ApiAgentDotwellKnownAgentDotjsonRoute;
+  '/api/agent/.well-known/oasf-record.json': typeof ApiAgentDotwellKnownOasfRecordDotjsonRoute;
+  '/api/agent/tasks/$taskId': typeof ApiAgentTasksTaskIdRouteWithChildren;
   '/api/agent/entrypoints/$key/invoke': typeof ApiAgentEntrypointsKeyInvokeRoute;
   '/api/agent/entrypoints/$key/stream': typeof ApiAgentEntrypointsKeyStreamRoute;
+  '/api/agent/tasks/$taskId/cancel': typeof ApiAgentTasksTaskIdCancelRoute;
+  '/api/agent/tasks/$taskId/subscribe': typeof ApiAgentTasksTaskIdSubscribeRoute;
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute;
   '/about': typeof AboutRoute;
-  '/test': typeof TestRoute;
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute;
+  '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute;
+  '/.well-known/oasf-record.json': typeof DotwellKnownOasfRecordDotjsonRoute;
   '/api/agent/entrypoints': typeof ApiAgentEntrypointsRouteWithChildren;
+  '/api/agent/favicon.svg': typeof ApiAgentFaviconDotsvgRoute;
   '/api/agent/health': typeof ApiAgentHealthRoute;
   '/api/agent/manifest': typeof ApiAgentManifestRoute;
+  '/api/agent/tasks': typeof ApiAgentTasksRouteWithChildren;
+  '/api/agent': typeof ApiAgentIndexRoute;
+  '/api/agent/.well-known/agent-card.json': typeof ApiAgentDotwellKnownAgentCardDotjsonRoute;
+  '/api/agent/.well-known/agent.json': typeof ApiAgentDotwellKnownAgentDotjsonRoute;
+  '/api/agent/.well-known/oasf-record.json': typeof ApiAgentDotwellKnownOasfRecordDotjsonRoute;
+  '/api/agent/tasks/$taskId': typeof ApiAgentTasksTaskIdRouteWithChildren;
   '/api/agent/entrypoints/$key/invoke': typeof ApiAgentEntrypointsKeyInvokeRoute;
   '/api/agent/entrypoints/$key/stream': typeof ApiAgentEntrypointsKeyStreamRoute;
+  '/api/agent/tasks/$taskId/cancel': typeof ApiAgentTasksTaskIdCancelRoute;
+  '/api/agent/tasks/$taskId/subscribe': typeof ApiAgentTasksTaskIdSubscribeRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   '/': typeof IndexRoute;
   '/about': typeof AboutRoute;
-  '/test': typeof TestRoute;
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute;
+  '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute;
+  '/.well-known/oasf-record.json': typeof DotwellKnownOasfRecordDotjsonRoute;
   '/api/agent/entrypoints': typeof ApiAgentEntrypointsRouteWithChildren;
+  '/api/agent/favicon.svg': typeof ApiAgentFaviconDotsvgRoute;
   '/api/agent/health': typeof ApiAgentHealthRoute;
   '/api/agent/manifest': typeof ApiAgentManifestRoute;
+  '/api/agent/tasks': typeof ApiAgentTasksRouteWithChildren;
+  '/api/agent/': typeof ApiAgentIndexRoute;
+  '/api/agent/.well-known/agent-card.json': typeof ApiAgentDotwellKnownAgentCardDotjsonRoute;
+  '/api/agent/.well-known/agent.json': typeof ApiAgentDotwellKnownAgentDotjsonRoute;
+  '/api/agent/.well-known/oasf-record.json': typeof ApiAgentDotwellKnownOasfRecordDotjsonRoute;
+  '/api/agent/tasks/$taskId': typeof ApiAgentTasksTaskIdRouteWithChildren;
   '/api/agent/entrypoints/$key/invoke': typeof ApiAgentEntrypointsKeyInvokeRoute;
   '/api/agent/entrypoints/$key/stream': typeof ApiAgentEntrypointsKeyStreamRoute;
+  '/api/agent/tasks/$taskId/cancel': typeof ApiAgentTasksTaskIdCancelRoute;
+  '/api/agent/tasks/$taskId/subscribe': typeof ApiAgentTasksTaskIdSubscribeRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | '/'
     | '/about'
-    | '/test'
     | '/.well-known/agent-card.json'
+    | '/.well-known/agent.json'
+    | '/.well-known/oasf-record.json'
     | '/api/agent/entrypoints'
+    | '/api/agent/favicon.svg'
     | '/api/agent/health'
     | '/api/agent/manifest'
+    | '/api/agent/tasks'
+    | '/api/agent'
+    | '/api/agent/.well-known/agent-card.json'
+    | '/api/agent/.well-known/agent.json'
+    | '/api/agent/.well-known/oasf-record.json'
+    | '/api/agent/tasks/$taskId'
     | '/api/agent/entrypoints/$key/invoke'
-    | '/api/agent/entrypoints/$key/stream';
+    | '/api/agent/entrypoints/$key/stream'
+    | '/api/agent/tasks/$taskId/cancel'
+    | '/api/agent/tasks/$taskId/subscribe';
   fileRoutesByTo: FileRoutesByTo;
   to:
     | '/'
     | '/about'
-    | '/test'
     | '/.well-known/agent-card.json'
+    | '/.well-known/agent.json'
+    | '/.well-known/oasf-record.json'
     | '/api/agent/entrypoints'
+    | '/api/agent/favicon.svg'
     | '/api/agent/health'
     | '/api/agent/manifest'
+    | '/api/agent/tasks'
+    | '/api/agent'
+    | '/api/agent/.well-known/agent-card.json'
+    | '/api/agent/.well-known/agent.json'
+    | '/api/agent/.well-known/oasf-record.json'
+    | '/api/agent/tasks/$taskId'
     | '/api/agent/entrypoints/$key/invoke'
-    | '/api/agent/entrypoints/$key/stream';
+    | '/api/agent/entrypoints/$key/stream'
+    | '/api/agent/tasks/$taskId/cancel'
+    | '/api/agent/tasks/$taskId/subscribe';
   id:
     | '__root__'
     | '/'
     | '/about'
-    | '/test'
     | '/.well-known/agent-card.json'
+    | '/.well-known/agent.json'
+    | '/.well-known/oasf-record.json'
     | '/api/agent/entrypoints'
+    | '/api/agent/favicon.svg'
     | '/api/agent/health'
     | '/api/agent/manifest'
+    | '/api/agent/tasks'
+    | '/api/agent/'
+    | '/api/agent/.well-known/agent-card.json'
+    | '/api/agent/.well-known/agent.json'
+    | '/api/agent/.well-known/oasf-record.json'
+    | '/api/agent/tasks/$taskId'
     | '/api/agent/entrypoints/$key/invoke'
-    | '/api/agent/entrypoints/$key/stream';
+    | '/api/agent/entrypoints/$key/stream'
+    | '/api/agent/tasks/$taskId/cancel'
+    | '/api/agent/tasks/$taskId/subscribe';
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
   AboutRoute: typeof AboutRoute;
-  TestRoute: typeof TestRoute;
   DotwellKnownAgentCardDotjsonRoute: typeof DotwellKnownAgentCardDotjsonRoute;
+  DotwellKnownAgentDotjsonRoute: typeof DotwellKnownAgentDotjsonRoute;
+  DotwellKnownOasfRecordDotjsonRoute: typeof DotwellKnownOasfRecordDotjsonRoute;
   ApiAgentEntrypointsRoute: typeof ApiAgentEntrypointsRouteWithChildren;
+  ApiAgentFaviconDotsvgRoute: typeof ApiAgentFaviconDotsvgRoute;
   ApiAgentHealthRoute: typeof ApiAgentHealthRoute;
   ApiAgentManifestRoute: typeof ApiAgentManifestRoute;
+  ApiAgentTasksRoute: typeof ApiAgentTasksRouteWithChildren;
+  ApiAgentIndexRoute: typeof ApiAgentIndexRoute;
+  ApiAgentDotwellKnownAgentCardDotjsonRoute: typeof ApiAgentDotwellKnownAgentCardDotjsonRoute;
+  ApiAgentDotwellKnownAgentDotjsonRoute: typeof ApiAgentDotwellKnownAgentDotjsonRoute;
+  ApiAgentDotwellKnownOasfRecordDotjsonRoute: typeof ApiAgentDotwellKnownOasfRecordDotjsonRoute;
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/test': {
-      id: '/test';
-      path: '/test';
-      fullPath: '/test';
-      preLoaderRoute: typeof TestRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
     '/about': {
       id: '/about';
       path: '/about';
@@ -171,11 +298,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    '/.well-known/oasf-record.json': {
+      id: '/.well-known/oasf-record.json';
+      path: '/.well-known/oasf-record.json';
+      fullPath: '/.well-known/oasf-record.json';
+      preLoaderRoute: typeof DotwellKnownOasfRecordDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/.well-known/agent.json': {
+      id: '/.well-known/agent.json';
+      path: '/.well-known/agent.json';
+      fullPath: '/.well-known/agent.json';
+      preLoaderRoute: typeof DotwellKnownAgentDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/.well-known/agent-card.json': {
       id: '/.well-known/agent-card.json';
       path: '/.well-known/agent-card.json';
       fullPath: '/.well-known/agent-card.json';
       preLoaderRoute: typeof DotwellKnownAgentCardDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/': {
+      id: '/api/agent/';
+      path: '/api/agent';
+      fullPath: '/api/agent';
+      preLoaderRoute: typeof ApiAgentIndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/tasks': {
+      id: '/api/agent/tasks';
+      path: '/api/agent/tasks';
+      fullPath: '/api/agent/tasks';
+      preLoaderRoute: typeof ApiAgentTasksRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     '/api/agent/manifest': {
@@ -192,12 +347,61 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentHealthRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    '/api/agent/favicon.svg': {
+      id: '/api/agent/favicon.svg';
+      path: '/api/agent/favicon.svg';
+      fullPath: '/api/agent/favicon.svg';
+      preLoaderRoute: typeof ApiAgentFaviconDotsvgRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/api/agent/entrypoints': {
       id: '/api/agent/entrypoints';
       path: '/api/agent/entrypoints';
       fullPath: '/api/agent/entrypoints';
       preLoaderRoute: typeof ApiAgentEntrypointsRouteImport;
       parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/tasks/$taskId': {
+      id: '/api/agent/tasks/$taskId';
+      path: '/$taskId';
+      fullPath: '/api/agent/tasks/$taskId';
+      preLoaderRoute: typeof ApiAgentTasksTaskIdRouteImport;
+      parentRoute: typeof ApiAgentTasksRoute;
+    };
+    '/api/agent/.well-known/oasf-record.json': {
+      id: '/api/agent/.well-known/oasf-record.json';
+      path: '/api/agent/.well-known/oasf-record.json';
+      fullPath: '/api/agent/.well-known/oasf-record.json';
+      preLoaderRoute: typeof ApiAgentDotwellKnownOasfRecordDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/.well-known/agent.json': {
+      id: '/api/agent/.well-known/agent.json';
+      path: '/api/agent/.well-known/agent.json';
+      fullPath: '/api/agent/.well-known/agent.json';
+      preLoaderRoute: typeof ApiAgentDotwellKnownAgentDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/.well-known/agent-card.json': {
+      id: '/api/agent/.well-known/agent-card.json';
+      path: '/api/agent/.well-known/agent-card.json';
+      fullPath: '/api/agent/.well-known/agent-card.json';
+      preLoaderRoute: typeof ApiAgentDotwellKnownAgentCardDotjsonRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    '/api/agent/tasks/$taskId/subscribe': {
+      id: '/api/agent/tasks/$taskId/subscribe';
+      path: '/subscribe';
+      fullPath: '/api/agent/tasks/$taskId/subscribe';
+      preLoaderRoute: typeof ApiAgentTasksTaskIdSubscribeRouteImport;
+      parentRoute: typeof ApiAgentTasksTaskIdRoute;
+    };
+    '/api/agent/tasks/$taskId/cancel': {
+      id: '/api/agent/tasks/$taskId/cancel';
+      path: '/cancel';
+      fullPath: '/api/agent/tasks/$taskId/cancel';
+      preLoaderRoute: typeof ApiAgentTasksTaskIdCancelRouteImport;
+      parentRoute: typeof ApiAgentTasksTaskIdRoute;
     };
     '/api/agent/entrypoints/$key/stream': {
       id: '/api/agent/entrypoints/$key/stream';
@@ -229,24 +433,49 @@ const ApiAgentEntrypointsRouteChildren: ApiAgentEntrypointsRouteChildren = {
 const ApiAgentEntrypointsRouteWithChildren =
   ApiAgentEntrypointsRoute._addFileChildren(ApiAgentEntrypointsRouteChildren);
 
+interface ApiAgentTasksTaskIdRouteChildren {
+  ApiAgentTasksTaskIdCancelRoute: typeof ApiAgentTasksTaskIdCancelRoute;
+  ApiAgentTasksTaskIdSubscribeRoute: typeof ApiAgentTasksTaskIdSubscribeRoute;
+}
+
+const ApiAgentTasksTaskIdRouteChildren: ApiAgentTasksTaskIdRouteChildren = {
+  ApiAgentTasksTaskIdCancelRoute: ApiAgentTasksTaskIdCancelRoute,
+  ApiAgentTasksTaskIdSubscribeRoute: ApiAgentTasksTaskIdSubscribeRoute,
+};
+
+const ApiAgentTasksTaskIdRouteWithChildren =
+  ApiAgentTasksTaskIdRoute._addFileChildren(ApiAgentTasksTaskIdRouteChildren);
+
+interface ApiAgentTasksRouteChildren {
+  ApiAgentTasksTaskIdRoute: typeof ApiAgentTasksTaskIdRouteWithChildren;
+}
+
+const ApiAgentTasksRouteChildren: ApiAgentTasksRouteChildren = {
+  ApiAgentTasksTaskIdRoute: ApiAgentTasksTaskIdRouteWithChildren,
+};
+
+const ApiAgentTasksRouteWithChildren = ApiAgentTasksRoute._addFileChildren(
+  ApiAgentTasksRouteChildren
+);
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
-  TestRoute: TestRoute,
   DotwellKnownAgentCardDotjsonRoute: DotwellKnownAgentCardDotjsonRoute,
+  DotwellKnownAgentDotjsonRoute: DotwellKnownAgentDotjsonRoute,
+  DotwellKnownOasfRecordDotjsonRoute: DotwellKnownOasfRecordDotjsonRoute,
   ApiAgentEntrypointsRoute: ApiAgentEntrypointsRouteWithChildren,
+  ApiAgentFaviconDotsvgRoute: ApiAgentFaviconDotsvgRoute,
   ApiAgentHealthRoute: ApiAgentHealthRoute,
   ApiAgentManifestRoute: ApiAgentManifestRoute,
+  ApiAgentTasksRoute: ApiAgentTasksRouteWithChildren,
+  ApiAgentIndexRoute: ApiAgentIndexRoute,
+  ApiAgentDotwellKnownAgentCardDotjsonRoute:
+    ApiAgentDotwellKnownAgentCardDotjsonRoute,
+  ApiAgentDotwellKnownAgentDotjsonRoute: ApiAgentDotwellKnownAgentDotjsonRoute,
+  ApiAgentDotwellKnownOasfRecordDotjsonRoute:
+    ApiAgentDotwellKnownOasfRecordDotjsonRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>();
-
-import type { getRouter } from './router.tsx';
-import type { createStart } from '@tanstack/react-start';
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
-  }
-}

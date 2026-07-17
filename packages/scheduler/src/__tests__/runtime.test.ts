@@ -1083,7 +1083,7 @@ describe('createSchedulerRuntime', () => {
         clock: () => now,
       });
 
-      await schedulerRuntime.createHire({
+      const { job } = await schedulerRuntime.createHire({
         agentCardUrl: 'https://example.com/agent',
         wallet: mockWallet,
         entrypointKey: 'default',
@@ -1169,7 +1169,44 @@ describe('createSchedulerRuntime', () => {
       await schedulerRuntime.tick();
 
       expect(seenKeys).toHaveLength(2);
-      expect(seenKeys[0]).toMatch(/^scheduler-job:/);
+      expect(seenKeys[0]).toMatch(/^scheduler-run:/);
+      expect(seenKeys[1]).not.toBe(seenKeys[0]);
+    });
+
+    it('derives a new occurrence key from an explicit interval seed', async () => {
+      let now = 1_000_000;
+      const seenKeys: Array<string | undefined> = [];
+      const { client } = createMockA2AClient();
+      client.invoke = (async (
+        _card: unknown,
+        _skillId: string,
+        _input: unknown,
+        _fetchFn: unknown,
+        invokeOptions?: { idempotencyKey?: string }
+      ) => {
+        seenKeys.push(invokeOptions?.idempotencyKey);
+        return { status: 'completed' };
+      }) as A2AClient['invoke'];
+      const store = createMemoryStore();
+      const schedulerRuntime = createSchedulerRuntime({
+        store,
+        runtime: createMockAgentRuntime(client),
+        clock: () => now,
+      });
+      const { job } = await schedulerRuntime.createHire({
+        agentCardUrl: 'https://example.com/agent',
+        entrypointKey: 'default',
+        schedule: { kind: 'interval', everyMs: 1_000 },
+        jobInput: {},
+        idempotencyKey: 'customer-schedule-seed-0001',
+      });
+
+      await schedulerRuntime.tick();
+      now = (await store.getJob(job.id))!.nextRunAt;
+      await schedulerRuntime.tick();
+
+      expect(seenKeys).toHaveLength(2);
+      expect(seenKeys[0]).not.toBe('customer-schedule-seed-0001');
       expect(seenKeys[1]).not.toBe(seenKeys[0]);
     });
 

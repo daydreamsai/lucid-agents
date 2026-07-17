@@ -127,13 +127,41 @@ export class PaymentTracker implements PaymentTrackerInterface {
     reservationIds: readonly string[],
     records: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[] = []
   ): Promise<void> {
-    const committed = await this.storage.commitPaymentReservations(
+    if (reservationIds.length === 0 && records.length === 0) return;
+    const settlementId = await this.stageSettlement(reservationIds, records);
+    await this.commitSettlement(settlementId);
+  }
+
+  /**
+   * Protect policy accounting from reservation expiry before an irreversible
+   * payment settlement starts.
+   */
+  async stageSettlement(
+    reservationIds: readonly string[],
+    records: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[] = []
+  ): Promise<string> {
+    if (reservationIds.length === 0 && records.length === 0) {
+      throw new Error('Settlement accounting batch must not be empty');
+    }
+    const settlementId = await this.storage.stagePaymentSettlement(
       reservationIds,
       records
     );
-    if (!committed) {
+    if (!settlementId) {
       throw new Error('One or more payment reservations expired');
     }
+    return settlementId;
+  }
+
+  /** Commit a durable settlement batch to payment history. */
+  async commitSettlement(settlementId: string): Promise<void> {
+    const committed = await this.storage.commitPaymentSettlement(settlementId);
+    if (!committed) throw new Error('Payment settlement batch was not found');
+  }
+
+  /** Release a durable settlement batch after payment definitively fails. */
+  async releaseSettlement(settlementId: string): Promise<void> {
+    await this.storage.releasePaymentSettlement(settlementId);
   }
 
   async releaseReservation(reservationId: string): Promise<void> {

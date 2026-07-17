@@ -77,6 +77,21 @@ export interface PaymentStorage {
     records?: readonly PaymentAccountingRecord[]
   ): Promise<boolean>;
 
+  /**
+   * Atomically move live reservations and additional accounting records into
+   * a durable, non-expiring settlement batch before payment is attempted.
+   */
+  stagePaymentSettlement(
+    reservationIds: readonly string[],
+    records?: readonly PaymentAccountingRecord[]
+  ): Promise<string | undefined>;
+
+  /** Atomically turn a staged settlement batch into payment history. */
+  commitPaymentSettlement(settlementId: string): Promise<boolean>;
+
+  /** Release a staged settlement batch after payment definitively fails. */
+  releasePaymentSettlement(settlementId: string): Promise<void>;
+
   /** Release a reservation without recording a payment. */
   releasePaymentReservation(reservationId: string): Promise<void>;
 

@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
+import { encodePaymentRequiredHeader } from '@x402/core/http';
 import { wrapBaseFetchWithPolicy } from '../policy-wrapper';
 import { createPaymentTracker } from '../payment-tracker';
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
+import type { PaymentStorage } from '../payment-storage';
 import { createRateLimiter } from '../rate-limiter';
 
 type FetchLike = (
@@ -14,10 +16,36 @@ const buildPaymentRequiredHeader = (details: {
   price: string;
   payTo: string;
   network?: string;
-}) =>
-  Buffer.from(JSON.stringify({ x402Version: 2, ...details })).toString(
-    'base64'
-  );
+  alternates?: Array<{ price: string; payTo: string; network?: string }>;
+}) => {
+  const requirement = (candidate: {
+    price: string;
+    payTo: string;
+    network?: string;
+  }) => ({
+    scheme: 'exact',
+    network: (candidate.network ?? 'eip155:8453') as `${string}:${string}`,
+    asset: '0x0000000000000000000000000000000000000001',
+    amount: BigInt(
+      Math.floor(Number.parseFloat(candidate.price) * 1_000_000)
+    ).toString(),
+    payTo: candidate.payTo,
+    maxTimeoutSeconds: 60,
+    extra: {},
+  });
+  return encodePaymentRequiredHeader({
+    x402Version: 2,
+    resource: {
+      url: 'https://example.com',
+      description: 'Policy wrapper test',
+      mimeType: 'application/json',
+    },
+    accepts: [
+      requirement(details),
+      ...(details.alternates ?? []).map(requirement),
+    ],
+  });
+};
 
 const buildPaymentResponseHeader = (details: Record<string, unknown> = {}) =>
   Buffer.from(JSON.stringify(details)).toString('base64');
@@ -143,6 +171,51 @@ describe('wrapBaseFetchWithPolicy', () => {
 
     const response = await wrappedFetch('https://example.com');
     expect(response.status).toBe(402); // Should pass through
+  });
+
+  it('fails closed when multiple v2 requirements have no shared selector', async () => {
+    baseFetch = async () =>
+      new Response(null, {
+        status: 402,
+        headers: {
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '1',
+            payTo: '0x111',
+            alternates: [{ price: '2', payTo: '0x222' }],
+          }),
+        },
+      });
+    const wrappedFetch = wrapBaseFetchWithPolicy(
+      baseFetch,
+      policyGroups,
+      paymentTracker,
+      rateLimiter
+    );
+
+    expect((await wrappedFetch('https://example.com')).status).toBe(503);
+  });
+
+  it('evaluates the same selected v2 requirement that the client will pay', async () => {
+    baseFetch = async () =>
+      new Response(null, {
+        status: 402,
+        headers: {
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '1',
+            payTo: '0x111',
+            alternates: [{ price: '15', payTo: '0x222' }],
+          }),
+        },
+      });
+    const wrappedFetch = wrapBaseFetchWithPolicy(
+      baseFetch,
+      policyGroups,
+      paymentTracker,
+      rateLimiter,
+      { paymentRequirementSelector: requirements => requirements[1] }
+    );
+
+    expect((await wrappedFetch('https://example.com')).status).toBe(403);
   });
 
   it('should record spending after successful payment', async () => {
@@ -299,6 +372,81 @@ describe('wrapBaseFetchWithPolicy', () => {
     expect((await wrappedFetch('https://example.com/paid')).status).toBe(402);
   });
 
+  it('keeps settled outgoing capacity when accounting fails beyond the reservation TTL', async () => {
+    const originalNow = Date.now;
+    let now = 1_000_000;
+    Date.now = () => now;
+    const delegate = createInMemoryPaymentStorage();
+    let releases = 0;
+    const storage: PaymentStorage = {
+      recordPayment: record => delegate.recordPayment(record),
+      getTotal: (...args) => delegate.getTotal(...args),
+      getAllRecords: (...args) => delegate.getAllRecords(...args),
+      reservePaymentLimit: reservation =>
+        delegate.reservePaymentLimit(reservation),
+      commitPaymentReservation: id => delegate.commitPaymentReservation(id),
+      commitPaymentReservations: (...args) =>
+        delegate.commitPaymentReservations(...args),
+      stagePaymentSettlement: (...args) =>
+        delegate.stagePaymentSettlement(...args),
+      commitPaymentSettlement: async () => {
+        throw new Error('accounting unavailable');
+      },
+      releasePaymentSettlement: id => delegate.releasePaymentSettlement(id),
+      releasePaymentReservation: async id => {
+        releases += 1;
+        await delegate.releasePaymentReservation(id);
+      },
+      clear: () => delegate.clear(),
+    };
+    paymentTracker = createPaymentTracker(storage);
+    policyGroups = [
+      {
+        name: 'settled-capacity',
+        outgoingLimits: { global: { maxTotalUsd: 1 } },
+      },
+    ];
+    baseFetch = async input => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (request.headers.has('PAYMENT-SIGNATURE')) {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
+          },
+        });
+      }
+      return new Response(null, {
+        status: 402,
+        headers: {
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '1',
+            payTo: '0x123...',
+          }),
+        },
+      });
+    };
+    const wrappedFetch = wrapBaseFetchWithPolicy(
+      baseFetch,
+      policyGroups,
+      paymentTracker,
+      rateLimiter
+    );
+
+    try {
+      expect((await wrappedFetch('https://example.com/paid')).status).toBe(402);
+      expect(
+        (await wrappedFetch('https://example.com/paid', paidRetry())).status
+      ).toBe(503);
+      expect(releases).toBe(0);
+
+      now += 5 * 60_000 + 1;
+      expect((await wrappedFetch('https://example.com/paid')).status).toBe(403);
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+
   it('correlates concurrent retries by request fingerprint, not FIFO order', async () => {
     policyGroups = [
       {
@@ -358,15 +506,26 @@ describe('wrapBaseFetchWithPolicy', () => {
     ).toBe(2_000_000n);
   });
 
-  it('bounds abandoned attempts and releases the evicted reservation', async () => {
+  it('fails closed at attempt capacity without evicting an active reservation', async () => {
     policyGroups = [
       {
         name: 'bounded',
         outgoingLimits: { global: { maxTotalUsd: 1 } },
       },
     ];
-    baseFetch = async () =>
-      new Response(null, {
+    let paidCalls = 0;
+    baseFetch = async input => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (request.headers.has('PAYMENT-SIGNATURE')) {
+        paidCalls += 1;
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'PAYMENT-RESPONSE': buildPaymentResponseHeader({ success: true }),
+          },
+        });
+      }
+      return new Response(null, {
         status: 402,
         headers: {
           'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
@@ -375,6 +534,7 @@ describe('wrapBaseFetchWithPolicy', () => {
           }),
         },
       });
+    };
     const wrappedFetch = wrapBaseFetchWithPolicy(
       baseFetch,
       policyGroups,
@@ -391,14 +551,23 @@ describe('wrapBaseFetchWithPolicy', () => {
         })
       ).status
     ).toBe(402);
+    const second = { method: 'POST', body: 'second' } satisfies RequestInit;
     expect(
-      (
-        await wrappedFetch('https://example.com/paid', {
-          method: 'POST',
-          body: 'second',
-        })
-      ).status
-    ).toBe(402);
+      (await wrappedFetch('https://example.com/paid', second)).status
+    ).toBe(503);
+    expect(
+      (await wrappedFetch('https://example.com/paid', paidRetry(second))).status
+    ).toBe(503);
+    expect(paidCalls).toBe(0);
+
+    const first = { method: 'POST', body: 'first' } satisfies RequestInit;
+    expect(
+      (await wrappedFetch('https://example.com/paid', paidRetry(first))).status
+    ).toBe(200);
+    expect(paidCalls).toBe(1);
+    expect(await paymentTracker.getOutgoingTotal('bounded', 'global')).toBe(
+      1_000_000n
+    );
   });
 
   it('keeps the attempt bound under concurrent challenges', async () => {

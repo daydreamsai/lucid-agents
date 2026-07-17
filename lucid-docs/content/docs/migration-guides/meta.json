@@ -2,6 +2,7 @@
   "title": "Migration Guides",
   "pages": [
     "index",
+    "v4-runtime",
     "x402-v2"
   ]
 }

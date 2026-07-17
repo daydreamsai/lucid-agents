@@ -4,9 +4,9 @@ import type {
   OutgoingLimitsConfig,
   IncomingLimit,
   IncomingLimitsConfig,
+  PaymentRateLimiter,
+  PaymentTracker,
 } from '@lucid-agents/types/payments';
-import type { PaymentTracker } from '@lucid-agents/types/payments';
-import type { RateLimiter } from './rate-limiter';
 
 /**
  * Result of policy evaluation.
@@ -255,7 +255,7 @@ export function evaluateRecipient(
  */
 export function evaluateRateLimit(
   group: PaymentPolicyGroup,
-  rateLimiter: RateLimiter
+  rateLimiter: PaymentRateLimiter
 ): PolicyEvaluationResult {
   if (!group.rateLimits) {
     return { allowed: true };
@@ -522,7 +522,7 @@ export async function evaluateIncomingLimits(
 export async function evaluatePolicyGroups(
   groups: PaymentPolicyGroup[],
   paymentTracker: PaymentTracker,
-  rateLimiter?: RateLimiter,
+  rateLimiter?: PaymentRateLimiter,
   targetUrl?: string,
   endpointUrl?: string,
   requestedAmount?: bigint,
@@ -583,7 +583,7 @@ export async function evaluateIncomingPolicyGroups(
   senderDomain?: string,
   endpointUrl?: string,
   requestedAmount?: bigint,
-  rateLimiter?: RateLimiter,
+  rateLimiter?: PaymentRateLimiter,
   options?: { deferUnknownSenderAddress?: boolean }
 ): Promise<PolicyEvaluationResult> {
   for (const group of groups) {

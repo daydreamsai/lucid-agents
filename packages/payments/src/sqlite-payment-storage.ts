@@ -72,6 +72,19 @@ export class SQLitePaymentStorage implements PaymentStorage {
         ON payment_reservations(group_name, scope, direction, timestamp);
       CREATE INDEX IF NOT EXISTS idx_payment_reservation_expiry
         ON payment_reservations(expires_at);
+      CREATE TABLE IF NOT EXISTS payment_settlement_entries (
+        entry_id TEXT PRIMARY KEY,
+        settlement_id TEXT NOT NULL,
+        group_name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_payment_settlement_id
+        ON payment_settlement_entries(settlement_id);
+      CREATE INDEX IF NOT EXISTS idx_payment_settlement_scope
+        ON payment_settlement_entries(group_name, scope, direction, timestamp);
     `);
   }
 
@@ -110,29 +123,39 @@ export class SQLitePaymentStorage implements PaymentStorage {
     direction: PaymentDirection,
     windowMs?: number
   ): Promise<bigint> {
-    let query = `
-      SELECT amount
-      FROM payments
+    const cutoff = windowMs === undefined ? undefined : Date.now() - windowMs;
+    const query = `
+      SELECT amount FROM payments
       WHERE group_name = ? AND scope = ? AND direction = ?
+        ${cutoff === undefined ? '' : 'AND timestamp > ?'}
+      UNION ALL
+      SELECT amount FROM payment_settlement_entries
+      WHERE group_name = ? AND scope = ? AND direction = ?
+        ${cutoff === undefined ? '' : 'AND timestamp > ?'}
     `;
-
-    let stmt: ReturnType<typeof this.db.prepare>;
+    const stmt = this.db.prepare(query);
     if (windowMs !== undefined) {
-      query += ' AND timestamp > ?';
-      stmt = this.db.prepare(query);
       const rows = stmt.all(
         groupName,
         scope,
         direction,
-        Date.now() - windowMs
+        cutoff!,
+        groupName,
+        scope,
+        direction,
+        cutoff!
       ) as Array<{ amount: string }>;
       const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
       return Promise.resolve(total);
     } else {
-      stmt = this.db.prepare(query);
-      const rows = stmt.all(groupName, scope, direction) as Array<{
-        amount: string;
-      }>;
+      const rows = stmt.all(
+        groupName,
+        scope,
+        direction,
+        groupName,
+        scope,
+        direction
+      ) as Array<{ amount: string }>;
       const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n);
       return Promise.resolve(total);
     }
@@ -273,10 +296,31 @@ export class SQLitePaymentStorage implements PaymentStorage {
               cutoff
             )
       ) as Array<{ amount: string }>;
-      const total = [...paymentRows, ...reservationRows].reduce(
-        (sum, row) => sum + BigInt(row.amount),
-        0n
-      );
+      const settlementQuery = `
+        SELECT amount FROM payment_settlement_entries
+        WHERE group_name = ? AND scope = ? AND direction = ?
+        ${cutoff === undefined ? '' : 'AND timestamp > ?'}
+      `;
+      const settlementStatement = this.db.prepare(settlementQuery);
+      const settlementRows = (
+        cutoff === undefined
+          ? settlementStatement.all(
+              reservation.groupName,
+              reservation.scope,
+              reservation.direction
+            )
+          : settlementStatement.all(
+              reservation.groupName,
+              reservation.scope,
+              reservation.direction,
+              cutoff
+            )
+      ) as Array<{ amount: string }>;
+      const total = [
+        ...paymentRows,
+        ...reservationRows,
+        ...settlementRows,
+      ].reduce((sum, row) => sum + BigInt(row.amount), 0n);
 
       if (total + reservation.amount > reservation.maxTotal) {
         this.db.exec('COMMIT');
@@ -373,6 +417,133 @@ export class SQLitePaymentStorage implements PaymentStorage {
     }
   }
 
+  async stagePaymentSettlement(
+    reservationIds: readonly string[],
+    records: readonly PaymentAccountingRecord[] = []
+  ): Promise<string | undefined> {
+    if (
+      new Set(reservationIds).size !== reservationIds.length ||
+      (reservationIds.length === 0 && records.length === 0)
+    ) {
+      return undefined;
+    }
+    this.beginImmediate();
+    try {
+      const now = Date.now();
+      const select = this.db.prepare(`
+        SELECT group_name, scope, direction, amount, expires_at
+        FROM payment_reservations WHERE reservation_id = ?
+      `);
+      type ReservationRow = {
+        group_name: string;
+        scope: string;
+        direction: PaymentDirection;
+        amount: string;
+        expires_at: number;
+      };
+      const reservations = reservationIds.map(
+        id => select.get(id) as ReservationRow | null
+      );
+      if (reservations.some(row => !row || row.expires_at <= now)) {
+        this.db
+          .prepare('DELETE FROM payment_reservations WHERE expires_at <= ?')
+          .run(now);
+        this.db.exec('COMMIT');
+        return undefined;
+      }
+
+      const settlementId = crypto.randomUUID();
+      const insert = this.db.prepare(`
+        INSERT INTO payment_settlement_entries
+          (entry_id, settlement_id, group_name, scope, direction, amount, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const row of reservations) {
+        insert.run(
+          crypto.randomUUID(),
+          settlementId,
+          row!.group_name,
+          row!.scope,
+          row!.direction,
+          row!.amount,
+          now
+        );
+      }
+      for (const record of records) {
+        insert.run(
+          crypto.randomUUID(),
+          settlementId,
+          record.groupName,
+          record.scope,
+          record.direction,
+          record.amount.toString(),
+          now
+        );
+      }
+      const remove = this.db.prepare(
+        'DELETE FROM payment_reservations WHERE reservation_id = ?'
+      );
+      for (const id of reservationIds) remove.run(id);
+      this.db.exec('COMMIT');
+      return settlementId;
+    } catch (error) {
+      this.rollback();
+      throw error;
+    }
+  }
+
+  async commitPaymentSettlement(settlementId: string): Promise<boolean> {
+    this.beginImmediate();
+    try {
+      type SettlementRow = {
+        group_name: string;
+        scope: string;
+        direction: PaymentDirection;
+        amount: string;
+        timestamp: number;
+      };
+      const entries = this.db
+        .prepare(
+          `SELECT group_name, scope, direction, amount, timestamp
+           FROM payment_settlement_entries WHERE settlement_id = ?`
+        )
+        .all(settlementId) as SettlementRow[];
+      if (entries.length === 0) {
+        this.db.exec('COMMIT');
+        return false;
+      }
+      const insert = this.db.prepare(`
+        INSERT INTO payments (group_name, scope, direction, amount, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      for (const entry of entries) {
+        insert.run(
+          entry.group_name,
+          entry.scope,
+          entry.direction,
+          entry.amount,
+          entry.timestamp
+        );
+      }
+      this.db
+        .prepare(
+          'DELETE FROM payment_settlement_entries WHERE settlement_id = ?'
+        )
+        .run(settlementId);
+      this.db.exec('COMMIT');
+      return true;
+    } catch (error) {
+      this.rollback();
+      throw error;
+    }
+  }
+
+  async releasePaymentSettlement(settlementId: string): Promise<void> {
+    this.db
+      .prepare('DELETE FROM payment_settlement_entries WHERE settlement_id = ?')
+      .run(settlementId);
+  }
+
   async releasePaymentReservation(reservationId: string): Promise<void> {
     this.db
       .prepare('DELETE FROM payment_reservations WHERE reservation_id = ?')
@@ -380,7 +551,9 @@ export class SQLitePaymentStorage implements PaymentStorage {
   }
 
   async clear(): Promise<void> {
-    this.db.exec('DELETE FROM payments; DELETE FROM payment_reservations;');
+    this.db.exec(
+      'DELETE FROM payments; DELETE FROM payment_reservations; DELETE FROM payment_settlement_entries;'
+    );
     return Promise.resolve();
   }
 

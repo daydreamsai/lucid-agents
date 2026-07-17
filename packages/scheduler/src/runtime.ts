@@ -37,7 +37,7 @@ export function createSchedulerRuntime(
   const agentCardTtlMs = options.agentCardTtlMs ?? 5 * 60_000;
   const defaultConcurrency = options.defaultConcurrency ?? 5;
 
-  const a2aClient = options.runtime.a2a.client;
+  const a2aClient = options.runtime.a2a?.client;
   if (!a2aClient) {
     throw new Error(
       'Scheduler runtime requires A2A extension. Add .use(a2a()) to your agent.'
@@ -49,28 +49,21 @@ export function createSchedulerRuntime(
       | ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>)
       | undefined;
 
-    try {
-      const payments = options.runtime.payments;
-      if (!payments) {
-        return await a2aClient.invoke(
-          args.manifest,
-          args.entrypointKey,
-          args.input,
-          undefined,
-          { idempotencyKey: args.idempotencyKey }
+    const payments = options.runtime.payments;
+    if (payments) {
+      try {
+        fetchFn =
+          (await payments.getFetchWithPayment(
+            options.runtime,
+            payments.config.network
+          )) ?? undefined;
+      } catch (error) {
+        // Payment context creation failed, continue without payment
+        console.warn(
+          '[scheduler] Failed to get fetch with payment:',
+          (error as Error).message
         );
       }
-      fetchFn =
-        (await payments.getFetchWithPayment(
-          options.runtime,
-          payments.config.network
-        )) ?? undefined;
-    } catch (error) {
-      // Payment context creation failed, continue without payment
-      console.warn(
-        '[scheduler] Failed to get fetch with payment:',
-        (error as Error).message
-      );
     }
 
     await a2aClient.invoke(
@@ -92,22 +85,28 @@ export function createSchedulerRuntime(
     idempotencyKey?: string;
   }): Job => {
     const id = crypto.randomUUID();
-    const idempotencyKey =
+    const idempotencyKeySeed =
       input.idempotencyKey?.trim() ?? `scheduler-job:${id}`;
-    if (idempotencyKey.length < 20 || idempotencyKey.length > 256) {
+    if (idempotencyKeySeed.length < 20 || idempotencyKeySeed.length > 256) {
       throw new Error('Idempotency key must contain 20 to 256 characters');
     }
+    const nextRunAt = computeInitialNextRun(input.schedule, input.now);
+    const idempotencyKey =
+      input.schedule.kind === 'interval'
+        ? occurrenceIdempotencyKey(idempotencyKeySeed, nextRunAt)
+        : idempotencyKeySeed;
     return {
       id,
       hireId: input.hireId,
       entrypointKey: input.entrypointKey,
       input: input.jobInput,
       schedule: input.schedule,
-      nextRunAt: computeInitialNextRun(input.schedule, input.now),
+      nextRunAt,
       attempts: 0,
       maxRetries: input.maxRetries ?? defaultMaxRetries,
       status: 'pending',
       idempotencyKey,
+      ...(input.schedule.kind === 'interval' ? { idempotencyKeySeed } : {}),
       managedIdempotencyKey: input.idempotencyKey === undefined,
     };
   };
@@ -386,6 +385,12 @@ export function createSchedulerRuntime(
             lastError: undefined,
           });
         } else {
+          const idempotencyKeySeed =
+            claimedJob.idempotencyKeySeed ??
+            (claimedJob.managedIdempotencyKey
+              ? `scheduler-job:${claimedJob.id}`
+              : (claimedJob.idempotencyKey ??
+                `scheduler-job:${claimedJob.id}`));
           await options.store.putJob({
             ...claimedJob,
             status: 'pending',
@@ -393,9 +398,11 @@ export function createSchedulerRuntime(
             attempts: 0,
             lastError: undefined,
             nextRunAt,
-            idempotencyKey: claimedJob.managedIdempotencyKey
-              ? `scheduler-job:${claimedJob.id}:${nextRunAt}`
-              : claimedJob.idempotencyKey,
+            idempotencyKey: occurrenceIdempotencyKey(
+              idempotencyKeySeed,
+              nextRunAt
+            ),
+            idempotencyKeySeed,
           });
         }
       } catch (error) {
@@ -491,6 +498,15 @@ export function createSchedulerRuntime(
     tick,
     recoverExpiredLeases,
   };
+}
+
+function occurrenceIdempotencyKey(seed: string, nextRunAt: number): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const character of seed) {
+    hash ^= BigInt(character.codePointAt(0) ?? 0);
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return `scheduler-run:${hash.toString(16).padStart(16, '0')}:${nextRunAt}`;
 }
 
 function computeInitialNextRun(schedule: Schedule, now: number): number {

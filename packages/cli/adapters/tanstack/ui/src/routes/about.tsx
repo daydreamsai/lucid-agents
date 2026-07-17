@@ -65,11 +65,17 @@ const devWorkflow = [
   },
 ];
 
-const integrationExample = `// Using x402-fetch to invoke an entrypoint
-import { createSigner, wrapFetchWithPayment } from "x402-fetch";
+const integrationExample = `// Using x402 v2 to invoke an entrypoint
+import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
+import { ExactEvmScheme } from "@x402/evm";
+import { privateKeyToAccount } from "viem/accounts";
 
-const signer = await createSigner("ethereum", process.env.PRIVATE_KEY!);
-const fetchWithPayment = wrapFetchWithPayment(fetch, signer);
+const signer = privateKeyToAccount(process.env.PRIVATE_KEY as \`0x\${string}\`);
+const client = new x402Client().register(
+  "eip155:*",
+  new ExactEvmScheme(signer)
+);
+const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
 const response = await fetchWithPayment(
   "https://localhost:3000/api/agent/entrypoints/echo/invoke",
@@ -187,7 +193,7 @@ function AboutPage() {
         <p className="text-sm text-zinc-400">
           Use{' '}
           <code className="rounded bg-zinc-800 px-2 py-1 text-xs">
-            x402-fetch
+            @x402/fetch
           </code>{' '}
           to wrap fetch calls with automatic payment handling. When the agent
           requests payment, the wrapper signs and forwards proof headers

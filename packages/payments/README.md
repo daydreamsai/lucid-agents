@@ -40,8 +40,11 @@ creation. The payments runtime first verifies x402 or SIWX and returns a stable
 subject without reserving or settling. After an invoke wins its idempotency
 claim, `admit()` evaluates incoming policies and reserves stateful limits.
 `finalize()` settles after a successful invoke or successful stream/task
-admission. Invalid input, failed invoke output/handlers, failed admission,
-failed settlement, and storage failures do not consume a reservation. A later
+admission. Immediately before an irreversible settlement, policy accounting is
+moved into a durable, non-expiring staged batch. Invalid input, failed invoke
+output/handlers, failed admission, and failed settlement release provisional or
+staged capacity; if final accounting fails after settlement, the staged batch
+remains counted until reconciliation instead of expiring open. A later
 asynchronous stream/task failure does not rewind an already accepted HTTP
 operation. SIWX entitlements are checked before either x402 or MPP challenges,
 so both rails support the same paid-entitlement reuse path.
@@ -144,12 +147,13 @@ payments({
 });
 ```
 
-All storage implementations provide atomic total/rate reservations and an
-all-or-nothing accounting batch. Settlement commits every applicable total,
-rate, and history record in one transaction; an expired reservation or storage
-error cannot leave a partially applied policy. Authorization fails closed
-instead of making tracking best-effort. `agent.close()` releases storage
-resources.
+All storage implementations provide atomic total/rate reservations and durable
+staged settlement batches. Before payment, every applicable total, rate, and
+history record moves into one non-expiring batch; after payment, that batch is
+committed to history in one transaction. A post-settlement storage error leaves
+the staged amount counted rather than partially applying accounting or failing
+open after the reservation TTL. Authorization fails closed instead of making
+tracking best-effort. `agent.close()` releases storage resources.
 
 ## Payment policies
 

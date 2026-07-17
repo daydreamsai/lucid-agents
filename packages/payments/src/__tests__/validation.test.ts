@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, spyOn } from 'bun:test';
 import { normalizePaymentNetwork, validatePaymentsConfig } from '../validation';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 
@@ -70,5 +70,60 @@ describe('validatePaymentsConfig', () => {
     expect(() =>
       validatePaymentsConfig(config, config.network, 'echo')
     ).toThrow('Stripe destination mode currently supports only Base mainnet');
+  });
+
+  it('reports each missing static payment field', () => {
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    const valid = {
+      payTo: '0xabc0000000000000000000000000000000000000',
+      facilitatorUrl: 'https://facilitator.test',
+      network: 'eip155:84532',
+    } as PaymentsConfig;
+
+    expect(() =>
+      validatePaymentsConfig(
+        { ...valid, payTo: undefined } as never,
+        valid.network,
+        'missing-payee'
+      )
+    ).toThrow('PAYMENTS_RECEIVABLE_ADDRESS');
+    expect(() =>
+      validatePaymentsConfig(
+        { ...valid, facilitatorUrl: undefined } as never,
+        valid.network,
+        'missing-facilitator'
+      )
+    ).toThrow('FACILITATOR_URL');
+    expect(() =>
+      validatePaymentsConfig(valid, undefined, 'missing-network')
+    ).toThrow('NETWORK is not set');
+    expect(error).toHaveBeenCalledTimes(3);
+    error.mockRestore();
+  });
+
+  it('requires a Stripe secret and reports unsupported networks', () => {
+    const error = spyOn(console, 'error').mockImplementation(() => undefined);
+    const stripe = {
+      stripe: { secretKey: '  ' },
+      facilitatorUrl: 'https://facilitator.test',
+      network: 'eip155:8453',
+    } as PaymentsConfig;
+
+    expect(() =>
+      validatePaymentsConfig(stripe, stripe.network, 'stripe')
+    ).toThrow('STRIPE_SECRET_KEY');
+    expect(() =>
+      validatePaymentsConfig(
+        {
+          payTo: '0xabc0000000000000000000000000000000000000',
+          facilitatorUrl: 'https://facilitator.test',
+          network: 'eip155:999999',
+        } as PaymentsConfig,
+        'eip155:999999',
+        'unsupported'
+      )
+    ).toThrow('Please use a supported CAIP-2 identifier');
+    expect(error).toHaveBeenCalledTimes(2);
+    error.mockRestore();
   });
 });

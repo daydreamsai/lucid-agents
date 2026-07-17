@@ -152,16 +152,6 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function verifiedIdentity(source?: string): {
-  payer?: string;
-  network?: string;
-} {
-  if (!source) return {};
-  const match = source.match(/^did:pkh:([^:]+:[^:]+):(.+)$/);
-  if (!match?.[1] || !match[2]) return { payer: source };
-  return { network: match[1], payer: match[2] };
-}
-
 function withoutPaymentCredential(request: Request): Request {
   const headers = new Headers(request.headers);
   const authorization = headers.get('Authorization');
@@ -238,7 +228,8 @@ async function createMppRuntime(
     credential: NonNullable<ReturnType<typeof decodeMppCredential>>,
     entrypoint: EntrypointDef,
     kind: 'invoke' | 'stream',
-    request: Request
+    request: Request,
+    allowIdempotencyRecovery: boolean
   ): ChallengeClaim => {
     const record = outstandingChallenges.get(credential.challengeId);
     if (!record) return { state: 'invalid' };
@@ -251,7 +242,13 @@ async function createMppRuntime(
       outstandingChallenges.delete(credential.challengeId);
       return { state: 'invalid' };
     }
-    const idempotencyKey = request.headers.get('Idempotency-Key')?.trim();
+    const candidateKey = allowIdempotencyRecovery
+      ? request.headers.get('Idempotency-Key')?.trim()
+      : undefined;
+    const idempotencyKey =
+      candidateKey && candidateKey.length >= 20 && candidateKey.length <= 256
+        ? candidateKey
+        : undefined;
     if (record.state === 'verified') {
       if (
         idempotencyKey &&
@@ -302,6 +299,13 @@ async function createMppRuntime(
     credential: NonNullable<ReturnType<typeof decodeMppCredential>>
   ): void => {
     outstandingChallenges.delete(credential.challengeId);
+  };
+
+  const releaseChallengeClaim = (
+    credential: NonNullable<ReturnType<typeof decodeMppCredential>>
+  ): void => {
+    const record = outstandingChallenges.get(credential.challengeId);
+    if (record?.state === 'verifying') record.state = 'issued';
   };
 
   const matchingRails = (
@@ -454,7 +458,8 @@ async function createMppRuntime(
       request: Request,
       entrypoint: EntrypointDef,
       kind: 'invoke' | 'stream',
-      resolvedRequirement?: MppPaymentRequirement
+      resolvedRequirement?: MppPaymentRequirement,
+      options?: { allowIdempotencyRecovery?: boolean }
     ) {
       const requirement = resolvedRequirement ?? requirements(entrypoint, kind);
       if (!requirement.required) return { authorized: true } as const;
@@ -500,7 +505,13 @@ async function createMppRuntime(
         }
       }
 
-      const claim = claimChallenge(credential, entrypoint, kind, request);
+      const claim = claimChallenge(
+        credential,
+        entrypoint,
+        kind,
+        request,
+        options?.allowIdempotencyRecovery === true
+      );
       if (claim.state === 'cached') return claim.authorization;
       if (claim.state === 'in_progress') {
         return {
@@ -564,14 +575,14 @@ async function createMppRuntime(
                 ),
             } as const;
           }
-          const identity = verifiedIdentity(credential.source);
           return completeChallenge(credential, {
             authorized: true,
-            receipt: verification.receipt,
-            payer: verification.payer ?? identity.payer,
-            network: verification.network ?? identity.network,
+            ...(verification.receipt ? { receipt: verification.receipt } : {}),
+            ...(verification.payer ? { payer: verification.payer } : {}),
+            ...(verification.network ? { network: verification.network } : {}),
           });
         } catch (error) {
+          releaseChallengeClaim(credential);
           return {
             authorized: false,
             response: configurationResponse(
@@ -599,18 +610,16 @@ async function createMppRuntime(
         const receiptResponse = result.withReceipt(marker);
         const receipt = receiptResponse.headers.get('Payment-Receipt');
         if (!receipt) throw new Error('MPP verifier omitted its receipt');
-        const identity = verifiedIdentity(credential.source);
         const handled = receiptResponse.headers.has(CONTENT_RESPONSE_MARKER)
           ? undefined
           : receiptResponse;
         return completeChallenge(credential, {
           authorized: true,
           receipt,
-          payer: identity.payer,
-          network: identity.network,
           ...(handled ? { handled } : {}),
         });
       } catch (error) {
+        releaseChallengeClaim(credential);
         return {
           authorized: false,
           response: configurationResponse(

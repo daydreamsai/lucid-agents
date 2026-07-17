@@ -429,7 +429,7 @@ describe('HTTP invoke idempotency', () => {
     expect(executions).toBe(1);
   });
 
-  it('replays a post-settlement failure instead of charging again', async () => {
+  it('recovers successful output after a post-settlement recording failure', async () => {
     const store = createInMemoryHttpIdempotencyStore();
     let executions = 0;
     let admissions = 0;
@@ -486,9 +486,12 @@ describe('HTTP invoke idempotency', () => {
     );
 
     expect(first.status).toBe(503);
-    expect(replay.status).toBe(503);
+    expect(replay.status).toBe(200);
     expect(replay.headers.get('Idempotency-Replayed')).toBe('true');
-    expect(await replay.json()).toEqual(await first.json());
+    expect(await replay.json()).toMatchObject({
+      status: 'succeeded',
+      output: { ok: true },
+    });
     expect(executions).toBe(1);
     expect(admissions).toBe(1);
   });

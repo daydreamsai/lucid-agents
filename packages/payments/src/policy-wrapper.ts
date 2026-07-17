@@ -1,8 +1,11 @@
-import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
-import type { PaymentTracker } from '@lucid-agents/types/payments';
-import type { RateLimiter } from './rate-limiter';
+import type {
+  PaymentPolicyGroup,
+  PaymentRateLimiter,
+  PaymentTracker,
+} from '@lucid-agents/types/payments';
+import { decodePaymentRequiredHeader } from '@x402/core/http';
+import type { PaymentRequirements } from '@x402/core/types';
 import { evaluatePolicyGroups, findMostSpecificOutgoingLimit } from './policy';
-import { decodePaymentRequiredHeader, parsePriceAmount } from './utils';
 
 const MAX_OUTSTANDING_ATTEMPTS = 10_000;
 const ATTEMPT_TTL_MS = 5 * 60 * 1_000;
@@ -10,6 +13,10 @@ const ATTEMPT_TTL_MS = 5 * 60 * 1_000;
 export type PolicyWrapperOptions = {
   maxOutstandingAttempts?: number;
   attemptTtlMs?: number;
+  /** Select the same v2 requirement that the outer x402 client will pay. */
+  paymentRequirementSelector?: (
+    requirements: readonly PaymentRequirements[]
+  ) => PaymentRequirements | undefined;
 };
 
 type FetchLike = (
@@ -43,44 +50,33 @@ function extractDomain(url: string): string | undefined {
   }
 }
 
-/**
- * Parses payment amount from a price string (assumes USDC with 6 decimals).
- * @param price - Price string (e.g., "1.5" for $1.50)
- * @returns Amount in base units (with 6 decimals), or undefined if invalid
- */
-/**
- * Extracts payment amount from response headers.
- * @param response - HTTP response object
- * @returns Payment amount in base units from PAYMENT-REQUIRED header
- */
-function extractPaymentAmount(response: Response): bigint | undefined {
-  const required = decodePaymentRequiredHeader(
-    response.headers.get('PAYMENT-REQUIRED')
-  );
-  return required?.price ? parsePriceAmount(required.price) : undefined;
-}
-
-/**
- * Extracts recipient address from payment request headers or response.
- * @param request - HTTP request object
- * @param response - HTTP response object
- * @returns Recipient address from PAYMENT-REQUIRED header
- */
-function extractRecipientAddress(
-  _request: Request,
-  response: Response
-): string | undefined {
-  const required = decodePaymentRequiredHeader(
-    response.headers.get('PAYMENT-REQUIRED')
-  );
-  return required?.payTo;
-}
-
 type PaymentInfo = {
   amount: bigint;
   recipientAddress?: string;
   recipientDomain?: string;
 };
+
+function extractPaymentInfo(
+  response: Response,
+  selector?: PolicyWrapperOptions['paymentRequirementSelector']
+): Pick<PaymentInfo, 'amount' | 'recipientAddress'> | undefined {
+  const header = response.headers.get('PAYMENT-REQUIRED');
+  if (!header) return undefined;
+  try {
+    const required = decodePaymentRequiredHeader(header);
+    const requirement = selector
+      ? selector(required.accepts)
+      : required.accepts.length === 1
+        ? required.accepts[0]
+        : undefined;
+    if (!requirement) return undefined;
+    const amount = BigInt(requirement.amount);
+    if (amount < 0n || !requirement.payTo?.trim()) return undefined;
+    return { amount, recipientAddress: requirement.payTo };
+  } catch {
+    return undefined;
+  }
+}
 
 type ReservedPolicyGroup = {
   groupName: string;
@@ -168,7 +164,7 @@ export function wrapBaseFetchWithPolicy(
   baseFetch: FetchLike,
   policyGroups: PaymentPolicyGroup[],
   paymentTracker: PaymentTracker,
-  rateLimiter?: RateLimiter,
+  rateLimiter?: PaymentRateLimiter,
   options: PolicyWrapperOptions = {}
 ): FetchLike {
   const maxOutstandingAttempts =
@@ -276,17 +272,6 @@ export function wrapBaseFetchWithPolicy(
     });
   };
 
-  const ensureAttemptCapacity = async (): Promise<void> => {
-    while (attemptOrder.size >= maxOutstandingAttempts) {
-      const oldest = attemptOrder.values().next().value as
-        | { requestKey: string; attempt: ReservedPaymentAttempt }
-        | undefined;
-      if (!oldest) break;
-      removeAttempt(oldest.requestKey, oldest.attempt);
-      await releaseAttempt(oldest.attempt);
-    }
-  };
-
   const takeAttempt = (requestKey: string) =>
     withAttemptLock(() => dequeueAttempt(requestKey));
 
@@ -298,106 +283,149 @@ export function wrapBaseFetchWithPolicy(
     const targetDomain = extractDomain(urlString);
     const requestKey = await requestFingerprint(request);
     const paidRequest = isPaidRequest(request);
+    const attempt = paidRequest ? await takeAttempt(requestKey) : undefined;
+    if (paidRequest && !attempt) {
+      return policyViolationResponse(
+        'Paid request has no active payment policy reservation',
+        undefined,
+        503
+      );
+    }
+
+    const accountingRecords = attempt
+      ? attempt.groups
+          .filter(group => group.recordsPayment)
+          .map(group => ({
+            groupName: group.groupName,
+            scope: group.scope,
+            direction: 'outgoing' as const,
+            amount: attempt.payment.amount,
+          }))
+      : [];
+    let settlementId: string | undefined;
+    if (
+      attempt &&
+      (attempt.reservationIds.length > 0 || accountingRecords.length > 0)
+    ) {
+      try {
+        settlementId = await paymentTracker.stageSettlement(
+          attempt.reservationIds,
+          accountingRecords
+        );
+      } catch (error) {
+        await releaseAttempt(attempt);
+        return policyViolationResponse(
+          error instanceof Error
+            ? error.message
+            : 'Payment accounting could not be staged',
+          undefined,
+          503
+        );
+      }
+    }
 
     let response: Response;
     try {
       response = await baseFetch(request);
     } catch (error) {
-      if (paidRequest) {
-        await releaseAttempt(await takeAttempt(requestKey));
+      if (settlementId) {
+        await paymentTracker.releaseSettlement(settlementId);
+      } else {
+        await releaseAttempt(attempt);
       }
       throw error;
     }
 
     if (response.status === 402) {
       if (paidRequest) {
-        await releaseAttempt(await takeAttempt(requestKey));
+        if (settlementId) {
+          await paymentTracker.releaseSettlement(settlementId);
+        } else {
+          await releaseAttempt(attempt);
+        }
         return response;
       }
-      const paymentAmount = extractPaymentAmount(response);
-      const recipientAddress = extractRecipientAddress(request, response);
+      const paymentInfo = extractPaymentInfo(
+        response,
+        options.paymentRequirementSelector
+      );
+      if (!paymentInfo) {
+        return policyViolationResponse(
+          'Unable to select a valid x402 v2 payment requirement',
+          undefined,
+          503
+        );
+      }
+      const paymentAmount = paymentInfo.amount;
+      const recipientAddress = paymentInfo.recipientAddress;
 
-      if (paymentAmount !== undefined) {
-        return withAttemptLock(async () => {
-          await ensureAttemptCapacity();
-          let evaluation;
-          try {
-            evaluation = await evaluatePolicyGroups(
-              policyGroups,
-              paymentTracker,
-              rateLimiter,
-              urlString,
-              urlString,
-              paymentAmount,
-              recipientAddress || undefined,
-              targetDomain
-            );
-          } catch (error) {
-            return policyViolationResponse(
-              error instanceof Error
-                ? error.message
-                : 'Payment policy storage is unavailable',
-              undefined,
-              503
-            );
-          }
+      return withAttemptLock(async () => {
+        if (attemptOrder.size >= maxOutstandingAttempts) {
+          return policyViolationResponse(
+            'Payment policy reservation capacity is exhausted',
+            undefined,
+            503
+          );
+        }
+        let evaluation;
+        try {
+          evaluation = await evaluatePolicyGroups(
+            policyGroups,
+            paymentTracker,
+            rateLimiter,
+            urlString,
+            urlString,
+            paymentAmount,
+            recipientAddress || undefined,
+            targetDomain
+          );
+        } catch (error) {
+          return policyViolationResponse(
+            error instanceof Error
+              ? error.message
+              : 'Payment policy storage is unavailable',
+            undefined,
+            503
+          );
+        }
 
-          if (!evaluation.allowed) {
-            return policyViolationResponse(
-              evaluation.reason || 'Payment blocked by policy',
-              evaluation.groupName
-            );
-          }
+        if (!evaluation.allowed) {
+          return policyViolationResponse(
+            evaluation.reason || 'Payment blocked by policy',
+            evaluation.groupName
+          );
+        }
 
-          const attempt: ReservedPaymentAttempt = {
-            id: globalThis.crypto.randomUUID(),
-            payment: {
-              amount: paymentAmount,
-              recipientAddress: recipientAddress || undefined,
-              recipientDomain: targetDomain,
-            },
-            reservationIds: [],
-            groups: [],
-          };
+        const attempt: ReservedPaymentAttempt = {
+          id: globalThis.crypto.randomUUID(),
+          payment: {
+            amount: paymentAmount,
+            recipientAddress: recipientAddress || undefined,
+            recipientDomain: targetDomain,
+          },
+          reservationIds: [],
+          groups: [],
+        };
 
-          try {
-            for (const group of policyGroups) {
-              let scope = 'global';
-              let recordsPayment = false;
-              if (group.outgoingLimits) {
-                recordsPayment = true;
-                const limitInfo = findMostSpecificOutgoingLimit(
-                  group.outgoingLimits,
-                  targetUrl,
-                  endpointUrl
-                );
-                scope = limitInfo?.scope ?? 'global';
-                if (limitInfo?.limit.maxTotalUsd !== undefined) {
-                  const reservation = await paymentTracker.reserveOutgoingLimit(
-                    group.name,
-                    scope,
-                    limitInfo.limit.maxTotalUsd,
-                    limitInfo.limit.windowMs,
-                    paymentAmount
-                  );
-                  if (!reservation.allowed || !reservation.reservationId) {
-                    await releaseAttempt(attempt);
-                    return policyViolationResponse(
-                      reservation.reason ?? 'Payment blocked by policy',
-                      group.name
-                    );
-                  }
-                  attempt.reservationIds.push(reservation.reservationId);
-                  recordsPayment = false;
-                }
-              }
-
-              if (group.rateLimits) {
-                const reservation = await paymentTracker.reserveRateLimit(
+        try {
+          for (const group of policyGroups) {
+            let scope = 'global';
+            let recordsPayment = false;
+            if (group.outgoingLimits) {
+              recordsPayment = true;
+              const limitInfo = findMostSpecificOutgoingLimit(
+                group.outgoingLimits,
+                targetUrl,
+                endpointUrl
+              );
+              scope = limitInfo?.scope ?? 'global';
+              if (limitInfo?.limit.maxTotalUsd !== undefined) {
+                const reservation = await paymentTracker.reserveOutgoingLimit(
                   group.name,
-                  'outgoing',
-                  group.rateLimits.maxPayments,
-                  group.rateLimits.windowMs
+                  scope,
+                  limitInfo.limit.maxTotalUsd,
+                  limitInfo.limit.windowMs,
+                  paymentAmount
                 );
                 if (!reservation.allowed || !reservation.reservationId) {
                   await releaseAttempt(attempt);
@@ -407,33 +435,48 @@ export function wrapBaseFetchWithPolicy(
                   );
                 }
                 attempt.reservationIds.push(reservation.reservationId);
+                recordsPayment = false;
               }
-              attempt.groups.push({
-                groupName: group.name,
-                scope,
-                recordsPayment,
-              });
             }
-          } catch (error) {
-            await releaseAttempt(attempt);
-            return policyViolationResponse(
-              error instanceof Error
-                ? error.message
-                : 'Payment policy storage is unavailable',
-              undefined,
-              503
-            );
+
+            if (group.rateLimits) {
+              const reservation = await paymentTracker.reserveRateLimit(
+                group.name,
+                'outgoing',
+                group.rateLimits.maxPayments,
+                group.rateLimits.windowMs
+              );
+              if (!reservation.allowed || !reservation.reservationId) {
+                await releaseAttempt(attempt);
+                return policyViolationResponse(
+                  reservation.reason ?? 'Payment blocked by policy',
+                  group.name
+                );
+              }
+              attempt.reservationIds.push(reservation.reservationId);
+            }
+            attempt.groups.push({
+              groupName: group.name,
+              scope,
+              recordsPayment,
+            });
           }
+        } catch (error) {
+          await releaseAttempt(attempt);
+          return policyViolationResponse(
+            error instanceof Error
+              ? error.message
+              : 'Payment policy storage is unavailable',
+            undefined,
+            503
+          );
+        }
 
-          enqueueAttempt(requestKey, attempt);
-          return response;
-        });
-      }
-
-      return response;
+        enqueueAttempt(requestKey, attempt);
+        return response;
+      });
     }
 
-    const attempt = paidRequest ? await takeAttempt(requestKey) : undefined;
     if (
       attempt &&
       response.ok &&
@@ -442,31 +485,34 @@ export function wrapBaseFetchWithPolicy(
     ) {
       const paymentResponseHeader = response.headers.get('PAYMENT-RESPONSE');
       if (paymentResponseHeader) {
-        try {
-          await paymentTracker.commitReservations(
-            attempt.reservationIds,
-            attempt.groups
-              .filter(group => group.recordsPayment)
-              .map(group => ({
-                groupName: group.groupName,
-                scope: group.scope,
-                direction: 'outgoing' as const,
-                amount: attempt.payment.amount,
-              }))
-          );
-        } catch (error) {
-          await releaseAttempt(attempt);
-          return policyViolationResponse(
-            error instanceof Error ? error.message : 'Payment recording failed',
-            undefined,
-            503
-          );
+        if (settlementId) {
+          try {
+            await paymentTracker.commitSettlement(settlementId);
+          } catch (error) {
+            // The remote settlement is irreversible. Keep the durable staged
+            // batch counted without a TTL until accounting is reconciled.
+            return policyViolationResponse(
+              error instanceof Error
+                ? error.message
+                : 'Payment recording failed',
+              undefined,
+              503
+            );
+          }
         }
+      } else {
+        if (settlementId) {
+          await paymentTracker.releaseSettlement(settlementId);
+        } else {
+          await releaseAttempt(attempt);
+        }
+      }
+    } else if (attempt) {
+      if (settlementId) {
+        await paymentTracker.releaseSettlement(settlementId);
       } else {
         await releaseAttempt(attempt);
       }
-    } else if (attempt) {
-      await releaseAttempt(attempt);
     }
 
     return response;

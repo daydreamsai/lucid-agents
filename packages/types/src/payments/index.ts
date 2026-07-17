@@ -119,6 +119,18 @@ export interface PaymentTracker {
     reservationIds: readonly string[],
     records?: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[]
   ): Promise<void>;
+  /**
+   * Durably stage policy accounting before an irreversible settlement starts.
+   * Staged amounts remain counted without a reservation TTL.
+   */
+  stageSettlement(
+    reservationIds: readonly string[],
+    records?: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[]
+  ): Promise<string>;
+  /** Commit a staged settlement batch to payment history. */
+  commitSettlement(settlementId: string): Promise<void>;
+  /** Release a staged settlement batch after settlement definitively fails. */
+  releaseSettlement(settlementId: string): Promise<void>;
   releaseReservation(reservationId: string): Promise<void>;
   checkOutgoingLimit(
     groupName: string,
@@ -318,6 +330,21 @@ export type IncomingPaymentAuthorization =
       /** Atomically reserve policy capacity before application execution. */
       admit: () => Promise<IncomingPaymentAdmission>;
     };
+
+/** Fetch-native incoming payment verifier with reusable SIWX authorization. */
+export type IncomingPaymentAuthorizer = {
+  (
+    request: Request,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream',
+    verifiedPayment?: VerifiedIncomingPayment
+  ): Promise<IncomingPaymentAuthorization>;
+  authorizeSIWx: (
+    request: Request,
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream'
+  ) => Promise<IncomingPaymentAuthorization | undefined>;
+};
 
 /** A payment verified by another installed rail, such as MPP. */
 export type VerifiedIncomingPayment = {

@@ -16,7 +16,6 @@
     "@reown/appkit": "^1.8.12",
     "@reown/appkit-adapter-solana": "^1.8.12",
     "@reown/appkit-adapter-wagmi": "^1.8.12",
-    "@tailwindcss/vite": "^4.0.6",
     "@tanstack/nitro-v2-vite-plugin": "^1.132.31",
     "@tanstack/react-devtools": "^0.7.0",
     "@tanstack/react-query": "^5.90.6",
@@ -36,10 +35,13 @@
     "wagmi": "^2.19.2",
     "@x402/fetch": "^2.2.0",
     "@x402/evm": "^2.2.0",
+    "@wagmi/connectors": "6.2.0",
+    "@wagmi/core": "2.22.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.16",
+    "@tailwindcss/vite": "^4.1.16",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",

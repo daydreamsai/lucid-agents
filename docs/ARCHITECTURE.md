@@ -174,7 +174,9 @@ atomic total/rate reservations
         ↓
 execute invoke, or admit stream/task work
         ↓
-finalize(response): settle + commit, or release on pre-admission failure
+stage non-expiring policy accounting
+        ↓
+finalize(response): settle + commit, or release on settlement failure
 ```
 
 Important invariants:
@@ -198,13 +200,16 @@ Important invariants:
 - Total and rate limits reserve capacity atomically in the configured storage.
   Storage errors fail closed; a request cannot bypass a limit because tracking
   is unavailable.
-- Settlement commits every reservation and non-reserved history record through
-  one storage transaction, so policy accounting is all-or-nothing.
+- Before an irreversible settlement, every reservation and non-reserved history
+  record moves atomically into a durable, non-expiring staged batch. Successful
+  settlement commits that batch through one storage transaction; a later
+  accounting error leaves it counted until reconciliation.
 - Invoke commits only after successful application output. Streams and tasks
   commit when the server successfully admits the asynchronous work because the
   HTTP response is already live/accepted at that boundary.
-- Invalid input, failed invoke output/handlers, failed admission, failed
-  settlement, or recording errors release outstanding reservations.
+- Invalid input, failed invoke output/handlers, failed admission, or failed
+  settlement releases outstanding or staged capacity. Recording errors after a
+  successful settlement retain the staged batch and therefore fail closed.
 - Outgoing policy wrapping is active even when no rate limiter is configured.
 
 ## Payment boundaries
@@ -294,7 +299,9 @@ The repository verifies architecture at several levels:
 - durable task-store contract and ownership tests;
 - generated-template and example smoke tests;
 - PostgreSQL integration tests in CI;
-- repository-wide source line and function coverage thresholds in CI. Compiled
+- repository-wide executable package-source line and function coverage
+  thresholds in CI. Type-only barrels, generated clients, templates, and the
+  separately smoke-tested examples package are excluded. Compiled
   `dist/` artifacts and test files are excluded from the coverage denominator;
   the aggregate gate is implemented by `scripts/check-coverage.ts` rather than
   Bun's per-file threshold setting.

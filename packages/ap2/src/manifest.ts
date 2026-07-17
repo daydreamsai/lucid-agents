@@ -11,6 +11,10 @@ import { AP2_EXTENSION_URI } from './types';
  * Creates a new Agent Card with AP2 extension added.
  * Immutable - returns new card, doesn't mutate input.
  */
+export function createAgentCardWithAP2<T extends AgentManifest>(
+  card: T,
+  ap2Config: AP2Config
+): T;
 export function createAgentCardWithAP2(
   card: AgentManifest,
   ap2Config: AP2Config

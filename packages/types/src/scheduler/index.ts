@@ -82,6 +82,8 @@ export type Job = {
   maxRetries: number;
   status: JobStatus;
   idempotencyKey?: string;
+  /** @internal Stable seed used to derive a distinct key for each interval occurrence. */
+  idempotencyKeySeed?: string;
   /** @internal True when the scheduler should rotate the key per interval run. */
   managedIdempotencyKey?: boolean;
   lease?: {
@@ -173,7 +175,7 @@ export type SchedulerRuntime = {
     /** Optional wallet metadata for auditing. Payment is handled by paymentContext. */
     wallet?: WalletRef;
     maxRetries?: number;
-    /** Stable 20–256 character key accepted by the target HTTP runtime. */
+    /** 20–256 character key; interval schedules treat it as a per-job seed. */
     idempotencyKey?: string;
     metadata?: Record<string, JsonValue>;
   }): Promise<{ hire: Hire; job: Job }>;
@@ -183,7 +185,7 @@ export type SchedulerRuntime = {
     schedule: Schedule;
     jobInput: JsonValue;
     maxRetries?: number;
-    /** Stable 20–256 character key accepted by the target HTTP runtime. */
+    /** 20–256 character key; interval schedules treat it as a per-job seed. */
     idempotencyKey?: string;
   }): Promise<Job>;
   pauseHire(hireId: string): Promise<OperationResult>;

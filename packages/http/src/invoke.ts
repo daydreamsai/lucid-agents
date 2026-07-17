@@ -136,7 +136,10 @@ export async function invoke(
     entrypoint,
     'invoke',
     runtime,
-    options?.auth
+    options?.auth,
+    {
+      allowMppIdempotencyRecovery: Boolean(idempotency && idempotencyKey),
+    }
   );
   if (authorization.authorized === false) {
     return authorization.response;
@@ -246,9 +249,10 @@ export async function invoke(
 
   const finalize = async (response: Response): Promise<Response> => {
     const completeIdempotency = async (
-      completedResponse: Response
+      completedResponse: Response,
+      returnedResponse: Response = completedResponse
     ): Promise<Response> => {
-      if (!idempotencyClaim || !idempotency) return completedResponse;
+      if (!idempotencyClaim || !idempotency) return returnedResponse;
       try {
         const completed = await idempotency.store.complete(
           idempotencyClaim.scope,
@@ -262,10 +266,10 @@ export async function invoke(
             'idempotency_claim_lost',
             'The invocation idempotency claim expired before completion',
             503,
-            completedResponse
+            returnedResponse
           );
         }
-        return completedResponse;
+        return returnedResponse;
       } catch (error) {
         // Do not release after execution or settlement: retaining the claim
         // prevents a retry from running and charging the invocation again.
@@ -273,10 +277,18 @@ export async function invoke(
           'idempotency_store_error',
           error instanceof Error ? error.message : 'Idempotency store failed',
           503,
-          completedResponse
+          returnedResponse
         );
       }
     };
+
+    const successfulResponse =
+      idempotencyClaim &&
+      idempotency &&
+      response.status >= 200 &&
+      response.status < 300
+        ? response.clone()
+        : undefined;
 
     let finalized: Response;
     try {
@@ -291,16 +303,15 @@ export async function invoke(
           503
         )
       );
-      return admission.isCommitted?.()
-        ? completeIdempotency(failed)
+      return admission.isCommitted?.() && successfulResponse
+        ? completeIdempotency(successfulResponse, failed)
         : releaseIdempotency(failed);
     }
     if (!idempotencyClaim || !idempotency) return finalized;
-    if (
-      (finalized.status < 200 || finalized.status >= 300) &&
-      !admission.isCommitted?.()
-    ) {
-      return releaseIdempotency(finalized);
+    if (finalized.status < 200 || finalized.status >= 300) {
+      return admission.isCommitted?.() && successfulResponse
+        ? completeIdempotency(successfulResponse, finalized)
+        : releaseIdempotency(finalized);
     }
     return completeIdempotency(finalized);
   };

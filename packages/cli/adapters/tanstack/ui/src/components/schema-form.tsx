@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -56,7 +56,7 @@ function renderField(
   value: any,
   onChange: (value: any) => void,
   required: boolean
-): JSX.Element {
+): ReactElement {
   const fieldId = `field-${name}`;
   const description = schema.description;
 

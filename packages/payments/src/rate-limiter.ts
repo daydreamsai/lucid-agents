@@ -87,12 +87,10 @@ class InMemoryRateLimiter implements PaymentRateLimiter {
   }
 }
 
-export type RateLimiter = PaymentRateLimiter;
-
 /**
  * Creates a new rate limiter instance.
- * @returns A new RateLimiter instance for tracking payment rate limits
+ * @returns A new payment rate limiter for tracking payment rate limits
  */
-export function createRateLimiter(): RateLimiter {
+export function createRateLimiter(): PaymentRateLimiter {
   return new InMemoryRateLimiter();
 }

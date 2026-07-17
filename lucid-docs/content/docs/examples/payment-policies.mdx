@@ -92,7 +92,13 @@ import {
   payments,
   paymentsFromEnv,
 } from '@lucid-agents/payments';
+import { policiesFromConfig } from '@lucid-agents/payments/node';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const paymentConfig = paymentsFromEnv();
+if (!paymentConfig) {
+  throw new Error('Payment configuration is required');
+}
 
 const agent = await createAgent({
   name: 'policy-agent',
@@ -101,8 +107,12 @@ const agent = await createAgent({
   .use(http())
   .use(
     payments({
-      config: paymentsFromEnv(),
-      policies: join(import.meta.dir, '..', 'payment-policies.json'),
+      config: {
+        ...paymentConfig,
+        policyGroups: policiesFromConfig(
+          join(import.meta.dir, '..', 'payment-policies.json')
+        ),
+      },
     })
   )
   .use(wallets({ config: walletsFromEnv() }))

@@ -42,6 +42,8 @@ export async function getManifest() {
 
 let paymentModulePromise: Promise<typeof import('@x402/fetch') | null> | null =
   null;
+let evmPaymentModulePromise: Promise<typeof import('@x402/evm') | null> | null =
+  null;
 
 let siwxModulePromise: Promise<
   typeof import('@lucid-agents/payments') | null
@@ -91,10 +93,39 @@ async function resolveFetcher(signer?: any, siwxSigner?: SIWxSignerOption) {
         return null;
       });
   }
+  if (!evmPaymentModulePromise) {
+    evmPaymentModulePromise = import('@x402/evm')
+      .then(evm => evm)
+      .catch(error => {
+        console.warn(
+          '@x402/evm could not be loaded, falling back to plain fetch',
+          error
+        );
+        return null;
+      });
+  }
 
-  const mod = await paymentModulePromise;
-  if (!mod) return baseFetcher;
-  return mod.wrapFetchWithPayment(baseFetcher, signer);
+  const [mod, evm] = await Promise.all([
+    paymentModulePromise,
+    evmPaymentModulePromise,
+  ]);
+  if (!mod || !evm) return baseFetcher;
+  const address = signer.account?.address ?? signer.address;
+  if (typeof address !== 'string' || !/^0x[0-9a-f]{40}$/iu.test(address)) {
+    throw new Error('Connected wallet does not expose an EVM address');
+  }
+  const client = new mod.x402Client().register(
+    'eip155:*',
+    new evm.ExactEvmScheme({
+      address: address as `0x${string}`,
+      signTypedData: message =>
+        signer.signTypedData({
+          ...message,
+          ...(signer.account ? { account: signer.account } : {}),
+        }),
+    })
+  );
+  return mod.wrapFetchWithPayment(baseFetcher, client);
 }
 
 export async function invokeEntrypoint({

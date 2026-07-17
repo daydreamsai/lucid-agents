@@ -1,5 +1,7 @@
-const DEFAULT_LINE_THRESHOLD = 0.7;
-const DEFAULT_FUNCTION_THRESHOLD = 0.78;
+import ts from 'typescript';
+
+const DEFAULT_LINE_THRESHOLD = 0.9;
+const DEFAULT_FUNCTION_THRESHOLD = 0.9;
 
 type FileCoverage = {
   linesFound: number;
@@ -10,12 +12,20 @@ type FileCoverage = {
 
 export type CoverageSummary = FileCoverage & {
   files: number;
+  missingFiles: string[];
   lineRate: number;
   functionRate: number;
 };
 
+function normalizeSourcePath(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '');
+  const packageIndex = normalized.indexOf('/packages/');
+  if (packageIndex >= 0) return normalized.slice(packageIndex + 1);
+  return normalized;
+}
+
 function isSourceFile(path: string): boolean {
-  const normalized = path.replace(/\\/g, '/');
+  const normalized = normalizeSourcePath(path);
   return (
     !normalized.includes('/dist/') &&
     !normalized.includes('/__tests__/') &&
@@ -23,13 +33,85 @@ function isSourceFile(path: string): boolean {
   );
 }
 
+function hasDeclareModifier(statement: ts.Statement): boolean {
+  return ts.canHaveModifiers(statement)
+    ? (ts
+        .getModifiers(statement)
+        ?.some(modifier => modifier.kind === ts.SyntaxKind.DeclareKeyword) ??
+        false)
+    : false;
+}
+
+function emitsRuntimeCode(statement: ts.Statement): boolean {
+  if (
+    ts.isImportDeclaration(statement) ||
+    ts.isImportEqualsDeclaration(statement) ||
+    ts.isExportDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isEmptyStatement(statement)
+  ) {
+    return false;
+  }
+
+  return !hasDeclareModifier(statement);
+}
+
+/** Return whether a package source file belongs to the repository coverage gate. */
+export function isCoverageSource(path: string, source: string): boolean {
+  const normalized = normalizeSourcePath(path);
+  if (
+    !/^packages\/[^/]+\/src\/.+\.[cm]?[jt]sx?$/.test(normalized) ||
+    normalized.startsWith('packages/examples/') ||
+    normalized.includes('/generated/') ||
+    /\.gen\.[cm]?[jt]sx?$/.test(normalized) ||
+    /(?:^|\/)routeTree\.gen\.[cm]?[jt]sx?$/.test(normalized) ||
+    normalized.endsWith('.d.ts') ||
+    !isSourceFile(normalized)
+  ) {
+    return false;
+  }
+
+  const scriptKind = normalized.endsWith('x')
+    ? ts.ScriptKind.TSX
+    : ts.ScriptKind.TS;
+  const sourceFile = ts.createSourceFile(
+    normalized,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    scriptKind
+  );
+  return sourceFile.statements.some(emitsRuntimeCode);
+}
+
+/** Discover executable package modules that must be represented in LCOV. */
+export async function discoverCoverageSources(
+  root = process.cwd()
+): Promise<string[]> {
+  const paths = new Set<string>();
+  for (const pattern of ['packages/*/src/**/*.ts', 'packages/*/src/**/*.tsx']) {
+    const glob = new Bun.Glob(pattern);
+    for await (const path of glob.scan({ cwd: root, onlyFiles: true })) {
+      const normalized = normalizeSourcePath(path);
+      const source = await Bun.file(`${root}/${normalized}`).text();
+      if (isCoverageSource(normalized, source)) paths.add(normalized);
+    }
+  }
+  return [...paths].sort();
+}
+
 /** Summarize source-only LCOV records using the aggregate repository totals. */
-export function summarizeLcov(lcov: string): CoverageSummary {
+export function summarizeLcov(
+  lcov: string,
+  expectedSources: Iterable<string> = []
+): CoverageSummary {
   const files = new Map<string, FileCoverage>();
 
   for (const record of lcov.split('end_of_record')) {
     const source = record.match(/^SF:(.+)$/m)?.[1]?.trim();
     if (!source || !isSourceFile(source)) continue;
+    const normalizedSource = normalizeSourcePath(source);
 
     const read = (key: string): number => {
       const raw = record.match(new RegExp(`^${key}:(\\d+)$`, 'm'))?.[1];
@@ -41,9 +123,9 @@ export function summarizeLcov(lcov: string): CoverageSummary {
       functionsFound: read('FNF'),
       functionsHit: read('FNH'),
     };
-    const current = files.get(source);
+    const current = files.get(normalizedSource);
     files.set(
-      source,
+      normalizedSource,
       current
         ? {
             linesFound: Math.max(current.linesFound, next.linesFound),
@@ -70,6 +152,10 @@ export function summarizeLcov(lcov: string): CoverageSummary {
   return {
     ...totals,
     files: files.size,
+    missingFiles: [...expectedSources]
+      .map(normalizeSourcePath)
+      .filter(path => !files.has(path))
+      .sort(),
     lineRate: totals.linesFound === 0 ? 1 : totals.linesHit / totals.linesFound,
     functionRate:
       totals.functionsFound === 0
@@ -101,10 +187,18 @@ if (import.meta.main) {
     reports.push(await source.text());
   }
 
-  const summary = summarizeLcov(reports.join('\n'));
+  const expectedSources = await discoverCoverageSources();
+  const summary = summarizeLcov(reports.join('\n'), expectedSources);
   if (summary.files === 0) {
     console.error(
       `Coverage report contains no source files: ${paths.join(', ')}`
+    );
+    process.exit(1);
+  }
+  if (summary.missingFiles.length > 0) {
+    console.error(
+      `Coverage report is missing ${summary.missingFiles.length} executable source files:\n` +
+        summary.missingFiles.map(path => `- ${path}`).join('\n')
     );
     process.exit(1);
   }

@@ -1158,6 +1158,7 @@ async function copyAdapterLayer(
     await fs.cp(sourceDir, targetDir, {
       recursive: true,
       errorOnExist: false,
+      force: true,
       filter: source => {
         // Skip .template files - they'll be processed separately
         return !source.endsWith('.template');

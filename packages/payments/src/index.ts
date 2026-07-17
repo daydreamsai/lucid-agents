@@ -52,7 +52,7 @@ export {
   createInMemoryPaymentStorage,
   type InMemoryPaymentStorage,
 } from './in-memory-payment-storage';
-export { createRateLimiter, type RateLimiter } from './rate-limiter';
+export { createRateLimiter } from './rate-limiter';
 export {
   evaluatePolicyGroups,
   evaluateIncomingPolicyGroups,

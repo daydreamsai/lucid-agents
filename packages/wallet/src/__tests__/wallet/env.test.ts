@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test';
 
-import { resolveAgentWalletFromEnv } from '../../env';
+import {
+  resolveAgentWalletFromEnv,
+  resolveDeveloperWalletFromEnv,
+  resolveWalletsFromEnv,
+  walletsFromEnv,
+} from '../../env';
 
 describe('resolveAgentWalletFromEnv', () => {
   it('resolves thirdweb wallet from AGENT_WALLET_ environment variables', () => {
@@ -184,5 +189,108 @@ describe('resolveAgentWalletFromEnv', () => {
     if (config?.type === 'lucid') {
       expect(config.baseUrl).toBe('https://api.example.com');
     }
+  });
+
+  it('merges developer environment config with explicit agent overrides', () => {
+    const developerKey =
+      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const agentKey =
+      '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const config = walletsFromEnv(
+      { agent: { type: 'local', privateKey: agentKey } },
+      {
+        DEVELOPER_WALLET_PRIVATE_KEY: developerKey,
+        DEVELOPER_WALLET_ADDRESS: ' 0xdeveloper ',
+        DEVELOPER_WALLET_RPC_URL: ' https://rpc.example.com ',
+        DEVELOPER_WALLET_CHAIN_ID: '84532',
+        DEVELOPER_WALLET_CHAIN_NAME: ' Base Sepolia ',
+      }
+    );
+
+    expect(config?.agent).toEqual({ type: 'local', privateKey: agentKey });
+    expect(config?.developer).toEqual({
+      type: 'local',
+      privateKey: developerKey,
+      address: '0xdeveloper',
+      walletClient: {
+        rpcUrl: 'https://rpc.example.com',
+        chainId: 84532,
+        chainName: 'Base Sepolia',
+      },
+    });
+  });
+
+  it('returns undefined when neither wallet is configured', () => {
+    expect(walletsFromEnv(undefined, {})).toBeUndefined();
+    expect(resolveWalletsFromEnv()).toBeUndefined();
+    expect(resolveWalletsFromEnv({})).toBeUndefined();
+    expect(resolveDeveloperWalletFromEnv({})).toBeUndefined();
+  });
+
+  it('parses Lucid headers, authorization context, and API URL fallback', () => {
+    const config = resolveAgentWalletFromEnv({
+      AGENT_WALLET_TYPE: 'lucid',
+      LUCID_API_URL: 'https://api.example.com',
+      AGENT_WALLET_AGENT_REF: 'agent-1',
+      AGENT_WALLET_ACCESS_TOKEN: 'token',
+      AGENT_WALLET_HEADERS: '{"x-tenant":7}',
+      AGENT_WALLET_AUTHORIZATION_CONTEXT: '{"role":"agent"}',
+    });
+
+    expect(config).toEqual({
+      type: 'lucid',
+      baseUrl: 'https://api.example.com',
+      agentRef: 'agent-1',
+      headers: { 'x-tenant': '7' },
+      accessToken: 'token',
+      authorizationContext: { role: 'agent' },
+    });
+  });
+
+  it('ignores malformed optional JSON and invalid local chain IDs', () => {
+    const lucid = resolveAgentWalletFromEnv({
+      AGENT_WALLET_TYPE: 'lucid',
+      AGENT_WALLET_BASE_URL: 'https://api.example.com',
+      AGENT_WALLET_AGENT_REF: 'agent-1',
+      AGENT_WALLET_HEADERS: '[]',
+      AGENT_WALLET_AUTHORIZATION_CONTEXT: '{bad json',
+    });
+    const local = resolveAgentWalletFromEnv({
+      AGENT_WALLET_TYPE: 'local',
+      AGENT_WALLET_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      AGENT_WALLET_RPC_URL: 'https://rpc.example.com',
+      AGENT_WALLET_CHAIN_ID: 'not-a-number',
+    });
+
+    expect(lucid?.type === 'lucid' && lucid.headers).toBeUndefined();
+    expect(
+      lucid?.type === 'lucid' && lucid.authorizationContext
+    ).toBeUndefined();
+    expect(local?.type === 'local' && local.walletClient).toEqual({
+      rpcUrl: 'https://rpc.example.com',
+    });
+  });
+
+  it('trims optional thirdweb metadata', () => {
+    const config = resolveAgentWalletFromEnv({
+      AGENT_WALLET_TYPE: 'thirdweb',
+      AGENT_WALLET_SECRET_KEY: 'secret',
+      AGENT_WALLET_ADDRESS: ' 0xagent ',
+      AGENT_WALLET_CAIP2: ' eip155:84532 ',
+      AGENT_WALLET_CHAIN: ' base-sepolia ',
+      AGENT_WALLET_CHAIN_TYPE: ' evm ',
+      AGENT_WALLET_LABEL: ' primary ',
+    });
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        address: '0xagent',
+        caip2: 'eip155:84532',
+        chain: 'base-sepolia',
+        chainType: 'evm',
+        label: 'primary',
+      })
+    );
   });
 });

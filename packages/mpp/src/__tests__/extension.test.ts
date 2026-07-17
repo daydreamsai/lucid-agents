@@ -196,7 +196,12 @@ describe('mpp extension configuration', () => {
     const { runtime } = await buildRuntime(async ({ credential }) => {
       verifierCalls += 1;
       return credential.payload.proof === 'test'
-        ? { valid: true, receipt: 'receipt-1' }
+        ? {
+            valid: true,
+            receipt: 'receipt-1',
+            payer: '0xverified',
+            network: 'eip155:84532',
+          }
         : { valid: false };
     });
     runtime.activate(paidEntrypoint);
@@ -212,7 +217,7 @@ describe('mpp extension configuration', () => {
     expect(accepted).toEqual({
       authorized: true,
       receipt: 'receipt-1',
-      payer: '0xpayer',
+      payer: '0xverified',
       network: 'eip155:84532',
     });
 
@@ -222,6 +227,54 @@ describe('mpp extension configuration', () => {
       'invoke',
       requirement
     );
+    expect(replay.authorized).toBe(false);
+    expect(verifierCalls).toBe(1);
+  });
+
+  it('does not treat the credential source as verifier-attested identity', async () => {
+    const { runtime } = await buildRuntime(async () => ({ valid: true }));
+    runtime.activate(paidEntrypoint);
+    const requirement = required(runtime);
+    const request = authorizedRequest(await challenge(runtime, requirement));
+
+    const accepted = await runtime.authorize(
+      request,
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+
+    expect(accepted).toEqual({ authorized: true });
+  });
+
+  it('does not enable payment replay from an idempotency header alone', async () => {
+    let verifierCalls = 0;
+    const { runtime } = await buildRuntime(async () => {
+      verifierCalls += 1;
+      return { valid: true, receipt: 'single-use-receipt' };
+    });
+    runtime.activate(paidEntrypoint);
+    const requirement = required(runtime, paidEntrypoint, 'stream');
+    const request = authorizedRequest(
+      await challenge(runtime, requirement, paidEntrypoint, 'stream'),
+      { proof: 'test' },
+      'stream-replay-payment-0001'
+    );
+
+    const accepted = await runtime.authorize(
+      request,
+      paidEntrypoint,
+      'stream',
+      requirement
+    );
+    const replay = await runtime.authorize(
+      new Request(request),
+      paidEntrypoint,
+      'stream',
+      requirement
+    );
+
+    expect(accepted.authorized).toBe(true);
     expect(replay.authorized).toBe(false);
     expect(verifierCalls).toBe(1);
   });
@@ -238,7 +291,7 @@ describe('mpp extension configuration', () => {
     const first = authorizedRequest(
       paymentChallenge,
       { proof: 'test' },
-      'recover-payment-1'
+      'recover-payment-0001'
     );
     const retry = new Request(first);
 
@@ -246,13 +299,15 @@ describe('mpp extension configuration', () => {
       first,
       paidEntrypoint,
       'invoke',
-      requirement
+      requirement,
+      { allowIdempotencyRecovery: true }
     );
     const recovered = await runtime.authorize(
       retry,
       paidEntrypoint,
       'invoke',
-      requirement
+      requirement,
+      { allowIdempotencyRecovery: true }
     );
     const otherKey = await runtime.authorize(
       new Request(retry, {
@@ -263,7 +318,8 @@ describe('mpp extension configuration', () => {
       }),
       paidEntrypoint,
       'invoke',
-      requirement
+      requirement,
+      { allowIdempotencyRecovery: true }
     );
 
     expect(accepted).toMatchObject({
@@ -346,6 +402,44 @@ describe('mpp extension configuration', () => {
 
       expect(response.authorized).toBe(false);
     }
+  });
+
+  it('allows the same credential to retry after a transient verifier exception', async () => {
+    let verifierCalls = 0;
+    const { runtime } = await buildRuntime(async () => {
+      verifierCalls += 1;
+      if (verifierCalls === 1) throw new Error('verifier unavailable');
+      return { valid: true, receipt: 'recovered-receipt' };
+    });
+    runtime.activate(paidEntrypoint);
+    const requirement = required(runtime);
+    const request = authorizedRequest(
+      await challenge(runtime, requirement),
+      { proof: 'test' },
+      'recover-verifier-0001'
+    );
+
+    const unavailable = await runtime.authorize(
+      new Request(request),
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+    const recovered = await runtime.authorize(
+      new Request(request),
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+
+    expect(unavailable.authorized).toBe(false);
+    if (unavailable.authorized) throw new Error('Expected verifier failure');
+    expect(unavailable.response.status).toBe(503);
+    expect(recovered).toMatchObject({
+      authorized: true,
+      receipt: 'recovered-receipt',
+    });
+    expect(verifierCalls).toBe(2);
   });
 
   it('emits native Stripe challenges with base-unit amounts', async () => {

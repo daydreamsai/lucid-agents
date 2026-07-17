@@ -29,11 +29,8 @@ type TypedDataPayload = {
 };
 
 type RuntimeSigner = {
-  chain: { id: number };
   account: { address: `0x${string}` | null };
-  transport: { type: string };
   signTypedData(payload: TypedDataPayload): Promise<`0x${string}`>;
-  signMessage(message: unknown): Promise<`0x${string}`>;
 };
 
 export type RuntimePaymentLogger = {
@@ -55,7 +52,7 @@ export type RuntimePaymentOptions = {
    */
   chainId?: number;
   /**
-   * Maximum payment in base units (USDC has 6 decimals). Falls back to kit config.
+   * Maximum payment in base units (USDC has 6 decimals).
    */
   maxPaymentBaseUnits?: bigint;
   /**
@@ -155,22 +152,6 @@ function normalizeTypedData(input: TypedDataPayload) {
   };
 }
 
-const toStringMessage = (message: unknown): string => {
-  if (typeof message === 'string') return message;
-  if (typeof (message as any)?.raw === 'string') {
-    return String((message as any).raw);
-  }
-  if (message instanceof Uint8Array) {
-    return Array.from(message)
-      .map(byte => byte.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  if (typeof message === 'object') {
-    return JSON.stringify(message ?? '');
-  }
-  return String(message ?? '');
-};
-
 async function fetchWalletAddress(
   wallet: WalletConnector
 ): Promise<string | null> {
@@ -182,24 +163,20 @@ async function fetchWalletAddress(
   }
 }
 
-function resolveMaxPaymentBaseUnits(
-  override?: bigint,
-  configOverride?: { maxPaymentBaseUnits?: bigint; maxPaymentUsd?: number }
-): bigint | undefined {
-  if (typeof override === 'bigint') return override;
-  if (!configOverride) return undefined;
-
-  if (typeof configOverride.maxPaymentBaseUnits === 'bigint') {
-    return configOverride.maxPaymentBaseUnits;
-  }
-  if (
-    typeof configOverride.maxPaymentUsd === 'number' &&
-    Number.isFinite(configOverride.maxPaymentUsd)
-  ) {
-    const scaled = Math.floor(configOverride.maxPaymentUsd * 1_000_000);
-    return scaled > 0 ? BigInt(scaled) : undefined;
-  }
-  return undefined;
+function enforceMaxPayment(
+  client: x402Client,
+  maxPaymentBaseUnits?: bigint
+): void {
+  if (maxPaymentBaseUnits === undefined) return;
+  client.registerPolicy((_version, requirements) =>
+    requirements.filter(requirement => {
+      try {
+        return BigInt(requirement.amount) <= maxPaymentBaseUnits;
+      } catch {
+        return false;
+      }
+    })
+  );
 }
 
 const normalizeAddressOrNull = (
@@ -212,27 +189,13 @@ const normalizeAddressOrNull = (
 function createRuntimeSigner(opts: {
   wallet: WalletConnector;
   initialAddress?: string | null;
-  chainId: number;
 }): RuntimeSigner {
   let currentAddress = normalizeAddressOrNull(opts.initialAddress);
-  let currentChainId = opts.chainId;
 
   const signer: RuntimeSigner = {
-    chain: { id: currentChainId },
     account: { address: currentAddress },
-    transport: { type: 'agent-runtime' },
     async signTypedData(data: TypedDataPayload) {
       const typedData = normalizeTypedData(data);
-      const domainChain =
-        (typedData.domain as any)?.chainId ??
-        (typedData.domain as any)?.chain_id;
-      if (typeof domainChain !== 'undefined') {
-        const parsed = Number(domainChain);
-        if (Number.isFinite(parsed) && parsed > 0) {
-          currentChainId = parsed;
-          signer.chain.id = parsed;
-        }
-      }
 
       // Create a challenge-like payload for typed data signing
       // The payload should have typedData field for typed data signing
@@ -246,40 +209,6 @@ function createRuntimeSigner(opts: {
       };
 
       // Use signChallenge with a synthetic challenge for typed data
-      const challenge = {
-        id:
-          typeof crypto?.randomUUID === 'function'
-            ? crypto.randomUUID()
-            : globalThis?.crypto?.randomUUID
-              ? globalThis.crypto.randomUUID()
-              : `${Date.now()}-${Math.random()}`,
-        nonce: `${Date.now()}-${Math.random()}`,
-        issued_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 3600000).toISOString(),
-        payload: challengePayload,
-        scopes: ['wallet.sign'],
-      };
-
-      const signature = await opts.wallet.signChallenge(challenge);
-
-      // Update address from wallet metadata if available
-      const metadata = await opts.wallet.getWalletMetadata();
-      if (metadata?.address) {
-        const nextAddress = normalizeAddressOrNull(metadata.address);
-        currentAddress = nextAddress ?? currentAddress;
-        signer.account.address = currentAddress;
-      }
-
-      return signature as `0x${string}`;
-    },
-    async signMessage(message: unknown) {
-      const payload = toStringMessage(message);
-
-      // Create a challenge-like payload for message signing
-      // The payload can be a string message directly, or an object with message field
-      const challengePayload = payload;
-
-      // Use signChallenge with a synthetic challenge for message signing
       const challenge = {
         id:
           typeof crypto?.randomUUID === 'function'
@@ -367,6 +296,7 @@ export async function createRuntimePaymentContext(
         caip2Network as `${string}:${string}`,
         new ExactEvmScheme(signer)
       );
+      enforceMaxPayment(client, options.maxPaymentBaseUnits);
 
       const fetchWithPayment = attachPreconnect(
         wrapFetchWithPayment(baseFetch as typeof fetch, client) as FetchLike,
@@ -460,7 +390,6 @@ export async function createRuntimePaymentContext(
   const runtimeSigner = createRuntimeSigner({
     wallet: wallet.connector,
     initialAddress: walletAddress,
-    chainId,
   });
 
   // Adapt RuntimeSigner to ClientEvmSigner interface using a Proxy
@@ -523,7 +452,27 @@ export async function createRuntimePaymentContext(
       fetchWithPolicy = wrapBaseFetchWithPolicy(
         baseFetch,
         policyGroups,
-        paymentTracker
+        paymentTracker,
+        undefined,
+        {
+          paymentRequirementSelector: requirements =>
+            requirements.find(requirement => {
+              if (
+                requirement.network !== caip2Network ||
+                requirement.scheme !== 'exact'
+              ) {
+                return false;
+              }
+              if (options.maxPaymentBaseUnits === undefined) return true;
+              try {
+                return (
+                  BigInt(requirement.amount) <= options.maxPaymentBaseUnits
+                );
+              } catch {
+                return false;
+              }
+            }),
+        }
       );
     }
 
@@ -533,6 +482,7 @@ export async function createRuntimePaymentContext(
       caip2Network as `${string}:${string}`,
       new ExactEvmScheme(signer)
     );
+    enforceMaxPayment(client, options.maxPaymentBaseUnits);
 
     const fetchWithPayment = attachPreconnect(
       wrapFetchWithPayment(

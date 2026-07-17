@@ -9,6 +9,8 @@ import {
   buildTrustConfigFromIdentity,
   createIdentityRegistryClient,
   type IdentityRecord,
+  makeViemClientsFromEnv,
+  makeViemClientsFromWallet,
   type PublicClientLike,
   signAgentDomainProof,
   toCaip10,
@@ -666,6 +668,211 @@ describe('createIdentityRegistryClient', () => {
     const approved = await client.getApproved(1n);
     expect(approved).toBe('0x0000000000000000000000000000000000005678');
   });
+
+  it('reads metadata and writes registry metadata and URIs', async () => {
+    const writes: any[] = [];
+    const publicClient = {
+      async readContract({ functionName, args }: any) {
+        if (functionName === 'getMetadata') {
+          if (args[1] === 'missing') return '0x';
+          if (args[1] === 'failed') throw new Error('read failed');
+          return '0x0102ff';
+        }
+        if (functionName === 'getVersion') return '1.0.0';
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+      async waitForTransactionReceipt() {
+        return { logs: [] };
+      },
+    } as any;
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234' as const,
+      },
+      async writeContract(args: any) {
+        writes.push(args);
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      namespace: 'eip155',
+      publicClient,
+      walletClient,
+    });
+
+    expect(await client.getMetadata(7n, 'bytes')).toEqual(
+      new Uint8Array([1, 2, 255])
+    );
+    expect(await client.getMetadata(7n, 'missing')).toBeNull();
+    expect(await client.getMetadata(7n, 'failed')).toBeNull();
+    expect(await client.getVersion()).toBe('1.0.0');
+    expect(
+      await client.setMetadata(7n, 'profile', new Uint8Array([0, 255]))
+    ).toBe('0xtxhash');
+    expect(await client.setAgentURI(7n, 'https://agent.example/new.json')).toBe(
+      '0xtxhash'
+    );
+    expect(writes.map(write => [write.functionName, write.args])).toEqual([
+      ['setMetadata', [7n, 'profile', '0x00ff']],
+      ['setAgentURI', [7n, 'https://agent.example/new.json']],
+    ]);
+    expect(
+      client.toRegistrationEntry(
+        {
+          agentId: 7n,
+          owner: '0x0000000000000000000000000000000000001234',
+          agentURI: 'https://agent.example/registration.json',
+        },
+        '0xsigned'
+      )
+    ).toEqual({
+      agentId: '7',
+      agentAddress: 'eip155:84532:0x0000000000000000000000000000000000001234',
+      agentRegistry: 'eip155:84532:0x000000000000000000000000000000000000dead',
+      agentURI: 'https://agent.example/registration.json',
+      signature: '0xsigned',
+    });
+    await expect(
+      client.setMetadata(7n, 'agentWallet', new Uint8Array())
+    ).rejects.toThrow('reserved metadata key');
+  });
+
+  it('fails write operations clearly when wallet capabilities are unavailable', async () => {
+    const publicClient = {
+      async readContract() {
+        return true;
+      },
+    } as PublicClientLike;
+    const readOnly = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient,
+    });
+
+    await expect(readOnly.register()).rejects.toThrow(
+      'Wallet client required for register'
+    );
+    await expect(
+      readOnly.setMetadata(1n, 'key', new Uint8Array())
+    ).rejects.toThrow('Wallet client required for setMetadata');
+    await expect(
+      readOnly.setAgentURI(1n, 'https://example.com')
+    ).rejects.toThrow('Wallet client required for setAgentURI');
+    await expect(
+      readOnly.setAgentWallet({
+        agentId: 1n,
+        newWallet: '0x0000000000000000000000000000000000001234',
+        deadline: 1n,
+        signature: '0x12',
+      })
+    ).rejects.toThrow('Wallet client required for setAgentWallet');
+    await expect(readOnly.unsetAgentWallet(1n)).rejects.toThrow(
+      'Wallet client required for unsetAgentWallet'
+    );
+    await expect(
+      readOnly.transferFrom(
+        '0x0000000000000000000000000000000000001234',
+        '0x0000000000000000000000000000000000005678',
+        1n
+      )
+    ).rejects.toThrow('Wallet client required for transferFrom');
+    await expect(
+      readOnly.approve('0x0000000000000000000000000000000000005678', 1n)
+    ).rejects.toThrow('Wallet client required for approve');
+    await expect(
+      readOnly.setApprovalForAll(
+        '0x0000000000000000000000000000000000005678',
+        true
+      )
+    ).rejects.toThrow('Wallet client required for setApprovalForAll');
+  });
+
+  it('validates registration and ERC-721 write inputs', async () => {
+    const publicClient = {
+      async readContract() {
+        return true;
+      },
+      async waitForTransactionReceipt() {
+        throw new Error('receipt unavailable');
+      },
+    } as any;
+    const accountless = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient,
+      walletClient: {
+        async writeContract() {
+          return '0xtxhash';
+        },
+      } as WalletClientLike,
+    });
+    await expect(accountless.register()).rejects.toThrow(
+      'wallet account address is required'
+    );
+    await expect(
+      accountless.transferFrom(
+        '0x0000000000000000000000000000000000001234',
+        '0x0000000000000000000000000000000000005678',
+        1n
+      )
+    ).rejects.toThrow('Wallet account required for transferFrom');
+    await expect(
+      accountless.approve('0x0000000000000000000000000000000000005678', 1n)
+    ).rejects.toThrow('Wallet account required for approve');
+    await expect(
+      accountless.setApprovalForAll(
+        '0x0000000000000000000000000000000000005678',
+        true
+      )
+    ).rejects.toThrow('Wallet account required for setApprovalForAll');
+
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234' as const,
+      },
+      async writeContract() {
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient,
+      walletClient,
+    });
+    await expect(
+      client.register({ metadata: [{ key: 'x', value: new Uint8Array() }] })
+    ).rejects.toThrow('agentURI is required');
+    expect(
+      await client.register({ agentURI: 'https://agent.example/registration' })
+    ).toEqual({
+      transactionHash: '0xtxhash',
+      agentAddress: '0x0000000000000000000000000000000000001234',
+      agentId: undefined,
+    });
+    await expect(
+      client.transferFrom(
+        ZERO_ADDRESS,
+        '0x0000000000000000000000000000000000005678',
+        1n
+      )
+    ).rejects.toThrow('from cannot be zero');
+    await expect(
+      client.transferFrom(
+        '0x0000000000000000000000000000000000001234',
+        ZERO_ADDRESS,
+        1n
+      )
+    ).rejects.toThrow('to cannot be zero');
+    await expect(client.approve(ZERO_ADDRESS, 1n)).rejects.toThrow(
+      'approved address cannot be zero'
+    );
+    await expect(client.setApprovalForAll(ZERO_ADDRESS, true)).rejects.toThrow(
+      'operator cannot be zero address'
+    );
+  });
 });
 
 describe('buildTrustConfigFromIdentity', () => {
@@ -906,6 +1113,170 @@ describe('bootstrapIdentity', () => {
     });
 
     expect(result.trust).toBeUndefined();
+  });
+});
+
+describe('viem client factories', () => {
+  it('uses a connector-provided wallet client and requires an RPC URL', async () => {
+    const providedWalletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000001234',
+      },
+    };
+    const factory = await makeViemClientsFromWallet({
+      env: {},
+      walletHandle: {
+        kind: 'local',
+        connector: {
+          async getWalletClient() {
+            return providedWalletClient;
+          },
+        },
+      } as any,
+    });
+    expect(factory).toBeDefined();
+    if (!factory) throw new Error('expected viem wallet factory');
+
+    expect(await factory({ chainId: 84532, rpcUrl: '', env: {} })).toBeNull();
+    const clients = await factory({
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      env: {},
+    });
+    expect(clients?.walletClient).toBe(providedWalletClient as any);
+    expect(clients?.signer).toBe(providedWalletClient as any);
+    expect((clients?.publicClient as any).chain.id).toBe(84532);
+  });
+
+  it('adapts local signer methods into a viem account', async () => {
+    const calls: Array<[string, unknown]> = [];
+    const factory = await makeViemClientsFromWallet({
+      rpcUrl: 'http://localhost:8545',
+      env: {},
+      walletHandle: {
+        kind: 'local',
+        connector: {
+          signer: {
+            async signMessage(message: unknown) {
+              calls.push(['message', message]);
+              return '0xmessage';
+            },
+            async signTypedData(payload: unknown) {
+              calls.push(['typed', payload]);
+              return '0xtyped';
+            },
+            async signTransaction(transaction: unknown) {
+              calls.push(['transaction', transaction]);
+              return '0xtransaction';
+            },
+          },
+          async getWalletClient() {
+            throw new Error('connector client unavailable');
+          },
+          async getWalletMetadata() {
+            return {
+              address: '0x0000000000000000000000000000000000001234',
+            };
+          },
+          async signChallenge() {
+            throw new Error('challenge fallback should not be used');
+          },
+        },
+      } as any,
+    });
+    if (!factory) throw new Error('expected viem wallet factory');
+
+    const clients = await factory({ chainId: 999999, rpcUrl: '', env: {} });
+    const account = (clients?.walletClient as any)?.account;
+    expect(await account.signMessage({ message: 'hello' })).toBe('0xmessage');
+    expect(
+      await account.signTypedData({
+        domain: { name: 'Agent' },
+        types: { Agent: [{ name: 'id', type: 'uint256' }] },
+        message: { id: 1n },
+        primaryType: 'Agent',
+      })
+    ).toBe('0xtyped');
+    expect(await account.signTransaction({ to: REGISTRY_ADDRESS })).toBe(
+      '0xtransaction'
+    );
+    expect(calls.map(([kind]) => kind)).toEqual([
+      'message',
+      'typed',
+      'transaction',
+    ]);
+  });
+
+  it('falls back to connector challenges for local signing', async () => {
+    const challenges: any[] = [];
+    const factory = await makeViemClientsFromWallet({
+      env: { RPC_URL: 'http://localhost:8545' },
+      walletHandle: {
+        kind: 'local',
+        connector: {
+          signer: {},
+          async getWalletMetadata() {
+            return {
+              address: '0x0000000000000000000000000000000000005678',
+            };
+          },
+          async signChallenge(challenge: unknown) {
+            challenges.push(challenge);
+            return '0xchallenge';
+          },
+        },
+      } as any,
+    });
+    if (!factory) throw new Error('expected viem wallet factory');
+
+    const clients = await factory({
+      chainId: 84532,
+      rpcUrl: undefined as any,
+      env: {},
+    });
+    const account = (clients?.walletClient as any)?.account;
+    expect(
+      await account.signMessage({ message: new Uint8Array([1, 2, 255]) })
+    ).toBe('0xchallenge');
+    expect(await account.signMessage({ message: 'plain text' })).toBe(
+      '0xchallenge'
+    );
+    expect(
+      await account.signTypedData({
+        domain: { name: 'Agent' },
+        types: {},
+        message: { id: 1 },
+        primaryType: 'Agent',
+      })
+    ).toBe('0xchallenge');
+    await expect(account.signTransaction({})).rejects.toThrow(
+      'require transaction signing support'
+    );
+    expect(challenges[0].payload).toBe('0x0102ff');
+    expect(challenges[1].payload).toBe('plain text');
+    expect(challenges[2].payload.typedData.primaryType).toBe('Agent');
+  });
+
+  it('creates public-only viem clients from environment configuration', async () => {
+    const factory = await makeViemClientsFromEnv({ env: {} });
+    expect(factory).toBeDefined();
+    if (!factory) throw new Error('expected viem environment factory');
+
+    expect(await factory({ chainId: 84532, rpcUrl: '', env: {} })).toBeNull();
+    const knownChain = await factory({
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      env: {},
+    });
+    const customChain = await factory({
+      chainId: 999999,
+      rpcUrl: 'http://localhost:8545',
+      env: {},
+    });
+    expect((knownChain?.publicClient as any).chain.id).toBe(84532);
+    expect((customChain?.publicClient as any).chain.id).toBe(999999);
+    expect(knownChain?.walletClient).toBeUndefined();
+    expect(knownChain?.signer).toBeUndefined();
   });
 });
 

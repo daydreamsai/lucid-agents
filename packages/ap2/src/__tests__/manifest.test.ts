@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
 
 import { createAgentCardWithAP2 } from '../manifest';
+import { ap2 } from '../extension';
 import { AP2_EXTENSION_URI } from '../types';
 
 describe('createAgentCardWithAP2', () => {
@@ -18,11 +19,28 @@ describe('createAgentCardWithAP2', () => {
     entrypoints: {},
   };
 
+  it('builds optional AP2 slices and applies configured manifests', async () => {
+    const disabled = ap2();
+    expect((await disabled.build({} as never)).ap2).toBeUndefined();
+    expect(disabled.onManifestBuild!(baseCard, {} as never)).toBe(baseCard);
+
+    const enabled = ap2({ roles: ['merchant'], required: true });
+    const slice = await enabled.build({} as never);
+    const manifest = enabled.onManifestBuild!(baseCard, {} as never);
+
+    expect(enabled.name).toBe('ap2');
+    expect(slice.ap2?.config.roles).toEqual(['merchant']);
+    expect(manifest.capabilities?.extensions).toHaveLength(1);
+  });
+
   it('creates new card with AP2 extension', () => {
-    const enhanced = createAgentCardWithAP2(baseCard, {
-      roles: ['merchant'],
-      required: true,
-    });
+    const enhanced: AgentCardWithEntrypoints = createAgentCardWithAP2(
+      baseCard,
+      {
+        roles: ['merchant'],
+        required: true,
+      }
+    );
 
     expect(enhanced).not.toBe(baseCard);
     expect(enhanced.capabilities?.extensions).toBeDefined();
@@ -139,4 +157,3 @@ describe('createAgentCardWithAP2', () => {
     expect(otherExtension).toBeDefined();
   });
 });
-

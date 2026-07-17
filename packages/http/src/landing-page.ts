@@ -184,6 +184,11 @@ export const renderLandingPage = ({
     /\/\.well-known\/agent-card\.json$/,
     ''
   );
+  const normalizedOrigin = origin.replace(/\/+$/, '');
+  const publicBaseUrl =
+    basePath && !normalizedOrigin.endsWith(basePath)
+      ? `${normalizedOrigin}${basePath}`
+      : normalizedOrigin;
   const entrypointsPath = `${basePath}/entrypoints`;
 
   return html`<!DOCTYPE html>
@@ -730,8 +735,8 @@ export const renderLandingPage = ({
                   </li>
                 </ul>
               </div>
-              <a class="hero-domain" href="${origin}" target="_blank"
-                >${origin.replace(/^https?:\/\//, '')}</a
+              <a class="hero-domain" href="${publicBaseUrl}" target="_blank"
+                >${publicBaseUrl.replace(/^https?:\/\//, '')}</a
               >
             </div>
             <div class="hero-actions">
@@ -805,7 +810,7 @@ export const renderLandingPage = ({
                       : undefined;
                     const invokeCurl = [
                       'curl -s -X POST \\',
-                      `  '${origin}${invokePath}' \\`,
+                      `  '${publicBaseUrl}${invokePath}' \\`,
                       "  -H 'Content-Type: application/json' \\",
                       "  -d '",
                       payloadIndented,
@@ -814,7 +819,7 @@ export const renderLandingPage = ({
                     const streamCurl = streaming
                       ? [
                           'curl -sN -X POST \\',
-                          `  '${origin}${streamPath}' \\`,
+                          `  '${publicBaseUrl}${streamPath}' \\`,
                           "  -H 'Content-Type: application/json' \\",
                           "  -H 'X-Payment: {{paymentHeader}}' \\",
                           "  -H 'Accept: text/event-stream' \\",
@@ -846,14 +851,14 @@ export const renderLandingPage = ({
                         <div class="meta-item">
                           <span class="meta-label">Invoke Endpoint</span>
                           <span class="meta-value"
-                            ><code>POST ${invokePath}</code></span
+                            ><code>POST ${invokeHref}</code></span
                           >
                         </div>
                         ${streaming
                           ? html`<div class="meta-item">
                               <span class="meta-label">Stream Endpoint</span>
                               <span class="meta-value"
-                                ><code>POST ${streamPath}</code></span
+                                ><code>POST ${streamHref}</code></span
                               >
                             </div>`
                           : ''}

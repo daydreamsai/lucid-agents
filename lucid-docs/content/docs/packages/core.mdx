@@ -1,15 +1,17 @@
 ---
 title: "@lucid-agents/core"
-description: Protocol-agnostic agent runtime with extension system.
+description: Protocol-agnostic agent runtime with a dependency-ordered extension system.
 icon: Cpu
 ---
 
-The core package provides the agent runtime and extension system. It's protocol-agnostic—HTTP, payments, and other capabilities are added via extensions.
+`@lucid-agents/core` owns agent metadata, the canonical entrypoint registry,
+manifest composition, and extension lifecycle. Protocol capabilities such as
+HTTP, payments, identity, and A2A are installed as separate extensions.
 
 ## Installation
 
 ```bash
-bun add @lucid-agents/core
+bun add @lucid-agents/core @lucid-agents/http
 ```
 
 ## Basic usage
@@ -17,148 +19,96 @@ bun add @lucid-agents/core
 ```typescript
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
+import { z } from 'zod';
 
-const agent = await createAgent({
+const runtime = await createAgent({
   name: 'my-agent',
   version: '1.0.0',
   description: 'An AI-powered assistant',
 })
   .use(http())
+  .addEntrypoint({
+    key: 'echo',
+    input: z.object({ text: z.string() }),
+    handler: async ctx => ({ output: { text: ctx.input.text } }),
+  })
   .build();
 ```
 
-## API reference
+## Runtime contract
 
-### createAgent(meta)
-
-Creates an `AgentBuilder` for constructing an agent with extensions.
+Every built runtime exposes the protocol-neutral core services. Extensions add
+their own typed slices directly to the same object.
 
 ```typescript
-function createAgent(meta: AgentMeta): AgentBuilder
+runtime.agent;               // metadata and canonical registry controller
+runtime.entrypoints.add(...);
+runtime.entrypoints.list();  // serializable entrypoint summaries
+runtime.entrypoints.snapshot();
+runtime.manifest.build('https://agent.example.com');
+await runtime.close();
+
+runtime.http.handlers;       // contributed by http()
+runtime.http.routes;         // canonical adapter-neutral route plan
+runtime.payments;            // contributed by payments()
 ```
 
-**Parameters:**
+`runtime.agent.config.meta` contains the metadata passed to `createAgent`.
+Use `runtime.entrypoints` for registration and discovery; protocol adapters do
+not maintain separate registries.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `meta` | `AgentMeta` | Agent metadata (name, version, description, etc.) |
+## AgentBuilder
 
-**Returns:** `AgentBuilder` - A fluent builder for configuring the agent.
-
-### AgentMeta
+`createAgent(meta)` returns an `AgentBuilder` with three primary operations:
 
 ```typescript
-type AgentMeta = {
-  name: string;         // Required: Agent name
-  version: string;      // Required: Semantic version (e.g., "1.0.0")
-  description?: string; // What the agent does
-  icon?: string;        // Icon URL
-  image?: string;       // Open Graph image URL (1200x630px recommended)
-  url?: string;         // Canonical URL for the agent
-  type?: 'website' | 'article';
-};
+const builder = createAgent(meta)
+  .use(extension)
+  .addEntrypoint(definition);
+
+const runtime = await builder.build();
 ```
 
-### AgentBuilder
+- `use(extension)` adds a typed runtime capability.
+- `addEntrypoint(definition)` queues an entrypoint before build.
+- `build()` orders extensions, initializes them, registers queued entrypoints,
+  and returns the completed runtime.
 
-Fluent builder for composing extensions.
+## Extension lifecycle
+
+Extensions declare hard dependencies with `requires` and optional ordering with
+`before` or `after`. The builder topologically orders them and rejects missing
+dependencies, cycles, duplicate names, and runtime-property collisions.
 
 ```typescript
-class AgentBuilder {
-  use<T>(extension: Extension<T>): AgentBuilder;
-  build(): Promise<AgentRuntime>;
-}
+import type { Extension } from '@lucid-agents/types/core';
+
+const metrics = (): Extension<{ metrics: { count: () => number } }> => ({
+  name: 'metrics',
+  after: ['http'],
+  build: () => ({ metrics: { count: () => 0 } }),
+  initialize: async runtime => {
+    // All runtime slices are available here.
+  },
+  onEntrypointAdded: (entrypoint, runtime) => {
+    // React to both queued and dynamically added entrypoints.
+  },
+  onManifestBuild: (manifest, runtime) => manifest,
+  dispose: async runtime => {
+    // Released once, in reverse dependency order, by runtime.close().
+  },
+});
 ```
 
-**Methods:**
+If build or initialization fails, already-built extensions are disposed in
+reverse order before the error is returned.
 
-#### .use(extension)
+## Entrypoints
 
-Adds an extension to the agent.
-
-```typescript
-const agent = await createAgent(meta)
-  .use(http())
-  .use(payments({ config }))
-  .use(identity({ config }))
-  .build();
-```
-
-Extensions are applied in order. Each extension can access context from previous extensions.
-
-#### .build()
-
-Builds the agent runtime with all configured extensions.
+Entrypoints can be registered before or after build:
 
 ```typescript
-const agent = await createAgent(meta)
-  .use(http())
-  .build();
-
-// agent.entrypoints - Entrypoint management
-// agent.handlers - HTTP handlers (if http extension used)
-// agent.config - Agent configuration
-```
-
-### AgentRuntime
-
-The built agent runtime provides access to all configured capabilities:
-
-```typescript
-type AgentRuntime = {
-  config: AgentConfig;
-  entrypoints: EntrypointsRuntime;
-  handlers?: AgentHttpHandlers;    // If http() extension used
-  payments?: PaymentsRuntime;      // If payments() extension used
-  identity?: IdentityRuntime;      // If identity() extension used
-  a2a?: A2ARuntime;               // If a2a() extension used
-  wallets?: WalletsRuntime;       // If wallets() extension used
-  ap2?: AP2Runtime;               // If ap2() extension used
-};
-```
-
-### EntrypointsRuntime
-
-Manages agent entrypoints:
-
-```typescript
-type EntrypointsRuntime = {
-  add: (def: EntrypointDef) => void;
-  list: () => Array<{ key: string; description?: string; streaming: boolean }>;
-  snapshot: () => EntrypointDef[];
-};
-```
-
-## Extension pattern
-
-Extensions follow a consistent interface:
-
-```typescript
-type Extension<T> = {
-  name: string;
-  build(ctx: BuildContext): T;
-  onEntrypointAdded?(entrypoint: EntrypointDef, runtime: AgentRuntime): void;
-  onManifestBuild?(
-    card: AgentCardWithEntrypoints,
-    runtime: AgentRuntime
-  ): AgentCardWithEntrypoints;
-};
-```
-
-**Lifecycle hooks:**
-
-| Hook | When called | Purpose |
-|------|-------------|---------|
-| `build` | During `.build()` | Initialize extension, return context |
-| `onEntrypointAdded` | After `entrypoints.add()` | React to new entrypoints |
-| `onManifestBuild` | When building Agent Card | Enhance manifest with extension data |
-
-## Streaming entrypoints
-
-Streaming is handled by the HTTP runtime and your entrypoint implementation:
-
-```typescript
-addEntrypoint({
+runtime.entrypoints.add({
   key: 'status-stream',
   async stream(ctx, emit) {
     await emit({
@@ -166,38 +116,35 @@ addEntrypoint({
       delta: `Starting ${ctx.input.topic}\n`,
       mime: 'text/plain',
     });
-
-    await emit({
-      kind: 'delta',
-      delta: 'Done.\n',
-      mime: 'text/plain',
-    });
-
     return { output: { completed: true } };
   },
 });
 ```
 
-## Exports
+Duplicate keys are rejected by the single core registry. Adding an entrypoint
+also invalidates the manifest cache and notifies installed extensions.
+
+## Public exports
 
 ```typescript
-// Main API
-export { createAgent, AgentBuilder } from '@lucid-agents/core';
+export {
+  AgentBuilder,
+  buildAgentManifest,
+  createAgent,
+  validateAgentMetadata,
+} from '@lucid-agents/core';
 
-// Lower-level API
-export { AgentCore, createAgentCore } from '@lucid-agents/core';
-
-// Utilities
-export { validateAgentMetadata } from '@lucid-agents/core';
-
-// Re-exported types
 export type {
+  AgentConfig,
   EntrypointDef,
   EntrypointHandler,
   EntrypointStreamHandler,
-  AgentConfig,
   StreamEnvelope,
   StreamPushEnvelope,
   StreamResult,
 } from '@lucid-agents/core';
 ```
+
+Shared runtime, manifest, and extension contracts live at
+`@lucid-agents/types/core`; `AgentCore` and `createAgentCore` are not public
+core-package exports.

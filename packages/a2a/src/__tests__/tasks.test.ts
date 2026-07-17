@@ -328,4 +328,80 @@ describe('A2A task state machine', () => {
       output: 'recovered-result',
     });
   });
+
+  it('publishes mapped execution failures as durable terminal tasks', async () => {
+    const runtime = createTaskRuntime({
+      store: createInMemoryTaskStore({ maxTasks: 10 }),
+    });
+    const events: TaskUpdateEvent[] = [];
+    await runtime.reserve({
+      taskId: 'mapped-failure',
+      accessToken: ACCESS_TOKEN,
+    });
+    await runtime.subscribe('mapped-failure', ACCESS_TOKEN, event => {
+      events.push(event);
+    });
+    await runtime.execute('mapped-failure', {
+      execute: async () => {
+        throw new Error('provider offline');
+      },
+      mapError: error => ({
+        code: 'provider_error',
+        message: (error as Error).message,
+        details: { retryable: true },
+      }),
+    });
+    await tick();
+
+    const failed = await runtime.get('mapped-failure', ACCESS_TOKEN);
+    expect(failed?.status).toBe('failed');
+    expect(failed?.error).toEqual({
+      code: 'provider_error',
+      message: 'provider offline',
+      details: { retryable: true },
+    });
+    expect(events).toEqual([
+      {
+        type: 'error',
+        data: {
+          taskId: 'mapped-failure',
+          status: 'failed',
+          error: failed?.error,
+        },
+      },
+    ]);
+  });
+
+  it('fails and aborts work that exceeds its execution lease', async () => {
+    const runtime = createTaskRuntime({
+      store: createInMemoryTaskStore({ maxTasks: 10 }),
+      maxRunMs: 5,
+    });
+    let abortReason: unknown;
+    await runtime.start({
+      taskId: 'timed-out',
+      accessToken: ACCESS_TOKEN,
+      execute: signal =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              abortReason = signal.reason;
+              reject(signal.reason);
+            },
+            { once: true }
+          );
+        }),
+    });
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    const failed = await runtime.get('timed-out', ACCESS_TOKEN);
+    expect(failed?.status).toBe('failed');
+    expect(failed?.error).toEqual({
+      code: 'task_timeout',
+      message: 'Task exceeded its 5ms execution limit',
+    });
+    expect(abortReason).toEqual(failed?.error);
+    await runtime.close();
+  });
 });

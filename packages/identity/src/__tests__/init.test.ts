@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 
 import {
   type AgentIdentity,
@@ -64,14 +64,31 @@ mock.module('viem', () => {
       const viem = getRealViem();
       return viem.toAccount?.(...args);
     },
+    hashMessage: (...args: any[]) => {
+      const viem = getRealViem();
+      return viem.hashMessage(...args);
+    },
+    recoverMessageAddress: (...args: any[]) => {
+      const viem = getRealViem();
+      return viem.recoverMessageAddress(...args);
+    },
   };
 });
 
-mock.module('viem/accounts', () => ({
-  privateKeyToAccount: () => ({
-    address: '0x0000000000000000000000000000000000000000',
-  }),
-}));
+mock.module('viem/accounts', () => {
+  let realAccounts: any = null;
+  return {
+    privateKeyToAccount: (...args: any[]) => {
+      if (currentTestPublicClient) {
+        return {
+          address: '0x0000000000000000000000000000000000000000',
+        };
+      }
+      realAccounts ??= require('../../../../node_modules/viem/_cjs/accounts');
+      return realAccounts.privateKeyToAccount(...args);
+    },
+  };
+});
 
 // Note: We don't mock viem/chains because it causes module cache pollution
 // that affects other test suites. The identity code handles missing chains gracefully.
@@ -85,6 +102,10 @@ const REGISTERED_EVENT_SIG =
 // Clean up test state after each test to prevent mock from affecting other tests
 afterEach(() => {
   currentTestPublicClient = null;
+});
+
+afterAll(() => {
+  mock.restore();
 });
 
 function createMockRuntime(

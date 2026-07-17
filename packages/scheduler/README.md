@@ -83,13 +83,13 @@ workers safe from intentionally executing the same due record at once, but a
 worker can fail after the remote call and before it saves completion. Delivery
 is therefore at least once.
 
-Every job gets an idempotency key unless the caller supplies one:
+Every job gets an idempotency seed unless the caller supplies one:
 
 - retries of the same occurrence reuse the same key;
-- a successful interval occurrence rotates an automatically managed key for the
-  next occurrence;
-- caller-supplied keys remain stable and must contain 20–256 characters after
-  trimming.
+- every interval occurrence derives a distinct key from that seed, including
+  caller-supplied seeds;
+- one-time jobs use a caller-supplied key unchanged;
+- seeds must contain 20–256 characters after trimming.
 
 The key is sent as `Idempotency-Key` by the A2A client. Lucid HTTP runtimes
 deduplicate it by default; other remote agents must provide an equivalent

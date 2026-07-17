@@ -134,6 +134,14 @@ export type MppAuthorizationResult =
       handled?: Response;
     };
 
+export type MppAuthorizationOptions = {
+  /**
+   * Retain verified challenge state only while an HTTP invocation is protected
+   * by a configured idempotency store using the same validated key.
+   */
+  allowIdempotencyRecovery?: boolean;
+};
+
 /** Complete MPP runtime capability owned by the MPP package. */
 export type MppRuntime = {
   readonly config: MppConfig;
@@ -152,7 +160,8 @@ export type MppRuntime = {
     entrypoint: EntrypointDef,
     kind: 'invoke' | 'stream',
     /** Reuse a requirement already resolved by the shared authorization gate. */
-    requirement?: MppPaymentRequirement
+    requirement?: MppPaymentRequirement,
+    options?: MppAuthorizationOptions
   ) => Promise<MppAuthorizationResult>;
   getMppFetch: (clientConfig: MppClientConfig) => Promise<FetchFunction | null>;
 };
