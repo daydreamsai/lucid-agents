@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import { createMemoryStore } from '../../store/memory';
 import type { Hire, Job } from '@lucid-agents/types/scheduler';
 
@@ -233,7 +233,7 @@ describe('createMemoryStore', () => {
       const due = await store.getDueJobs(now, 10);
 
       expect(due).toHaveLength(2);
-      const dueIds = due.map((j) => j.id);
+      const dueIds = due.map(j => j.id);
       expect(dueIds).toContain('unleased-job');
       expect(dueIds).toContain('leased-expired-job');
       expect(dueIds).not.toContain('leased-active-job');
@@ -274,7 +274,7 @@ describe('createMemoryStore', () => {
 
       const due = await store.getDueJobs(now, 10);
 
-      expect(due.map((j) => j.id)).toEqual(['job-a', 'job-b', 'job-c']);
+      expect(due.map(j => j.id)).toEqual(['job-a', 'job-b', 'job-c']);
     });
 
     it('returns clones of jobs', async () => {
@@ -300,7 +300,12 @@ describe('createMemoryStore', () => {
       const job = createMockJob({ id: 'test-job', status: 'pending' });
 
       await store.putJob(job);
-      const claimed = await store.claimJob('test-job', 'worker-1', 30000, Date.now());
+      const claimed = await store.claimJob(
+        'test-job',
+        'worker-1',
+        30000,
+        Date.now()
+      );
 
       expect(claimed).toBe(true);
 
@@ -313,7 +318,12 @@ describe('createMemoryStore', () => {
     it('returns false for non-existent job', async () => {
       const store = createMemoryStore();
 
-      const claimed = await store.claimJob('nonexistent', 'worker-1', 30000, Date.now());
+      const claimed = await store.claimJob(
+        'nonexistent',
+        'worker-1',
+        30000,
+        Date.now()
+      );
 
       expect(claimed).toBe(false);
     });
@@ -327,7 +337,12 @@ describe('createMemoryStore', () => {
       });
 
       await store.putJob(job);
-      const claimed = await store.claimJob('test-job', 'worker-2', 30000, Date.now());
+      const claimed = await store.claimJob(
+        'test-job',
+        'worker-2',
+        30000,
+        Date.now()
+      );
 
       expect(claimed).toBe(false);
     });
@@ -360,7 +375,12 @@ describe('createMemoryStore', () => {
       });
 
       await store.putJob(job);
-      const claimed = await store.claimJob('test-job', 'worker-2', 30000, Date.now());
+      const claimed = await store.claimJob(
+        'test-job',
+        'worker-2',
+        30000,
+        Date.now()
+      );
 
       expect(claimed).toBe(true);
 

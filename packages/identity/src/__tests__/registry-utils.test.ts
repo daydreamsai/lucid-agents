@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { stringToBytes32, waitForConfirmation } from '../registries/utils';
+import { waitForConfirmation } from '../registries/utils';
 
 const txHash =
   '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const;
@@ -42,19 +42,5 @@ describe('registry utilities', () => {
     expect(
       await waitForConfirmation({}, txHash, { timeout: 0 })
     ).toBeUndefined();
-  });
-
-  it('encodes strings as bytes32 and accepts valid hex values', () => {
-    const encoded = stringToBytes32('quality');
-    expect(encoded).toHaveLength(66);
-    expect(encoded.startsWith('0x7175616c697479')).toBe(true);
-    expect(stringToBytes32(txHash)).toBe(txHash);
-  });
-
-  it('rejects malformed bytes32 values and oversized tags', () => {
-    expect(() => stringToBytes32('0x1234')).toThrow(
-      'Invalid bytes32 hex string'
-    );
-    expect(() => stringToBytes32('x'.repeat(33))).toThrow('is too long');
   });
 });

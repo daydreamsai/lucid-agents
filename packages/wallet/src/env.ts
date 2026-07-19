@@ -43,9 +43,7 @@ export function walletsFromEnv(
   return hasWallets(merged) ? merged : undefined;
 }
 
-export function resolveWalletsFromEnv(
-  env?: EnvRecord
-): WalletsConfig | undefined {
+function resolveWalletsFromEnv(env?: EnvRecord): WalletsConfig | undefined {
   if (!env) return undefined;
   const agent = env.AGENT_WALLET_TYPE
     ? resolveAgentWalletFromEnv(env)
@@ -64,7 +62,7 @@ export function resolveWalletsFromEnv(
   return wallets;
 }
 
-export function resolveAgentWalletFromEnv(
+function resolveAgentWalletFromEnv(
   env: EnvRecord
 ): AgentWalletConfig | undefined {
   const type = env.AGENT_WALLET_TYPE?.toLowerCase();
@@ -197,7 +195,7 @@ function parseLucidWalletFromEnv(
   };
 }
 
-export function resolveDeveloperWalletFromEnv(
+function resolveDeveloperWalletFromEnv(
   env: EnvRecord
 ): DeveloperWalletConfig | undefined {
   const privateKey = env.DEVELOPER_WALLET_PRIVATE_KEY;

@@ -15,9 +15,6 @@ function makeClients() {
   type ReadContractResult = Awaited<
     ReturnType<PublicClientLike['readContract']>
   >;
-  type WaitForTransactionReceiptArgs = Parameters<
-    NonNullable<PublicClientWithReceipt['waitForTransactionReceipt']>
-  >[0];
   type WaitForTransactionReceiptResult = Awaited<
     ReturnType<
       NonNullable<PublicClientWithReceipt['waitForTransactionReceipt']>
@@ -72,9 +69,7 @@ function makeClients() {
       }
       return true;
     },
-    async waitForTransactionReceipt(
-      _args: WaitForTransactionReceiptArgs
-    ): Promise<WaitForTransactionReceiptResult> {
+    async waitForTransactionReceipt(): Promise<WaitForTransactionReceiptResult> {
       return { logs: [] };
     },
   };

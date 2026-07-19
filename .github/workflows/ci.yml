@@ -28,6 +28,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build:packages
       - run: bun run type-check
+      - run: bun run deadcode
       - run: bun run lint
       - run: bun run format:check
 

@@ -2,6 +2,8 @@
   "include": ["**/*.ts", "**/*.tsx"],
   "compilerOptions": {
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "module": "ESNext",

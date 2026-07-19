@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
+import type { EntrypointDef } from '@lucid-agents/types/core';
 import type {
   MppPaymentRequirement,
   MppRuntime,

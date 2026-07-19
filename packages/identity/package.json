@@ -47,7 +47,6 @@
   "devDependencies": {
     "tsup": "^8.5.0",
     "typescript": "^5.9.2",
-    "@lucid-agents/eslint-config": "workspace:*",
-    "@lucid-agents/prettier-config": "workspace:*"
+    "@lucid-agents/eslint-config": "workspace:*"
   }
 }

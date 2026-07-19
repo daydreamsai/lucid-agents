@@ -1,4 +1,3 @@
-import type { Network } from '@x402/core/types';
 import type { EntrypointDef, AgentRuntime } from '@lucid-agents/types/core';
 import type {
   PaymentsConfig,
@@ -15,10 +14,9 @@ import { encodePaymentRequiredHeader } from './utils';
 import { resolvePayTo } from './payto-resolver';
 import { createInMemorySIWxStorage } from './siwx-in-memory-storage';
 import type { SIWxStorage } from './siwx-storage';
-import type { SIWxConfig, SIWxStorageConfig } from '@lucid-agents/types/siwx';
+import type { SIWxStorageConfig } from '@lucid-agents/types/siwx';
 import type { WalletsRuntime } from '@lucid-agents/types/wallets';
 import { createIncomingPaymentAuthorizer } from './incoming';
-import { entrypointHasSIWx } from './siwx-entrypoint';
 import { normalizePaymentNetwork, validatePaymentsConfig } from './validation';
 
 /**

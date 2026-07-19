@@ -36,6 +36,7 @@
     "release": "bun run release:version && bun run release:publish",
     "lint": "bun run --filter='./packages/*' lint",
     "lint:fix": "bun run --filter='./packages/*' lint:fix",
+    "deadcode": "knip --no-config-hints",
     "format": "bun run --filter='./packages/*' format",
     "format:check": "bun run --filter='./packages/*' format:check",
     "type-check": "bun run --filter='./packages/*' type-check",
@@ -51,22 +52,19 @@
   "dependencies": {
     "@types/bun": "^1.2.21",
     "@types/node": "^24.3.1",
-    "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.9",
     "@typescript-eslint/eslint-plugin": "^8.39.1",
     "@typescript-eslint/parser": "^8.39.1",
-    "@x402/core": "2.2.0",
-    "@x402/express": "2.2.0",
-    "@x402/hono": "2.2.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.1.4",
     "husky": "^9.1.7",
+    "knip": "6.27.0",
     "prettier": "^3.0.0"
   }
 }

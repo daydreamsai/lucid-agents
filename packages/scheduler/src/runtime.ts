@@ -11,7 +11,7 @@ import type { AgentRuntime } from '@lucid-agents/types/core';
 import type { A2ARuntime } from '@lucid-agents/types/a2a';
 import type { PaymentsRuntime } from '@lucid-agents/types/payments';
 
-export type SchedulerAgentRuntime = AgentRuntime<{
+type SchedulerAgentRuntime = AgentRuntime<{
   a2a: A2ARuntime;
   payments?: PaymentsRuntime;
 }>;

@@ -5,7 +5,6 @@ import type {
   WalletCapabilities,
   WalletConnector,
   WalletMetadata,
-  ThirdwebWalletOptions,
 } from '@lucid-agents/types/wallets';
 import type { WalletClient } from 'viem';
 

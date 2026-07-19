@@ -7,7 +7,6 @@ export default definePackageConfig({
   },
   dts: true,
   external: [
-    '@lucid-agents/core',
     '@lucid-agents/types',
     'yaml',
     'csv-parse',

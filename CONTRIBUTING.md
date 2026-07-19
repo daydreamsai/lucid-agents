@@ -107,9 +107,8 @@ bun run dev
 Packages include example files demonstrating usage:
 
 ```bash
-# Run an example from core
-cd packages/core
-bun run examples/full-agent.ts
+# Run the full agent example
+bun run packages/examples/src/core/full-agent.ts
 
 # Run an example from identity
 cd packages/identity
@@ -216,6 +215,18 @@ Run tests in watch mode:
 ```bash
 bun test --watch
 ```
+
+Check for unreachable files, unused dependencies, and private exports:
+
+```bash
+bun run deadcode
+```
+
+Knip treats package indexes, repository scripts, standalone examples, CLI
+commands, framework routes, and adapter templates as entrypoints. Generated API
+SDK exports and generated route trees are excluded from export analysis; edit
+their generators rather than generated output when a generated artifact needs to
+change. Build output and local `.context` artifacts are excluded entirely.
 
 ### Writing Tests
 

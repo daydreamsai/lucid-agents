@@ -47,9 +47,7 @@
     "generate": "bun run codegen.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@hey-api/client-fetch": "^0.10.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.88.2",
     "@tanstack/react-query": "^5.90.12",

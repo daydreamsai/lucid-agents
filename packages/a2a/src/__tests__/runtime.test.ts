@@ -7,7 +7,6 @@ import type {
 import { z } from 'zod';
 
 import { createA2ARuntime } from '../runtime';
-import { buildAgentCard } from '../card';
 import { a2a as a2aExtension } from '../extension';
 
 describe('createA2ARuntime', () => {

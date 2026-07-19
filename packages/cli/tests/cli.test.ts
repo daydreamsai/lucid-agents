@@ -652,7 +652,7 @@ describe('create-agent-kit CLI', () => {
     const prompt: PromptApi = {
       select: async ({ choices }) => choices[0]?.value ?? '',
       confirm: async () => false,
-      input: async ({ message, defaultValue = '' }) => {
+      input: async ({ message: _message, defaultValue = '' }) => {
         // Just use defaults for all inputs
         return defaultValue;
       },

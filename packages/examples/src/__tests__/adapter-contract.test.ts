@@ -33,7 +33,7 @@ async function createContractRuntime(name: string): Promise<ContractRuntime> {
     .addEntrypoint({
       key: 'stream',
       stream: async ({ input }, emit) => {
-        await emit({ kind: 'delta', delta: input });
+        await emit({ kind: 'delta', delta: String(input) });
         return { output: input };
       },
     })

@@ -20,7 +20,7 @@ import type {
 export class SQLitePaymentStorage implements PaymentStorage {
   private db: Database;
 
-  constructor(dbPath?: string, agentId?: string) {
+  constructor(dbPath?: string, _agentId?: string) {
     if (typeof Bun === 'undefined') {
       throw new Error(
         'SQLitePaymentStorage requires Bun runtime. Use PostgresPaymentStorage or InMemoryPaymentStorage for Node.js.'
@@ -41,7 +41,7 @@ export class SQLitePaymentStorage implements PaymentStorage {
     this.db = new Database(path);
     this.db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;');
     this.initSchema();
-    // Note: agentId is stored but not used for SQLite (single-agent per DB)
+    // SQLite uses one database per agent, so the compatibility argument is unused.
   }
 
   private initSchema(): void {

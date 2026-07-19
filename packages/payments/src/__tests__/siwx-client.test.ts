@@ -55,13 +55,10 @@ describe('SIWX Client', () => {
 
     it('should parse SIWX extension from response body error.siwx', async () => {
       const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
-      const response = new Response(
-        JSON.stringify({ error: { siwx: ext } }),
-        {
-          status: 402,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
+      const response = new Response(JSON.stringify({ error: { siwx: ext } }), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
       const result = await parseSIWxExtension(response);
       expect(result).toEqual(ext);
     });
@@ -96,10 +93,10 @@ describe('SIWX Client', () => {
 
     it('should NOT parse from body.siwx (non-standard location)', async () => {
       const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
-      const response = new Response(
-        JSON.stringify({ siwx: ext }),
-        { status: 402, headers: { 'Content-Type': 'application/json' } }
-      );
+      const response = new Response(JSON.stringify({ siwx: ext }), {
+        status: 402,
+        headers: { 'Content-Type': 'application/json' },
+      });
       const result = await parseSIWxExtension(response);
       // body.siwx is NOT a standard location - should not be parsed
       expect(result).toBeUndefined();
@@ -120,8 +117,7 @@ describe('SIWX Client', () => {
   describe('wrapFetchWithSIWx', () => {
     const mockSigner: SIWxSigner = {
       signMessage: async () => '0xsignature',
-      getAddress: async () =>
-        '0x1234567890abcdef1234567890abcdef12345678',
+      getAddress: async () => '0x1234567890abcdef1234567890abcdef12345678',
       getChainId: async () => 'eip155:84532',
     };
 
@@ -185,7 +181,7 @@ describe('SIWX Client', () => {
 
       const baseFetch = async (
         _input: RequestInfo | URL,
-        init?: RequestInit
+        _init?: RequestInit
       ) => {
         if (!capturedHeaders) {
           return new Response(JSON.stringify({ error: { siwx: ext } }), {
@@ -246,7 +242,9 @@ describe('SIWX Client', () => {
       const baseFetch = async () => {
         callCount++;
         if (callCount === 1) {
-          return new Response(JSON.stringify({ error: { siwx: ext } }), { status: 402 });
+          return new Response(JSON.stringify({ error: { siwx: ext } }), {
+            status: 402,
+          });
         }
         return new Response('ok', { status: 200 });
       };
@@ -256,7 +254,9 @@ describe('SIWX Client', () => {
 
       expect(signedMessage).toBeDefined();
       // The message should contain EIP-191 style lines, NOT be a JSON string
-      expect(signedMessage).toContain('test.com wants you to sign in with your account:');
+      expect(signedMessage).toContain(
+        'test.com wants you to sign in with your account:'
+      );
       expect(signedMessage).toContain('URI: http://test.com/api');
       expect(signedMessage).toContain('Nonce: nonce1');
       // It should NOT be JSON

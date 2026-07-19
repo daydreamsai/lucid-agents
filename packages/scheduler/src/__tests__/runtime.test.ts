@@ -5,14 +5,16 @@ import type {
   InvokeArgs,
   Job,
   OperationResult,
-  PaymentContext,
   SchedulerStore,
   WalletRef,
 } from '@lucid-agents/types/scheduler';
 import type { AgentCardWithEntrypoints } from '@lucid-agents/types';
 import type { A2AClient, A2ARuntime } from '@lucid-agents/types/a2a';
 import type { AgentRuntime } from '@lucid-agents/types/core';
-import type { SchedulerAgentRuntime } from '../runtime';
+
+type SchedulerAgentRuntime = Parameters<
+  typeof createSchedulerRuntime
+>[0]['runtime'];
 
 function expectError(result: OperationResult, substring: string): void {
   expect(result.success).toBe(false);
@@ -601,7 +603,7 @@ describe('createSchedulerRuntime', () => {
 
     it('returns error when job is completed', async () => {
       const now = 1000000;
-      const { runtime, store } = createTestRuntime({ clock: () => now });
+      const { runtime } = createTestRuntime({ clock: () => now });
 
       const { job } = await runtime.createHire({
         agentCardUrl: 'https://example.com/agent',
@@ -628,7 +630,7 @@ describe('createSchedulerRuntime', () => {
         entrypointKey: string;
         input: unknown;
       }> = [];
-      const { runtime, store } = createTestRuntime({
+      const { runtime } = createTestRuntime({
         clock: () => now,
         invokeFn: async (manifest, entrypointKey, input) => {
           invocations.push({ manifest, entrypointKey, input });
@@ -817,7 +819,7 @@ describe('createSchedulerRuntime', () => {
       const invocations: Array<{ input: unknown }> = [];
       const { runtime, store } = createTestRuntime({
         clock: () => now,
-        invokeFn: async (manifest, entrypointKey, input) => {
+        invokeFn: async (_manifest, _entrypointKey, input) => {
           invocations.push({ input });
           await new Promise(resolve => setTimeout(resolve, 10));
           return { output: {}, status: 'completed' };
@@ -1046,21 +1048,9 @@ describe('createSchedulerRuntime', () => {
       } as unknown as SchedulerAgentRuntime;
     }
 
-    function createMockPaymentContext(): PaymentContext {
-      const mockFetch = async () => new Response('{}');
-      return {
-        fetchWithPayment:
-          mockFetch as unknown as PaymentContext['fetchWithPayment'],
-        walletAddress: '0x1234567890abcdef1234567890abcdef12345678',
-        chainId: 84532,
-      };
-    }
-
     it('creates runtime with AgentRuntime and paymentContext', () => {
       const { client } = createMockA2AClient();
       const mockAgentRuntime = createMockAgentRuntime(client);
-      const paymentContext = createMockPaymentContext();
-
       const schedulerRuntime = createSchedulerRuntime({
         store: createMemoryStore(),
         runtime: mockAgentRuntime,
@@ -1075,15 +1065,13 @@ describe('createSchedulerRuntime', () => {
       const now = 1000000;
       const { client, invocations } = createMockA2AClient();
       const mockAgentRuntime = createMockAgentRuntime(client);
-      const paymentContext = createMockPaymentContext();
-
       const schedulerRuntime = createSchedulerRuntime({
         store: createMemoryStore(),
         runtime: mockAgentRuntime,
         clock: () => now,
       });
 
-      const { job } = await schedulerRuntime.createHire({
+      await schedulerRuntime.createHire({
         agentCardUrl: 'https://example.com/agent',
         wallet: mockWallet,
         entrypointKey: 'default',

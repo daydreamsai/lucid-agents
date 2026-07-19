@@ -1,6 +1,5 @@
 import type { AgentCardWithEntrypoints } from '../a2a';
 import type { WalletConnector, WalletMetadata } from '../wallets';
-import type { AgentRuntime } from '../core';
 import type { FetchFunction } from '../http';
 
 export type JsonValue =

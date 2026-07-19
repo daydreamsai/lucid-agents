@@ -142,7 +142,6 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
     });
 
     it('should respect time window when filtering by agent_id', async () => {
-      const now = Date.now();
       const windowMs = 1000; // 1 second window
 
       // Record payment for agent A

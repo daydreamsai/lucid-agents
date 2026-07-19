@@ -29,7 +29,7 @@ const RateLimitConfigSchema = z.object({
   windowMs: z.number().int().positive(),
 });
 
-export const PaymentPolicyGroupSchema = z.object({
+const PaymentPolicyGroupSchema = z.object({
   name: z.string().min(1),
   outgoingLimits: OutgoingLimitsConfigSchema.optional(),
   incomingLimits: IncomingLimitsConfigSchema.optional(),
@@ -44,4 +44,3 @@ export const PaymentPolicyGroupSchema = z.object({
  * Zod schema for PaymentPolicyGroup array.
  */
 export const PaymentPolicyGroupsSchema = z.array(PaymentPolicyGroupSchema);
-

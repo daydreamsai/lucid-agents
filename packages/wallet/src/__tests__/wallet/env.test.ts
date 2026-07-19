@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 
-import {
-  resolveAgentWalletFromEnv,
-  resolveDeveloperWalletFromEnv,
-  resolveWalletsFromEnv,
-  walletsFromEnv,
-} from '../../env';
+import { walletsFromEnv } from '../../env';
+
+type EnvRecord = Record<string, string | undefined>;
+
+const resolveAgentWalletFromEnv = (env: EnvRecord) =>
+  walletsFromEnv(undefined, env)?.agent;
+const resolveDeveloperWalletFromEnv = (env: EnvRecord) =>
+  walletsFromEnv(undefined, env)?.developer;
+const resolveWalletsFromEnv = (env?: EnvRecord) =>
+  walletsFromEnv(undefined, env ?? {});
 
 describe('resolveAgentWalletFromEnv', () => {
   it('resolves thirdweb wallet from AGENT_WALLET_ environment variables', () => {
@@ -67,14 +71,6 @@ describe('resolveAgentWalletFromEnv', () => {
 
     expect(() => resolveAgentWalletFromEnv(env)).toThrow(
       'Invalid AGENT_WALLET_CHAIN_ID: "invalid". Must be a valid integer.'
-    );
-  });
-
-  it('throws error when AGENT_WALLET_TYPE is missing', () => {
-    const env = {};
-
-    expect(() => resolveAgentWalletFromEnv(env)).toThrow(
-      'AGENT_WALLET_TYPE environment variable is required. Set it to "local", "thirdweb", or "lucid".'
     );
   });
 

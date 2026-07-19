@@ -116,7 +116,11 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
@@ -130,7 +134,7 @@ describe('createIdentityRegistryClient', () => {
       async readContract() {
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -174,7 +178,11 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
@@ -188,7 +196,7 @@ describe('createIdentityRegistryClient', () => {
       async readContract() {
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -393,7 +401,11 @@ describe('createIdentityRegistryClient', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000001234' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
@@ -955,7 +967,11 @@ describe('bootstrapTrust', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
@@ -969,7 +985,7 @@ describe('bootstrapTrust', () => {
       async readContract() {
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -1045,7 +1061,11 @@ describe('bootstrapIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000009' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
@@ -1058,7 +1078,7 @@ describe('bootstrapIdentity', () => {
       async readContract() {
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {

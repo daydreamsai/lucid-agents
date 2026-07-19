@@ -37,16 +37,11 @@
     "thirdweb": "^5.113.0",
     "mppx": "^0.1.0",
     "viem": "catalog:",
-    "@x402/core": "catalog:",
-    "@x402/fetch": "catalog:",
-    "@x402/evm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@lucid-agents/eslint-config": "workspace:*",
-    "@lucid-agents/prettier-config": "workspace:*",
-    "bun-types": "latest"
+    "@lucid-agents/eslint-config": "workspace:*"
   }
 }

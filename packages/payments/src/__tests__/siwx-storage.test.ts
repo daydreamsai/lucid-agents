@@ -1,9 +1,15 @@
-import { describe, expect, it, beforeEach, afterEach, afterAll } from 'bun:test';
+import {
+  describe,
+  expect,
+  it,
+  beforeEach,
+  afterEach,
+  afterAll,
+} from 'bun:test';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import { createInMemorySIWxStorage } from '../siwx-in-memory-storage';
-import { createSQLiteSIWxStorage } from '../siwx-sqlite-storage';
 import type { SIWxStorage } from '../siwx-storage';
 import type { SQLiteSIWxStorage } from '../siwx-sqlite-storage';
 
@@ -32,55 +38,34 @@ function runStorageTests(
 
     describe('hasPaid', () => {
       it('should return false for unknown resource/address pair', async () => {
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        const result = await storage.hasPaid('resource-1', '0xAbC123def456');
         expect(result).toBe(false);
       });
 
       it('should return true after recordPayment', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        const result = await storage.hasPaid('resource-1', '0xAbC123def456');
         expect(result).toBe(true);
       });
 
       it('should normalize address to lowercase', async () => {
         await storage.recordPayment('resource-1', '0xABC123DEF456');
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xabc123def456'
-        );
+        const result = await storage.hasPaid('resource-1', '0xabc123def456');
         expect(result).toBe(true);
       });
 
       it('should distinguish different resources for same address', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');
-        const result1 = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
-        const result2 = await storage.hasPaid(
-          'resource-2',
-          '0xAbC123def456'
-        );
+        const result1 = await storage.hasPaid('resource-1', '0xAbC123def456');
+        const result2 = await storage.hasPaid('resource-2', '0xAbC123def456');
         expect(result1).toBe(true);
         expect(result2).toBe(false);
       });
 
       it('should distinguish different addresses for same resource', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');
-        const result1 = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
-        const result2 = await storage.hasPaid(
-          'resource-1',
-          '0x999888777666'
-        );
+        const result1 = await storage.hasPaid('resource-1', '0xAbC123def456');
+        const result2 = await storage.hasPaid('resource-1', '0x999888777666');
         expect(result1).toBe(true);
         expect(result2).toBe(false);
       });
@@ -89,33 +74,20 @@ function runStorageTests(
     describe('recordPayment', () => {
       it('should record a payment entitlement', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        const result = await storage.hasPaid('resource-1', '0xAbC123def456');
         expect(result).toBe(true);
       });
 
       it('should handle duplicate recordings idempotently', async () => {
         await storage.recordPayment('resource-1', '0xAbC123def456');
         await storage.recordPayment('resource-1', '0xAbC123def456');
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        const result = await storage.hasPaid('resource-1', '0xAbC123def456');
         expect(result).toBe(true);
       });
 
       it('should store optional chainId', async () => {
-        await storage.recordPayment(
-          'resource-1',
-          '0xAbC123def456',
-          'eip155:1'
-        );
-        const result = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        await storage.recordPayment('resource-1', '0xAbC123def456', 'eip155:1');
+        const result = await storage.hasPaid('resource-1', '0xAbC123def456');
         expect(result).toBe(true);
       });
     });
@@ -200,10 +172,7 @@ function runStorageTests(
 
         await storage.clear();
 
-        const hasPaid = await storage.hasPaid(
-          'resource-1',
-          '0xAbC123def456'
-        );
+        const hasPaid = await storage.hasPaid('resource-1', '0xAbC123def456');
         const hasNonce = await storage.hasUsedNonce('nonce-abc-123');
 
         expect(hasPaid).toBe(false);
@@ -242,20 +211,19 @@ describe('SIWxStorage', () => {
   const describeWithDb = TEST_DB_URL ? describe : describe.skip;
 
   describeWithDb('PostgresSIWxStorage', () => {
-    let pgStorage: SIWxStorage & { close?: () => Promise<void> } | null = null;
+    let pgStorage: (SIWxStorage & { close?: () => Promise<void> }) | null =
+      null;
 
-    runStorageTests(
-      'PostgresSIWxStorage',
-      async () => {
-        if (!pgStorage) {
-          const { createPostgresSIWxStorage } = await import(
-            '../siwx-postgres-storage'
-          );
-          pgStorage = createPostgresSIWxStorage(TEST_DB_URL!) as SIWxStorage & { close?: () => Promise<void> };
-        }
-        return pgStorage;
+    runStorageTests('PostgresSIWxStorage', async () => {
+      if (!pgStorage) {
+        const { createPostgresSIWxStorage } =
+          await import('../siwx-postgres-storage');
+        pgStorage = createPostgresSIWxStorage(TEST_DB_URL!) as SIWxStorage & {
+          close?: () => Promise<void>;
+        };
       }
-    );
+      return pgStorage;
+    });
 
     afterAll(async () => {
       if (pgStorage?.close) {

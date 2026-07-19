@@ -10,8 +10,6 @@ import type {
   A2AClient,
   ListTasksRequest,
   ListTasksResponse,
-  CancelTaskRequest,
-  CancelTaskResponse,
   A2AInvokeOptions,
   TaskAccess,
 } from '@lucid-agents/types/a2a';

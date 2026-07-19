@@ -41,6 +41,7 @@ describe('createAgentCardWithIdentity', () => {
     const original = { ...baseCard };
     createAgentCardWithIdentity(baseCard, trustConfig);
 
+    expect(baseCard).toEqual(original);
     expect(baseCard.registrations).toBeUndefined();
     expect(baseCard.trustModels).toBeUndefined();
   });

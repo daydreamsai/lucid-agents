@@ -370,7 +370,7 @@ export function createIdentityRegistryClient<
           }
         }
       }
-    } catch (error) {
+    } catch {
       agentId = undefined;
     }
 
@@ -1177,7 +1177,7 @@ export async function makeViemClientsFromWallet(
   const walletHandle = options.walletHandle;
   const connector = walletHandle.connector;
 
-  return async ({ chainId, rpcUrl, env: runtimeEnv }) => {
+  return async ({ chainId, rpcUrl }) => {
     const effectiveRpcUrl = options.rpcUrl ?? rpcUrl ?? env.RPC_URL;
     if (!effectiveRpcUrl) {
       defaultLogger.warn(
@@ -1350,7 +1350,7 @@ export async function makeViemClientsFromEnv(
   const modules = await importViemModules();
   if (!modules) return undefined;
 
-  return ({ chainId, rpcUrl, env: runtimeEnv }) => {
+  return ({ chainId, rpcUrl }) => {
     const effectiveRpcUrl = options.rpcUrl ?? rpcUrl ?? env.RPC_URL;
     if (!effectiveRpcUrl) {
       defaultLogger.warn(

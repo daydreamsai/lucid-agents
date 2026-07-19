@@ -15,8 +15,6 @@ import {
   subscribeTask,
   waitForTask,
 } from '../client';
-import { buildAgentCard } from '../card';
-import { z } from 'zod';
 
 describe('invokeAgent', () => {
   const card: AgentCardWithEntrypoints = {

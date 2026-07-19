@@ -1,4 +1,3 @@
-import type { AgentRuntime } from '@lucid-agents/types/core';
 import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import type {
   StreamEnvelope,

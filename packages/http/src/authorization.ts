@@ -11,7 +11,7 @@ export type AuthorizationRuntime = AgentRuntime<{
   mpp?: MppRuntime;
 }>;
 
-export type EntrypointAdmission =
+type EntrypointAdmission =
   | { admitted: false; response: Response }
   | {
       admitted: true;

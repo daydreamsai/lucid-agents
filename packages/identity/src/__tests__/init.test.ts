@@ -111,12 +111,14 @@ afterAll(() => {
 function createMockRuntime(
   address = '0x0000000000000000000000000000000000000007'
 ) {
-  const agentId = BigInt(`0x${address.slice(-1)}`);
-
   const mockWalletClient = {
     account: {
       address: address as `0x${string}`,
-      async signMessage({ message }: { message: string | Uint8Array }) {
+      async signMessage({
+        message: _message,
+      }: {
+        message: string | Uint8Array;
+      }) {
         return '0xsignature' as `0x${string}`;
       },
     },
@@ -126,7 +128,13 @@ function createMockRuntime(
     async signMessage() {
       return '0xsignature' as `0x${string}`;
     },
-    async request({ method, params }: { method: string; params: any[] }) {
+    async request({
+      method,
+      params: _params,
+    }: {
+      method: string;
+      params: any[];
+    }) {
       if (method === 'personal_sign') {
         return '0xsignature';
       }
@@ -150,7 +158,7 @@ function createMockRuntime(
       }
       return true;
     },
-    async waitForTransactionReceipt({ hash }: { hash: string }) {
+    async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
       return {
         logs: [
           {
@@ -211,14 +219,18 @@ describe('createAgentIdentity', () => {
     const mockWalletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000007' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as const;
         },
       },
       async writeContract() {
         return '0xtxhash' as const;
       },
-      async signMessage(args: any) {
+      async signMessage(_args: any) {
         return '0xsignature';
       },
     };
@@ -233,7 +245,7 @@ describe('createAgentIdentity', () => {
         }
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -349,7 +361,11 @@ describe('createAgentIdentity', () => {
     const walletClient = {
       account: {
         address: '0x0000000000000000000000000000000000000009' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as `0x${string}`;
         },
       },
@@ -372,7 +388,7 @@ describe('createAgentIdentity', () => {
         }
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -430,42 +446,6 @@ describe('createAgentIdentity', () => {
   });
 
   it('uses environment variables as fallback', async () => {
-    const mockWalletClient = {
-      account: {
-        address: '0x000000000000000000000000000000000000000a' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
-          return '0xsignature' as const;
-        },
-      },
-      async writeContract() {
-        return '0xtxhash' as const;
-      },
-      async signMessage(args: any) {
-        return '0xsignature';
-      },
-    };
-
-    const publicClient = {
-      async readContract() {
-        return true;
-      },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
-        return {
-          logs: [
-            {
-              address: REGISTRY_ADDRESS,
-              topics: [
-                REGISTERED_EVENT_SIG,
-                '0x000000000000000000000000000000000000000000000000000000000000000a', // agentId = 10
-                '0x000000000000000000000000000000000000000000000000000000000000000a', // owner
-              ],
-              data: '0x',
-            },
-          ],
-        };
-      },
-    } as any;
-
     const result = await createAgentIdentity({
       runtime: createMockRuntime('0x000000000000000000000000000000000000000a'),
       chainId: 84532,
@@ -484,42 +464,6 @@ describe('createAgentIdentity', () => {
   });
 
   it('applies custom trust models', async () => {
-    const mockWalletClient = {
-      account: {
-        address: '0x000000000000000000000000000000000000000b' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
-          return '0xsignature' as const;
-        },
-      },
-      async writeContract() {
-        return '0xtxhash' as const;
-      },
-      async signMessage(args: any) {
-        return '0xsignature';
-      },
-    };
-
-    const publicClient = {
-      async readContract() {
-        return true;
-      },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
-        return {
-          logs: [
-            {
-              address: REGISTRY_ADDRESS,
-              topics: [
-                REGISTERED_EVENT_SIG,
-                '0x000000000000000000000000000000000000000000000000000000000000000b', // agentId = 11
-                '0x000000000000000000000000000000000000000000000000000000000000000b', // owner
-              ],
-              data: '0x',
-            },
-          ],
-        };
-      },
-    } as any;
-
     const result = await createAgentIdentity({
       runtime: createMockRuntime('0x000000000000000000000000000000000000000b'),
       domain: 'custom.example.com',
@@ -540,42 +484,6 @@ describe('createAgentIdentity', () => {
   });
 
   it('applies custom trust overrides', async () => {
-    const mockWalletClient = {
-      account: {
-        address: '0x000000000000000000000000000000000000000c' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
-          return '0xsignature' as const;
-        },
-      },
-      async writeContract() {
-        return '0xtxhash' as const;
-      },
-      async signMessage(args: any) {
-        return '0xsignature';
-      },
-    };
-
-    const publicClient = {
-      async readContract() {
-        return true;
-      },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
-        return {
-          logs: [
-            {
-              address: REGISTRY_ADDRESS,
-              topics: [
-                REGISTERED_EVENT_SIG,
-                '0x000000000000000000000000000000000000000000000000000000000000000c', // agentId = 12
-                '0x000000000000000000000000000000000000000000000000000000000000000c', // owner
-              ],
-              data: '0x',
-            },
-          ],
-        };
-      },
-    } as any;
-
     const result = await createAgentIdentity({
       runtime: createMockRuntime('0x000000000000000000000000000000000000000c'),
       domain: 'override.example.com',
@@ -641,27 +549,6 @@ describe('registerAgent', () => {
   it('wraps createAgentIdentity with autoRegister forced to true', async () => {
     let registerCalled = false;
 
-    const publicClient = {
-      async readContract() {
-        return true;
-      },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
-        return {
-          logs: [
-            {
-              address: REGISTRY_ADDRESS,
-              topics: [
-                REGISTERED_EVENT_SIG,
-                '0x000000000000000000000000000000000000000000000000000000000000000d', // agentId = 13
-                '0x000000000000000000000000000000000000000000000000000000000000000d', // owner
-              ],
-              data: '0x',
-            },
-          ],
-        };
-      },
-    } as any;
-
     const mockPublicClient = {
       async readContract({ functionName }: { functionName: string }) {
         if (functionName === 'ownerOf') {
@@ -672,7 +559,7 @@ describe('registerAgent', () => {
         }
         return true;
       },
-      async waitForTransactionReceipt({ hash }: { hash: string }) {
+      async waitForTransactionReceipt({ hash: _hash }: { hash: string }) {
         return {
           logs: [
             {
@@ -692,7 +579,11 @@ describe('registerAgent', () => {
     const walletClient = {
       account: {
         address: '0x000000000000000000000000000000000000000d' as const,
-        async signMessage({ message }: { message: string | Uint8Array }) {
+        async signMessage({
+          message: _message,
+        }: {
+          message: string | Uint8Array;
+        }) {
           return '0xsignature' as `0x${string}`;
         },
       },
@@ -700,7 +591,7 @@ describe('registerAgent', () => {
         registerCalled = true;
         return '0xabcdef' as `0x${string}`;
       },
-      async signMessage(args: any) {
+      async signMessage(_args: any) {
         return '0xsignature';
       },
       async request({ method }: { method: string }) {

@@ -139,13 +139,7 @@ export function createReputationRegistryClient<
 >(
   options: ReputationRegistryClientOptions<PublicClient, WalletClient>
 ): ReputationRegistryClient {
-  const {
-    address,
-    chainId,
-    publicClient,
-    walletClient,
-    identityRegistryAddress,
-  } = options;
+  const { address, chainId, publicClient, walletClient } = options;
 
   async function getFeedback(
     agentId: bigint,

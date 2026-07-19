@@ -1,10 +1,6 @@
 import { readFileSync } from 'fs';
 import { extname } from 'path';
-import type {
-  Extension,
-  BuildContext,
-  AgentRuntime,
-} from '@lucid-agents/types/core';
+import type { Extension, AgentRuntime } from '@lucid-agents/types/core';
 import type { CatalogItem, CatalogExtensionOptions } from './types';
 import { parseCatalogYaml, parseCatalogCsv } from './parser';
 import { generateEntrypoints } from './entrypoints';
@@ -20,7 +16,7 @@ export function catalog(
 
   return {
     name: 'catalog',
-    build(ctx: BuildContext): { catalog?: CatalogRuntime } {
+    build(): { catalog?: CatalogRuntime } {
       const ext = extname(options.file).toLowerCase();
       const content = readFileSync(options.file, 'utf-8');
 

@@ -60,28 +60,3 @@ export async function waitForConfirmation(
     return undefined;
   }
 }
-
-/**
- * Convert string to bytes32 for tags and other registry operations
- */
-export function stringToBytes32(str: string): Hex {
-  if (str.startsWith('0x')) {
-    // Validate hex string is proper bytes32 format
-    if (!/^0x[0-9a-fA-F]{64}$/.test(str)) {
-      throw new Error(`Invalid bytes32 hex string: ${str}`);
-    }
-    return str as Hex;
-  }
-  // Convert string to bytes32
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(str);
-  if (bytes.length > 32) {
-    throw new Error(`Tag "${str}" is too long (max 32 bytes)`);
-  }
-  // Pad to 32 bytes
-  const padded = new Uint8Array(32);
-  padded.set(bytes);
-  return `0x${Array.from(padded)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')}` as Hex;
-}

@@ -5,10 +5,7 @@ import { join } from 'node:path';
 
 import { policiesFromConfig } from '../env';
 import { loadPoliciesFromConfig } from '../policy-config';
-import {
-  PaymentPolicyGroupSchema,
-  PaymentPolicyGroupsSchema,
-} from '../policy-schema';
+import { PaymentPolicyGroupsSchema } from '../policy-schema';
 
 const directories: string[] = [];
 
@@ -73,7 +70,7 @@ describe('payment policy configuration', () => {
 
   it('enforces positive limits while accepting a minimal named policy', () => {
     expect(
-      PaymentPolicyGroupSchema.safeParse({ name: 'minimal' }).success
+      PaymentPolicyGroupsSchema.safeParse([{ name: 'minimal' }]).success
     ).toBe(true);
     expect(
       PaymentPolicyGroupsSchema.safeParse([

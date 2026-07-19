@@ -52,7 +52,6 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "@lucid-agents/eslint-config": "workspace:*",
-    "@lucid-agents/prettier-config": "workspace:*",
     "@lucid-agents/analytics": "workspace:*",
     "@lucid-agents/a2a": "workspace:*",
     "@lucid-agents/ap2": "workspace:*",

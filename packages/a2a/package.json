@@ -41,8 +41,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@lucid-agents/hono": "workspace:*",
-    "@lucid-agents/http": "workspace:*",
     "tsup": "catalog:",
     "typescript": "catalog:"
   }

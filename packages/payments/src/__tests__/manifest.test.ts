@@ -69,7 +69,11 @@ describe('createAgentCardWithPayments', () => {
   ];
 
   it('creates new card with pricing and payments array', () => {
-    const enhanced = createAgentCardWithPayments(baseCard, paymentsConfig, entrypoints);
+    const enhanced = createAgentCardWithPayments(
+      baseCard,
+      paymentsConfig,
+      entrypoints
+    );
 
     expect(enhanced).not.toBe(baseCard);
     expect(enhanced.payments).toBeDefined();
@@ -81,12 +85,17 @@ describe('createAgentCardWithPayments', () => {
     const original = { ...baseCard };
     createAgentCardWithPayments(baseCard, paymentsConfig, entrypoints);
 
+    expect(baseCard).toEqual(original);
     expect(baseCard.payments).toBeUndefined();
     expect(baseCard.entrypoints.echo.pricing).toBeUndefined();
   });
 
   it('adds pricing to entrypoints with prices', () => {
-    const enhanced = createAgentCardWithPayments(baseCard, paymentsConfig, entrypoints);
+    const enhanced = createAgentCardWithPayments(
+      baseCard,
+      paymentsConfig,
+      entrypoints
+    );
 
     expect(enhanced.entrypoints.echo.pricing).toBeDefined();
     expect(enhanced.entrypoints.echo.pricing?.invoke).toBe('1000');
@@ -97,21 +106,34 @@ describe('createAgentCardWithPayments', () => {
   });
 
   it('does not add pricing to entrypoints without prices', () => {
-    const enhanced = createAgentCardWithPayments(baseCard, paymentsConfig, entrypoints);
+    const enhanced = createAgentCardWithPayments(
+      baseCard,
+      paymentsConfig,
+      entrypoints
+    );
 
     expect(enhanced.entrypoints.free?.pricing).toBeUndefined();
   });
 
   it('adds x402 payment method to payments array', () => {
-    const enhanced = createAgentCardWithPayments(baseCard, paymentsConfig, entrypoints);
+    const enhanced = createAgentCardWithPayments(
+      baseCard,
+      paymentsConfig,
+      entrypoints
+    );
 
     expect(enhanced.payments).toBeDefined();
     const payment = enhanced.payments?.[0];
     expect(payment?.method).toBe('x402');
     expect(payment?.payee).toBe(paymentsConfig.payTo);
     expect(payment?.network).toBe(paymentsConfig.network);
-    expect((payment as { endpoint?: string }).endpoint).toBe(paymentsConfig.facilitatorUrl);
-    expect((payment?.extensions as { x402?: { facilitatorUrl?: string } })?.x402?.facilitatorUrl).toBe(paymentsConfig.facilitatorUrl);
+    expect((payment as { endpoint?: string }).endpoint).toBe(
+      paymentsConfig.facilitatorUrl
+    );
+    expect(
+      (payment?.extensions as { x402?: { facilitatorUrl?: string } })?.x402
+        ?.facilitatorUrl
+    ).toBe(paymentsConfig.facilitatorUrl);
   });
 
   it('omits static payee in stripe mode and marks dynamic payee resolution', () => {
@@ -121,15 +143,20 @@ describe('createAgentCardWithPayments', () => {
       network: 'eip155:8453',
     };
 
-    const enhanced = createAgentCardWithPayments(baseCard, stripeConfig, entrypoints);
+    const enhanced = createAgentCardWithPayments(
+      baseCard,
+      stripeConfig,
+      entrypoints
+    );
     const payment = enhanced.payments?.[0];
 
     expect(payment?.method).toBe('x402');
     expect(payment?.payee).toBeUndefined();
     expect(payment?.network).toBe(stripeConfig.network);
-    expect((payment?.extensions as { x402?: { payeeMode?: string } })?.x402?.payeeMode).toBe(
-      'dynamic'
-    );
+    expect(
+      (payment?.extensions as { x402?: { payeeMode?: string } })?.x402
+        ?.payeeMode
+    ).toBe('dynamic');
   });
 
   it('handles entrypoints with only invoke price', () => {
@@ -155,7 +182,11 @@ describe('createAgentCardWithPayments', () => {
       },
     };
 
-    const enhanced = createAgentCardWithPayments(cardWithInvokeOnly, paymentsConfig, entrypointsInvokeOnly);
+    const enhanced = createAgentCardWithPayments(
+      cardWithInvokeOnly,
+      paymentsConfig,
+      entrypointsInvokeOnly
+    );
 
     expect(enhanced.entrypoints['invoke-only'].pricing?.invoke).toBe('500');
     expect(enhanced.entrypoints['invoke-only'].pricing?.stream).toBeUndefined();

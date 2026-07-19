@@ -5,10 +5,7 @@ import type {
   ManifestEntrypoint,
 } from '@lucid-agents/types/core';
 import type { MppConfig } from '@lucid-agents/types/mpp';
-import {
-  resolveEntrypointPrice,
-  resolveEntrypointMppConfig,
-} from './challenge';
+import { resolveEntrypointPrice } from './challenge';
 
 /**
  * Creates a new Agent Card with MPP payment metadata.

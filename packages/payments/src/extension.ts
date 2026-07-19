@@ -1,7 +1,6 @@
 import type {
   AgentManifest,
   AgentRuntime,
-  BuildContext,
   EntrypointDef,
   Extension,
 } from '@lucid-agents/types/core';
@@ -29,7 +28,7 @@ export function payments(options?: {
   return {
     name: 'payments',
     after: ['wallets'],
-    build(ctx: BuildContext): { payments: PaymentsRuntime | undefined } {
+    build(): { payments: PaymentsRuntime | undefined } {
       paymentsRuntime = createPaymentsRuntime(
         options?.config,
         options?.agentId,
@@ -38,7 +37,7 @@ export function payments(options?: {
       );
       return { payments: paymentsRuntime };
     },
-    onEntrypointAdded(entrypoint: EntrypointDef, runtime: AgentRuntime) {
+    onEntrypointAdded(entrypoint: EntrypointDef) {
       if (
         paymentsRuntime &&
         !paymentsRuntime.isActive &&

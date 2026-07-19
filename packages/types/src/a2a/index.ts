@@ -1,9 +1,8 @@
 import type { Network } from '../core/network';
 import type { Resource } from '../payments';
-import type { EntrypointPrice, SolanaAddress } from '../payments';
+import type { SolanaAddress } from '../payments';
 import type { RegistrationEntry, TrustModel } from '../identity';
 import type { EntrypointDef } from '../core';
-import type { AgentRuntime } from '../core';
 import type { Usage } from '../core';
 import type { FetchFunction } from '../http';
 import type { AP2ExtensionDescriptor } from '../ap2';

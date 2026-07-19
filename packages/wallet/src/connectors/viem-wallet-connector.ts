@@ -5,7 +5,7 @@ import type {
   AgentChallenge,
   LocalEoaSigner,
 } from '@lucid-agents/types/wallets';
-import { hashMessage, recoverMessageAddress, type WalletClient } from 'viem';
+import { recoverMessageAddress, type WalletClient } from 'viem';
 
 /**
  * Options for creating a ViemWalletConnector.
@@ -71,7 +71,9 @@ export class ViemWalletConnector implements WalletConnector {
           throw new Error('No account available');
         }
         const messageStr =
-          typeof message === 'string' ? message : new TextDecoder().decode(message);
+          typeof message === 'string'
+            ? message
+            : new TextDecoder().decode(message);
         return walletClient.signMessage({
           account: walletClient.account,
           message: messageStr,
@@ -122,14 +124,14 @@ export class ViemWalletConnector implements WalletConnector {
     });
 
     // Verify signature
-    const messageHash = hashMessage(message);
     const recoveredAddress = await recoverMessageAddress({
       message,
       signature,
     });
 
     if (
-      recoveredAddress.toLowerCase() !== this.walletClient.account.address.toLowerCase()
+      recoveredAddress.toLowerCase() !==
+      this.walletClient.account.address.toLowerCase()
     ) {
       throw new Error('Signature verification failed');
     }
@@ -137,7 +139,9 @@ export class ViemWalletConnector implements WalletConnector {
     return signature;
   }
 
-  private buildChallengePayload(challenge: AgentChallenge): Record<string, unknown> {
+  private buildChallengePayload(
+    challenge: AgentChallenge
+  ): Record<string, unknown> {
     return {
       id: challenge.id,
       credential_id: challenge.credential_id,

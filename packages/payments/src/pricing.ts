@@ -69,7 +69,7 @@ function validatePriceFormat(
  */
 export function resolvePrice(
   entrypoint: EntrypointDef,
-  payments: PaymentsConfig | undefined,
+  _payments: PaymentsConfig | undefined,
   which: 'invoke' | 'stream'
 ): string | null {
   if (!entrypoint.price) {

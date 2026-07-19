@@ -16,7 +16,7 @@ type FetchLike = (
   init?: RequestInit
 ) => Promise<Response>;
 
-export type PaymentClientRuntime = AgentRuntime<{
+type PaymentClientRuntime = AgentRuntime<{
   wallets?: WalletsRuntime;
   payments?: PaymentsRuntime;
 }>;

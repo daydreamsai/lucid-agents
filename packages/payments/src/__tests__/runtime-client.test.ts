@@ -10,10 +10,11 @@ import type {
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 
-import {
-  createRuntimePaymentContext,
-  type PaymentClientRuntime,
-} from '../runtime';
+import { createRuntimePaymentContext } from '../runtime';
+
+type PaymentClientRuntime = NonNullable<
+  Parameters<typeof createRuntimePaymentContext>[0]['runtime']
+>;
 
 const ADDRESS = '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429';
 const UPDATED_ADDRESS = '0x1234567890abcdef1234567890abcdef12345678';

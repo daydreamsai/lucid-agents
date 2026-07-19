@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { EntrypointDef, EntrypointHandler } from './entrypoint';
+import type { EntrypointDef } from './entrypoint';
 import type { AgentRuntime } from './runtime';
 
 /**

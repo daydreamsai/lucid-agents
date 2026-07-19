@@ -9,12 +9,11 @@ import type {
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { AgentHttpRuntime } from '@lucid-agents/types/http';
 import type { PaymentsRuntime } from '@lucid-agents/types/payments';
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
 import { http } from '../index';
 import type { InvokeResult } from '../invoke';
-import { ZodValidationError } from '@lucid-agents/types/core';
 import { createInMemoryTaskStore, createTaskRuntime } from '@lucid-agents/a2a';
 
 const meta = {
@@ -914,8 +913,8 @@ describe('Task Operations', () => {
         return data.taskId;
       };
 
-      const taskId1 = await createTask('hello1');
-      const taskId2 = await createTask('hello2');
+      await createTask('hello1');
+      await createTask('hello2');
 
       await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -1004,7 +1003,6 @@ describe('Task Operations', () => {
   describe('POST /tasks/{taskId}/cancel - Cancel Task', () => {
     it('cancels a running task', async () => {
       const { handlers, entrypoints } = makeTestHandlers();
-      let taskAborted = false;
 
       entrypoints.set('slow', {
         key: 'slow',
@@ -1014,12 +1012,10 @@ describe('Task Operations', () => {
         handler: async ctx => {
           const input = ctx.input as { delay: number };
           if (ctx.signal?.aborted) {
-            taskAborted = true;
             throw new Error('Task aborted');
           }
           await new Promise(resolve => setTimeout(resolve, input.delay));
           if (ctx.signal?.aborted) {
-            taskAborted = true;
             throw new Error('Task aborted');
           }
           return {

@@ -39,35 +39,3 @@ export type IdentityRegistryWriteFunctionName = ContractFunctionName<
   typeof IDENTITY_REGISTRY_ABI,
   'nonpayable' | 'payable'
 >;
-
-/**
- * Valid read function names for Reputation Registry
- */
-export type ReputationRegistryReadFunctionName = ContractFunctionName<
-  typeof REPUTATION_REGISTRY_ABI,
-  'view' | 'pure'
->;
-
-/**
- * Valid write function names for Reputation Registry
- */
-export type ReputationRegistryWriteFunctionName = ContractFunctionName<
-  typeof REPUTATION_REGISTRY_ABI,
-  'nonpayable' | 'payable'
->;
-
-/**
- * Valid read function names for Validation Registry
- */
-export type ValidationRegistryReadFunctionName = ContractFunctionName<
-  typeof VALIDATION_REGISTRY_ABI,
-  'view' | 'pure'
->;
-
-/**
- * Valid write function names for Validation Registry
- */
-export type ValidationRegistryWriteFunctionName = ContractFunctionName<
-  typeof VALIDATION_REGISTRY_ABI,
-  'nonpayable' | 'payable'
->;

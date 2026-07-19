@@ -311,6 +311,7 @@ Run the same local quality sequence with:
 ```bash
 bun run build:packages
 bun run type-check
+bun run deadcode
 bun run lint
 bun run format:check
 bun run test:portability

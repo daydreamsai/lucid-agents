@@ -11,10 +11,7 @@ import {
   ThirdwebWalletConnector,
   type ThirdwebWalletConnectorOptions,
 } from './connectors/thirdweb-connector';
-import {
-  ViemWalletConnector,
-  type ViemWalletConnectorOptions,
-} from './connectors/viem-wallet-connector';
+import { ViemWalletConnector } from './connectors/viem-wallet-connector';
 import type {
   AgentWalletConfig,
   AgentWalletHandle,
@@ -24,7 +21,6 @@ import type {
   LucidWalletOptions,
   SignerWalletOptions,
   ThirdwebWalletOptions,
-  WalletConnector,
   WalletsConfig,
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';

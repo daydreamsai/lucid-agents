@@ -12,7 +12,13 @@ module.exports = {
     'import',
   ],
   rules: {
-    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      {
+        varsIgnorePattern: '^_',
+        argsIgnorePattern: '^_',
+      },
+    ],
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-empty-object-type': 'warn',
     '@typescript-eslint/no-wrapper-object-types': 'warn',
@@ -55,4 +61,3 @@ module.exports = {
     '*.config.ts',
   ],
 };
-

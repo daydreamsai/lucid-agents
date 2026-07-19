@@ -118,10 +118,7 @@ export function identity(options?: {
             : undefined,
       };
     },
-    onManifestBuild(
-      card: AgentManifest,
-      _runtime: AgentRuntime
-    ): AgentManifest {
+    onManifestBuild(card: AgentManifest): AgentManifest {
       return trustConfig
         ? createAgentCardWithIdentity(card, trustConfig)
         : card;

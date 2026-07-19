@@ -51,8 +51,6 @@
   },
   "devDependencies": {
     "tsup": "catalog:",
-    "typescript": "catalog:",
-    "@lucid-agents/core": "workspace:*",
-    "@lucid-agents/http": "workspace:*"
+    "typescript": "catalog:"
   }
 }

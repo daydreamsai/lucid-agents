@@ -8,10 +8,5 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   tsconfig: "tsconfig.build.json",
-  external: [
-    '@lucid-agents/types',
-    '@tanstack/react-start',
-    '@tanstack/start',
-    '@tanstack/react-router',
-  ],
+  external: ['@lucid-agents/types'],
 });

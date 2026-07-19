@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 const PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ADAPTER_FILES_ROOT = join(PACKAGE_ROOT, 'adapters');
 
-export type AdapterSnippets = {
+type AdapterSnippets = {
   imports: string;
   preSetup: string;
   appCreation: string;

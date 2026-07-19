@@ -233,11 +233,8 @@ describe('Example Smoke Tests', () => {
         .use(a2a())
         .build();
 
-      const {
-        app: workerApp,
-        addEntrypoint: addWorkerEp,
-        runtime: _workerRuntime,
-      } = await createAgentApp(workerAgent);
+      const { app: workerApp, addEntrypoint: addWorkerEp } =
+        await createAgentApp(workerAgent);
 
       addWorkerEp({
         key: 'echo',

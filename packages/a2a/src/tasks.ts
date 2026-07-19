@@ -1,9 +1,6 @@
 import type {
   A2ATaskRuntime,
   ExecuteTaskOptions,
-  ListTasksRequest,
-  ListTasksResponse,
-  StartTaskOptions,
   StoredTask,
   Task,
   TaskError,

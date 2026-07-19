@@ -234,8 +234,6 @@ describeWithDb('Multi-Agent Payment Isolation', () => {
 
   describe('Rate limiting per agent', () => {
     it('should enforce rate limits independently per agent', async () => {
-      const maxPayments = 3;
-      const windowMs = 1000; // 1 second
       const groupName = 'rate-limited-group';
 
       // Agent A makes 3 payments (at limit)

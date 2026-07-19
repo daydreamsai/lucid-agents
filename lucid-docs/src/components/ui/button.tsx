@@ -1,4 +1,4 @@
-import { cva, type VariantProps } from 'class-variance-authority';
+import { cva } from 'class-variance-authority';
 
 const variants = {
   primary: 'bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/80',
@@ -22,7 +22,5 @@ export const buttonVariants = cva(
         'icon-xs': 'p-1 [&_svg]:size-4',
       },
     },
-  },
+  }
 );
-
-export type ButtonProps = VariantProps<typeof buttonVariants>;

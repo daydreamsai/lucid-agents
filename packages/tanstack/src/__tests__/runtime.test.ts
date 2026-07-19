@@ -105,7 +105,7 @@ describe('createTanStackRuntime', () => {
         },
       })
       .build();
-    const { handlers, routes } = await createTanStackRuntime(agent);
+    const { handlers } = await createTanStackRuntime(agent);
     const url = 'https://agent.test/api/agent/entrypoints/private/invoke';
     const body = JSON.stringify({ input: {} });
 

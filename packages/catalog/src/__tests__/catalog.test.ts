@@ -10,7 +10,6 @@ import {
   parseCatalogYaml,
   parseCatalogCsv,
   type CatalogItem,
-  type CatalogConfig,
   CatalogItemSchema,
   generateEntrypoints,
 } from '../index';
@@ -344,7 +343,7 @@ describe('generateEntrypoints', () => {
 
   it('applies custom handler factory when provided', () => {
     const handlerFactory = (item: CatalogItem) => {
-      return async (ctx: any) => ({ output: { product: item.key } });
+      return async () => ({ output: { product: item.key } });
     };
     const entrypoints = generateEntrypoints(sampleItems, { handlerFactory });
     expect(entrypoints[0].handler).toBeDefined();

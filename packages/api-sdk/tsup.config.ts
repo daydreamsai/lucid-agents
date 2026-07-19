@@ -8,5 +8,5 @@ export default definePackageConfig({
       'src/sdk/@tanstack/react-query.gen.ts',
   },
   dts: true,
-  external: ['@hey-api/client-fetch', '@tanstack/react-query'],
+  external: ['@tanstack/react-query'],
 });

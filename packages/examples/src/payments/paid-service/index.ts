@@ -95,7 +95,7 @@ addEntrypoint({
   output: z.object({
     result: z.string(),
   }),
-  handler: async ctx => {
+  handler: async () => {
     return {
       output: {
         result: 'This should be blocked by policy!',

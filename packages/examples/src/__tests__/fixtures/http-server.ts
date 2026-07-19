@@ -24,3 +24,5 @@ const stop = () => {
 
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
+
+export {};

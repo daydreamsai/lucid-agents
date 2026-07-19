@@ -1,9 +1,4 @@
-import type {
-  AgentManifest,
-  AgentRuntime,
-  BuildContext,
-  Extension,
-} from '@lucid-agents/types/core';
+import type { AgentManifest, Extension } from '@lucid-agents/types/core';
 import type { AP2Config, AP2Runtime } from '@lucid-agents/types/ap2';
 
 import { createAgentCardWithAP2 } from './manifest';
@@ -14,7 +9,7 @@ export function ap2(options?: AP2Config): Extension<{ ap2?: AP2Runtime }> {
 
   return {
     name: 'ap2',
-    build(ctx: BuildContext): { ap2?: AP2Runtime } {
+    build(): { ap2?: AP2Runtime } {
       // Only create runtime if explicit config provided
       if (options) {
         ap2Runtime = createAP2Runtime(options);
@@ -23,7 +18,7 @@ export function ap2(options?: AP2Config): Extension<{ ap2?: AP2Runtime }> {
       // No auto-detection - require explicit configuration
       return { ap2: undefined };
     },
-    onManifestBuild(card: AgentManifest, runtime: AgentRuntime): AgentManifest {
+    onManifestBuild(card: AgentManifest): AgentManifest {
       // Only add AP2 extension if explicitly configured
       if (ap2Runtime?.config) {
         return createAgentCardWithAP2(card, ap2Runtime.config);

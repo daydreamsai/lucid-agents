@@ -1,8 +1,5 @@
 import { formatUnits } from 'viem';
-import type {
-  PaymentRecord,
-  PaymentTracker,
-} from '@lucid-agents/types/payments';
+import type { PaymentTracker } from '@lucid-agents/types/payments';
 import type {
   AnalyticsSummary,
   Transaction,
@@ -13,7 +10,7 @@ import type {
  * Formats a BigInt amount (in base units with 6 decimals) to a human-friendly USDC string.
  * Uses viem's formatUnits to preserve precision for very large amounts.
  */
-export function formatUsdcAmount(amount: bigint): string {
+function formatUsdcAmount(amount: bigint): string {
   const formatted = formatUnits(amount, 6);
   return formatted.replace(/\.?0+$/, '');
 }
@@ -172,7 +169,7 @@ export async function exportToJSON(
   const data = await getAnalyticsData(paymentTracker, windowMs);
   return JSON.stringify(
     data,
-    (key, value) => {
+    (_key, value) => {
       // Convert bigint to string for JSON serialization
       if (typeof value === 'bigint') {
         return value.toString();
