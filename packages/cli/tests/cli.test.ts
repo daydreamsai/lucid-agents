@@ -360,7 +360,7 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
     );
-    await Promise.all([
+    const [, storefront, serviceStyles] = await Promise.all([
       readFile(join(projectDir, 'src/lib/service-client.ts'), 'utf8'),
       readFile(
         join(projectDir, 'src/components/service-storefront.tsx'),
@@ -396,6 +396,10 @@ describe('create-agent-kit CLI', () => {
     expect(dashboardRoute).toContain('handlers.manifest');
     expect(dashboardRoute).not.toContain('runtime.entrypoints');
     expect(dashboardRoute).not.toContain('runtime.agent.config.meta');
+    expect(serviceStyles).toContain('color-scheme: dark');
+    expect(serviceStyles).toContain('font-family: var(--service-mono)');
+    expect(storefront).not.toContain('service-monogram');
+    expect(storefront).not.toContain('service-icon');
     expect(startTypes).toContain("import type {} from '@tanstack/react-start'");
     await expect(
       readFile(join(projectDir, 'src/routes/about.tsx'), 'utf8')
@@ -473,7 +477,7 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'app/api/agent/favicon.svg/route.ts'),
       'utf8'
     );
-    await Promise.all([
+    const [, storefront] = await Promise.all([
       readFile(join(projectDir, 'lib/service-client.ts'), 'utf8'),
       readFile(join(projectDir, 'components/service-storefront.tsx'), 'utf8'),
     ]);
@@ -509,6 +513,8 @@ describe('create-agent-kit CLI', () => {
     expect(pageSrc).toContain('buildServicePageModel');
     expect(pageSrc).toContain('handlers.manifest');
     expect(pageSrc).not.toContain('runtime.manifest');
+    expect(storefront).not.toContain('service-monogram');
+    expect(storefront).not.toContain('service-icon');
     await expect(
       readFile(join(projectDir, 'proxy.ts'), 'utf8')
     ).rejects.toThrow();

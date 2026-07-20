@@ -94,6 +94,10 @@ describe('renderLandingPage', () => {
     expect(page).toContain('@media (max-width: 767px)');
     expect(page).toContain('position: sticky');
     expect(page).toContain('const response = await fetch(url);');
+    expect(page).toContain('<meta name="theme-color" content="#0b0d0c"');
+    expect(page).toContain('color-scheme: dark');
+    expect(page).toContain('font: 16px/1.5 var(--mono)');
+    expect(page).not.toContain('class="monogram"');
   });
 
   it('makes protected flows explicit and only executes free operations', async () => {

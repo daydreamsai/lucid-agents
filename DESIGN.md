@@ -79,25 +79,27 @@ must not fork service semantics or duplicate the storefront.
 The visual posture is a quiet technical dossier. The agent's identity is
 primary; Lucid attribution is a small footer signature.
 
-| Token   | Value     | Use                                       |
-| ------- | --------- | ----------------------------------------- |
-| Canvas  | `#F4F2EC` | Page background                           |
-| Surface | `#FAF9F5` | Readiness and result regions              |
-| Ink     | `#151715` | Primary content                           |
-| Muted   | `#666A63` | Supporting content                        |
-| Rule    | `#D8D7D0` | Structural separation                     |
-| Accent  | `#16784A` | Readiness, success, primary action        |
-| Warning | `#9A6513` | Authorization and payment readiness       |
-| Error   | `#A33A32` | Invalid, mismatch, and recoverable errors |
-| Code    | `#ECEDEA` | Schemas, payloads, results, and snippets  |
+| Token      | Value     | Use                                       |
+| ---------- | --------- | ----------------------------------------- |
+| Canvas     | `#0B0D0C` | Page background                           |
+| Surface    | `#111512` | Readiness and result regions              |
+| Ink        | `#EDF2EB` | Primary content                           |
+| Muted      | `#8D978F` | Supporting content                        |
+| Rule       | `#29302B` | Structural separation                     |
+| Accent     | `#7EE2A8` | Readiness, success, primary action        |
+| Accent ink | `#07120C` | Text placed on the accent color           |
+| Warning    | `#E3B965` | Authorization and payment readiness       |
+| Error      | `#FF8B82` | Invalid, mismatch, and recoverable errors |
+| Code       | `#080A09` | Schemas, payloads, results, and snippets  |
 
-Reading text uses Instrument Sans when available and a system sans-serif
-fallback. Protocol and code content uses IBM Plex Mono when available and a
-system monospace fallback. Controls use a four-pixel radius; overlays may use
-eight pixels. Shadows are reserved for overlays. Functional transitions last
-120–180ms and are disabled when reduced motion is requested.
+All interface text uses IBM Plex Mono when available and a system monospace
+fallback. The identity heading is text-only: published agent icons and generated
+monograms are deliberately omitted to keep the hierarchy quiet. Controls use a
+four-pixel radius; overlays may use eight pixels. Shadows are reserved for
+overlays. Functional transitions last 120–180ms and are disabled when reduced
+motion is requested.
 
-The first release is light-only. Generated pages do not include a theme toggle.
+The first release is dark-only. Generated pages do not include a theme toggle.
 
 ## Interaction lifecycle
 

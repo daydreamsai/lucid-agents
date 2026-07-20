@@ -75,29 +75,12 @@ function AgentHeader({ service }: { service: ServicePageModel }) {
   ].filter((value): value is string => Boolean(value));
   return (
     <header className="service-header">
-      <div className="service-identity">
-        {service.agent.iconUrl ? (
-          <img
-            className="service-icon"
-            src={service.agent.iconUrl}
-            alt=""
-            width="48"
-            height="48"
-          />
-        ) : (
-          <span className="service-monogram" aria-hidden="true">
-            {service.agent.name.slice(0, 1).toUpperCase()}
-          </span>
-        )}
-        <div>
-          <div className="service-kicker">
-            <span className={`status-dot status-${service.status.state}`} />
-            {service.status.label}
-            {service.agent.version ? ` · v${service.agent.version}` : ''}
-          </div>
-          <h1>{service.agent.name}</h1>
-        </div>
+      <div className="service-kicker">
+        <span className={`status-dot status-${service.status.state}`} />
+        {service.status.label}
+        {service.agent.version ? ` · v${service.agent.version}` : ''}
       </div>
+      <h1>{service.agent.name}</h1>
       <p className="service-purpose">
         {service.agent.description ??
           'This agent has not published a description yet.'}

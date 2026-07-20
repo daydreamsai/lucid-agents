@@ -64,7 +64,7 @@ curl --fail --silent "http://127.0.0.1:$PORT/health" >/dev/null
 "${PWCLI[@]}" snapshot >snapshot.log
 PAGE_STATE=""
 for _ in $(seq 1 50); do
-  PAGE_STATE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ title: document.title, identity: document.querySelector('h1')?.textContent, offering: document.querySelector('.offering-rail strong')?.textContent, workspace: document.querySelector('[data-workspace]:not([hidden]) h2')?.textContent, width: innerWidth, columns: getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns })")"
+  PAGE_STATE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ title: document.title, identity: document.querySelector('h1')?.textContent, offering: document.querySelector('.offering-rail strong')?.textContent, workspace: document.querySelector('[data-workspace]:not([hidden]) h2')?.textContent, width: innerWidth, columns: getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns, scheme: getComputedStyle(document.documentElement).colorScheme, font: getComputedStyle(document.body).fontFamily, headingIcon: Boolean(document.querySelector('.service-header .monogram, .service-header img')) })")"
   if [[ "$PAGE_STATE" == *'\"workspace\":\"Echo\"'* ]]; then
     break
   fi
@@ -81,6 +81,9 @@ bun -e '
   if (state.workspace !== "Echo") throw new Error("echo workspace was not selected");
   if (state.width !== 1440) throw new Error("desktop viewport was not applied");
   if (!state.columns.startsWith("320px")) throw new Error("desktop offering rail is not 320px");
+  if (state.scheme !== "dark") throw new Error("portable storefront is not dark mode");
+  if (!/mono/i.test(state.font)) throw new Error("portable storefront is not monospace");
+  if (state.headingIcon) throw new Error("portable storefront still renders a heading icon");
 '
 
 "${PWCLI[@]}" press Tab >/dev/null
@@ -169,7 +172,7 @@ curl --fail --silent "http://127.0.0.1:$REACT_PORT/api/agent/health" >/dev/null
 "${PWCLI[@]}" goto "http://127.0.0.1:$REACT_PORT" >/dev/null
 REACT_DESKTOP=""
 for _ in $(seq 1 100); do
-  REACT_DESKTOP="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ identity: document.querySelector('h1')?.textContent, offering: document.querySelector('.offering-list button')?.textContent, workspace: document.querySelector('.offering-workspace h2')?.textContent, live: document.querySelector('.run-state')?.getAttribute('aria-live'), columns: document.querySelector('.service-layout') ? getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns : '' })")"
+  REACT_DESKTOP="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ identity: document.querySelector('h1')?.textContent, offering: document.querySelector('.offering-list button')?.textContent, workspace: document.querySelector('.offering-workspace h2')?.textContent, live: document.querySelector('.run-state')?.getAttribute('aria-live'), columns: document.querySelector('.service-layout') ? getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns : '', scheme: getComputedStyle(document.documentElement).colorScheme, font: getComputedStyle(document.body).fontFamily, headingIcon: Boolean(document.querySelector('.service-header .service-icon, .service-header .service-monogram, .service-header img')) })")"
   if [[ "$REACT_DESKTOP" == *'\"workspace\":\"Echo\"'* ]]; then
     break
   fi
@@ -184,6 +187,9 @@ bun -e '
   if (state.workspace !== "Echo") throw new Error("generated React workspace was not selected");
   if (state.live !== "polite") throw new Error("generated React run state is not announced");
   if (!state.columns.startsWith("320px")) throw new Error("generated React desktop rail is not 320px");
+  if (state.scheme !== "dark") throw new Error("generated React storefront is not dark mode");
+  if (!/mono/i.test(state.font)) throw new Error("generated React storefront is not monospace");
+  if (state.headingIcon) throw new Error("generated React storefront still renders a heading icon");
 '
 "${PWCLI[@]}" press Tab >/dev/null
 REACT_RAIL_FOCUS="$("${PWCLI[@]}" --raw eval "() => document.activeElement?.matches('.offering-list button') === true")"

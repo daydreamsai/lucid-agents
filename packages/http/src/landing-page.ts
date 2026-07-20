@@ -247,7 +247,7 @@ export const renderLandingPage = ({
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#f4f2ec" />
+        <meta name="theme-color" content="#0b0d0c" />
         <link rel="icon" type="image/svg+xml" href="${faviconDataUrl}" />
         <title>${service.agent.name}</title>
         <meta
@@ -256,18 +256,20 @@ export const renderLandingPage = ({
         />
         <style>
           :root {
-            color-scheme: light;
-            --canvas: #f4f2ec;
-            --surface: #faf9f5;
-            --ink: #151715;
-            --muted: #666a63;
-            --rule: #d8d7d0;
-            --accent: #16784a;
-            --warning: #9a6513;
-            --error: #a33a32;
-            --code: #ecedea;
-            --reading: 'Avenir Next', Avenir, system-ui, sans-serif;
-            --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+            color-scheme: dark;
+            --canvas: #0b0d0c;
+            --surface: #111512;
+            --ink: #edf2eb;
+            --muted: #8d978f;
+            --rule: #29302b;
+            --accent: #7ee2a8;
+            --accent-ink: #07120c;
+            --warning: #e3b965;
+            --error: #ff8b82;
+            --code: #080a09;
+            --mono:
+              'IBM Plex Mono', 'SFMono-Regular', 'SF Mono', Menlo, Consolas,
+              monospace;
           }
           * {
             box-sizing: border-box;
@@ -277,7 +279,7 @@ export const renderLandingPage = ({
             min-width: 320px;
             background: var(--canvas);
             color: var(--ink);
-            font: 16px/1.5 var(--reading);
+            font: 16px/1.5 var(--mono);
           }
           button,
           textarea {
@@ -291,7 +293,8 @@ export const renderLandingPage = ({
           a:focus-visible,
           textarea:focus-visible,
           summary:focus-visible {
-            outline: 3px solid rgba(22, 120, 74, 0.28);
+            outline: 3px solid
+              color-mix(in srgb, var(--accent) 34%, transparent);
             outline-offset: 2px;
           }
           .service-page {
@@ -300,23 +303,8 @@ export const renderLandingPage = ({
             padding: 0 36px;
           }
           .service-header {
-            padding: 52px 0 40px;
+            padding: 48px 0 36px;
             border-bottom: 1px solid var(--rule);
-          }
-          .identity {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-          }
-          .monogram {
-            display: grid;
-            width: 48px;
-            height: 48px;
-            place-items: center;
-            border: 1px solid var(--rule);
-            border-radius: 8px;
-            background: var(--surface);
-            font: 600 17px/1 var(--mono);
           }
           .kicker,
           .section-label {
@@ -343,17 +331,19 @@ export const renderLandingPage = ({
             background: var(--error);
           }
           h1 {
-            margin: 5px 0 0;
-            font-size: clamp(28px, 4vw, 44px);
-            line-height: 1.05;
-            letter-spacing: -0.035em;
+            max-width: 920px;
+            margin: 12px 0 0;
+            font-size: clamp(26px, 3.5vw, 40px);
+            font-weight: 600;
+            line-height: 1.1;
+            letter-spacing: -0.045em;
           }
           .purpose {
             max-width: 720px;
-            margin: 24px 0 0;
+            margin: 18px 0 0;
             color: var(--muted);
-            font-size: clamp(18px, 2vw, 23px);
-            line-height: 1.45;
+            font-size: clamp(15px, 1.5vw, 18px);
+            line-height: 1.6;
           }
           .trust-line {
             display: flex;
@@ -405,9 +395,6 @@ export const renderLandingPage = ({
             color: inherit;
             text-decoration: none;
           }
-          .offering-rail a:hover {
-            background: var(--surface);
-          }
           .offering-rail a[aria-current='true'] {
             border-left: 3px solid var(--accent);
             background: var(--surface);
@@ -439,6 +426,7 @@ export const renderLandingPage = ({
           }
           .workspace-header {
             display: flex;
+            align-items: flex-start;
             justify-content: space-between;
             gap: 24px;
           }
@@ -454,6 +442,8 @@ export const renderLandingPage = ({
           }
           .facts {
             display: flex;
+            align-items: flex-start;
+            align-content: flex-start;
             flex-wrap: wrap;
             justify-content: flex-end;
             gap: 7px;
@@ -504,11 +494,12 @@ export const renderLandingPage = ({
             border-radius: 4px;
             cursor: pointer;
             font-weight: 700;
+            transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
           }
           .primary {
             border: 1px solid var(--accent);
             background: var(--accent);
-            color: white;
+            color: var(--accent-ink);
           }
           .secondary {
             border: 1px solid var(--ink);
@@ -613,6 +604,18 @@ export const renderLandingPage = ({
             color: var(--muted);
             font: 12px/1.4 var(--mono);
           }
+          .actions button:active,
+          .offering-rail a:active {
+            transform: scale(0.97);
+          }
+          @media (hover: hover) and (pointer: fine) {
+            .offering-rail a:hover {
+              background: var(--surface);
+            }
+            .actions button:hover {
+              transform: translateY(-1px);
+            }
+          }
           @media (max-width: 767px) {
             .service-page {
               padding: 0 18px;
@@ -698,22 +701,13 @@ export const renderLandingPage = ({
       <body>
         <main class="service-page">
           <header class="service-header">
-            <div class="identity">
-              <span class="monogram" aria-hidden="true"
-                >${service.agent.name.slice(0, 1).toUpperCase()}</span
-              >
-              <div>
-                <div class="kicker">
-                  <span
-                    class="status-dot status-${service.status.state}"
-                  ></span>
-                  ${service.status.label}${service.agent.version
-                    ? ` · v${service.agent.version}`
-                    : ''}
-                </div>
-                <h1>${service.agent.name}</h1>
-              </div>
+            <div class="kicker">
+              <span class="status-dot status-${service.status.state}"></span>
+              ${service.status.label}${service.agent.version
+                ? ` · v${service.agent.version}`
+                : ''}
             </div>
+            <h1>${service.agent.name}</h1>
             <p class="purpose">
               ${service.agent.description ??
               'This agent has not published a description yet.'}
