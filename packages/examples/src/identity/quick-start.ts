@@ -41,7 +41,7 @@ async function main() {
     console.log('Transaction:', identity.transactionHash);
     console.log(
       '\nNext step: Host your metadata at:',
-      `https://${identity.domain}/.well-known/agent-metadata.json`
+      `https://${identity.domain}/.well-known/agent-registration.json`
     );
   } else if (identity.trust) {
     console.log('Found existing registration');

@@ -1,34 +1,189 @@
 ---
 title: '@lucid-agents/analytics'
-description: Payment-tracker summaries, transaction views, and safe CSV/JSON exports.
+description: Query and export the six-decimal payment records owned by a Lucid payment tracker.
 icon: ChartNoAxesCombined
 status: next
 verifiedVersion: 0.3.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The analytics extension binds reporting operations to the payment tracker owned
-by `@lucid-agents/payments`.
+`@lucid-agents/analytics` adds read-only summaries, transaction views, and
+CSV/JSON exports over the `PaymentTracker` created by
+`@lucid-agents/payments`.
+
+It is not a facilitator/chain indexer, finance ledger, refund system, trace
+backend, or proof that a payment settled externally. Its completeness is
+exactly the completeness of the configured Lucid payment store.
+
+## Install and bind
 
 ```bash
 bun add @lucid-agents/analytics @lucid-agents/payments
 ```
 
-```ts
+```typescript
+import { analytics } from '@lucid-agents/analytics';
+import { createAgent } from '@lucid-agents/core';
+import { payments } from '@lucid-agents/payments';
+
 const runtime = await createAgent(meta)
   .use(payments({ config }))
   .use(analytics())
   .build();
-
-const summary = await runtime.analytics.getSummary(24 * 60 * 60 * 1_000);
-const csv = await runtime.analytics.exportCSV();
 ```
 
-`analytics()` requires an enabled payments runtime with a payment tracker. It
-exposes summaries, transactions, combined data, and CSV/JSON exports. It does
-not query a facilitator or chain and is only as durable and complete as the
-configured payment storage.
+The extension declares `payments` as a required capability. Build fails with
+`analytics() requires an enabled payments() runtime with storage` when no
+payment tracker exists.
 
-CSV output protects formula-like fields, but exported payment data may still be
-sensitive. Apply normal access and retention controls.
+## Runtime API
+
+```typescript
+type AnalyticsRuntime = {
+  getSummary(windowMs?: number): Promise<AnalyticsSummary>;
+  getTransactions(windowMs?: number): Promise<Transaction[]>;
+  getData(windowMs?: number): Promise<AnalyticsData>;
+  exportCSV(windowMs?: number): Promise<string>;
+  exportJSON(windowMs?: number): Promise<string>;
+};
+```
+
+```typescript
+const day = 24 * 60 * 60_000;
+const summary = await runtime.analytics.getSummary(day);
+const transactions = await runtime.analytics.getTransactions(day);
+
+console.log({
+  incomingBaseUnits: summary.incomingTotal.toString(),
+  outgoingBaseUnits: summary.outgoingTotal.toString(),
+  netBaseUnits: summary.netTotal.toString(),
+  transactionCount: summary.incomingCount + summary.outgoingCount,
+  newest: transactions[0]?.timestampIso,
+});
+```
+
+`windowMs` uses `Date.now() - windowMs` and includes records newer than the
+cutoff. Omit it for all retained records. Results are not a database snapshot
+across several calls; concurrent payments can make a separately fetched
+summary and transaction list differ. Use `getData()` when the one function is
+the intended API, while recognizing the underlying tracker still performs its
+own reads.
+
+## Data model and units
+
+```typescript
+type PaymentRecord = {
+  id?: number;
+  groupName: string;
+  scope: string;
+  direction: 'incoming' | 'outgoing';
+  amount: bigint;
+  timestamp: number;
+};
+
+type Transaction = PaymentRecord & {
+  amountUsdc: string;
+  timestampIso: string;
+};
+```
+
+Amounts are stored as six-decimal base units. `1_500_000n` is formatted as
+`"1.5"`. JSON exports serialize `bigint` totals as base-10 strings; CSV emits
+the human-readable `amountUsdc` plus millisecond/ISO timestamps.
+
+The analytics layer labels the formatted field USDC and should not be used to
+aggregate arbitrary MPP currencies or assets without an explicit normalized
+currency/asset model in the application.
+
+`getOutgoingSummary()`, `getIncomingSummary()`, and `getSummary()` standalone
+helpers currently return the same combined incoming/outgoing summary. Their
+names do not filter the other direction. Use the individual fields instead of
+assuming a direction-exclusive result.
+
+## Transaction ordering and scope
+
+`getTransactions()` sorts newest first. `groupName` and `scope` are the policy
+accounting dimensions recorded by the payment tracker; they are not guaranteed
+to contain a run ID, payer, payee, asset, external transaction, or tenant ID.
+
+For multi-tenant reporting, configure trusted agent/tenant namespaces in the
+owning payment store and authorize access outside this package. Do not infer
+tenant ownership from a caller-provided group/scope string.
+
+## CSV and JSON export
+
+```typescript
+const csv = await runtime.analytics.exportCSV(day);
+const json = await runtime.analytics.exportJSON(day);
+
+await uploadToProtectedReportStore({ csv, json });
+```
+
+CSV fields are quoted/escaped when needed. Values beginning with formula
+characters (`=`, `+`, `-`, `@`, tab, or carriage return) receive a leading
+apostrophe defense. That reduces spreadsheet formula injection; it does not
+make the file non-sensitive or authorize the recipient.
+
+JSON converts every `bigint` to a decimal string. Consumers must parse money
+with integer/decimal-safe code rather than `Number`.
+
+## Standalone helpers
+
+The package exports:
+
+```typescript
+export {
+  getOutgoingSummary,
+  getIncomingSummary,
+  getSummary,
+  getAllTransactions,
+  getAnalyticsData,
+  exportToCSV,
+  exportToJSON,
+} from '@lucid-agents/analytics';
+```
+
+Each accepts a `PaymentTracker` first and optional `windowMs` second. Canonical
+analytics types are re-exported from the shared types package by this package.
+
+## Durability and reconciliation
+
+- In-memory payment storage makes analytics process-local and ephemeral.
+- SQLite can persist one-host payment records; Postgres is the normal shared
+  option for replicas.
+- A staged settlement that has not committed is counted for policy safety but
+  does not appear as a normal completed payment record in analytics.
+- Provider/chain settlements, refunds, chargebacks, or manual corrections made
+  outside the tracker will not appear automatically.
+- Restoring an old database can omit newer external settlements.
+
+Reconcile analytics against facilitator/provider/chain and the application's
+fulfillment ledger. Do not use `netTotal` as an accounting balance or revenue
+recognition number.
+
+## Privacy and access control
+
+Group names, scopes, timestamps, amounts, and IDs can reveal customers and
+commercial activity. Protect exports with server-side authorization,
+encryption, retention/deletion policy, audit logs, tenant filtering, and
+download rate limits. Do not expose `runtime.analytics` directly as a public
+entrypoint without an explicit schema and access policy.
+
+## Failure and testing
+
+Analytics methods propagate payment-store read errors. Treat an unavailable
+report as an observability failure, not evidence that totals are zero. Test:
+
+- exact six-decimal formatting, including values above safe JavaScript integer
+  range;
+- time-window boundary and clock behavior;
+- mixed incoming/outgoing net calculations;
+- CSV quoting, newlines, quotes, and formula prefixes;
+- JSON `bigint` strings;
+- store disconnect, empty data, cross-tenant access, and backup restore;
+- comparison with one known external settlement set.
+
+For lifecycle tracing beyond completed payment records, use the
+[observability contract](/docs/operate/observability) and
+[payment recovery model](/docs/build/payment-model).

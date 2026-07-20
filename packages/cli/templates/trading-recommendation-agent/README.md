@@ -1,56 +1,62 @@
-## Trading Recommendation Agent
+# Trading recommendation service
 
-This agent buys trading data from a data agent and generates trading signals/recommendations. It demonstrates A2A (Agent-to-Agent) composition with payment-enabled calls.
+Buyer-style Lucid example that purchases mock data from the paired trading data
+service and derives a demonstration BUY/SELL/HOLD signal.
 
-### Quick Start
+> **Migration required:** the current repository generator still composes this
+> legacy template with pre-v3 runtime/dependency/task-client wiring. It is not
+> included in the packed-workspace generated-project verification matrix and
+> should not be used as a starting point until that implementation is migrated.
+> This README describes the target contract for the migration.
 
-```sh
-bunx @lucid-agents/cli recommendation-agent --template=trading-recommendation-agent --adapter=hono
-cd recommendation-agent
-# Set AGENT_WALLET_PRIVATE_KEY and DATA_AGENT_URL in .env
-bun run dev
+The package namespace is `a2a`, but this project uses Lucid Agent Card,
+entrypoint, and task contracts—not the official A2A v1 binding.
+
+## Prerequisites
+
+- Start the generated `trading-data-agent` service on an allowlisted URL.
+- Use a dedicated testnet buyer wallet with a small balance.
+- Configure the same canonical payment network as the seller.
+- Review recipient and spend policy before allowing automatic signatures.
+
+```dotenv
+DATA_AGENT_URL=http://localhost:3001
+AGENT_WALLET_TYPE=local
+AGENT_WALLET_PRIVATE_KEY=0xSERVER_ONLY_BUYER_KEY
+PAYMENTS_NETWORK=eip155:84532
 ```
 
-### Prerequisites
+After the template implementation is migrated, `bun install`,
+`bun run type-check`, and `bun run dev` must all pass before use.
 
-You need a running data agent (created with `trading-data-agent` template) that this agent will buy data from.
+## Entrypoints
 
-### Entrypoints
+- `generateSignal`: obtains a larger market-data result and runs the selected
+  demonstration strategy.
+- `quickSignal`: obtains only a current mock price.
 
-- **`generateSignal`** - Buys market data and generates trading signal
-  - Parameters: `symbol` (string), `strategy` (optional: 'momentum', 'mean-reversion', 'breakout')
-  - Returns: signal (BUY/SELL/HOLD), confidence, reasoning, dataPrice
-
-- **`quickSignal`** - Quick signal using price data only (cheaper)
-  - Parameters: `symbol` (string)
-  - Returns: signal (BUY/SELL/HOLD), price
-
-### Environment Variables
-
-- `DATA_AGENT_URL` - URL of the data agent (default: http://localhost:3001)
-- `AGENT_WALLET_PRIVATE_KEY` - Wallet private key (pays for data)
-- `PAYMENTS_NETWORK` - Payment network (must match data agent: base-sepolia, base, solana-devnet, solana)
-
-### Testing
-
-1. Start the data agent first (on port 3001)
-2. Start this recommendation agent (on port 3000)
-3. Call the recommendation agent:
-
-```sh
-curl -X POST http://localhost:3000/entrypoints/generateSignal/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"symbol": "BTC/USD", "strategy": "momentum"}}'
+```bash
+curl -i http://localhost:3000/entrypoints/generateSignal/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: recommendation-request-000001' \
+  --data '{"input":{"symbol":"BTC/USD","strategy":"momentum"}}'
 ```
 
-The agent will automatically pay the data agent for the market data.
+The recommendation service makes the downstream payment. A successful outer
+response does not by itself prove downstream settlement; retain sanitized
+operation/receipt evidence and validate the returned data schema.
 
-### How It Works
+## Safety boundary
 
-1. Agent needs data → calls data agent's `getMarketData` entrypoint
-2. Uses payment-enabled fetch → automatically pays via x402
-3. Data agent validates payment → processes request and returns data
-4. Agent analyzes data → generates trading signal
+The generated example demonstrates composition, not a production approval or
+trading system. Before real funds:
 
-See `AGENTS.md` for detailed implementation guide.
+- allowlist the exact seller origin, payee, network, asset, and maximum amount;
+- use durable budget/idempotency state across replicas;
+- cap tool/model retries, concurrency, input, duration, and total spend;
+- preserve one business operation ID through payment and task polling;
+- handle ambiguous timeout after signing by reconciliation, not blind retry;
+- secure task access tokens and redact credentials from logs; and
+- replace mock strategies with reviewed domain logic.
 
+Read `AGENTS.md` for the current direct-invoke and Lucid-task client shapes.

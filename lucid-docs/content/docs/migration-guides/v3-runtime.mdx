@@ -4,7 +4,7 @@ description: Move from adapter-owned application behavior to extension-owned run
 icon: ArrowRight
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
@@ -12,19 +12,53 @@ Lucid Agents v3 in this repository makes the completed runtime the single owner
 of entrypoints, HTTP authorization, payments, tasks, and manifest composition.
 The public Stable channel remains v2.5.0 until the v3 package set is published.
 
+Migrate in a branch with a pinned lockfile. Do not upgrade one package at a
+time across Stable and Next.
+
+## Before you change code
+
+Inventory:
+
+- every `@lucid-agents/*` and x402 dependency/version;
+- adapter-local route, paywall, manifest, entrypoint, and task code;
+- public base paths and Agent Card URLs;
+- wallet/payment/identity environment variables;
+- payment, SIWX, idempotency, task, and scheduler storage;
+- client retry keys and expected error bodies; and
+- on-chain/provider side effects that cannot be rolled back.
+
+Capture a v2 contract test for health, discovery, free invoke, unpaid `402`,
+paid result/receipt, stream envelopes, and any task/client behavior before
+changing the implementation.
+
 ## Build one runtime
 
 ```ts
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const paymentConfig = paymentsFromEnv();
+if (!paymentConfig) throw new Error('Payment configuration is required');
+
 const runtime = await createAgent(meta)
-  .use(payments({ config: paymentsFromEnv() }))
-  .use(a2a({ taskStore }))
-  .use(http())
+  .use(payments({ config: paymentConfig }))
+  .use(
+    a2a({
+      tasks: { store: taskStore },
+    })
+  )
+  .use(
+    http({ basePath: '/api/agent', idempotency: { store: idempotencyStore } })
+  )
   .build();
 ```
 
 Register capabilities through `runtime.entrypoints.add()` or on the builder
 before `build()`. Adapter `addEntrypoint` helpers delegate to this registry for
-compatibility.
+compatibility. Duplicate keys now fail at the canonical registry and dynamic
+additions invalidate manifest caches.
 
 ## Delegate framework routes
 
@@ -32,6 +66,22 @@ compatibility.
 - TanStack and generated Next.js modules delegate to
   `runtime.http.handlers`.
 - Remove adapter-local paywalls, task stores, manifests, and registries.
+- Preserve the original request body/headers; do not run a body parser or
+  second x402 middleware before the canonical handler.
+
+Compare the public route plan and Agent Card before and after migration,
+including configured base paths and compatibility discovery aliases.
+
+## Move configuration to owning extensions
+
+Use `paymentsFromEnv()`, `walletsFromEnv()`, `identityFromEnv()`, and
+`mppFromEnv()` deliberately. There is no global runtime config merge. Prices
+stay on entrypoints as USD decimal strings and one priced entrypoint selects
+one payment rail.
+
+The current environment/alias matrix is documented in
+[Environment variables](/docs/reference/environment). Remove obsolete generic
+price/private-key variables only after updating deployment secrets.
 
 ## Use server-only subpaths
 
@@ -43,8 +93,53 @@ import { createPostgresPaymentStorage } from '@lucid-agents/payments/storage/pos
 import { createSQLitePaymentStorage } from '@lucid-agents/payments/storage/sqlite';
 ```
 
+Only payment and SIWX have shipped SQLite/Postgres factories. HTTP
+idempotency, Lucid tasks, and scheduler state require custom durable ports;
+current MPP challenge state is process-local. Do not translate a v2 database
+setting into a fictional v3 adapter.
+
+## Review protocol changes separately
+
+- x402 is v2 fixed-price `exact`; follow the separate
+  [x402 v2 migration](/docs/migration-guides/x402-v2).
+- Lucid Agent Cards/tasks are not the official A2A v1 binding.
+- AP2 currently emits v0.1 role metadata only, while upstream has moved.
+- ERC-8004 remains Draft and validation is not initialized by default.
+- MPP is an active individual Internet-Draft subset tied to the repository's
+  `mppx` version.
+
+Do not combine a runtime migration with an interoperability claim unless the
+corresponding protocol tests pass.
+
 ## Verify the migration
 
-Test health, Agent Card shape, free invocation, unpaid `402`, paid settlement,
-streaming, task ownership, idempotent retry, process restart with durable state,
-and `runtime.close()`.
+Run:
+
+1. clean install, package type-check, unit tests, and build;
+2. adapter contract tests for every deployed framework;
+3. health/card/entrypoint snapshot comparison;
+4. free invoke plus invalid input/output errors;
+5. unpaid `402`, paid settlement, same-key replay, and wrong-key conflict;
+6. stream admission, disconnect, and terminal envelope behavior;
+7. task ownership, cancellation, worker crash, and lease recovery;
+8. process restart/new replica with every durable state surface; and
+9. `runtime.close()` resource disposal during graceful shutdown.
+
+Test a low-limit testnet canary through the production proxy and reconcile the
+output, receipt/transaction, and durable record.
+
+## Rollout and rollback
+
+Use expand/contract storage changes so v2 and v3 can coexist during a canary.
+Keep the prior immutable build and its secret/config set. Route only a small
+allowlisted capability to v3, stop new paid admission on a mismatch, preserve
+staged settlements and idempotency records, then reconcile before routing
+back.
+
+Rollback cannot undo an on-chain settlement or identity registration. Do not
+drop new storage columns/records until the maximum retry, task-retention, and
+reconciliation windows have expired.
+
+See [Release channels](/docs/reference/release-channels),
+[Configuration](/docs/reference/configuration), and the
+[production checklist](/docs/operate/production-checklist).

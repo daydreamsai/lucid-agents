@@ -44,6 +44,9 @@ export const reputationClient = result?.clients?.reputation;
 export const validationClient = result?.clients?.validation;
 ```
 
+The validation registry client is deprecated and is not created by the default
+bootstrap path; do not make normal application startup depend on it.
+
 If auto-registration is enabled and no agent wallet is available, build fails
 closed. An empty payments environment is allowed until an entrypoint declares a
 price.
@@ -56,13 +59,15 @@ AGENT_DOMAIN=agent.example.com
 RPC_URL=https://...
 CHAIN_ID=84532
 AGENT_WALLET_PRIVATE_KEY=0x...
-IDENTITY_AUTO_REGISTER=true
+IDENTITY_AUTO_REGISTER=false
 ```
 
 The agent wallet signs identity transactions. A developer wallet is optional
 and should be configured only when the application needs separate contract
 operations. Never place either private key in browser-visible environment
-variables.
+variables. Enable auto-registration only after verifying the chain, registry,
+domain, hosted registration URI, and gas funding; the current wizard default
+must be reviewed rather than accepted blindly.
 
 Identity registration is EVM-only. Payment receiving is independent and may
 use an EVM or Solana network.
@@ -83,8 +88,10 @@ metadata changes.
 
 ## Service declarations
 
-Wizard switches populate `registrationOptions.selectedServices` for A2A, web,
-OASF, Twitter, and email. Only declare endpoints you will actually host.
+Wizard switches populate `registrationOptions.selectedServices` for an
+A2A-labeled entry, web, OASF, Twitter, and email. The label does not make the
+generated Lucid task routes an official A2A v1 binding. Only declare endpoints
+you will actually host.
 
 For OASF, the generated template validates authors, skills, domains, modules,
 and locators as JSON arrays. URI-bearing arrays reject invalid URLs. The HTTP

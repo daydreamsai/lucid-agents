@@ -4,28 +4,121 @@ description: Preserve ownership, payment admission, and retry safety for long-ru
 icon: ListChecks
 status: next
 verifiedVersion: 0.6.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Install `a2a()` to expose owned task routes backed by the canonical entrypoint
-registry. A task reservation is created only after authorization succeeds.
+Use a Lucid task when fulfillment should outlive the HTTP request. Installing
+`a2a()` adds owned task state and task routes backed by the canonical
+entrypoint registry.
+
+This is Lucid's current task profile, not the official A2A v1 HTTP/JSON-RPC
+binding. Do not claim cross-vendor A2A conformance; read
+[A2A protocol status](/docs/protocols/a2a).
+
+## Configure the task runtime
 
 ```ts
+import { a2a, createInMemoryTaskStore } from '@lucid-agents/a2a';
+
+const taskStore = createInMemoryTaskStore({
+  maxTasks: 1_000,
+  retentionMs: 24 * 60 * 60_000,
+});
+
 const runtime = await createAgent(meta)
   .use(payments({ config }))
-  .use(a2a({ taskStore }))
+  .use(
+    a2a({
+      tasks: {
+        store: taskStore,
+        maxRunMs: 10 * 60_000,
+      },
+    })
+  )
   .use(http())
   .build();
 ```
 
-Task state follows an owned state machine: submitted, working, completed,
-failed, or canceled. Store task records durably in production and use leases so
-two workers cannot fulfill the same task concurrently.
+The shipped store is bounded and process-local. Production deployments must
+implement the `TaskStore` port if tasks must survive restart or multiple
+workers. The package does not ship SQLite/Postgres task adapters.
 
-Payment admission does not make fulfillment infallible. Define what happens
-when work fails after verification and before settlement, and never create a
-second business task merely because a client retried an HTTP request. Use a
-stable idempotency key and return the existing task identity.
+## Authorization and state
 
-See [A2A](/docs/protocols/a2a) for discovery and client operations.
+Task creation uses the shared authorization transaction:
+
+```text
+request
+  → payment/SIWX/policy verification
+  → target idempotency and capacity admission
+  → durable task reservation + opaque owner-token hash
+  → payment settlement/finalization
+  → background execution lease
+  → completed | failed | cancelled
+```
+
+The public state values are `running`, `completed`, `failed`, and `cancelled`.
+Creation returns a `taskId` and opaque `accessToken`; only a hash of the token
+belongs in the task store. Possession of that token controls get, list,
+subscribe, and cancel operations.
+
+Never place task access tokens in URLs, logs, analytics, browser storage, or
+model prompts. A missing task and an unauthorized task should not become an
+existence oracle.
+
+## Exactly-once is not promised
+
+`TaskStore.claimExecution()` provides a fenced lease, and
+`compareAndSet()` rejects stale owners. That prevents many concurrent double
+executions, but application side effects can still occur before a worker loses
+its lease or crashes.
+
+Make fulfillment idempotent against a business operation ID stored with the
+task. Use unique database constraints or a downstream idempotency key for
+external writes. Do not create a second business task simply because a client
+lost the creation response.
+
+## Settlement and failures
+
+For task creation, Lucid settles after the task reservation is durable and
+before background execution completes. A later failed or cancelled task is not
+automatically a refund.
+
+Define and publish:
+
+- what counts as accepted versus fulfilled;
+- retry and lease-recovery behavior;
+- cancellation cutoff and best-effort semantics;
+- result retention and deletion;
+- refund, credit, or rerun policy after post-settlement failure; and
+- how operators reconcile task, payment, and downstream records.
+
+If reservation fails, authorization must abort without settlement. If
+settlement/recording becomes ambiguous, preserve the reservation and inspect
+payment evidence before allowing a replacement task.
+
+## Operate the workers
+
+- Use a shared atomic store and recover expired `running` leases after process
+  loss.
+- Size `maxRunMs` to terminate genuinely stuck work; it is not a lease
+  heartbeat.
+- Bound concurrency, input, output, remote calls, and per-task cost.
+- Propagate cancellation through the handler's `AbortSignal`.
+- Alert on lease expiry, long-running tasks, repeated failures, store errors,
+  and settled tasks without terminal fulfillment.
+- Close the runtime during graceful shutdown and stop accepting new tasks
+  before draining workers.
+
+## Test the lifecycle
+
+Test creation without credentials, valid paid creation, wrong access token,
+duplicate creation retry, concurrent lease claims, cancellation races, timeout,
+worker crash, expired-lease recovery, stale-owner completion, and retention
+expiry. Reconcile one paid failed task according to the published customer
+policy.
+
+See [A2A package reference](/docs/packages/a2a),
+[durable storage](/docs/operate/durable-storage), and
+[payment lifecycle](/docs/build/payment-model).

@@ -22,19 +22,19 @@ Most applications receive the package transitively. Install it directly when aut
 
 Prefer the narrow domain path that owns the type:
 
-| Export path | Owns |
-| --- | --- |
-| `@lucid-agents/types/core` | Agent metadata, runtime, manifest, entrypoint, extension, adapter, and network contracts. |
-| `@lucid-agents/types/http` | Fetch handlers, route plan, SSE envelopes, and idempotency-store ports. |
-| `@lucid-agents/types/a2a` | Agent Cards, A2A clients, owned tasks, leases, and task stores. |
-| `@lucid-agents/types/payments` | x402 configuration, runtime, policies, authorization, tracking, and storage contracts. |
-| `@lucid-agents/types/mpp` | MPP server/client methods, verifier, authorization, and runtime contracts. |
-| `@lucid-agents/types/siwx` | SIWX configuration, credentials, authentication context, and nonce storage. |
-| `@lucid-agents/types/identity` | ERC-8004 registration, trust, OASF, clients, and runtime contracts. |
-| `@lucid-agents/types/wallets` | Wallet configuration, connectors, metadata, and runtime contracts. |
-| `@lucid-agents/types/ap2` | AP2 roles, descriptors, configuration, and runtime contracts. |
-| `@lucid-agents/types/scheduler` | Hires, jobs, schedules, leases, stores, and scheduler runtime. |
-| `@lucid-agents/types/analytics` | Payment analytics, transaction, and runtime contracts. |
+| Export path                     | Owns                                                                                      |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `@lucid-agents/types/core`      | Agent metadata, runtime, manifest, entrypoint, extension, adapter, and network contracts. |
+| `@lucid-agents/types/http`      | Fetch handlers, route plan, SSE envelopes, and idempotency-store ports.                   |
+| `@lucid-agents/types/a2a`       | Agent Cards, Lucid HTTP-profile clients, owned tasks, leases, and task stores.            |
+| `@lucid-agents/types/payments`  | x402 configuration, runtime, policies, authorization, tracking, and storage contracts.    |
+| `@lucid-agents/types/mpp`       | MPP server/client methods, verifier, authorization, and runtime contracts.                |
+| `@lucid-agents/types/siwx`      | SIWX configuration, credentials, authentication context, and nonce storage.               |
+| `@lucid-agents/types/identity`  | ERC-8004 registration, trust, OASF, clients, and runtime contracts.                       |
+| `@lucid-agents/types/wallets`   | Wallet configuration, connectors, metadata, and runtime contracts.                        |
+| `@lucid-agents/types/ap2`       | AP2 roles, descriptors, configuration, and runtime contracts.                             |
+| `@lucid-agents/types/scheduler` | Hires, jobs, schedules, leases, stores, and scheduler runtime.                            |
+| `@lucid-agents/types/analytics` | Payment analytics, transaction, and runtime contracts.                                    |
 
 The root entrypoint remains available, but domain subpaths make ownership and dependency direction explicit.
 
@@ -132,10 +132,7 @@ interface Extension<
     context: BuildContext<Dependencies>
   ): RuntimeSlice | Promise<RuntimeSlice>;
   initialize?(runtime: AgentRuntime): void | Promise<void>;
-  onEntrypointAdded?(
-    entrypoint: EntrypointDef,
-    runtime: AgentRuntime
-  ): void;
+  onEntrypointAdded?(entrypoint: EntrypointDef, runtime: AgentRuntime): void;
   onManifestBuild?(
     manifest: AgentManifest,
     runtime: AgentRuntime

@@ -1,26 +1,171 @@
 ---
 title: Choose a payment model
-description: Match the charging contract to the workload without claiming upstream features Lucid does not implement.
+description: Select a charging contract and understand Lucid's authorization, fulfillment, settlement, and recovery transaction.
 icon: Scale
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Workload | Use now | Why |
-| --- | --- | --- |
-| Deterministic request with a known price | x402 `exact` | The buyer knows the full charge before fulfillment |
-| Invoke and stream have different fixed prices | Per-mode Lucid price | Each operation advertises one exact amount |
-| Credential-backed charge or session | MPP | Use only after installing the Next-only MPP extension |
-| Unknown usage before completion | Design a bounded fixed tier | Lucid does not currently expose x402 `upto` settlement |
-| Many payments settled together | Not currently supported | x402 batch settlement is upstream capability, not Lucid support |
+Choose a model whose price and settlement point are knowable before Lucid must
+commit the HTTP operation. Lucid currently supports fixed prices; it does not
+turn unknown usage into metered settlement automatically.
 
-Prices are USD decimal strings: `"0.01"` means one cent in the configured USDC
-asset. Atomic token amounts appear in protocol payloads and accounting, not in
-the entrypoint's human-readable price field.
+## Select the commercial contract
 
-Do not model an unbounded workload as a cheap fixed call. Bound input size,
-runtime, tokens, or output, then price the bounded service. For long-running
-work, use an [asynchronous task](/docs/build/async-tasks) so payment admission
-and fulfillment state remain visible.
+| Workload                                      | Use now                    | Why                                                                     |
+| --------------------------------------------- | -------------------------- | ----------------------------------------------------------------------- |
+| Deterministic request with a known price      | x402 v2 `exact`            | The buyer sees the full charge before fulfillment                       |
+| Invoke and stream have different fixed prices | `{ invoke, stream }` price | Each operation advertises one exact amount                              |
+| Credential-backed charge or session           | Next-only MPP              | Use only with one implemented Tempo, Stripe, or custom verifier         |
+| Long-running fixed-price work                 | Lucid owned task           | Payment commits when the task is accepted, before background completion |
+| Unknown usage before completion               | Bounded fixed tier         | Lucid does not expose x402 `upto` settlement                            |
+| Many payments settled together                | Not supported              | Batch settlement is an upstream x402 capability, not a Lucid feature    |
+
+Prices are decimal strings. For the current x402 policy tracker, `"0.01"`
+means one cent in the six-decimal USD/USDC accounting model. Do not use a
+JavaScript number or atomic token amount in `price`.
+
+Bound input bytes, tokens, execution time, output size, and external provider
+spend before assigning a fixed price. A fixed-price endpoint with unbounded
+cost is an availability and solvency risk.
+
+## The application transaction
+
+Every adapter delegates invoke, stream, and task admission to the same
+transport-independent gate:
+
+```text
+request
+  → choose rail and verify credential / SIWX
+  → claim target idempotency (invoke only)
+  → reserve payment-policy capacity
+  → reach the operation's fulfillment boundary
+  → stage non-expiring payment accounting
+  → settle the payment
+  → commit accounting and optional entitlement
+  → persist replay result (invoke only)
+  → return protocol metadata + application response
+```
+
+Verification, admission, fulfillment, settlement, and recording are separate
+states. A valid signature does not mean policy admitted the call; a successful
+settlement does not mean the background work later succeeded.
+
+## State ownership and observability
+
+| State                        | Durable owner                          | Observable evidence                                   | Safe retry?                                               |
+| ---------------------------- | -------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------- |
+| Challenged                   | Protocol/client                        | `401` or `402`, challenge header/body                 | Yes, after validating requirement                         |
+| Credential verified          | Payment verifier/facilitator           | Verification result and verified payer                | Continue same attempt; do not log credential              |
+| Invoke idempotency claimed   | `HttpIdempotencyStore`                 | Scope, key, fingerprint, owner, expiry                | Same request waits/retries; conflicting request must stop |
+| Policy capacity reserved     | `PaymentTracker`                       | Reservation IDs and policy group/scope                | Release on pre-settlement failure                         |
+| Fulfillment boundary reached | Handler, SSE admission, or `TaskStore` | Invoke result, open stream, or durable task record    | Depends on mode; see below                                |
+| Accounting staged            | `PaymentTracker`                       | Non-expiring settlement batch                         | Do not create a new charge until reconciled               |
+| Payment settled              | Facilitator/provider/chain             | Settlement response/receipt/transaction               | Irreversible; never blindly repay                         |
+| Accounting committed         | `PaymentTracker`                       | Payment records and cleared staged batch              | Business operation may be replayed from stored result     |
+| Invoke response retained     | `HttpIdempotencyStore`                 | Serialized successful response until retention expiry | Same fingerprint returns `Idempotency-Replayed: true`     |
+
+Lucid does not currently ship a general settlement reconciliation worker. The
+operator must monitor staged/unknown outcomes and query the facilitator,
+provider, chain, fulfillment record, and idempotency/task state before deciding
+whether to retry, compensate, refund, or complete accounting manually.
+
+## Fulfillment boundary differs by mode
+
+### Invoke
+
+Lucid validates input, runs the handler, validates output, and obtains a
+successful response before settlement. A `4xx`/`5xx` application response
+releases payment reservations and is not settled.
+
+This means a handler can perform an external side effect before settlement is
+attempted. If settlement then fails, the side effect is not automatically
+rolled back. Make handler effects idempotent or compensatable and pass the same
+business operation ID to every downstream system.
+
+After settlement, Lucid commits payment accounting and then stores the
+successful response under the invoke idempotency key. If response recording
+fails after settlement, Lucid retains the active claim instead of releasing it;
+when it can, it stores the pre-settlement successful response while returning a
+`503` for the current attempt. This prevents a blind retry from running and
+charging the handler twice.
+
+### Stream
+
+Lucid validates input, constructs the SSE response, and settles when the stream
+is successfully admitted. The stream handler runs as the body is consumed.
+A disconnect or later `run-end: failed` does not rewind the already accepted
+and settled operation.
+
+Price a stream for admission or a bounded service result, not for an unbounded
+number of chunks. Lucid does not implement x402 `upto` or post-hoc usage
+settlement.
+
+### Owned task
+
+Lucid verifies and admits payment, durably reserves the task, settles the
+accepted task response, and only then starts background execution. If
+settlement fails, the reserved task is cancelled. If background execution later
+fails or is cancelled, the accepted payment is not automatically refunded.
+
+The current task-create route does not use the invoke idempotency store. Use
+the task ownership capability to inspect the accepted task and design a stable
+application-level submission key if duplicate task creation is unacceptable.
+
+## Failure and recovery truth table
+
+| Failure window                               | Money                         | Fulfillment/state                                        | Response                                | Operator/client action                                             |
+| -------------------------------------------- | ----------------------------- | -------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------ |
+| Before verification                          | Not settled                   | Handler/task not run                                     | Challenge or `4xx`                      | Fix credential/requirement; retry same operation ID                |
+| Idempotency conflict/in progress             | Not newly settled             | Existing invoke owns key                                 | `409`                                   | Retry later only for in-progress; never change body under same key |
+| Policy admission fails                       | Not settled                   | Handler/task not run                                     | `403` or `503`                          | Treat denial as final unless policy legitimately changes           |
+| Invalid input/output or handler error        | Not settled by Lucid          | Handler may have started and may have external effects   | `400` or `500`                          | Inspect side effects before retry; reuse same key                  |
+| Task capacity reservation fails              | Not settled                   | No accepted task                                         | `503`                                   | Back off; reuse business submission identity                       |
+| Accounting staging fails                     | Not settled                   | Invoke may have completed; stream/task admission reached | `503`                                   | Repair storage; inspect fulfillment before retry                   |
+| Settlement definitively fails                | Not settled                   | Invoke effect may exist; reserved task is cancelled      | `402`/`503`                             | Reconcile side effects; retry only with same idempotency identity  |
+| Crash after staging, before known settlement | Unknown                       | Operation boundary reached                               | Connection loss                         | Query facilitator/chain and staged state; do not pay again blindly |
+| Settlement succeeds, accounting commit fails | Settled                       | Operation accepted/succeeded at its mode boundary        | `503` with available settlement headers | Reconcile and complete accounting; do not charge again             |
+| Stream/task later fails                      | Settled                       | Terminal failure/cancellation recorded when durable      | Stream event or task state              | Apply commercial refund/credit policy separately                   |
+| Idempotency result expires                   | Prior result may have settled | Replay evidence no longer retained                       | A new call can execute                  | Set retention longer than the buyer's maximum retry window         |
+
+An HTTP timeout is not evidence that settlement failed. Any retry policy that
+treats a timeout as “unpaid” can create duplicate charges.
+
+## Idempotency contract
+
+For invoke, generate one 20–256 character key per logical business operation
+before the first unpaid request. Reuse it across the protocol retry and every
+network retry. Lucid fingerprints method, URL, body, verified authorization
+subject, and relevant security context; a different request under the same key
+returns a conflict.
+
+Target idempotency is enabled by default with a bounded in-memory store. Inject
+a durable atomic `HttpIdempotencyStore` for restarts or multiple replicas.
+Configure:
+
+- `inProgressTtlMs` longer than the maximum handler plus settlement duration;
+- `retentionMs` longer than any buyer retry/reconciliation window;
+- capacity for active claims and retained responses;
+- atomic claim/complete/release semantics across every replica.
+
+## Refunds and disputes
+
+Neither Lucid nor x402 `exact` automatically refunds a failed business outcome.
+A refund is a separate idempotent payment or provider operation with its own
+authorization, evidence, accounting, and status. Document which stream/task
+terminal states are eligible, who approves it, how partial delivery is valued,
+and how the original settlement is linked.
+
+## Production proof
+
+Before launch, fault-inject each row in the truth table against the real
+storage implementations. Capture one correlation record containing the
+idempotency key, run/task ID, verified payer, entrypoint/mode, policy
+reservations, staged settlement ID, facilitator/chain evidence, response code,
+and fulfillment outcome—without recording credentials or private keys.
+
+Continue with [receive x402 payments](/docs/build/receive-x402),
+[retries and idempotency](/docs/buy/retries-idempotency), and
+[durable storage](/docs/operate/durable-storage).

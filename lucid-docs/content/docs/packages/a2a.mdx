@@ -8,7 +8,17 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-The A2A extension adds Agent Card discovery, direct invocation, streaming clients, and an owned asynchronous task state machine. HTTP task routes appear only when `a2a()` is installed.
+The A2A extension adds Agent Card-shaped discovery, direct invocation,
+streaming clients, and an owned asynchronous task state machine. HTTP task
+routes appear only when `a2a()` is installed.
+
+<Callout type="warn">
+  This package uses Lucid-specific `/entrypoints` and `/tasks` routes and a
+  Lucid task model. It does not implement an official A2A v1 JSON-RPC, gRPC, or
+  HTTP+JSON binding, does not negotiate `A2A-Version`, and has not passed the
+  A2A TCK. Treat it as a Lucid interoperability profile, not blanket A2A v1
+  conformance.
+</Callout>
 
 ## Installation
 
@@ -63,7 +73,7 @@ type A2ARuntime = {
 };
 ```
 
-`buildCard()` builds the A2A-owned portion directly. The HTTP manifest handler runs the complete manifest contribution pipeline, adding payments, identity, AP2, and other installed capabilities.
+`buildCard()` builds the A2A-owned portion directly. The HTTP manifest handler runs the complete manifest contribution pipeline, adding payments, identity, AP2, and other installed capabilities. The emitted `protocolVersion: "1.0"` describes the card shape; it does not change the Lucid routes into an official A2A binding.
 
 ## Agent Card discovery
 
@@ -157,12 +167,7 @@ Keep `accessToken` secret. Every read, cancellation, listing, and subscription r
 ```typescript
 import { waitForTask } from '@lucid-agents/a2a';
 
-const terminal = await waitForTask(
-  agent.a2a.client,
-  card,
-  access,
-  30_000
-);
+const terminal = await waitForTask(agent.a2a.client, card, access, 30_000);
 
 await agent.a2a.client.subscribeTask(card, access, event => {
   console.log(event.type, event.data);
@@ -173,14 +178,10 @@ const cancellable = await agent.a2a.client.sendMessage(card, 'summarize', {
 });
 await agent.a2a.client.cancelTask(card, cancellable);
 
-const owned = await agent.a2a.client.listTasks(
-  card,
-  access.accessToken,
-  {
-    status: ['running', 'completed'],
-    limit: 50,
-  }
-);
+const owned = await agent.a2a.client.listTasks(card, access.accessToken, {
+  status: ['running', 'completed'],
+  limit: 50,
+});
 ```
 
 `waitForTask()` returns when the task is `completed`, `failed`, or `cancelled`, and throws after its deadline.
@@ -209,24 +210,25 @@ const second = await agent.a2a.client.sendMessage(
   }
 );
 
-const conversation = await agent.a2a.client.listTasks(
-  card,
-  first.accessToken,
-  { contextId: 'conversation-123' }
-);
+const conversation = await agent.a2a.client.listTasks(card, first.accessToken, {
+  contextId: 'conversation-123',
+});
 ```
 
 ## HTTP task contract
 
+This table documents the **Lucid HTTP profile**, not the official A2A v1
+HTTP+JSON operation paths or message/task schemas.
+
 With an empty HTTP base path:
 
-| Operation | Route | Access token |
-| --- | --- | --- |
-| Create | `POST /tasks` | Supplied or generated. |
-| List owned tasks | `GET /tasks` | Required. |
-| Read | `GET /tasks/:taskId` | Required. |
-| Cancel | `POST /tasks/:taskId/cancel` | Required. |
-| Subscribe | `GET /tasks/:taskId/subscribe` | Required. |
+| Operation        | Route                          | Access token           |
+| ---------------- | ------------------------------ | ---------------------- |
+| Create           | `POST /tasks`                  | Supplied or generated. |
+| List owned tasks | `GET /tasks`                   | Required.              |
+| Read             | `GET /tasks/:taskId`           | Required.              |
+| Cancel           | `POST /tasks/:taskId/cancel`   | Required.              |
+| Subscribe        | `GET /tasks/:taskId/subscribe` | Required.              |
 
 The token travels in `Task-Access-Token` and must contain 20–256 characters. A configured HTTP base path prefixes all task routes and is preserved in the Agent Card interface URL.
 
@@ -300,3 +302,6 @@ export {
 ```
 
 Protocol contracts such as `AgentCard`, `A2ARuntime`, `A2AClient`, `Task`, `TaskAccess`, `TaskStore`, and task request/response types are defined in `@lucid-agents/types/a2a` and are not re-exported.
+
+See [A2A compatibility](/docs/protocols/a2a) before integrating with a
+third-party A2A SDK.

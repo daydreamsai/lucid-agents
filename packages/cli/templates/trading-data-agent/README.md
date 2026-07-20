@@ -1,45 +1,62 @@
-## Trading Data Agent
+# Trading data service
 
-This agent provides mock trading data via priced entrypoints. Other agents can buy this data using A2A (Agent-to-Agent) calls with x402 payments.
+Merchant-style Lucid example that exposes mock OHLCV data through priced HTTP
+entrypoints and Agent Card-shaped discovery.
 
-### Quick Start
+> **Migration required:** the current repository generator still composes this
+> legacy template with pre-v3 runtime/dependency wiring. It is not included in
+> the packed-workspace generated-project verification matrix and should not be
+> used as a starting point until that implementation is migrated. This README
+> describes the target contract for the migration.
 
-```sh
-bunx @lucid-agents/cli data-agent --template=trading-data-agent --adapter=hono
-cd data-agent
-# Set PAYMENTS_RECEIVABLE_ADDRESS in .env
-bun run dev
+This generated project uses Lucid's own entrypoint/task profile; it is not an
+official A2A v1 implementation. Any AP2 role is metadata only.
+
+## Run
+
+Review `.env.example`, then provide a testnet facilitator, canonical network,
+and receiving address in `.env`:
+
+```dotenv
+PAYMENTS_FACILITATOR_URL=https://YOUR_TESTNET_FACILITATOR
+PAYMENTS_NETWORK=eip155:84532
+PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_EVM_ADDRESS
 ```
 
-### Entrypoints
+After the template implementation is migrated, `bun install`,
+`bun run type-check`, and `bun run dev` must all pass before use.
 
-- **`getMarketData`** - Returns full OHLCV (Open/High/Low/Close/Volume) data
-  - Price: 5000 base units
-  - Parameters: `symbol` (string), `timeframe` (optional: '1h', '4h', '1d')
+## Entrypoints
 
-- **`getPrice`** - Returns current price only
-  - Price: 1000 base units
-  - Parameters: `symbol` (string)
+- `getMarketData`: bounded mock OHLCV response, currently priced at `$0.005`.
+- `getPrice`: mock current price, currently priced at `$0.001`.
 
-### Environment Variables
+Prices are USD decimal strings, not token base units.
 
-- `PAYMENTS_FACILITATOR_URL` - x402 facilitator endpoint
-- `PAYMENTS_FACILITATOR_AUTH` - Optional facilitator bearer token (defaults to `DREAMS_AUTH_TOKEN` at runtime)
-- `PAYMENTS_NETWORK` - Payment network (base-sepolia, base, solana-devnet, solana)
-- `PAYMENTS_RECEIVABLE_ADDRESS` - Address that receives payments
+An unpaid request should be challenged:
 
-### Testing
-
-Test the agent locally:
-
-```sh
-curl -X POST http://localhost:3000/entrypoints/getPrice/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"symbol": "BTC/USD"}}'
+```bash
+curl -i http://localhost:3000/entrypoints/getPrice/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: trading-data-read-000001' \
+  --data '{"input":{"symbol":"BTC/USD"}}'
 ```
 
-### Use with Recommendation Agent
+Expect `402` and `PAYMENT-REQUIRED`. Use a compatible testnet x402 buyer to
+verify a paid `2xx` plus `PAYMENT-RESPONSE`; plain curl cannot complete the
+payment.
 
-This agent is designed to work with the `trading-recommendation-agent` template, which buys data from this agent and generates trading signals.
+## Configuration
 
-See `AGENTS.md` for detailed implementation guide.
+- `PAYMENTS_FACILITATOR_URL`: external x402 facilitator base URL.
+- `PAYMENTS_FACILITATOR_AUTH`: optional server-only bearer token.
+- `PAYMENTS_NETWORK`: canonical CAIP-2 network.
+- `PAYMENTS_RECEIVABLE_ADDRESS`: seller destination on that network.
+
+Template/wizard defaults are development inputs, not production endorsements.
+Before real data or funds, replace mock generation, set size/time/concurrency
+limits, add durable payment/idempotency storage, verify provider behavior, and
+publish reconciliation/refund semantics.
+
+The `trading-recommendation-agent` template is the paired buyer example.
+See `AGENTS.md` before modifying the generated runtime.

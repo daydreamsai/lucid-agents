@@ -63,7 +63,7 @@ Static x402 receiving uses:
 ```dotenv
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 PAYMENTS_FACILITATOR_URL=https://facilitator.example
-PAYMENTS_NETWORK=base-sepolia
+PAYMENTS_NETWORK=eip155:84532
 ```
 
 Supported aliases include `ethereum`, `sepolia`, `base`, `base-sepolia`,

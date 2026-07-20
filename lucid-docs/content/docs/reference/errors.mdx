@@ -1,23 +1,143 @@
 ---
 title: Errors
-description: Classify HTTP, policy, payment, task, and fulfillment failures.
+description: Machine-readable HTTP errors, retry decisions, and ambiguous payment outcomes.
 icon: CircleAlert
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Class                            | Typical status/state | Retry guidance                                      |
-| -------------------------------- | -------------------- | --------------------------------------------------- |
-| Input/schema                     | `400`                | Fix input; do not repay blindly                     |
-| Payment required                 | `402`                | Let a compatible buyer evaluate and retry once      |
-| Policy denied                    | `403`                | Change intent/policy; do not bypass controls        |
-| Missing payment configuration    | `503`                | Operator action required                            |
-| Verification/settlement provider | `5xx`                | Check provider and ambiguous state before retry     |
-| Fulfillment exception            | `5xx` or failed task | Query idempotency/task state before another payment |
-| Task lease/cancellation          | Task state           | Follow task state machine, not generic HTTP retry   |
+Lucid HTTP handlers return JSON errors with a machine-readable `code`:
 
-Expose stable machine-readable error codes and a safe message. Log correlated
-internal detail by run/idempotency/task ID without returning secrets or payment
-credentials.
+```json
+{
+  "error": {
+    "code": "invalid_input",
+    "message": "Safe summary or validation details"
+  }
+}
+```
+
+The status code identifies the broad class. The error code determines the
+operator or client action. Do not retry, repay, or expose internal details based
+only on `4xx` versus `5xx`.
+
+## Core invoke and stream errors
+
+| Code                   | Status | Meaning                                                          | Client action                                                                |
+| ---------------------- | -----: | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `entrypoint_not_found` |  `404` | No registered entrypoint matches the key.                        | Correct the URL or refresh discovery.                                        |
+| `not_implemented`      |  `501` | The entrypoint has no handler for that operation.                | Do not retry until the service changes.                                      |
+| `invalid_request`      |  `400` | The request body is not valid JSON or has the wrong outer shape. | Fix the request; do not pay again blindly.                                   |
+| `invalid_input`        |  `400` | Input failed the entrypoint schema.                              | Fix the fields described in `issues`.                                        |
+| `invalid_output`       |  `500` | The handler returned output that failed its declared schema.     | Operator bug; use the same idempotency key when checking recovery.           |
+| `stream_not_supported` |  `400` | The entrypoint has no stream handler.                            | Use invoke or a stream-capable entrypoint.                                   |
+| `internal_error`       |  `500` | An unclassified handler or stream failure occurred.              | Treat the outcome as ambiguous if payment or side effects may already exist. |
+
+Metadata routes use `not_found` with `404` when an optional document such as
+the OASF record is not enabled. That differs from `entrypoint_not_found`: it
+means the route exists, but the requested discovery surface is unavailable.
+
+Task routes additionally use:
+
+| Code                    |         Status | Meaning                                                         |
+| ----------------------- | -------------: | --------------------------------------------------------------- |
+| `a2a_tasks_not_enabled` |          `404` | No Lucid task runtime is installed.                             |
+| `skill_not_found`       |          `404` | The requested card skill does not resolve to an entrypoint.     |
+| `task_not_found`        |          `404` | No task exists or the caller is not allowed to observe it.      |
+| `task_access_required`  | `400` or `401` | The task token is malformed or absent.                          |
+| `task_execution_failed` |          `503` | The reservation or background execution could not be started.   |
+| `invalid_state`         | `400` or `409` | The requested task transition is invalid for its current state. |
+
+Once a task has started, failure is represented on the stored task or SSE
+event rather than as a new route response. Mapped handler failures use
+`invalid_input`, `invalid_output`, or `internal_error`; the in-memory executor
+uses `task_timeout` when `maxRunMs` expires. The client may synthesize
+`parse_error` if a task SSE event is not valid JSON. Applications can also
+return domain-specific `TaskError.code` values, so treat this field as an open
+string after handling the Lucid codes you depend on.
+
+Lucid's current task routes are not the official A2A v1 binding. See
+[A2A protocol status](/docs/protocols/a2a) before writing interoperable error
+handling around them.
+
+## Payment and authorization errors
+
+| Code                                 | Typical status | Settlement meaning                                                                     | Safe action                                                                                      |
+| ------------------------------------ | -------------: | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `payment_required`                   |          `402` | No verified x402 payment yet.                                                          | Evaluate the advertised requirement, approve it under policy, then retry once with a credential. |
+| `auth_required`                      | `401` or `402` | A SIWX challenge is required.                                                          | Sign the canonical challenge and retry once.                                                     |
+| `auth_failed`                        |          `401` | SIWX verification failed.                                                              | Refresh the challenge; do not reuse an invalid or expired credential.                            |
+| `policy_violation`                   |          `403` | Payment/fulfillment was not admitted.                                                  | Change the request or approval policy; never bypass the control automatically.                   |
+| `policy_storage_error`               |          `503` | Policy capacity could not be checked atomically.                                       | Fail closed and restore the policy store before retrying.                                        |
+| `payment_configuration_error`        | `500` or `503` | Required rail, network, destination, or provider configuration is absent/inconsistent. | Operator action; do not downgrade to a free request.                                             |
+| `authorization_configuration_error`  |          `503` | An auth-only entrypoint lacks an enabled SIWX runtime/store.                           | Fix deployment configuration.                                                                    |
+| `authorization_admission_failed`     |          `503` | Capacity reservation failed before execution.                                          | Usually safe to retry after the store recovers, using the same idempotency key.                  |
+| `authorization_abort_failed`         |          `503` | A provisional reservation could not be released.                                       | Reconcile reservations before accepting more traffic.                                            |
+| `authorization_finalization_failed`  |          `503` | Settlement/finalization threw after execution began.                                   | Ambiguous: query facilitator evidence and the idempotency record before retrying.                |
+| `payment_reservation_release_failed` |          `503` | Incoming policy capacity could not be released after an application failure.           | Reconcile reservation state before retrying or admitting more traffic.                           |
+| `settlement_failed`                  | `402` or `503` | Settlement was rejected definitively (`402`) or settlement execution threw (`503`).    | Distinguish rejection from unknown submission outcome before any retry.                          |
+| `payment_recording_failed`           |          `503` | Settlement may have succeeded but accounting or SIWX entitlement persistence failed.   | Treat as potentially paid; reconcile, do not submit a new credential automatically.              |
+| `mpp_configuration_error`            |          `503` | MPP methods or verifier configuration cannot serve the challenge.                      | Operator action.                                                                                 |
+| `mpp_verification_in_progress`       |          `409` | The same process-local MPP challenge is already being verified.                        | Back off; use the same validated idempotency key where supported.                                |
+
+Facilitators and upstream payment libraries may return additional structured
+errors. Preserve their status and correlation data internally, but do not
+assume an undocumented provider body is stable.
+
+## Idempotency errors
+
+Invoke idempotency is activated only when the client sends an
+`Idempotency-Key`. Keys must contain 20–256 characters.
+
+| Code                       | Status | Meaning                                            | Retry rule                                                                                   |
+| -------------------------- | -----: | -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `invalid_idempotency_key`  |  `400` | The key length is outside the accepted range.      | Generate a valid key and send it only if the original request was not admitted.              |
+| `idempotency_in_progress`  |  `409` | Another owner holds the same request claim.        | Respect `Retry-After`; poll with the same key and identical request.                         |
+| `idempotency_key_conflict` |  `409` | The same key was used for a different fingerprint. | Stop; use a new key for the genuinely different operation.                                   |
+| `idempotency_store_error`  |  `503` | Claim, release, or completion persistence failed.  | Check whether execution/settlement occurred before retrying.                                 |
+| `idempotency_claim_lost`   |  `503` | The in-progress lease expired before completion.   | Ambiguous; inspect fulfillment and payment evidence. Increase the TTL if runs can exceed it. |
+
+A successful replay includes `Idempotency-Replayed: true`. A replayed response
+is evidence that the stored invocation result was returned, not that a new
+payment was submitted.
+
+## Retry decision table
+
+| Observation                                                                                       | Automatic retry?           | Credential/key behavior                                                            |
+| ------------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| Initial `402 payment_required`                                                                    | Once, after local approval | Add a fresh payment credential; keep the same business idempotency key.            |
+| `400`, `403`, or `404`                                                                            | No                         | Correct intent/configuration first.                                                |
+| `409 idempotency_in_progress`                                                                     | Yes, bounded backoff       | Same request and same idempotency key; do not create a second payment intent.      |
+| Network failure before any response bytes                                                         | Maybe                      | Same idempotency key; first check client/provider evidence when available.         |
+| `503` before authorization admission                                                              | After dependency recovery  | Same idempotency key.                                                              |
+| `authorization_finalization_failed`, `payment_recording_failed`, timeout after payment submission | No blind retry             | Query settlement and stored response/task state before deciding.                   |
+| Stream disconnect after `200`                                                                     | Not as a new paid stream   | Streaming settles on admission; resume only through application-defined semantics. |
+| Task creation returned a task ID                                                                  | Poll the task              | Do not recreate the paid task merely because execution is slow.                    |
+
+See [Retries and idempotency](/docs/buy/retries-idempotency) and
+[Payment lifecycle](/docs/build/payment-model) for the complete state machine.
+
+## Logging contract
+
+Log enough context to distinguish payment, fulfillment, and persistence:
+
+- request/run ID, entrypoint, operation, and validated idempotency key hash;
+- payment protocol, network, asset, atomic amount, payer/payee identifiers, and
+  facilitator/receipt identifiers;
+- authorization phase (`challenge`, `verified`, `admitted`, `settling`,
+  `settled`, `recorded`) and whether settlement became irreversible;
+- task ID and lease/owner identifiers when applicable;
+- public error code plus an internal exception class and dependency name.
+
+Never log payment credentials, wallet private keys, facilitator bearer tokens,
+SIWX signatures, raw authorization context, or unredacted provider payloads.
+
+## Public versus internal messages
+
+Treat `error.code` as the automation surface. Public messages should be safe
+and actionable but may evolve; stack traces and provider responses belong in
+correlated server logs. If your application adds codes, namespace and document
+them so a client can distinguish Lucid transport errors from business-domain
+failures.

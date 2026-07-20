@@ -1,364 +1,200 @@
 # @lucid-agents/cli
 
-CLI scaffolding tool to quickly generate new agent projects with built-in templates and interactive configuration.
+Scaffold a Lucid service for Hono, Express, TanStack Start, or Next.js. The CLI
+copies a template, applies one adapter, writes wizard values to the generated
+environment files, and optionally installs dependencies. It is a project
+generator, not a runtime dependency.
 
-## Quick Start
+## Choose a release channel
 
-Create a new agent in seconds:
+The public npm package set is Stable. This repository can be ahead of npm, so
+pin one channel and inspect the generated dependency versions before install.
+
+Stable:
 
 ```bash
-bunx @lucid-agents/cli@latest my-agent
+bunx @lucid-agents/cli@2.5.0 my-service \
+  --adapter=hono \
+  --template=blank
 ```
 
-The wizard will guide you through template selection and configuration. That's it!
-
-## Available Templates
-
-Choose the template that fits your use case:
-
-### Blank Template (`blank`)
-
-Minimal agent with echo entrypoint. Best starting point for custom agents.
-
-**Best for:**
-
-- Learning core fundamentals
-- Building custom agents from scratch
-- Minimal boilerplate
-
-### ERC-8004 Identity Template (`identity`)
-
-Full-featured agent with on-chain identity and verifiable attestations.
-
-**Best for:**
-
-- Verifiable agents with on-chain identity
-- Trust and reputation tracking
-- Domain-bound agent attestations
-- Decentralized agent networks
-
-### Trading Data Agent (`trading-data-agent`)
-
-Merchant-style agent that exposes paid market data entrypoints.
-
-**Best for:**
-
-- Selling structured data over x402
-- A2A merchant examples
-- Testing monetized entrypoints
-
-### Trading Recommendation Agent (`trading-recommendation-agent`)
-
-Shopper-style agent that buys data from another agent and returns recommendations.
-
-**Best for:**
-
-- A2A composition examples
-- Paid downstream calls
-- Multi-agent workflows
-
-## How It Works
-
-When you run the CLI:
-
-1. **Choose your template** - Select which type of agent to create
-2. **Configure through wizard** - Answer questions about your agent:
-   - Agent name, version, description
-   - Payment settings (receivable address, network, pricing)
-   - Template-specific settings (domain for identity, etc.)
-3. **Project generated** - Complete agent project with:
-   - Configured `src/agent.ts`
-   - Generated `.env` with your answers
-   - Ready-to-use `package.json`
-   - Template-specific features
-4. **Install & run** - Optionally install dependencies with `--install`
-
-All configuration goes into `.env` - easy to change later without editing code.
-
-### Adapter System
-
-Framework-specific assets live under `packages/cli/adapters/<adapter>`.
-When you select an adapter, the CLI copies the corresponding runtime framework files:
-
-**Available Adapters:**
-
-- `hono` - Traditional HTTP server with Hono framework
-- `express` - Node-style HTTP server built on Express with `@lucid-agents/express`
-- `tanstack-ui` - TanStack Start service storefront with wallet authorization, payments, streaming, tasks, and schema-derived inputs
-- `tanstack-headless` - TanStack Start API-only (no UI components)
-- `next` – Next.js App Router shell with the same shared service storefront
-
-The adapter provides the runtime skeleton (routing, server setup, build config), while templates provide the agent logic (entrypoints, features, configuration).
-
-### Generated Service UI
-
-Next and TanStack UI projects share one generated frontend layer. The page is a
-public service storefront rather than an operations dashboard. It presents the
-Agent Card identity and trust signals, lists offerings with their prices and
-protocols, and opens a schema-derived invocation workspace for the selected
-offering.
-
-The React storefront supports:
-
-- free invoke and SSE stream operations;
-- progressive SIWX and x402 wallet readiness;
-- session-only MPP credential entry;
-- A2A task creation, polling, and cancellation when published;
-- integration snippets, schemas, endpoints, and public capability descriptors;
-- responsive drill-in navigation and accessible live status updates.
-
-Inputs, results, task access tokens, and payment credentials are not written to
-browser storage. The generated page reads the public Agent Card and health
-handlers instead of inspecting private runtime configuration.
-
-Hono and Express use the portable version of the same service model. The
-portable page can invoke and stream free offerings and explains how to use a
-protocol-aware client for protected operations.
-
-## CLI Options
+Current repository (Next):
 
 ```bash
-bunx @lucid-agents/cli <app-name> [options]
+bun run build:packages
+bun packages/cli/dist/index.js my-service \
+  --adapter=hono \
+  --template=blank \
+  --no-install
+```
 
-Options:
-  -t, --template <id>   Select template (blank, identity, trading-data-agent, trading-recommendation-agent)
-  -a, --adapter <id>    Select runtime adapter (hono, express, tanstack-ui, tanstack-headless, next)
+Do not use `@latest` in reproducible automation. Repository templates track the
+Next workspace and are not proof that the same package versions are available
+on npm.
+
+## Templates
+
+| Template                       | Purpose                                                       | Adapters                                     |
+| ------------------------------ | ------------------------------------------------------------- | -------------------------------------------- |
+| `blank`                        | Minimal typed service and starting capability                 | Hono, Express, TanStack UI/headless, Next.js |
+| `identity`                     | Wallet, ERC-8004 identity metadata/registration, and payments | Hono, Express, TanStack UI/headless, Next.js |
+| `trading-data-agent`           | Legacy merchant example; requires v3 template migration       | Hono, Express                                |
+| `trading-recommendation-agent` | Legacy buyer example; requires v3 template migration          | Hono, Express                                |
+
+The generated-project verification matrix currently covers `blank` across all
+five adapters. The two trading templates still contain pre-v3 composition and
+are not a supported starting point until their generated source, dependencies,
+and paid task calls are migrated and added to that matrix. Their documentation
+records the target contract. They are also not a claim of conformance with the
+official A2A v1 transport or task model.
+
+## Adapters
+
+| Adapter             | Generated shape                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `hono`              | Hono application bound to the canonical HTTP route plan                                               |
+| `express`           | Express application with a Node/Web Request bridge                                                    |
+| `tanstack-ui`       | TanStack Start routes plus a public service storefront                                                |
+| `tanstack-headless` | TanStack Start routes without the storefront                                                          |
+| `next`              | Next.js App Router modules plus the shared storefront; there is no standalone Next.js adapter package |
+
+The generated UI is a public service storefront. It presents Agent Card,
+health, schemas, operation URLs, prices, and available public trust signals. It
+is not an operations dashboard and must not expose payment records, secrets,
+private task state, or wallet credentials.
+
+## Options
+
+```text
+Usage: bunx @lucid-agents/cli <app-name> [options]
+
+  -t, --template <id>   Select a template
+  -a, --adapter <id>    Select an adapter
   -i, --install         Run bun install after scaffolding
-  --no-install          Skip bun install (default)
-  --wizard=no           Skip wizard, use template defaults
-  --non-interactive     Same as --wizard=no
-  --network=<network>   Set payment network (base-sepolia, base, solana-devnet, solana)
-  --KEY=value           Pass template argument (use with --non-interactive)
-  -h, --help            Show this help
+  --no-install          Skip installation (default)
+  --wizard=no           Use template defaults
+  --no-wizard           Alias for --wizard=no
+  --non-interactive     Alias for --wizard=no
+  --network=<network>   Map a payment-network value to PAYMENTS_NETWORK
+  --KEY=value           Supply a template wizard value in non-interactive mode
+  -h, --help            Show installed CLI help
 ```
 
-### Examples
+`--framework` is accepted as a compatibility alias for `--adapter`.
+
+## Reproducible non-interactive generation
+
+Supply the template, adapter, and every deployment-sensitive value. Prefer a
+canonical CAIP-2 network even though the wizard accepts historical aliases.
 
 ```bash
-# Interactive setup (recommended)
-bunx @lucid-agents/cli@latest my-agent
-
-# With specific template
-bunx @lucid-agents/cli@latest my-agent --template=identity
-
-# With Solana payment network
-bunx @lucid-agents/cli@latest my-agent --network=solana-devnet
-
-# With Base mainnet
-bunx @lucid-agents/cli@latest my-agent --network=base
-
-# Identity template with Solana payments
-bunx @lucid-agents/cli@latest my-agent --template=identity --network=solana
-
-# With Express adapter
-bunx @lucid-agents/cli@latest my-agent --adapter=express --template=blank
-
-# With Hono adapter
-bunx @lucid-agents/cli@latest my-agent --adapter=hono --template=blank
-
-# With TanStack UI (full dashboard)
-bunx @lucid-agents/cli@latest my-agent --adapter=tanstack-ui --template=blank
-
-# With TanStack headless (API only, no UI)
-bunx @lucid-agents/cli@latest my-agent --adapter=tanstack-headless --template=blank
-
-# Auto-install dependencies
-bunx @lucid-agents/cli@latest my-agent --install
-
-# Non-interactive with defaults
-bunx @lucid-agents/cli@latest my-agent --template=blank --wizard=no
-```
-
-### Network Selection
-
-All templates support both EVM and Solana payment networks:
-
-**Interactive Mode:**
-When you run the CLI interactively, you'll see a dropdown menu to select your payment network:
-
-```
-? Payment network
-  ❯ Base Sepolia (EVM testnet)
-    Base (EVM mainnet)
-    Solana Devnet
-    Solana Mainnet
-```
-
-**Non-Interactive Mode:**
-Use the `--network` flag to specify the network:
-
-```bash
-# Solana devnet
-bunx @lucid-agents/cli my-agent --network=solana-devnet --non-interactive
-
-# Base mainnet
-bunx @lucid-agents/cli my-agent --network=base --non-interactive
-```
-
-**Important Notes:**
-
-- Payment network is independent of identity registration (identity uses EVM chain)
-- For identity template: EVM private key is for identity registration, payment address can be Solana
-- Payment address can be shared across multiple agents
-
-### Non-Interactive Mode with Template Arguments
-
-Perfect for CI/CD, automation, or AI coding agents:
-
-```bash
-# Blank template with custom configuration
-bunx @lucid-agents/cli@latest my-agent \
+bunx @lucid-agents/cli@2.5.0 paid-service \
+  --adapter=hono \
   --template=blank \
   --non-interactive \
-  --AGENT_DESCRIPTION="Custom agent for automation" \
-  --AGENT_VERSION="1.0.0" \
-  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
-
-# Identity template with full configuration
-bunx @lucid-agents/cli@latest verified-agent \
-  --template=identity \
-  --non-interactive \
-  --install \
-  --AGENT_DESCRIPTION="Verifiable agent with on-chain identity" \
-  --AGENT_VERSION="0.1.0" \
-  --AGENT_DOMAIN="agent.example.com" \
-  --PAYMENTS_FACILITATOR_URL="https://facilitator.daydreams.systems" \
-  --PAYMENTS_NETWORK="ethereum" \
-  --PAYMENTS_RECEIVABLE_ADDRESS="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0" \
-  --PAYMENTS_DEFAULT_PRICE="0.1" \
-  --RPC_URL="https://eth.llamarpc.com" \
-  --CHAIN_ID="1" \
-  --IDENTITY_AUTO_REGISTER="true"
-
+  --no-install \
+  --AGENT_DESCRIPTION='Paid analysis service' \
+  --AGENT_VERSION='0.1.0' \
+  --PAYMENTS_FACILITATOR_URL='https://YOUR_TESTNET_FACILITATOR' \
+  --PAYMENTS_NETWORK='eip155:84532' \
+  --PAYMENTS_DESTINATION='static' \
+  --PAYMENTS_RECEIVABLE_ADDRESS='0xYOUR_EVM_ADDRESS'
 ```
 
-**How it works:**
-
-1. Any flag matching a wizard prompt key (e.g., `--AGENT_DESCRIPTION`) is captured
-2. In non-interactive mode, these values override template defaults
-3. Values not provided fall back to `defaultValue` from `template.json`
-4. Check `template.schema.json` in each template for available arguments
-
-## Environment Variables
-
-The wizard writes all configuration to `.env`. You can edit these values anytime.
-
-### Common Variables (All Templates)
+Then:
 
 ```bash
-# Agent metadata
-AGENT_NAME=my-agent
-AGENT_VERSION=0.1.0
-AGENT_DESCRIPTION=Your agent description
-
-# Payments
-PAYMENTS_FACILITATOR_URL=https://facilitator.daydreams.systems
-PAYMENTS_RECEIVABLE_ADDRESS=0xYourWalletAddress
-PAYMENTS_NETWORK=ethereum
-PAYMENTS_DEFAULT_PRICE=0.1
-
-# Wallet for transactions
-PRIVATE_KEY=
+cd paid-service
+sed -n '1,200p' .env.example
+bun install
+bunx tsc --noEmit
+bun run dev
 ```
 
-### Identity Template
+Review the generated `package.json`, `.env.example`, entrypoint prices, public
+origin/base path, and facilitator before deploying. A template default is not a
+production provider recommendation.
 
-Additional variables for ERC-8004:
+There is no `PAYMENTS_DEFAULT_PRICE` runtime variable. Prices belong on each
+entrypoint as USD decimal strings. The wallet helper uses role-specific names
+such as `AGENT_WALLET_PRIVATE_KEY` and `DEVELOPER_WALLET_PRIVATE_KEY`; a generic
+`PRIVATE_KEY` is not the current documented contract.
+
+## Wizard behavior
+
+1. The CLI selects a compatible adapter and template.
+2. `--KEY=value` answers are used only in non-interactive/skip-wizard mode.
+3. Unspecified answers fall back to `defaultValue` in the template's
+   `template.json`.
+4. Conditional prompts are included only when their `when` rule matches.
+5. Stripe destination mode forces the generated payment network to Base.
+6. Adapter files and template sections are composed into the project.
+7. `.env` and `.env.example` are generated; template metadata is removed.
+8. Dependencies are installed only with `--install`.
+
+The target directory must be empty. If no project name is supplied, the CLI
+derives one from the selected template.
+
+## Generated project contract
+
+The exact files vary by adapter, but every project should keep these
+boundaries:
+
+- one completed Lucid runtime owns the canonical entrypoint registry;
+- `@lucid-agents/http` owns payment/SIWX authorization and route handlers;
+- the framework adapter binds those routes instead of adding another paywall;
+- private configuration stays server-side; and
+- public storefronts derive data from Agent Card and health handlers.
+
+After generation, add one capability at a time and test:
 
 ```bash
-AGENT_DOMAIN=agent.example.com
-IDENTITY_AUTO_REGISTER=true
-RPC_URL=https://eth.llamarpc.com
-CHAIN_ID=1
+bunx tsc --noEmit
+curl -i http://localhost:3000/health
+curl -i http://localhost:3000/.well-known/agent-card.json
 ```
 
-## Project Structure
+For a priced route, verify the unpaid request returns x402 `402` before funding
+a buyer. Use the repository's Stable quickstart for the complete paid loop.
 
-Generated projects have:
+## Template development
 
-```
-my-agent/
-├── src/
-│   ├── agent.ts      # Agent configuration and entrypoints
-│   └── index.ts      # HTTP server
-├── .env              # Your configuration (from wizard)
-├── .env.example      # Documentation reference
-├── package.json      # Dependencies and scripts
-├── tsconfig.json     # TypeScript config
-└── README.md         # Project documentation
-```
-
-### Key Files Explained
-
-**`src/agent.ts`**
-
-- Defines your agent's metadata (name, version, description)
-- Registers entrypoints with handlers
-- Configures payments (x402), AP2, and trust metadata (optional)
-
-**`src/index.ts`**
-
-- Boots a Bun HTTP server
-- Serves the agent app
-- Can be customized for different runtimes
-
-**`.env.example`**
-
-- Template showing required environment variables
-- Safe to commit to version control
-- Reference documentation for configuration
-
-**`.env`**
-
-- Your actual environment values (from wizard)
-- Never commit this file (contains secrets like PRIVATE_KEY)
-- Edit anytime to change configuration
-
-## Next Steps
-
-After creating your project:
-
-1. **Install dependencies** - `bun install` (or use `--install` flag)
-2. **Start the agent** - `bun run dev` (visit http://localhost:3000)
-3. **Customize** - Edit `src/agent.ts` to add your capabilities
-4. **Deploy** - Deploy to your Bun-compatible platform
-
-## Available Scripts
-
-Generated projects include:
+Template source lives in `packages/cli/templates/`; framework assets live in
+`packages/cli/adapters/`. When changing either:
 
 ```bash
-bun run dev      # Start in watch mode (auto-reload)
-bun run start    # Start in production mode
-bun run agent    # Run agent module directly
-bunx tsc --noEmit # Type-check
+bun run --cwd packages/cli build
+bun test packages/cli/tests
+```
+
+Generate every compatible adapter with `--no-install`, inspect the transformed
+files, then install/type-check at least the changed combinations. Update the
+template schema, `AGENTS.md`, and README when adding wizard keys or public
+behavior.
+
+## Programmatic API
+
+```ts
+export { runCli } from '@lucid-agents/cli';
+export type { PromptApi, RunLogger } from '@lucid-agents/cli';
 ```
 
 ## Troubleshooting
 
-### Template not found
+- **Unknown template/adapter:** run `--help` and choose a compatible pair.
+- **Target exists:** choose an empty directory; the CLI does not merge into an
+  existing tree.
+- **Generated install fails:** inspect package versions before running
+  `bun install`; do not mix Stable and Next packages.
+- **Priced route is free:** confirm the entrypoint has an explicit price and
+  the matching payment extension/configuration is installed.
+- **Identity registration fails:** identity uses an EVM developer/agent signer
+  even when the service receives x402 payments on Solana.
 
-Use a valid template ID: `blank`, `identity`, `trading-data-agent`, or `trading-recommendation-agent`.
-
-### Directory already exists
-
-The target directory must be empty. Choose a different name.
-
-### Install failed
-
-Run `bun install` manually in your project directory.
-
-### Command not found: bunx
-
-Install Bun from [bun.sh](https://bun.sh).
-
-Note: While the CLI works with Node/npx, generated projects require Bun.
-
-## Related Packages
-
-- [`@lucid-agents/core`](../core/README.md) - Core agent runtime
-- [`@lucid-agents/identity`](../identity/README.md) - ERC-8004 identity
+See the [public CLI reference](../../lucid-docs/content/docs/packages/cli.mdx),
+[release channels](../../lucid-docs/content/docs/reference/release-channels.mdx),
+and [environment inventory](../../lucid-docs/content/docs/reference/environment.mdx).
 
 ## Contributing
 
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development guidelines.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md).

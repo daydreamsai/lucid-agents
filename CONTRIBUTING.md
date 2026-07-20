@@ -16,7 +16,8 @@ Thank you for your interest in contributing to Lucid Agents! This document provi
 
 ### Prerequisites
 
-- **Bun** >= 20.9.0 (install from [bun.sh](https://bun.sh))
+- **Bun** 1.3 or newer (install from [bun.sh](https://bun.sh))
+- **Node.js** 20.9 or newer when running Node-targeted adapters and checks
 - **Git** for version control
 - A code editor (VS Code recommended)
 
@@ -25,7 +26,7 @@ Thank you for your interest in contributing to Lucid Agents! This document provi
 1. **Clone the repository**
 
 ```bash
-git clone https://github.com/lucid-dreams-ai/lucid-agents.git
+git clone https://github.com/daydreamsai/lucid-agents.git
 cd lucid-agents
 ```
 
@@ -287,8 +288,8 @@ Aim for good test coverage, especially for:
 - Edge cases and error handling
 - Breaking changes
 
-`bun run test:coverage` enforces aggregate source coverage of at least 70% of
-lines and 78% of functions. Compiled output and test files are excluded.
+`bun run test:coverage` enforces aggregate source coverage of at least 90% of
+lines and 90% of functions. Compiled output and test files are excluded.
 
 ## Pull Requests
 

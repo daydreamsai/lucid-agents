@@ -1,21 +1,170 @@
 ---
 title: Deploy with TanStack Start
-description: Choose a generated service storefront or a headless Fetch-handler deployment.
+description: Deploy a generated storefront or headless Nitro server while keeping payment authority server-side.
 icon: Layers
 status: next
 verifiedVersion: 0.8.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
+The TanStack Start adapter has two generated application shapes. Both use file
+routes that delegate to `@lucid-agents/tanstack` handlers; neither should copy
+entrypoint execution or payment verification into a loader/component.
+
+## Choose a variant
+
+| Variant             | Includes                                                              | Use when                                                   |
+| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `tanstack-ui`       | SSR storefront, schema forms, wallet connection, public service model | Humans need to inspect/test/buy capabilities through a UI  |
+| `tanstack-headless` | API routes and minimal directory page                                 | The service is machine-facing and UI is deployed elsewhere |
+
+The UI wallet belongs to the connected buyer. Seller secrets, database
+credentials, facilitator auth, and server signing authority must remain in
+server-only modules.
+
+## Generate from the Next workspace
+
 ```bash
-bunx @lucid-agents/cli my-service --adapter=tanstack-ui
+bun install --frozen-lockfile
+bun run build:packages
+
+bun packages/cli/dist/index.js my-service --adapter=tanstack-ui
 # or
-bunx @lucid-agents/cli my-service --adapter=tanstack-headless
+bun packages/cli/dist/index.js my-service --adapter=tanstack-headless
+
+cd my-service
+bun install --frozen-lockfile
+bun run type-check
+bun run build
 ```
 
-The UI variant includes the shared service storefront. The headless variant is
-API-only. Both delegate generated route modules to the same HTTP handlers; do
-not copy entrypoint execution or payment logic into TanStack loaders.
+Do not use an unpinned public CLI when targeting the repository-only Next
+surface.
 
-See the [TanStack reference](/docs/packages/tanstack).
+Generated routes cover root well-known discovery and the main API under
+`/api/agent`, including invoke, stream, and task routes. Route-tree generation
+is part of the build; CI should fail when regeneration changes committed files.
+
+## Server/runtime boundary
+
+The generated `src/lib/agent.ts` is the server-only source of the runtime and
+handlers. Route handlers dynamically import it and pass the original request:
+
+```typescript
+export const Route = createFileRoute('/api/agent/entrypoints/$key/invoke')({
+  server: {
+    handlers: {
+      POST: async ({ request, params }) => {
+        const { handlers } = await import('@/lib/agent');
+        return handlers.invoke({ request, params: { key: params.key } });
+      },
+    },
+  },
+});
+```
+
+Keep provider/database imports out of components, loaders serialized to the
+browser, and shared utility barrels that client code can reach. Inspect the
+client bundle for secret-bearing packages before release.
+
+## Build and start the Node server
+
+The generated Nitro configuration produces a server bundle:
+
+```bash
+bun run type-check
+bun run build
+NODE_ENV=production node --env-file=.env .output/server/index.mjs
+```
+
+A static hosting target is insufficient; invoke/payment routes require the
+server output. Pin the Node version/image, copy the complete Nitro output and
+required production dependencies, and inject secrets at runtime.
+
+The exact Nitro preset/hosting integration controls request limits, filesystem,
+connection reuse, streaming, and shutdown. Verify the target rather than
+assuming portability from the Fetch handler interface.
+
+## Storefront production checks
+
+The UI renders public Agent Card/service data and can initiate wallet payment.
+Before publishing it:
+
+- validate public origin and `/api/agent` URLs behind the production proxy;
+- show the exact recipient, network, asset, and maximum amount before wallet
+  approval;
+- prevent arbitrary discovered URLs from becoming server-side fetch targets;
+- handle wallet rejection, wrong network, expired challenge, and missing
+  settlement evidence without claiming success;
+- validate output before rendering and encode untrusted content;
+- keep connected-wallet/account data out of analytics by default;
+- make unsupported Solana buyer or protocol combinations visibly unavailable.
+
+The storefront is not an AP2 mandate/checkout implementation and the Agent Card
+is not x402 Bazaar publication.
+
+## Durability and process model
+
+The default Node server can be long-lived, but the selected hosting preset may
+still scale instances independently. In every case:
+
+- in-memory payment/SIWX/idempotency/task/scheduler state is per instance;
+- use shared Postgres/custom stores before horizontal scaling;
+- SQLite needs persistent local disk and a compatible single-host topology;
+- run scheduler and recoverable task execution in explicit long-lived workers;
+- bound database pools and provider concurrency per instance;
+- treat MPP replay/challenge state as process-local in this release.
+
+The package ships only memory stores for tasks and schedules. Implement and
+test their durable ports rather than naming a database without an adapter.
+
+## Streaming and assets
+
+Test SSE through Nitro, the hosting adapter, load balancer, and CDN. Disable
+buffering/cache/compression that waits for the full body, propagate disconnect,
+and set duration/idle limits. A successful local Vite dev stream is not
+production evidence.
+
+Serve hashed static assets with immutable caching, but never cache Agent Cards,
+health/readiness, payment challenges, invoke results, task tokens, or SSE
+responses as ordinary public assets.
+
+## Health, readiness, and shutdown
+
+`/api/agent/health` proves the Lucid handler responds. Add a protected
+readiness check for database schema/atomic operations, facilitator support,
+wallet/provider access, and critical downstreams.
+
+Confirm the chosen Nitro host sends a termination signal, stops new traffic,
+allows request/stream drain, and closes runtime/database resources. If the
+framework host cannot call `runtime.close()` reliably, own resource lifecycle
+outside the request bundle or choose a long-lived Hono/Express topology.
+
+## Canary
+
+```bash
+curl --fail https://service.example/api/agent/health
+curl --fail https://service.example/.well-known/agent-card.json
+curl -i https://service.example/api/agent/entrypoints/quote/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: deploy-tanstack-canary-000001' \
+  --data '{"input":{"symbol":"ETH"}}'
+```
+
+Require `402`, then complete one low-limit paid call from both a server buyer
+and—if UI is enabled—the supported browser wallet path. Reconcile output,
+settlement evidence, external transaction, and local record. Restart/scale to a
+second instance and confirm same-key behavior plus any task lease recovery.
+
+## Rollback
+
+Deploy immutable server and asset versions together so the storefront never
+targets incompatible handlers. Keep database changes backward-compatible
+during overlap. If payment/fulfillment evidence disagrees, stop new paid calls,
+preserve state, reconcile, and route both UI and API back to a compatible
+release.
+
+See the [TanStack package reference](/docs/packages/tanstack),
+[durable storage](/docs/operate/durable-storage), and
+[deployment overview](/docs/operate/deploy).

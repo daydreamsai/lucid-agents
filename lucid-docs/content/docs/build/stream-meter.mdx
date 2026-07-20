@@ -1,36 +1,104 @@
 ---
 title: Stream and meter work
-description: Stream typed progress while keeping the currently supported payment contract explicit.
+description: Stream typed progress while keeping the currently supported fixed-price payment contract explicit.
 icon: Radio
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid streams over Server-Sent Events (SSE). A stream operation can have a
-different fixed price from direct invocation, but current x402 settlement is
-not usage-metered.
+Lucid streams over Server-Sent Events (SSE). Invoke and stream may have
+different fixed prices, but current x402 support does not meter tokens, bytes,
+time, or arbitrary usage and does not implement the x402 `upto` scheme.
+
+## Define a bounded stream
 
 ```ts
 runtime.entrypoints.add({
   key: 'generate',
+  description: 'Generate bounded text with progress',
   price: { invoke: '0.03', stream: '0.05' },
   input: z.object({ prompt: z.string().min(1).max(2_000) }),
-  output: z.object({ text: z.string() }),
-  handler: async ({ input }) => ({ output: await generate(input.prompt) }),
+  output: z.object({ text: z.string().max(20_000) }),
+  handler: async ({ input, signal }) => ({
+    output: { text: await generate(input.prompt, signal) },
+  }),
   stream: async ({ input, signal }, emit) => {
     let text = '';
     for await (const token of generateTokens(input.prompt, signal)) {
       text += token;
       await emit({ kind: 'delta', delta: token, mime: 'text/plain' });
     }
-    return { output: { text } };
+    return {
+      status: 'succeeded',
+      output: { text },
+      usage: { completion_tokens: text.length },
+    };
   },
 });
 ```
 
-Bound the maximum input, duration, and output to make the advertised fixed
-price honest. Do not describe this as x402 `upto` or token-level settlement.
-If fulfillment can outlive the connection, use an
-[asynchronous task](/docs/build/async-tasks).
+The HTTP runtime adds `run-start` and `run-end` envelopes. Handlers may emit
+`text`, `delta`, `asset`, `control`, or `error` envelopes. Each SSE event gains
+the run ID, sequence number, and creation time when the handler omits them.
+
+The output returned by a stream handler is placed on `run-end`; it is not
+currently validated against the entrypoint output schema by the stream path.
+Validate the final value inside your handler when downstream correctness
+depends on it.
+
+## Payment timing
+
+For a protected stream:
+
+1. Lucid verifies authorization and reserves policy capacity.
+2. It validates the request input.
+3. It admits and finalizes settlement for the `200` SSE response.
+4. The body then emits progress and a terminal envelope.
+
+Settlement therefore becomes irreversible before the stream body necessarily
+finishes. A disconnect, model error, proxy timeout, or failed `run-end` after
+admission does not automatically undo payment.
+
+Publish this fulfillment policy and decide when to issue a refund, credit, or
+replay. If customers must pay only for a completed artifact, use an
+[asynchronous task](/docs/build/async-tasks) with explicit accepted/fulfilled
+semantics instead of treating a connection as a transaction.
+
+## Make a fixed price honest
+
+Bound every cost driver:
+
+- input bytes and schema complexity;
+- maximum model/tool iterations;
+- execution and idle duration;
+- maximum emitted bytes/events and asset size;
+- downstream calls and total provider spend; and
+- concurrent streams per tenant/wallet.
+
+Use separate fixed prices only when the maximum-cost envelopes genuinely
+differ. Usage fields are application telemetry; they are not settlement units.
+
+## Proxy and browser requirements
+
+- Preserve `Content-Type: text/event-stream` and required payment headers.
+- Disable response buffering and compression that withholds small chunks.
+- Flush headers promptly and send bounded heartbeat/control events if your
+  platform requires them.
+- Configure idle/request timeouts above the advertised maximum stream length.
+- Propagate `Request.signal` so disconnect stops downstream work.
+- Restrict CORS and expose payment/receipt headers only to intended browser
+  origins.
+
+## Verify failure paths
+
+Test free streaming, unpaid `402`, paid stream, invalid input, disconnect
+before and after admission, handler throw, explicit error envelope, proxy
+buffering, sequence ordering, maximum-output enforcement, and shutdown while a
+stream is active. Reconcile the paid-disconnect case rather than assuming no
+charge occurred.
+
+See [HTTP package reference](/docs/packages/http),
+[x402 support](/docs/protocols/x402), and
+[payment lifecycle](/docs/build/payment-model).

@@ -8,7 +8,17 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-The MPP extension protects invoke, stream, and A2A task execution with standard Payment-Auth `402 Payment Required` challenges. Every adapter delegates to the same authorization gate.
+The MPP extension protects invoke, stream, and Lucid task execution with
+Payment-Auth `402 Payment Required` challenges. Every adapter delegates to the
+same authorization gate.
+
+<Callout type="warn">
+  MPP is currently the individual Internet-Draft
+  `draft-ryan-httpauth-payment-01`, not an IETF standard. This package uses
+  `mppx` 0.1 and implements the documented Tempo, Stripe, and custom-verifier
+  subset over Lucid HTTP routes; it is not the complete MPP transport,
+  discovery, rail, session, or subscription surface.
+</Callout>
 
 ## Installation
 
@@ -63,6 +73,9 @@ const agent = await createAgent({
 `tempo.server()` is materialized as native mppx charge and session methods. mppx verifies the echoed HMAC challenge, credential schema, transaction, amount, recipient, and settlement before Lucid admits the request.
 
 Set a stable, high-entropy `MPP_SECRET_KEY` in production. When it is omitted, Lucid generates a new key for each process. Lucid's outstanding-challenge and replay registry is also process-local, so paid retries require sticky routing and do not survive a restart even when the key is configured.
+
+There is currently no injectable durable MPP challenge store. A multi-worker or
+restart-safe conformance claim would be incorrect until that capability exists.
 
 ## Stripe setup
 

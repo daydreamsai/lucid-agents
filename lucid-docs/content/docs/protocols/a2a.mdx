@@ -1,23 +1,94 @@
 ---
-title: A2A
-description: Advertise capabilities and run direct, streaming, or owned task interactions.
+title: A2A compatibility
+description: The exact boundary between A2A v1 and Lucid Agent Card, invocation, streaming, and task APIs.
 icon: Users
 status: next
 verifiedVersion: 0.6.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The A2A extension contributes Agent Card capabilities, a remote client, and an
-owned task runtime. HTTP task routes exist only when `a2a()` is installed.
+The upstream [A2A protocol](https://a2a-protocol.org/latest/) reached its first
+stable v1.0 release in March 2026; v1.0.1 followed in May. It defines Agent
+Cards, messages, artifacts, tasks, streaming, push notifications, and three
+equal-capability bindings: JSON-RPC, gRPC, and HTTP+JSON.
 
-Use direct invocation for bounded synchronous work, streaming for connected
-incremental output, and tasks for fulfillment that must survive the initiating
-connection. Task stores and leases are explicit durability ports.
+Lucid currently implements **A2A-shaped discovery plus a Lucid-specific HTTP
+profile**. Do not describe `@lucid-agents/a2a` as a conformant A2A v1 server or
+client.
 
-A2A discovery is not x402 Bazaar. The Agent Card can advertise payment
-requirements produced by Lucid extensions, but it does not publish the x402
-discovery extension.
+## Compatibility matrix
 
-Apply payment authorization before reserving a task, and release reservations
-when task creation or fulfillment admission fails.
+| Area                                        | Lucid status    | Detail                                                                           |
+| ------------------------------------------- | --------------- | -------------------------------------------------------------------------------- |
+| Agent Card discovery                        | Partial         | Serves `/.well-known/agent-card.json`; parses and preserves many v1 fields       |
+| `protocolVersion: "1.0"`                    | Emitted         | Metadata label only; it does not make the routes conformant                      |
+| `supportedInterfaces`                       | Partial         | Emits `HTTP+JSON` URL and uses first HTTP interface when calling                 |
+| Official HTTP+JSON operations               | Not implemented | Lucid calls `/entrypoints/:key/invoke`, `/entrypoints/:key/stream`, and `/tasks` |
+| JSON-RPC binding                            | Not implemented | No `message/send`, `tasks/get`, or JSON-RPC envelope                             |
+| gRPC binding                                | Not implemented | No protobuf service                                                              |
+| `A2A-Version` negotiation                   | Not implemented | Lucid does not send or require the v1 version header                             |
+| Messages and artifacts                      | Not conformant  | Lucid uses typed entrypoint input/output and a smaller `message.content` shape   |
+| Tasks                                       | Lucid profile   | Custom statuses, routes, ownership token, storage, leases, and SSE events        |
+| Push notifications                          | Not implemented | No webhook registration/delivery or SSRF controls                                |
+| Card signatures/authenticated extended card | Parsed only     | No signing or verification workflow                                              |
+| A2A TCK                                     | Not passed      | No conformance claim is made                                                     |
+
+## What Lucid does provide
+
+- Agent Card-shaped discovery generated from the canonical entrypoint registry;
+- direct typed invocation over Lucid HTTP routes;
+- SSE streaming over Lucid HTTP routes;
+- owned asynchronous tasks with opaque access capabilities;
+- bounded in-memory defaults plus a durable `TaskStore` port;
+- fenced execution leases for recovery across workers;
+- one authorization transaction shared with x402, MPP, SIWX, and idempotency.
+
+These are useful application features even though the wire contract is not an
+official A2A binding.
+
+## Lucid HTTP profile
+
+With no base path configured:
+
+| Operation                  | Route                              | Lucid request/response                                          |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| Discover                   | `GET /.well-known/agent-card.json` | Agent Card-shaped JSON plus Lucid entrypoint metadata           |
+| Invoke                     | `POST /entrypoints/:key/invoke`    | `{ "input": ... }` to Lucid result envelope                     |
+| Stream                     | `POST /entrypoints/:key/stream`    | `{ "input": ... }` to Lucid SSE events                          |
+| Create task                | `POST /tasks`                      | Lucid `SendMessageRequest` to `{ taskId, accessToken, status }` |
+| Read/list/cancel/subscribe | `/tasks...`                        | Requires `Task-Access-Token`                                    |
+
+The task token is a Lucid ownership capability, not an A2A credential. Servers
+persist only its SHA-256 hash and deliberately return not-found for both an
+unknown task and a wrong owner.
+
+## Migration to official A2A
+
+If a partner requires A2A v1 interoperability, put an explicit protocol
+adapter in front of the Lucid entrypoint/task runtime. That adapter must:
+
+1. implement one official v1 binding and require/emit `A2A-Version`;
+2. translate official `Message`, `Part`, `Artifact`, `Task`, state, and event
+   models without losing semantics;
+3. map authentication and authorization to the Agent Card security schemes;
+4. implement push-notification security if advertised;
+5. preserve cancellation, idempotency, and terminal-state behavior;
+6. run the official Inspector/TCK plus cross-SDK interoperability tests.
+
+Do not simply rename Lucid routes or change the card version string.
+
+## Security and production checks
+
+- Treat Agent Cards as untrusted input; allowlist schemes and origins before
+  following interface URLs.
+- Validate card signatures only through an implemented trust policy. Merely
+  preserving a signature field is not verification.
+- Protect task access tokens from URLs, logs, analytics, and browser history.
+- Use a durable atomic task store for restarts or more than one worker.
+- Apply SSRF controls to any future push-notification implementation.
+- Scope idempotency keys to caller identity and target operation.
+
+See the [A2A package reference](/docs/packages/a2a) for the complete Lucid
+profile. Use the upstream [A2A v1 changes guide](https://a2a-protocol.org/latest/whats-new-v1/)
+when designing an official adapter.

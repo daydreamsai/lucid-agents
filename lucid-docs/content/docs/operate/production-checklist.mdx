@@ -4,40 +4,120 @@ description: Verify release, money movement, fulfillment, durability, and operat
 icon: ClipboardCheck
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
+Do not enable mainnet merely by changing `PAYMENTS_NETWORK`. A production
+release is ready only when the package set, payment profile, application
+fulfillment, durable state, security controls, and incident process have been
+tested together.
+
 ## Release and compatibility
 
-- Pin one compatible Stable or Next package set.
-- Run generated-project, type, and payment smoke tests from a clean install.
-- Confirm the x402 version, scheme, network, asset, and facilitator together.
+- [ ] Pin one compatible Stable or Next package set and commit its lockfile.
+- [ ] Record Bun/Node, adapter, x402 libraries, `mppx` (if used), facilitator,
+      wallet/provider, database, and protocol/profile versions.
+- [ ] Run clean-install, type, unit, adapter, example, portability, and docs
+      checks from the release artifact.
+- [ ] Confirm every advertised feature is implemented on its compatibility
+      page; do not infer A2A/AP2/MPP/Bazaar support from metadata names.
+- [ ] Prepare an immutable rollback artifact and expand/contract schema plan.
 
 ## Money movement
 
-- Use a production facilitator with documented auth, limits, and incident path.
-- Verify receiving addresses and configured networks out of band.
-- Put per-request and time-window limits on buyer wallets.
-- Reconcile settlement evidence with application fulfillment records.
+- [ ] Verify the production facilitator's auth, `/supported` profile, limits,
+      status/support path, and verify/settle timeout behavior.
+- [ ] Verify payee addresses, chain/network, asset, decimals, and Stripe/static
+      destination mode out of band.
+- [ ] Put recipient/origin/network/asset allowlists plus per-request,
+      time-window, rate, and total limits on every buyer wallet.
+- [ ] Separate buyer signing, seller receiving, identity registration, and
+      administrative authority where possible.
+- [ ] Complete one low-limit funded canary and reconcile application output,
+      `PAYMENT-RESPONSE`/receipt, chain/provider record, and accounting row.
+- [ ] Publish refund/credit/rerun behavior for invoke, stream, and accepted
+      asynchronous tasks.
 
-## Correctness and durability
+## Correctness and duplicate prevention
 
-- Use durable payment, SIWX, idempotency, task, and scheduler stores where the
-  corresponding feature is enabled.
-- Test process loss between verify, fulfill, settle, and record.
-- Bound input, execution time, output, retries, and concurrent work.
-- Make task ownership and lease expiry observable.
+- [ ] Validate input and output schemas and enforce size, duration, downstream
+      call, concurrency, and output bounds.
+- [ ] Generate one business operation ID before payment negotiation and reuse
+      it through retries, tasks, framework resumes, and reconciliation.
+- [ ] Use a durable atomic HTTP idempotency store for multiple instances and
+      make downstream side effects idempotent independently.
+- [ ] Test duplicate/concurrent requests, claim expiry, conflicting request
+      fingerprints, and response replay.
+- [ ] Test process loss before/after verification, policy reservation,
+      fulfillment, settlement submission, settlement success, and recording.
 
-## Security and operations
+## Durable state and topology
 
-- Keep wallet keys, facilitator credentials, and provider tokens in a secret
-  manager.
-- Log run, idempotency, task, payer, network, amount, settlement, and failure
-  identifiers without logging credentials.
-- Alert on `402`, policy rejection, verification, settlement, and fulfillment
-  error-rate changes independently.
-- Publish health checks and a rollback/incident procedure.
+- [ ] Map every state surface using
+      [Durable storage](/docs/operate/durable-storage): payment/SIWX shipped
+      stores; custom HTTP idempotency, task, and scheduler ports; process-local
+      MPP challenge state.
+- [ ] Run migrations before readiness and prove backup/restore on the release
+      schema.
+- [ ] Verify atomic reservations/claims/leases under concurrent replicas.
+- [ ] Keep task/scheduler workers on a topology that survives request return;
+      do not depend on serverless memory or timers.
+- [ ] Drain requests/streams/workers and call `runtime.close()` on shutdown.
 
-Do not enable mainnet merely by changing `PAYMENTS_NETWORK`; review every item
-above and run a low-limit canary payment first.
+## Security and tenant isolation
+
+- [ ] Complete the [threat model](/docs/operate/security) for wallet,
+      facilitator, discovery, model/tool, adapter, database, and hosted
+      boundaries.
+- [ ] Load keys/tokens from a secret manager, scope/rotate them, and test
+      emergency revocation without a privileged fallback.
+- [ ] Bind policy, records, idempotency, tasks, and logs to the authenticated
+      tenant/principal; test cross-tenant reads and budget collisions.
+- [ ] Block SSRF/private-network discovery, unsafe redirects, oversized cards,
+      and stale/malicious payee changes.
+- [ ] Redact payment credentials, SIWX signatures, wallet keys, facilitator
+      tokens, task access tokens, auth context, and sensitive model data.
+
+## Deployment and traffic
+
+- [ ] Follow the selected [adapter runbook](/docs/operate/deploy) for public
+      origin/base path, trusted proxies, raw body handling, SSE, readiness,
+      graceful shutdown, and rollback.
+- [ ] Separate liveness from readiness; readiness probes durable stores and
+      required facilitator/wallet/provider dependencies.
+- [ ] Test public health, Agent Card, free invoke, unpaid challenge, paid
+      canary, replay from another replica, stream through the proxy, and worker
+      recovery after instance loss.
+- [ ] Ramp traffic by capability/tenant and keep an immediate stop-admission
+      control that does not expose the paid handler for free.
+
+## Observability and incidents
+
+- [ ] Correlate request/run, business operation, idempotency, task/job, payer,
+      payee, network, atomic amount, facilitator receipt, settlement, and
+      fulfillment identifiers using the
+      [observability contract](/docs/operate/observability).
+- [ ] Alert separately on challenge rate, policy denial, verification,
+      settlement, recording, fulfillment, lease, durable-store, and latency
+      changes.
+- [ ] Rehearse ambiguous settlement, paid fulfillment failure, provider outage,
+      leaked wallet/token, database loss, malicious discovery, and rollback.
+- [ ] Give on-call staff a reconciliation query and escalation bundle that does
+      not require raw credentials.
+
+## Release evidence
+
+Attach to the release:
+
+- exact versions/config hash and compatibility profile;
+- test/build/link reports;
+- canary operation, sanitized receipt/transaction, fulfillment, and replay
+  evidence;
+- migration/backup/restore result;
+- open risks and intentionally process-local surfaces; and
+- owner, dashboards, alerts, rollback command, and incident contacts.
+
+If any money/fulfillment outcome is ambiguous, stop new paid admission for the
+affected capability, preserve state, and reconcile before retrying or rolling
+back.

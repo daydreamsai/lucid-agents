@@ -1,32 +1,266 @@
 ---
 title: Use durable storage
-description: Preserve payment accounting, entitlements, idempotency, tasks, and schedules across processes.
+description: Preserve payment, entitlement, idempotency, task, and schedule invariants across restarts and replicas.
 icon: Database
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-In-memory stores are safe defaults for tests and one-process demonstrations.
-They do not coordinate replicas and lose state on restart.
+In-memory stores are bounded defaults for tests and one-process demonstrations.
+They lose state on restart and cannot coordinate replicas. Production
+durability is a correctness property, not merely a database connection.
 
-| State                            | Why durability matters                                  |
-| -------------------------------- | ------------------------------------------------------- |
-| Payment records and reservations | Prevent overspend and support reconciliation            |
-| SIWX entitlements                | Reuse verified access without accepting forged sessions |
-| HTTP idempotency                 | Return the original result instead of fulfilling twice  |
-| A2A tasks and leases             | Preserve ownership and terminal state                   |
-| Scheduler occurrences            | Prevent duplicate recurring calls                       |
+## Storage support matrix
 
-Node deployments can use the package-specific SQLite or Postgres exports. Keep
-server-only drivers out of portable/edge bundles:
+| State                                             | Default               | Shipped durable implementation          | Injection point                    |
+| ------------------------------------------------- | --------------------- | --------------------------------------- | ---------------------------------- |
+| Payment records, reservations, staged settlements | In memory             | SQLite and Postgres                     | `payments({ storageFactory })`     |
+| SIWX nonces and entitlements                      | In memory             | SQLite and Postgres                     | `payments({ siwxStorageFactory })` |
+| HTTP invoke idempotency                           | Bounded in memory     | None                                    | `http({ idempotency: { store } })` |
+| Lucid owned tasks and execution leases            | Bounded in memory     | None                                    | `a2a({ tasks: { store } })`        |
+| Scheduler hires/jobs/leases                       | In memory             | None                                    | `scheduler({ store })`             |
+| MPP outstanding challenges/replay                 | Process-local         | None; no injected store in this release | Not available                      |
+| Analytics                                         | Reads payment tracker | Same durability as payment storage      | `analytics()`                      |
 
-```ts
-import { createPostgresPaymentStorage } from '@lucid-agents/payments/storage/postgres';
-import { createSQLitePaymentStorage } from '@lucid-agents/payments/storage/sqlite';
+Do not tell operators to “use the SQLite/Postgres task or scheduler store.”
+Those implementations do not ship. Applications must implement and contract-
+test the corresponding ports.
+
+## Choose a topology
+
+| Deployment                       | Minimum correct choice                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Local test or disposable preview | In-memory defaults                                                                                                     |
+| One persistent Node process      | SQLite can persist payment/SIWX; custom durable stores are still required for idempotency/tasks/schedules              |
+| Several processes on one host    | Shared Postgres or another transactional service; a local SQLite file is not a general multi-process plan              |
+| Several hosts/regions            | Shared or correctly partitioned database with atomic compare-and-set/lease operations; explicit region ownership       |
+| Edge/serverless                  | External portable store implementations; Node SQLite/Postgres subpaths may not bundle or preserve connection semantics |
+
+Multi-region active/active execution is unsafe when two regions can reserve the
+same budget, consume the same nonce, claim the same idempotency key, or recover
+the same task/job without a single consistency owner.
+
+## Configure payment and SIWX storage
+
+The portable package root does not load database drivers. Import an explicit
+Node-only subpath and pass both the storage type and matching factory.
+
+### SQLite
+
+```typescript
+import { payments } from '@lucid-agents/payments';
+import {
+  sqlitePaymentStorageFactory,
+  sqliteSIWxStorageFactory,
+} from '@lucid-agents/payments/storage/sqlite';
+
+const paymentExtension = payments({
+  config: {
+    facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL!,
+    network: 'eip155:84532',
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+    storage: {
+      type: 'sqlite',
+      sqlite: { dbPath: '.data/payments.db' },
+    },
+    siwx: {
+      enabled: true,
+      storage: {
+        type: 'sqlite',
+        sqlite: { dbPath: '.data/siwx.db' },
+      },
+    },
+  },
+  storageFactory: sqlitePaymentStorageFactory,
+  siwxStorageFactory: sqliteSIWxStorageFactory,
+});
 ```
 
-Create storage through the owning extension's factory/port and close it through
-`runtime.close()`. Test concurrent reservations and restart recovery against
-the same backend you use in production.
+Create the directory with restrictive permissions, put it on persistent disk,
+back it up consistently, and run only a topology supported by your SQLite
+locking and filesystem semantics.
+
+### Postgres
+
+```bash
+bun add pg
+```
+
+```typescript
+import { payments } from '@lucid-agents/payments';
+import {
+  postgresPaymentStorageFactory,
+  postgresSIWxStorageFactory,
+} from '@lucid-agents/payments/storage/postgres';
+
+const connectionString = process.env.DATABASE_URL!;
+
+const paymentExtension = payments({
+  agentId: 'merchant-production',
+  config: {
+    facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL!,
+    network: 'eip155:8453',
+    payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+    storage: {
+      type: 'postgres',
+      postgres: { connectionString },
+    },
+    siwx: {
+      enabled: true,
+      storage: {
+        type: 'postgres',
+        postgres: { connectionString },
+      },
+    },
+  },
+  storageFactory: postgresPaymentStorageFactory,
+  siwxStorageFactory: postgresSIWxStorageFactory,
+});
+```
+
+Use a stable `agentId` to isolate payment records for several agents in one
+database. That does not replace database permissions or application tenant
+scoping.
+
+Setting `storage.type` to `sqlite` or `postgres` without the corresponding
+factory fails at build time by design.
+
+## HTTP idempotency store contract
+
+```typescript
+import type { HttpIdempotencyStore } from '@lucid-agents/types/http';
+
+declare const idempotencyStore: HttpIdempotencyStore;
+
+const httpExtension = http({
+  idempotency: {
+    store: idempotencyStore,
+    inProgressTtlMs: 15 * 60_000,
+    retentionMs: 24 * 60 * 60_000,
+  },
+});
+```
+
+The implementation must atomically:
+
+- `claim(scope, key, fingerprint, ownerId, expiresAt, now)` as claimed,
+  in-progress, conflicting, or completed;
+- let exactly the owning claim `complete()` one serialized response;
+- let only the owner `release()` a pre-execution/pre-settlement claim;
+- retain completed responses longer than every permitted buyer retry;
+- prevent an expired/stale owner from overwriting a newer claim.
+
+Store the fingerprint and response as opaque values. Responses can contain
+sensitive application data and protocol headers; apply encryption, access, and
+retention controls.
+
+## Task store contract
+
+```typescript
+import { a2a } from '@lucid-agents/a2a';
+import type { TaskStore } from '@lucid-agents/types/a2a';
+
+declare const taskStore: TaskStore;
+
+const taskExtension = a2a({
+  tasks: {
+    store: taskStore,
+    maxRunMs: 15 * 60_000,
+  },
+});
+```
+
+`TaskStore` requires durable creation and transitions, owner-hash isolation,
+atomic execution claims, lease expiry/recovery, and fenced compare-and-set.
+Terminal writes include the execution owner so a worker whose lease expired
+cannot overwrite a recovery worker. Subscriptions must filter by the persisted
+owner hash.
+
+On shutdown, Lucid aborts local handlers but leaves durable running tasks
+recoverable through their leases. Do not mark every running task cancelled
+merely because one worker exits.
+
+## Scheduler store contract
+
+```typescript
+import { scheduler } from '@lucid-agents/scheduler';
+import type { SchedulerStore } from '@lucid-agents/types/scheduler';
+
+declare const schedulerStore: SchedulerStore;
+
+const schedulerExtension = scheduler({
+  store: schedulerStore,
+  leaseMs: 30_000,
+  defaultMaxRetries: 3,
+});
+```
+
+The store must persist hires and jobs before acknowledgement and implement
+`claimJob()` atomically. It must recover expired leases without letting two
+workers own the same occurrence. Recurring jobs rotate an idempotency key per
+occurrence; preserve the stored seed/current key exactly.
+
+The current `SchedulerStore` surface uses whole-record `putJob()` writes rather
+than an explicit fenced compare-and-set for every transition. A production
+implementation must prevent stale worker updates transactionally and should be
+stress-tested under overlapping `tick()` calls.
+
+## Atomicity and consistency requirements
+
+| Invariant              | Required guarantee                                                |
+| ---------------------- | ----------------------------------------------------------------- |
+| Spend/incoming total   | Reservation check and insert are one atomic operation             |
+| Rate limit             | Concurrent admissions cannot all observe the same old count       |
+| Settlement staging     | Reservation transfer to non-expiring staged accounting is atomic  |
+| SIWX nonce             | At most one successful consume across every worker                |
+| Idempotency            | One fingerprint owns a key; completed response cannot be replaced |
+| Task execution         | One live lease owner; stale owners cannot write terminal state    |
+| Scheduler occurrence   | One live lease owner and one stable occurrence idempotency key    |
+| Tenant/agent isolation | Trusted namespace is part of every key/query/unique constraint    |
+
+Eventual consistency is not sufficient for these admission decisions unless a
+single writer owns the relevant keyspace.
+
+## Migrations, startup, and shutdown
+
+1. Version every store schema and run backward-compatible migrations before
+   deploying code that requires it.
+2. Refuse readiness until required tables/indexes/constraints exist and the
+   process can perform an atomic probe.
+3. Deploy expand/contract schema changes so old and new versions can overlap.
+4. Stop new admission, drain requests, stop scheduler workers, call
+   `runtime.close()`, and then close the server/process.
+5. Roll back code only to a version compatible with the migrated schema.
+
+`runtime.close()` closes extension-owned stores, but the application still owns
+server shutdown ordering and connection/drain deadlines.
+
+## Backup, restore, and reconciliation
+
+Backups are useful only if restoring them preserves uniqueness, staged
+settlements, retained responses, owner hashes, leases, and tenant namespaces.
+Run a restore drill and then:
+
+- reconcile staged/unknown settlement records with the facilitator/provider or
+  chain;
+- ensure completed idempotency responses remain available;
+- recover only expired task/job leases;
+- compare payment analytics with the external settlement ledger;
+- verify SIWX nonce uniqueness and entitlement expiry.
+
+Restoring an old database beside newer external settlements can make the local
+ledger forget already-paid operations. Never resume autonomous retries until
+that gap is reconciled.
+
+## Contract tests
+
+For each custom store, test concurrent claim/reserve/consume, stale-owner
+writes, lease expiry, process termination at every transition, database
+disconnect, transaction rollback, migration overlap, backup restore, and
+cross-tenant access. Run the suite against the exact database version and
+topology used in production.
+
+Continue with the [payment transaction and recovery model](/docs/build/payment-model)
+and [production checklist](/docs/operate/production-checklist).

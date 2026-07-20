@@ -6,7 +6,8 @@ This package contains example implementations demonstrating how to use the lucid
 
 - `src/core/` - Core framework examples (HTTP, payments, identity, streaming)
 - `src/identity/` - ERC-8004 identity examples
-- `src/a2a/` - Agent-to-Agent protocol examples
+- `src/a2a/` - Agent Card-shaped discovery and Lucid task-profile examples;
+  these are not the official A2A v1 binding
 
 ## Running Examples
 

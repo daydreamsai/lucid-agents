@@ -1,10 +1,15 @@
 # @lucid-agents/identity
 
-ERC-8004 identity, reputation, validation, trust metadata, registration files,
-and OASF discovery for Lucid Agents.
+Draft ERC-8004 identity and reputation clients, trust metadata, registration
+files, and OASF discovery for Lucid Agents. A manual validation compatibility
+client remains exported, but validation is deprecated while the draft evolves.
 
 ERC-8004 identity is EVM-only. It is independent of the network on which an
 agent accepts payments.
+
+The `A2A` service label below records an Agent Card endpoint. Lucid's current
+card/task profile is not the official A2A v1 transport and does not imply TCK
+conformance.
 
 ## Runtime extension
 
@@ -54,7 +59,7 @@ const result = agent.identity?.result;
 result?.record;
 result?.clients?.identity;
 result?.clients?.reputation;
-result?.clients?.validation; // optional/deprecated while the spec evolves
+result?.clients?.validation; // undefined by default; type retained for compatibility
 ```
 
 Identity trust is contributed to the live agent card, and the HTTP OASF handler
@@ -147,7 +152,7 @@ You may instead pass a wallet handle directly. The returned result includes:
 
 - lookup/registration status and transaction hash;
 - the identity record when found or registered;
-- identity and reputation clients, plus the optional validation client;
+- identity and reputation clients; validation is not created by default;
 - trust metadata for an agent card;
 - the resolved domain and whether this call registered the identity.
 
@@ -157,9 +162,9 @@ You may instead pass a wallet handle directly. The returned result includes:
 ## Registry clients
 
 The identity client manages registration ownership and metadata. The reputation
-client reads and submits ERC-8004 feedback. The optional validation client is
-deprecated while that registry is revised. All writes use the configured wallet;
-reads use the configured RPC client.
+client reads and submits ERC-8004 feedback. A validation client must be created
+manually and is deprecated while that registry is revised. All writes use the
+configured wallet; reads use the configured RPC client.
 
 ```ts
 const clients = agent.identity?.result?.clients;

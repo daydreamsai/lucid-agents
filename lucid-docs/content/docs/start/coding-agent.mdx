@@ -11,6 +11,13 @@ product: sdk
 A coding agent can scaffold and modify a Lucid service, but generated code must
 still pass the same build and payment tests as hand-written code.
 
+## Choose the channel first
+
+Tell the coding agent whether it is modifying a Stable npm project or this
+repository's Next workspace. Include the pinned package versions and adapter.
+Do not ask it to “use the latest Lucid”; that can combine incompatible public
+and repository APIs.
+
 ## Give the agent repository context
 
 Keep the generated `AGENTS.md` file. It describes the template's public APIs,
@@ -21,16 +28,57 @@ environment variables, and test commands. Ask the agent to:
 3. State prices as USD decimal strings.
 4. Keep private keys and facilitator credentials server-side.
 5. Run typechecking and the unpaid `402` test before reporting completion.
+6. Read package-local `AGENTS.md` instructions and existing tests before
+   changing an API.
+7. State protocol/version boundaries instead of claiming generic A2A, AP2,
+   MPP, or ERC-8004 compatibility.
 
 ## Example request
 
 ```text
 Add a capability named summarize. It accepts non-empty text and returns a
 summary plus usage. Charge $0.02 USDC per invocation over x402. Preserve the
-existing adapter and add a test that an unpaid request receives 402.
+existing Stable package versions and adapter. Add tests that invalid input is
+400, an unpaid request is 402 without fulfillment, and a same-key retry does
+not run the handler twice. Do not expose secrets or add a second paywall.
 ```
+
+## Require evidence, not a prose claim
+
+Ask the agent to return:
+
+- changed files and the public behavior each one owns;
+- exact commands run and whether each passed;
+- the unpaid challenge status/header and paid testnet evidence, when funding is
+  in scope;
+- any snippet that remains illustrative rather than compiled;
+- release-channel/protocol assumptions and unverified provider dependencies;
+- production gaps such as in-memory stores, test keys, or missing readiness.
+
+A useful completion gate is:
+
+```bash
+bunx tsc --noEmit
+bun test
+bun run build
+```
+
+In this monorepo, also run the package/example smoke tests and documentation
+checks required by the root `AGENTS.md`. Never let the coding agent spend real
+funds, register an on-chain identity, deploy, publish, or rotate credentials
+unless that external side effect was explicitly authorized.
+
+## Review high-risk changes
+
+Human review should focus on recipient/network changes, wallet authority,
+price and policy changes, settlement timing, idempotency, task access tokens,
+discovery URLs, storage durability, log redaction, and adapter middleware order.
+Generated code is not safer merely because it type-checks.
 
 The open-source workflow does not require the Hosted Lucid Platform. Hosted
 agent creation is a separate product surface; see
 [Hosted agent creation](/docs/products/agent-creation) only if that service is
 available to your account.
+
+Continue with [Add Lucid to an existing app](/docs/start/existing-app) and the
+[production checklist](/docs/operate/production-checklist).

@@ -14,14 +14,18 @@ generator, not a runtime dependency.
 
 ## Usage
 
+This page describes the repository's Next CLI. Build and invoke the local
+artifact:
+
 ```bash
-bunx @lucid-agents/cli my-service
+bun run build:packages
+bun packages/cli/dist/index.js my-service --adapter=hono --template=blank
 ```
 
 For a reproducible Next scaffold:
 
 ```bash
-bunx @lucid-agents/cli my-service \
+bun packages/cli/dist/index.js my-service \
   --adapter=hono \
   --template=blank \
   --non-interactive \
@@ -53,23 +57,27 @@ compatibility checks unambiguous.
 
 ## Adapters
 
-| Adapter             | Generated integration                                                |
-| ------------------- | -------------------------------------------------------------------- |
-| `hono`              | Hono app bound with `@lucid-agents/hono`                             |
-| `express`           | Express app and Web Request bridge                                   |
-| `tanstack-ui`       | TanStack Start service storefront and route modules                  |
-| `tanstack-headless` | TanStack Start route modules without the storefront                  |
-| `next`              | Next.js App Router modules; there is no `@lucid-agents/next` package |
+| Adapter             | Generated integration                                                      |
+| ------------------- | -------------------------------------------------------------------------- |
+| `hono`              | Hono app bound with `@lucid-agents/hono`                                   |
+| `express`           | Express app and Web Request bridge                                         |
+| `tanstack-ui`       | TanStack Start service storefront and route modules                        |
+| `tanstack-headless` | TanStack Start route modules without the storefront                        |
+| `next`              | Next.js App Router modules; there is no standalone Next.js adapter package |
 
-The trading templates currently target Hono and Express. Blank and identity
-support every adapter listed above.
+The trading templates currently target Hono and Express. They still contain
+pre-v3 composition and are not covered by the generated-project verification
+matrix; use `blank` or `identity` until their generated source/dependencies are
+migrated and tested. Blank and identity support every adapter listed above.
 
 ## Templates
 
 - `blank` provides the smallest runtime and echo capability.
 - `identity` adds wallets, ERC-8004 configuration, payments, and trust metadata.
-- `trading-data-agent` is a priced merchant example.
-- `trading-recommendation-agent` is a buyer example that calls a merchant.
+- `trading-data-agent` documents the target shape for a priced merchant but is
+  currently migration-required.
+- `trading-recommendation-agent` documents the target buyer composition but is
+  currently migration-required.
 
 Generated code follows the selected adapter's canonical binding. For example,
 Hono uses `createAgentApp(runtime)`, while TanStack uses
@@ -81,6 +89,10 @@ The current Stable quickstart deliberately pins the public CLI and runtime
 versions, then installs the direct x402 buyer dependencies needed by its tested
 transaction. Follow [Install Lucid](/docs/start/install), not a Next template,
 when reproducibility matters.
+
+```bash
+bunx @lucid-agents/cli@2.5.0 my-service --adapter=hono --template=blank
+```
 
 The programmatic surface is intentionally small:
 

@@ -1,48 +1,217 @@
 ---
 title: Receive x402 payments
-description: Configure payment admission, fulfillment, settlement, and recording as one runtime transaction.
+description: Configure x402 v2 admission, fulfillment, settlement, recording, and production recovery.
 icon: CircleDollarSign
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Install `payments()` before building the runtime and give priced entrypoints an
-explicit x402 protocol when another payment extension is also active.
+This guide protects a typed Lucid entrypoint with one x402 v2 HTTP `exact`
+payment. Lucid verifies, applies policy, reaches the operation's fulfillment
+boundary, settles, and records through one adapter-independent transaction.
 
-```ts
-const runtime = await createAgent(meta)
+It does not provide a wallet, facilitator, asset, refund workflow, tax/invoice
+system, or x402 Bazaar publication.
+
+## Compatibility
+
+| Area                            | This guide                                      |
+| ------------------------------- | ----------------------------------------------- |
+| Channel                         | Next repository workspace                       |
+| Payment protocol                | x402 v2 HTTP                                    |
+| Scheme                          | `exact`                                         |
+| Demonstrated network            | Base Sepolia `eip155:84532`                     |
+| Seller networks                 | Documented EVM and Solana matrix                |
+| Buyer used for end-to-end proof | EVM                                             |
+| Test facilitator                | `https://x402.org/facilitator` (testnet only)   |
+| Price/accounting model          | Decimal USD/USDC, six-decimal policy accounting |
+
+See the exact [x402 support matrix](/docs/protocols/x402) before choosing a
+different network, facilitator, or provider.
+
+## Prerequisites
+
+- Build the repository as the complete Next workspace set.
+- Use a seller receiving address for the selected network.
+- Choose a facilitator whose `/supported` response includes x402 v2,
+  `exact`, the network, and compatible asset.
+- For the paid proof, use a separate funded testnet buyer wallet.
+
+## Configure the seller
+
+Environment configuration:
+
+```dotenv
+PAYMENTS_FACILITATOR_URL=https://x402.org/facilitator
+PAYMENTS_NETWORK=eip155:84532
+PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_EVM_RECEIVING_ADDRESS
+```
+
+Or configure explicitly:
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments } from '@lucid-agents/payments';
+import { z } from 'zod';
+
+const runtime = await createAgent({
+  name: 'quote-service',
+  version: '1.0.0',
+  description: 'Returns a bounded market quote',
+})
   .use(
     payments({
       config: {
         facilitatorUrl: 'https://x402.org/facilitator',
         network: 'eip155:84532',
-        payTo: '0xYOUR_EVM_RECEIVING_ADDRESS',
+        payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+        storage: { type: 'in-memory' },
       },
     })
   )
   .use(http())
+  .addEntrypoint({
+    key: 'quote',
+    description: 'Return one test quote',
+    price: '0.01',
+    paymentProtocol: 'x402',
+    input: z.object({ symbol: z.string().min(1).max(16) }),
+    output: z.object({ symbol: z.string(), priceUsd: z.string() }),
+    handler: async ({ input }) => ({
+      output: { symbol: input.symbol, priceUsd: '3000.00' },
+    }),
+  })
   .build();
 ```
 
-The HTTP extension executes one authorization transaction:
+`paymentProtocol: 'x402'` is optional when x402 is the only installed rail, but
+keeping it explicit avoids ambiguity when MPP is added later. An entrypoint
+without `price` is free.
 
-```text
-challenge → verify → reserve policy capacity → fulfill → settle → record
-                                      └ failure → release reservation
+## Verify the challenge before funding a buyer
+
+Start the selected adapter, then use plain Fetch/curl:
+
+```bash
+curl -i http://localhost:3000/entrypoints/quote/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: docs-quote-operation-000001' \
+  --data '{"input":{"symbol":"ETH"}}'
 ```
 
-The adapter does not own this transaction. Invoke, stream, and task routes all
-delegate to it.
+Expect:
 
-## Current limits
+```text
+HTTP/1.1 402 Payment Required
+PAYMENT-REQUIRED: <base64url payload>
+content-type: application/json; charset=utf-8
+```
 
-- x402 v2 `exact` scheme
-- one accepted payment option per challenge
-- EVM and Solana mechanisms exposed by Lucid's configured networks
-- no Lucid Bazaar declaration, `upto`, batch settlement, signed offers, or
-  signed receipts
+Decode the challenge only in a safe local tool and verify x402 version `2`,
+scheme `exact`, canonical network `eip155:84532`, the exact receiving address,
+and price/asset supported by the facilitator. Do not paste credentials into a
+web decoder or support issue.
 
-See the maintained [x402 support matrix](/docs/protocols/x402) before choosing a
-facilitator based on features supported by the upstream protocol.
+If plain Fetch returns `200`, the route is free or the payments runtime did not
+activate. If it returns `503`, inspect configuration and facilitator support
+before retrying.
+
+## Complete the paid call
+
+Use the compiled [Stable seller/buyer quickstart](/docs/start/sell-paid-api) or
+a Next runtime buyer to make one funded testnet call. The successful response
+must contain:
+
+- a `2xx` application status;
+- `PAYMENT-RESPONSE` settlement evidence;
+- the expected Lucid result envelope and schema-valid output;
+- one payment record when durable tracking is configured.
+
+Use the same 20–256 character idempotency key for the unpaid request, protocol
+retry, and all later transport retries.
+
+## Transaction and settlement timing
+
+```text
+challenge → verify → claim invoke idempotency → reserve policy
+          → fulfill boundary → stage accounting → settle
+          → commit accounting/entitlement → retain response
+```
+
+The fulfillment boundary is different for invoke, stream, and owned tasks:
+
+- invoke runs and validates the handler before settlement;
+- stream settles when the SSE response is admitted, before later chunks finish;
+- task settles after durable reservation, before background execution.
+
+Read the normative [payment model](/docs/build/payment-model) before selecting
+stream/task refund or retry semantics.
+
+## Add incoming policy
+
+```typescript
+const config = {
+  facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL!,
+  network: 'eip155:84532' as const,
+  payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+  policyGroups: [
+    {
+      name: 'receivables',
+      blockedSenders: ['0x0000000000000000000000000000000000000000'],
+      incomingLimits: {
+        global: { maxPaymentUsd: 1, maxTotalUsd: 1_000 },
+      },
+      rateLimits: { maxPayments: 100, windowMs: 60_000 },
+    },
+  ],
+};
+```
+
+Sender rules use the payer cryptographically recovered by the
+facilitator/verifier. A caller-provided address, `Origin`, or `Referer` is not
+payer identity.
+
+## Make payment state durable
+
+The root package defaults to in-memory payment and SIWX state. For one Node
+host, inject the SQLite factory; for multiple replicas, use the Postgres
+factory and a stable `agentId`. Merely setting `storage.type` without the
+matching factory fails closed.
+
+HTTP idempotency, Lucid tasks, and scheduler state have separate ports and do
+not become durable because payment storage is durable. Follow
+[Use durable storage](/docs/operate/durable-storage).
+
+## Failure and operator action
+
+| Error/status                                      | Phase                         | Action                                                                                |
+| ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
+| `payment_configuration_error`                     | Activation/rail selection     | Fix payee, facilitator, network, or selected rail; do not expose an unpriced fallback |
+| `402 payment_required`                            | Expected challenge            | Validate and pay once under the same operation ID                                     |
+| `403 policy_violation`                            | Admission                     | Treat as a final policy decision unless configuration legitimately changes            |
+| `invalid_input` / `invalid_output`                | Fulfillment                   | No Lucid settlement; inspect any handler side effect before retrying                  |
+| `payment_recording_failed` before settlement      | Accounting stage              | Repair store and inspect fulfillment; no blind new key                                |
+| `settlement_failed`                               | Facilitator/provider          | Reconcile handler/task state and external payment outcome                             |
+| `payment_recording_failed` with settlement header | After irreversible settlement | Keep staged amount counted; reconcile and complete local accounting                   |
+| Network timeout                                   | Unknown window                | Query facilitator/chain plus idempotency/task state before another charge             |
+
+## Production checklist
+
+1. Replace the testnet facilitator and address with reviewed production
+   configuration; probe `/supported` during startup/readiness.
+2. Authenticate facilitator requests when supported and rotate the token.
+3. Use durable shared policy/accounting and invoke idempotency state.
+4. Make handler side effects idempotent or compensatable.
+5. Define settlement reconciliation, staged-record recovery, refund/dispute,
+   and finance-ledger ownership.
+6. Redact credentials and task tokens; alert separately on verification,
+   policy, settlement, accounting, and fulfillment failure.
+7. Fault-inject every crash window and deploy a low-limit canary paid call.
+8. Gracefully drain the server and call `runtime.close()` on shutdown.
+
+Continue with [facilitator selection](/docs/operate/facilitator),
+[payment troubleshooting](/docs/operate/troubleshoot-payments), and the
+[production checklist](/docs/operate/production-checklist).

@@ -1,48 +1,142 @@
 ---
 title: x402 support
-description: Exact Lucid x402 support by protocol version, scheme, network, client, and extension.
+description: Exact Lucid x402 support by version, scheme, network, client, facilitator, and extension.
 icon: CreditCard
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid receives and buys HTTP-native payments using x402 v2. Upstream x402
-supports more features and networks than this Lucid release.
+Lucid receives and buys HTTP-native payments using
+[x402 v2](https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md).
+It wraps the wire exchange in one application transaction: verify, reserve
+policy capacity, fulfill, settle, and record.
+
+Upstream x402 supports more transports, schemes, extensions, networks, and
+facilitator combinations than this Lucid release.
 
 ## Support matrix
 
-| Capability                     | Status        | Lucid behavior                                                        |
-| ------------------------------ | ------------- | --------------------------------------------------------------------- |
-| x402 v2 headers                | Supported     | `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`           |
-| `exact` scheme                 | Supported     | One fixed USD decimal price per operation                             |
-| `upto` scheme                  | Not supported | Do not advertise usage-based settlement                               |
-| Batch settlement               | Not supported | Each admitted call settles independently                              |
-| Multiple `accepts` options     | Not supported | Lucid emits one accepted option                                       |
-| EVM seller networks            | Supported     | Ethereum, Sepolia, Base, Base Sepolia, Polygon, Amoy, Avalanche, Fuji |
-| Solana seller networks         | Supported     | Mainnet and Devnet canonical identifiers                              |
-| `createX402Fetch` EVM buyer    | Supported     | EVM signer; defaults to Ethereum/Sepolia/Base/Base Sepolia            |
-| `createX402Fetch` Solana buyer | Not supported | Seller support does not imply buyer signing support                   |
-| SIWX                           | Supported     | Optional challenge declaration and entitlement reuse                  |
-| Payment identifiers extension  | Not supported | HTTP idempotency is separate                                          |
-| Bazaar declaration/publication | Not supported | A2A and local catalogs are separate discovery inputs                  |
-| Signed offers and receipts     | Not supported | The normal settlement response is not this extension                  |
-| Gas sponsorship extension      | Not supported | Depends on external wallet/provider behavior                          |
-| Stripe dynamic destination     | Partial       | Base mainnet only through the server-only provider export             |
+| Capability                           | Status        | Lucid behavior                                                          |
+| ------------------------------------ | ------------- | ----------------------------------------------------------------------- |
+| x402 v2 HTTP headers                 | Supported     | `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`             |
+| `exact` scheme                       | Supported     | One fixed decimal price for invoke or stream                            |
+| `upto` scheme                        | Not supported | Do not advertise usage-based authorization/settlement                   |
+| Batch settlement                     | Not supported | Each admitted call settles independently                                |
+| Multiple `accepts` options           | Not supported | Lucid config resolves one network and destination                       |
+| EVM seller                           | Supported     | Ethereum, Sepolia, Base, Base Sepolia, Polygon, Amoy, Avalanche, Fuji   |
+| Solana seller                        | Supported     | Mainnet and Devnet canonical CAIP-2 identifiers                         |
+| EVM buyer                            | Supported     | `createX402Fetch` defaults to Ethereum, Sepolia, Base, and Base Sepolia |
+| Solana buyer                         | Not supported | Seller verification does not imply buyer signing support                |
+| SIWX                                 | Supported     | Optional proof and reusable entitlement around a route                  |
+| Payment identifiers                  | Not supported | Lucid application idempotency is separate                               |
+| Bazaar declaration/publication       | Not supported | Agent Cards and local catalogs are separate discovery inputs            |
+| MCP or A2A x402 transport            | Not supported | The payment exchange is bound to Lucid HTTP routes                      |
+| Signed offers and receipts extension | Not supported | A normal settlement response is not that extension                      |
+| Gas sponsorship                      | Not supported | Depends on external wallet/provider behavior                            |
+| Stripe dynamic destination           | Partial       | Server-only provider export; Base mainnet only                          |
+
+## Wire transaction
+
+```text
+1. Buyer calls the Lucid route without a credential.
+2. Server returns 402 plus PAYMENT-REQUIRED (x402Version: 2).
+3. Buyer selects the advertised requirement and retries with PAYMENT-SIGNATURE.
+4. Facilitator verification identifies a valid payer and payment payload.
+5. Lucid reserves sender, total, rate, and idempotency capacity.
+6. The handler runs (or a task is durably reserved).
+7. Lucid stages accounting, asks the facilitator to settle, and commits it.
+8. The application response carries PAYMENT-RESPONSE.
+```
+
+Adapters must delegate to the shared HTTP authorization transaction. Installing
+a framework-local paywall would split verification, idempotency, settlement,
+and accounting into competing flows.
+
+## Pricing, asset, and units
+
+Entrypoint prices are decimal strings such as `"0.05"`; never use JavaScript
+numbers for money. Lucid's policy accounting currently converts them as a
+six-decimal USD/USDC value.
+
+The public `PaymentsConfig` selects destination, facilitator, and network but
+does not expose an arbitrary asset selector. The registered upstream `exact`
+scheme and facilitator decide the compatible asset for that network. Confirm
+the facilitator's `/supported` response instead of assuming that a network
+name guarantees a token or scheme.
 
 ## Network identifiers
 
-New configuration should use CAIP-2 identifiers such as `eip155:84532` and
-`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`. Legacy aliases are normalized at the
-configuration boundary but are not emitted in runtime metadata.
+New configuration must use canonical CAIP-2 identifiers:
 
-The facilitator must support the same x402 version, scheme, network, and asset.
-Query its supported endpoint instead of assuming compatibility from a brand or
-network name.
+```text
+eip155:8453                                    # Base mainnet
+eip155:84532                                   # Base Sepolia
+solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp       # Solana mainnet
+solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1        # Solana Devnet
+```
 
-## Application transaction
+Historical aliases such as `base-sepolia` and `solana:devnet` are accepted at
+the configuration boundary. Runtime state and discovery metadata emit the
+canonical value.
 
-Lucid surrounds the protocol exchange with policy reservation, fulfillment,
-settlement finalization, task ownership, and recording. An adapter must not
-install a second x402 paywall because that would split this transaction.
+The facilitator must support the same x402 version, scheme, network, and
+asset. Production applications should probe support on startup and alert on
+drift.
+
+## Seller and buyer boundaries
+
+The seller path supports EVM and Solana exact verification. The convenience
+buyer `createX402Fetch()` uses an EVM local account and cannot pay Solana
+requirements. A runtime buyer can also obtain a payment-aware Fetch through
+the payments runtime when an appropriate wallet client is available.
+
+Buyer policy limits are a Lucid feature, not an x402 budget protocol. They
+protect one deployment only when their tracker is durable and shared across
+workers.
+
+## Failure and refund semantics
+
+| Failure point                                | Expected result                                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Missing/malformed credential                 | Return challenge or reject; do not run the handler                                          |
+| Facilitator verification fails               | Reject; release provisional state                                                           |
+| Incoming policy rejects payer or amount      | Reject before settlement/fulfillment                                                        |
+| Handler fails before irreversible settlement | Release reservations; no successful application response                                    |
+| Settlement definitively fails                | Release staged accounting and return an error                                               |
+| Process loses settlement outcome             | Reconcile against the facilitator/chain before retrying                                     |
+| Business refund requested                    | Execute a separate, idempotent transfer and record it; x402 `exact` has no automatic refund |
+
+The application must decide whether fulfillment may happen before settlement
+and how to recover an unknown outcome. Lucid's normal route finalization
+settles before returning success, but external systems can still time out after
+the payment becomes irreversible.
+
+## Security and production checklist
+
+- Use HTTPS and never log payment credentials or private keys.
+- Authenticate production facilitator calls when supported and scope the token
+  to `/verify`, `/settle`, and `/supported`.
+- Confirm the facilitator, network, asset, payee, and price from the verified
+  requirement—not caller-controlled headers.
+- Use durable Postgres or SQLite tracking as appropriate; use shared Postgres
+  for horizontally scaled policy enforcement.
+- Require a stable 20–256 character `Idempotency-Key` for retryable effects.
+- Reconcile settlement receipts with facilitator or chain records and alert on
+  staged/unknown outcomes.
+- Test expired authorization, duplicate retry, concurrent retry, wrong network,
+  wrong amount, handler failure, facilitator timeout, and restart recovery.
+- Do not use the public x402.org test facilitator as an assumed production SLA;
+  choose and verify an explicit production facilitator.
+
+## Interoperability claim
+
+Lucid implements the documented x402 v2 HTTP `exact` subset through the
+official x402 TypeScript packages. It has not established conformance for
+unsupported extensions or transports. Run an end-to-end paid call against the
+specific facilitator and counterparty release you will deploy.
+
+Start with [receive x402 payments](/docs/build/receive-x402), then add
+[durable storage](/docs/operate/durable-storage) and
+[payment troubleshooting](/docs/operate/troubleshoot-payments).

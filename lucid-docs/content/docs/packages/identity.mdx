@@ -1,65 +1,99 @@
 ---
-title: "@lucid-agents/identity"
-description: ERC-8004 on-chain identity and reputation for agents.
+title: '@lucid-agents/identity'
+description: Publish ERC-8004 identity metadata and operate identity and reputation registries.
 icon: Fingerprint
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The identity extension adds ERC-8004 on-chain identity support, enabling verifiable agent identity, domain proofs, and reputation tracking.
+`@lucid-agents/identity` connects a Lucid runtime to ERC-8004 identity and
+reputation registries. It can discover or register an on-chain agent identity,
+add trust metadata to the Agent Card, generate a registration document, and
+publish an OASF capability record.
 
-## Installation
+ERC-8004 is still an Ethereum standards-track **Draft**, not a finalized ERC.
+Identity ownership and reputation events are useful evidence, but they do not
+prove that an agent is safe, correct, or trustworthy. Read the
+[protocol support boundary](/docs/protocols/erc-8004) before making a
+conformance claim.
+
+## Install
 
 ```bash
-bun add @lucid-agents/identity viem
+bun add @lucid-agents/identity @lucid-agents/wallet viem
 ```
 
-## Basic usage
+## Choose a mode
+
+| Mode                     | Network calls                           | Wallet required     | Use when                                                            |
+| ------------------------ | --------------------------------------- | ------------------- | ------------------------------------------------------------------- |
+| Advertise existing trust | None during build                       | No                  | You already have registry entries and only need Agent Card metadata |
+| Resolve identity         | Registry reads                          | Yes                 | You want to find an existing identity for a domain                  |
+| Auto-register            | Registry reads and a write when missing | Yes, funded for gas | You want the SDK to create an identity when none exists             |
+| Direct registry clients  | Reads and optional writes               | For writes          | You need lifecycle or reputation operations outside runtime build   |
+
+Registration is an on-chain side effect. Keep `autoRegister: false` until the
+chain, domain, registry address, signer, and transaction policy have been
+reviewed.
+
+## Add identity to a runtime
 
 ```typescript
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 import { identity, identityFromEnv } from '@lucid-agents/identity';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-const agent = await createAgent({
-  name: 'my-agent',
+const runtime = await createAgent({
+  name: 'research-agent',
   version: '1.0.0',
+  description: 'Finds and synthesizes primary sources',
 })
-  .use(http())
   .use(wallets({ config: walletsFromEnv() }))
   .use(identity({ config: identityFromEnv() }))
+  .use(http())
   .build();
 ```
 
-## Configuration
+The identity extension declares a dependency on `wallets`. A developer wallet
+is preferred for registry operations; the agent wallet is a backward-compatible
+fallback.
 
-### Environment variables
+## Configure from environment
 
 ```bash
-# Identity registry contract address
+AGENT_DOMAIN=research.example.com
+RPC_URL=https://your-base-sepolia-rpc.example
+CHAIN_ID=84532
+IDENTITY_AUTO_REGISTER=false
+
+# Optional override. Otherwise the package uses its known deployment for CHAIN_ID.
 IDENTITY_REGISTRY_ADDRESS=0x...
-
-# Agent's domain for identity binding
-AGENT_DOMAIN=my-agent.example.com
-
-# Auto-register identity if not exists
-IDENTITY_AUTO_REGISTER=true
 ```
 
-### identityFromEnv()
+`identityFromEnv(overrides?)` reads:
 
-Loads configuration from environment variables:
+| Variable                                                                                             | Meaning                                                  |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `AGENT_DOMAIN`                                                                                       | Domain placed in the identity proof and registration URI |
+| `RPC_URL`                                                                                            | EVM JSON-RPC endpoint                                    |
+| `CHAIN_ID`                                                                                           | Numeric EVM chain ID                                     |
+| `REGISTER_IDENTITY` or `IDENTITY_AUTO_REGISTER`                                                      | Whether to write a missing registration                  |
+| `IDENTITY_A2A_ENDPOINT`                                                                              | Explicit A2A service URL in the registration document    |
+| `IDENTITY_A2A_VERSION`                                                                               | A2A service version label                                |
+| `IDENTITY_WEBSITE`, `IDENTITY_TWITTER`, `IDENTITY_EMAIL`                                             | Optional service endpoints                               |
+| `IDENTITY_INCLUDE_A2A`, `IDENTITY_INCLUDE_WEB`, `IDENTITY_INCLUDE_TWITTER`, `IDENTITY_INCLUDE_EMAIL` | Select generated services                                |
+| `IDENTITY_INCLUDE_OASF`                                                                              | Enable structured OASF output                            |
 
-```typescript
-import { identityFromEnv } from '@lucid-agents/identity';
+OASF environment configuration additionally requires all five JSON-array
+values: `IDENTITY_OASF_AUTHORS_JSON`, `IDENTITY_OASF_SKILLS_JSON`,
+`IDENTITY_OASF_DOMAINS_JSON`, `IDENTITY_OASF_MODULES_JSON`, and
+`IDENTITY_OASF_LOCATORS_JSON`. `IDENTITY_OASF_ENDPOINT` and
+`IDENTITY_OASF_VERSION` are optional.
 
-const config = identityFromEnv();
-```
-
-### IdentityConfig
+The `IdentityConfig` accepted by the extension is:
 
 ```typescript
 type IdentityConfig = {
@@ -68,244 +102,302 @@ type IdentityConfig = {
   autoRegister?: boolean;
   rpcUrl?: string;
   chainId?: number;
+  registration?: AgentRegistrationOptions;
 };
 ```
 
-## API reference
+`IDENTITY_REGISTRY_ADDRESS` is consumed by the bootstrap helper rather than
+stored on `IdentityConfig`.
 
-### identity(options)
+## Advertise an existing identity without a wallet
 
-Creates the identity extension.
+Supply a complete trust configuration when registration has already happened:
 
 ```typescript
-function identity(options: {
-  config: IdentityConfig;
-}): Extension<IdentityExtensionContext>
+import { identity } from '@lucid-agents/identity';
+
+const identityExtension = identity({
+  config: {
+    trust: {
+      registrations: [
+        {
+          agentId: '42',
+          agentRegistry:
+            'eip155:84532:0x8004A818BFB912233c491871b3d84c89A494BD9e',
+        },
+      ],
+      trustModels: ['feedback'],
+    },
+  },
+});
 ```
 
-**Requirements:**
-- The `wallets()` extension must be added before `identity()`
-- An agent wallet is required for signing identity proofs
+This mode enriches the Agent Card but does not verify the supplied values at
+startup. Validate them in your release process.
 
-### createAgentIdentity()
+## Resolve or register identity directly
 
-Bootstrap function for creating and registering agent identity:
+`createAgentIdentity()` is the lower-level bootstrap API:
 
 ```typescript
 import { createAgentIdentity } from '@lucid-agents/identity';
 
-const identity = await createAgentIdentity({
-  runtime: agent,
-  domain: 'my-agent.example.com',
-  autoRegister: true,  // Register on-chain if not exists
+const result = await createAgentIdentity({
+  runtime,
+  domain: 'research.example.com',
+  rpcUrl: process.env.RPC_URL,
+  chainId: 84532,
+  autoRegister: false,
+  registration: {
+    name: 'Research Agent',
+    description: 'Finds and synthesizes primary sources',
+    x402Support: true,
+  },
 });
+
+if (!result.record) {
+  throw new Error(`Identity was not resolved: ${result.status}`);
+}
+
+console.log(result.record.agentId, result.status);
 ```
 
-### Host your registration file
+The result can include:
 
-After registration, host the ERC-8004 registration file at:
+- `record`, `trust`, `signature`, `transactionHash`, and `didRegister` from
+  identity bootstrap
+- `status`, `domain`, and `isNewRegistration`
+- `clients.identity` and `clients.reputation` when clients could be created
+- `registration` and `oasfRecord` when registration options were supplied
 
-```text
-https://my-agent.example.com/.well-known/agent-registration.json
+Bootstrap is designed to let the agent continue when registry resolution
+fails. It logs a warning and may return no `record` or `clients`; treat those
+fields as the success condition when identity is mandatory.
+
+`createAgentIdentity()` defaults `autoRegister` to `true` when neither an
+option nor environment value is present. Pass the value explicitly in
+production.
+
+## Runtime surface
+
+The extension contributes two related slices:
+
+```typescript
+type IdentityExtensionRuntime = {
+  trust?: TrustConfig;
+  identity?: {
+    registration?: AgentRegistration;
+    buildOASFRecord?: (requestUrl: string) => OASFRecord | undefined;
+    result?: AgentIdentity;
+  };
+};
 ```
 
-You can generate the file with the helper:
+There are no `runtime.identity.signDomainProof()`,
+`identity.createDomainChallenge()`, or `identity.verifyDomainProof()` instance
+methods.
+
+The HTTP extension uses `registration` and `buildOASFRecord` to serve discovery
+metadata. `trust` is merged into the generated Agent Card.
+
+## Registration and OASF documents
+
+Generate a registration document explicitly:
 
 ```typescript
 import { generateAgentRegistration } from '@lucid-agents/identity';
 
-const registration = generateAgentRegistration(identity, {
-  name: 'My Agent',
-  description: 'An intelligent assistant',
-  services: [
-    {
-      name: 'A2A',
-      endpoint: 'https://my-agent.example.com/.well-known/agent-card.json',
-    },
-  ],
+const registration = generateAgentRegistration(result, {
+  name: 'Research Agent',
+  description: 'Finds and synthesizes primary sources',
+  a2aEndpoint: 'https://research.example.com/.well-known/agent-card.json',
+  website: 'https://research.example.com/',
+  x402Support: true,
+  active: true,
 });
 ```
 
-### TrustConfig helpers
+Host the returned JSON at the `agentURI` registered on-chain—conventionally:
 
-`createAgentIdentity` returns an object that includes `trust` (if available) and optional `clients`.
-Use `getTrustConfig` to normalize the trust configuration for manifests and adapters:
-
-```typescript
-import { createAgentIdentity, getTrustConfig } from '@lucid-agents/identity';
-
-const identity = await createAgentIdentity({ runtime: agent, autoRegister: true });
-const trustConfig = getTrustConfig(identity);
+```text
+https://research.example.com/.well-known/agent-registration.json
 ```
 
-## ERC-8004 overview
+A registration document can describe services and registrations, but it is
+only trustworthy when a consumer verifies its origin and the corresponding
+on-chain record.
 
-ERC-8004 is a standard for on-chain agent identity:
-
-- **Registry**: Smart contract storing agent registrations
-- **Domain binding**: Prove ownership of a domain
-- **Reputation**: Track agent reputation feedback and scores
-- **Trust models**: Define trust relationships
-
-### Registration entry
+To publish OASF metadata, use structured configuration:
 
 ```typescript
-type RegistrationEntry = {
-  agentId: number | string;
-  agentRegistry: string; // CAIP-10: namespace:chainId:address
-  agentAddress?: string; // optional legacy owner address (CAIP-10)
-  signature?: string;
+const config = {
+  domain: 'research.example.com',
+  registration: {
+    selectedServices: ['A2A', 'web', 'OASF'] as const,
+    oasf: {
+      version: '0.8.0',
+      authors: ['ops@research.example.com'],
+      skills: ['source-discovery', 'synthesis'],
+      domains: ['research'],
+      modules: ['https://research.example.com/modules/core'],
+      locators: ['https://research.example.com/.well-known/oasf-record.json'],
+    },
+  },
 };
 ```
 
-### Agent registration file
+The generated record also includes current Lucid entrypoints. Free-form OASF
+strings are rejected; the five array fields are required in strict mode.
+
+## Domain-proof helpers
+
+Domain proof is exposed as standalone message-building and signing helpers:
 
 ```typescript
-type AgentRegistration = {
-  type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1';
-  name: string;
-  description?: string;
-  image?: string;
-  domain?: string;
-  url?: string;
-  owner?: string;
-  services?: Array<{
-    name: string;
-    endpoint: string;
-    version?: string;
-    description?: string;
-  }>;
-  registrations?: RegistrationEntry[];
-  supportedTrust?: TrustModel[];
+import {
+  buildDomainProofMessage,
+  signDomainProof,
+} from '@lucid-agents/identity';
+import type { SignerWalletClient } from '@lucid-agents/wallet';
+
+const params = {
+  domain: 'research.example.com',
+  address: '0x1234000000000000000000000000000000000000' as const,
+  chainId: 84532,
+  nonce: crypto.randomUUID(),
 };
+
+const message = buildDomainProofMessage(params);
+const signature = await signDomainProof(
+  walletClient as SignerWalletClient,
+  params
+);
 ```
 
-### Trust models
+The package does not provide a domain-challenge server or a general verifier.
+The relying party must issue and persist a nonce, enforce expiry and audience,
+recover the signer, compare the expected domain/address/chain, and mark the
+nonce consumed.
 
-```typescript
-type TrustModel = {
-  id: string;
-  name: string;
-  description?: string;
-  verificationMethod: 'domain' | 'registry' | 'signature';
-};
-```
+## Registry clients
 
-## Domain proofs
-
-Prove ownership of a domain by signing a challenge:
-
-```typescript
-// Server generates challenge
-const challenge = await identity.createDomainChallenge('my-agent.example.com');
-
-// Agent signs challenge with wallet
-const proof = await agent.identity.signDomainProof(challenge);
-
-// Server verifies proof
-const isValid = await identity.verifyDomainProof(proof, 'my-agent.example.com');
-```
-
-## Manifest integration
-
-Identity information is included in the Agent Card:
-
-```json
-{
-  "name": "my-agent",
-  "registrations": [
-    {
-      "agentId": "1",
-      "agentRegistry": "eip155:84532:0xregistry",
-      "agentAddress": "eip155:84532:0xowner"
-    }
-  ],
-  "trustModels": ["feedback", "inference-validation"],
-  "ValidationRequestsURI": "https://my-agent.example.com/validation/request",
-  "ValidationResponsesURI": "https://my-agent.example.com/validation/response"
-}
-```
-
-## Registry operations
-
-### Identity registry client
+### Identity registry
 
 ```typescript
 import { createIdentityRegistryClient } from '@lucid-agents/identity';
 
-const registry = createIdentityRegistryClient({
-  address: '0x...',
+const identityRegistry = createIdentityRegistryClient({
+  address: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
   chainId: 84532,
-  publicClient,  // viem public client
-  walletClient,  // viem wallet client (required for writes)
+  publicClient,
+  walletClient, // omit for read-only use
 });
 
-// Lookup agent by ID
-const agent = await registry.get(1n);
-const metadata = await registry.getMetadata(1n, 'version');
+const record = await identityRegistry.get(42n);
+const metadata = await identityRegistry.getMetadata(42n, 'version');
 
-// Register new agent
-await registry.register({
-  agentURI: 'https://my-agent.example.com/.well-known/agent-registration.json',
+const registered = await identityRegistry.register({
+  agentURI: 'https://research.example.com/.well-known/agent-registration.json',
 });
 ```
 
-### Reputation registry client
+The client also supports wallet assignment, metadata writes, transfers,
+approvals, and version lookup. Write methods require an account-bearing wallet
+client and wait for transaction confirmation.
+
+### Reputation registry
 
 ```typescript
 import { createReputationRegistryClient } from '@lucid-agents/identity';
 
 const reputation = createReputationRegistryClient({
-  address: '0x...',
+  address: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+  identityRegistryAddress: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
   chainId: 84532,
   publicClient,
   walletClient,
 });
 
-// Get agent reputation
-const summary = await reputation.getSummary(1n);
-const score =
-  summary.valueDecimals === 0
-    ? Number(summary.value)
-    : Number(summary.value) / 10 ** summary.valueDecimals;
-
-// Submit feedback
-await reputation.giveFeedback({
-  toAgentId: 1n,
-  value: 5,
+const summary = await reputation.getSummary(42n);
+const txHash = await reputation.giveFeedback({
+  toAgentId: 42n,
+  value: 95,
   valueDecimals: 0,
   tag1: 'quality',
-  tag2: 'speed',
+  tag2: 'research',
+  endpoint: 'https://research.example.com',
 });
 ```
 
-## Exports
+Interpret feedback in context. On-chain provenance does not make an evaluation
+objective, Sybil-resistant, or relevant to your use case.
 
-```typescript
-// Extension
-export { identity } from '@lucid-agents/identity';
+### Validation registry status
 
-// Configuration
-export { identityFromEnv } from '@lucid-agents/identity';
+`createValidationRegistryClient()` remains exported for backward
+compatibility, but validation is under active development and is not created
+inside `result.clients`. Do not describe validation as generally available or
+build a production dependency on its current shape without pinning and auditing
+the upstream draft and deployed contract.
 
-// Bootstrap
-export { createAgentIdentity } from '@lucid-agents/identity';
+## Known registry deployments
 
-// Registry clients
-export {
-  createIdentityRegistryClient,
-  createReputationRegistryClient,
-  createValidationRegistryClient,
-} from '@lucid-agents/identity';
+The package currently contains identity and reputation addresses for:
 
-// Manifest integration
-export { createAgentCardWithIdentity } from '@lucid-agents/identity';
+| Network          |   Chain ID | Identity and reputation | Validation                       |
+| ---------------- | ---------: | ----------------------- | -------------------------------- |
+| Ethereum mainnet |        `1` | Configured              | Zero address / not deployed      |
+| Ethereum Sepolia | `11155111` | Configured              | Deprecated compatibility address |
+| Base Sepolia     |    `84532` | Configured              | Deprecated compatibility address |
 
-// Types
-export type {
-  IdentityConfig,
-  IdentityRuntime,
-  RegistrationEntry,
-  TrustModel,
-} from '@lucid-agents/identity';
-```
+`SUPPORTED_CHAINS` contains additional chain constants, but
+`getRegistryAddresses()` rejects chains that do not yet have entries in the
+deployment map. Check the
+[official ERC-8004 contracts repository](https://github.com/erc-8004/erc-8004-contracts)
+before every production deployment.
+
+## Type ownership and exports
+
+Import `IdentityConfig` and identity-specific helper/client types from
+`@lucid-agents/identity`. Canonical cross-package contracts—including
+`IdentityRuntime`, `AgentRegistration`, `RegistrationEntry`, `TrustConfig`, and
+`TrustModel`—live in `@lucid-agents/types/identity`.
+
+The package exports:
+
+- `identity`, `identityFromEnv`, `createAgentIdentity`, and `registerAgent`
+- `generateAgentRegistration`, `generateOASFRecord`, and `getTrustConfig`
+- identity, reputation, and deprecated validation registry clients
+- domain-proof and registry-signature helpers
+- registry deployment helpers such as `getRegistryAddresses()` and
+  `isChainSupported()`
+- `createAgentCardWithIdentity()` for explicit manifest enrichment
+
+## Security and production checks
+
+- Pin the chain ID and registry addresses; never infer them from an untrusted
+  request.
+- Make registration an explicit deployment or administration step. Do not let
+  normal request handling create identities.
+- Verify the hosted registration document matches the on-chain `agentURI`,
+  owner, services, and expected domain.
+- Use a dedicated, funded signer with transaction limits. Identity ownership is
+  transferable and approvals are security-sensitive.
+- Index reputation events with confirmation depth and reorg handling before
+  using them in authorization policy.
+- Do not convert a reputation score directly into permission to spend money or
+  access sensitive data.
+
+## Troubleshooting
+
+| Symptom                                      | Likely cause                                                   | Fix                                                                                |
+| -------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Missing identity configuration error         | Domain, RPC URL, or chain ID is absent                         | Set `AGENT_DOMAIN`, `RPC_URL`, and `CHAIN_ID`, or pass them explicitly             |
+| Build says a wallet is required              | Domain/registration resolution was enabled without `wallets()` | Add a developer or agent wallet, or provide static `trust`                         |
+| Runtime starts but `result.record` is absent | Lookup/registration failed and bootstrap continued             | Inspect warnings, RPC reachability, registry address, funds, and `autoRegister`    |
+| Unsupported chain error                      | The constant exists but no registry deployment is configured   | Use one of the three mapped chains or provide/audit custom clients                 |
+| OASF strict-mode error                       | One or more structured arrays are missing or malformed         | Supply all five string arrays and valid URI values                                 |
+| `result.clients.validation` is undefined     | Validation is intentionally excluded                           | Do not depend on it; use a manually created compatibility client only after review |
+
+See [ERC-8004 protocol support](/docs/protocols/erc-8004) for the precise
+upstream-version and interoperability boundary.

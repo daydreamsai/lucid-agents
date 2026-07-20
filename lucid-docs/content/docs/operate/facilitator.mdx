@@ -1,34 +1,116 @@
 ---
 title: Configure a facilitator
-description: Select and verify an external x402 verification and settlement provider.
+description: Select, verify, and operate the external x402 verification and settlement dependency.
 icon: Landmark
 status: stable
 verifiedVersion: 2.5.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: provider
 ---
 
-A facilitator verifies a buyer's x402 payload and submits settlement. It is
-external infrastructure, not a Lucid package.
+An x402 facilitator verifies a buyer's payment payload and submits settlement.
+It is external infrastructure, not a Lucid package. Lucid connects the
+facilitator's protocol evidence to application admission, fulfillment, policy,
+idempotency, and accounting.
 
-| Environment        | Example                        | Notes                                                        |
-| ------------------ | ------------------------------ | ------------------------------------------------------------ |
-| Testnet quickstart | `https://x402.org/facilitator` | Signup-free; Base Sepolia and Solana Devnet only             |
-| Production         | Provider or self-hosted URL    | Confirm networks, assets, auth, pricing, limits, and support |
+## Choose by exact compatibility
 
-Configure the URL and optional bearer token:
+Do not select a facilitator from brand name or “x402 supported” alone. Record:
+
+| Dimension        | Required decision                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| Environment      | Testnet versus production endpoint and service status                                          |
+| x402 profile     | Version 2, scheme (Lucid currently uses `exact`), and supported extensions                     |
+| Network          | Exact canonical CAIP-2 network requested by the seller                                         |
+| Asset            | Token/mint/contract, decimals, and any facilitator restrictions                                |
+| Destination      | Static address or supported dynamic destination behavior                                       |
+| Authentication   | Bearer token format, scopes, rotation, and source-network restrictions                         |
+| Operations       | Verify/settle latency, timeouts, rate limits, retries, status/receipt lookup, incident support |
+| Commercial terms | Fees, quotas, settlement guarantees, liability, refund/dispute path                            |
+
+The public testnet facilitator used by the Stable quickstart is:
+
+```dotenv
+PAYMENTS_FACILITATOR_URL=https://x402.org/facilitator
+```
+
+Treat it as a quickstart dependency for its documented test networks, not as an
+implicit production SLA. Obtain a production/self-hosted endpoint and contract
+from its owner.
+
+## Configure server-side authentication
 
 ```dotenv
 PAYMENTS_FACILITATOR_URL=https://YOUR_FACILITATOR_URL
 PAYMENTS_FACILITATOR_AUTH=YOUR_SERVER_SIDE_TOKEN
+PAYMENTS_NETWORK=eip155:84532
+PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_RECEIVING_ADDRESS
 ```
 
-Before deployment, query the provider's supported endpoint and verify the exact
-scheme/network combination Lucid will request. A facilitator supporting an
-upstream feature such as `upto` or Bazaar does not make that feature available
-through Lucid.
+`paymentsFromEnv()` turns a raw token into `Authorization: Bearer ...` for the
+facilitator's supported, verify, and settle requests. It also accepts an
+already prefixed bearer value. Never send this token to buyers or storefronts.
+
+Use the preferred `PAYMENTS_*` variables; legacy aliases are documented only
+for compatibility in [Environment variables](/docs/reference/environment).
+
+## Probe before serving traffic
+
+The x402 HTTP facilitator client calls the base URL's `/supported`, `/verify`,
+and `/settle` operations. Before deployment:
+
+1. call `/supported` with the production auth headers;
+2. confirm the exact v2 scheme/network/asset combination your route will
+   advertise;
+3. reject startup/readiness if a required combination is missing;
+4. complete an unpaid `402` and one low-value testnet/canary settlement; and
+5. persist the sanitized settlement/transaction reference and match it to the
+   application operation ID.
+
+A facilitator supporting upstream `upto`, Bazaar, or another extension does
+not make that feature available through Lucid. The runtime's
+[x402 support matrix](/docs/protocols/x402) is the product boundary.
+
+## Timeouts and failure semantics
+
+Verification happens before handler execution. Settlement happens during
+authorization finalization and its timing differs for invoke, stream, and task
+creation. A timeout after settlement submission is ambiguous, not a safe signal
+to submit a new payment.
+
+| Failure                                   | Response posture                             | Operator action                                                                |
+| ----------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------ |
+| `/supported` unavailable at startup       | Fail readiness for priced routes             | Restore provider/network compatibility                                         |
+| Verification rejects credential           | Return protocol failure; do not execute      | Inspect version, scheme, network, asset, amount, signature, expiry             |
+| Verification times out                    | Fail closed before fulfillment               | Retry only inside a bounded provider policy if no irreversible action occurred |
+| Settlement fails definitively             | Return failure and release staged accounting | Preserve evidence and provider reason                                          |
+| Settlement result is unknown              | Return/record ambiguous failure              | Query provider/chain by operation and receipt identifiers before retrying      |
+| Settlement succeeded but recording failed | Treat as potentially paid                    | Recover staged accounting/idempotency record; do not charge again blindly      |
+
+Read [Payment lifecycle](/docs/build/payment-model) for the exact commit points.
+
+## Availability and scaling
+
+- Set connect, total, and idle timeouts below the client request budget.
+- Use bounded retries with jitter only for operations the provider documents as
+  idempotent or queryable.
+- Apply circuit breaking/readiness so provider failure does not create free
+  fulfillment.
+- Monitor supported-profile drift, verify/settle latency, rejection reasons,
+  ambiguous outcomes, and receipt-to-fulfillment reconciliation.
+- Keep a second provider as a tested configuration, not an automatic mid-call
+  failover. Different facilitators may not share identifiers or settlement
+  state.
+
+## Provider ownership boundary
+
+Lucid cannot guarantee facilitator uptime, custody model, fees, supported
+assets, finality, refunds, or regulatory terms. Publish provider-specific docs
+only when there is a verified production URL, auth contract, status page,
+support path, and tested compatibility profile.
 
 The former Daydreams facilitator page was removed from package reference
-because `@daydreamsai/facilitator` is not a package in this monorepo. Add a
-provider-specific guide only when ownership, availability, and support are
-explicit.
+because `@daydreamsai/facilitator` is not a package in this monorepo.
+
+Continue with [Troubleshoot payments](/docs/operate/troubleshoot-payments) and
+the [production checklist](/docs/operate/production-checklist).

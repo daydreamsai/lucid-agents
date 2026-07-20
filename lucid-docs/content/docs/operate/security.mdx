@@ -1,27 +1,155 @@
 ---
-title: Secure keys and requests
-description: Protect signing authority and preserve the payment trust boundary.
+title: Threat model and shared responsibility
+description: Protect signing authority, payment admission, discovery, durable state, tasks, tenants, and evidence.
 icon: LockKeyhole
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-- Keep buyer private keys, facilitator auth, Stripe secrets, and provider keys
-  server-side.
-- Give autonomous wallets small balances and explicit policy; do not reuse an
-  administrative deployer wallet.
-- Trust the payer returned by facilitator verification, not a request body or
-  unverified payment payload claim.
-- Validate the full target URL and payment recipient before signing.
-- Bound request size and execution time before costly fulfillment begins.
-- Redact payment signatures, auth tokens, and private keys from logs and error
-  reports.
-- Rotate credentials and revoke hosted wallet sessions after compromise.
-- Keep SIWX nonces and entitlements in a store with atomic consume/expiry
-  semantics.
+Lucid coordinates sensitive systems but does not make them trustworthy. Model
+the buyer, seller, wallet, facilitator/provider, discovery document, network,
+storage, adapter, handler, and LLM as separate trust zones.
 
-Payment proves authorization for the advertised requirement. It does not make
-input safe, establish application identity beyond the verified wallet, or
-remove the need for rate limiting and abuse controls.
+Payment proves that the configured verifier accepted a credential for one
+requirement. It does not make input safe, prove fulfillment quality, establish
+a human identity, or authorize unrelated application actions.
+
+## Assets to protect
+
+- buyer and operator signing keys;
+- hosted-wallet and facilitator bearer tokens;
+- Stripe/Tempo/provider secrets;
+- payment credentials, receipts, and transaction identifiers;
+- idempotency keys and retained successful responses;
+- SIWX nonces and entitlements;
+- task access tokens, task contents, and subscriber streams;
+- tenant-specific payment totals, policies, schedules, and identity records;
+- registration metadata, Agent Cards, catalogs, and OASF documents;
+- application inputs/outputs and any personal or confidential data they carry.
+
+## Trust boundaries
+
+```text
+Untrusted caller / discovered service
+              ↓ validate URL, schema, identity, price, recipient
+Lucid HTTP + authorization runtime
+       ↙                     ↘
+wallet/signer              facilitator/provider/network
+       ↘                     ↙
+ policy + durable stores + idempotency
+              ↓
+handler / model / external tools
+              ↓
+settlement, task, result, and audit evidence
+```
+
+Never let an LLM cross a payment, mandate, wallet, URL, or authorization
+boundary without deterministic code enforcing policy. Prompt-injection
+resistance is not a substitute for a verifier.
+
+## Threat and control matrix
+
+| Threat                                 | Entry point / attacker                                            | Required control                                                                                                     | Residual risk and test                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Signing-key theft                      | Logs, source, browser bundle, CI, compromised host                | Server-only secret manager or remote signer; least balance/authority; rotation and revocation                        | Host compromise can still sign; test secret scans and emergency rotation                 |
+| Malicious payment requirement          | Compromised seller/discovery/proxy changes price, payee, network  | Buyer allowlists recipient and origin; caps request/total; validates canonical URL/network/amount before signing     | Approved seller can still overcharge within limits; test wrong recipient/network/amount  |
+| Confused deputy                        | LLM or user convinces buyer to pay an unrelated endpoint          | Bind policy to business intent, exact endpoint, recipient, maximum amount, and approval tier                         | Intent classification can be wrong; test prompt-injected URLs and recipients             |
+| Credential replay / duplicate charge   | Network retry, attacker, concurrent workers                       | Protocol nonce/expiry; one business idempotency key; atomic shared stores; provider-side dedupe                      | External settlement may precede local record; inject concurrent and crash retries        |
+| Body or target substitution            | Proxy/caller reuses credential for different payload/route        | Verify method, canonical URL, request/body binding, entrypoint, mode, price, and subject                             | Protocol subsets differ in body binding; test same credential against changed body/route |
+| False payer identity                   | Request body/header asserts wallet                                | Use only facilitator/verifier-recovered payer; normalize chain/address                                               | Verifier/provider compromise remains; test spoofed body and `Origin`/`Referer`           |
+| Settlement ambiguity                   | Timeout/crash between settlement and local commit                 | Non-expiring staged accounting, retained idempotency claim, provider/chain reconciliation                            | No packaged reconciler; run crash-window drills and manual recovery                      |
+| Handler side effect without settlement | Invoke handler writes externally before settlement fails          | Downstream idempotency/compensation; defer irreversible effects where possible                                       | Some effects cannot roll back; fault-inject settlement after handler success             |
+| SSRF and unsafe discovery              | Agent Card/interface URL, registration URI, OASF, catalog locator | Allow schemes/hosts/IP ranges; block loopback/link-local/metadata; redirect and size/time limits                     | DNS rebinding/proxy paths remain; test private IPs and redirect chains                   |
+| Task-token disclosure                  | URL/log/analytics/browser history/operator output                 | Keep `Task-Access-Token` in a secret header; persist hash only; redact everywhere                                    | Token remains bearer authority; test wrong-token indistinguishability and log sinks      |
+| Cross-tenant data/spend leakage        | Shared database/store keys                                        | Namespace by trusted tenant/agent ID; tenant in every primary/unique key and policy scope; row-level access controls | A missing predicate can leak; run adversarial two-tenant contract tests                  |
+| SIWX nonce race or broad entitlement   | Concurrent requests, weak scope/expiry                            | Random single-use nonce; atomic consume; bind domain/URI/chain/resource; short expiry                                | Wallet control is not business permission; test wrong scope and double consume           |
+| Custom MPP verifier bypass             | Decode-only or caller-controlled payer/receipt                    | Cryptographically verify full challenge, payment, settlement, amount, recipient, target, payer; fail closed          | Custom provider semantics remain yours; negative-test every omitted field                |
+| Schema/output injection                | Caller or model output                                            | Zod input/output validation, size/time limits, contextual output encoding                                            | Valid structured content may still be malicious; test downstream rendering/commands      |
+| Log and telemetry exfiltration         | Errors, traces, CSV exports, support bundles                      | Field allowlist and structured redaction before serialization; access/retention controls                             | Derived metadata can identify users; inspect real exported payloads                      |
+| Supply-chain compromise                | npm packages, CI action, skill/plugin, generated template         | Lockfile, provenance/signature policy, minimal install scripts, dependency review, secretless builds                 | Trusted dependencies can update; rehearse rollback and compromised-release response      |
+| Stale or false protocol metadata       | Self-declared Agent Card/AP2/ERC registration                     | Pin versions; verify authoritative source/signature/on-chain owner; revalidate freshness                             | Identity/reputation does not prove safety or uptime; test stale/rotated metadata         |
+
+## Shared responsibility
+
+| Control                        | Lucid provides                                         | You or the provider must provide                                                             |
+| ------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| Input/output shape             | Zod validation hooks and canonical handlers            | Correct schemas, semantic validation, size/time limits, safe rendering                       |
+| x402/MPP credential processing | Documented protocol subset and shared gate             | Trusted facilitator/verifier, provider account, supported asset/network, incident escalation |
+| Buyer policy                   | Recipient/sender lists, amount/total/rate policy ports | Correct identities, approval workflow, durable shared store, policy review                   |
+| Idempotency                    | Invoke claim/fingerprint/response port                 | Durable atomic implementation, retention/capacity, downstream dedupe                         |
+| Payment accounting             | Reservations and staged settlement records             | Backups, migrations, tenant isolation, reconciliation, refunds, finance ledger               |
+| Wallet connector               | Signing/challenge abstraction                          | Custody, transaction policy, balance limits, rotation, recovery                              |
+| SIWX                           | Verification and nonce/entitlement port                | Durable atomic store, business authorization mapping, lifecycle/revocation                   |
+| Tasks and schedules            | Ownership tokens, state/lease store interfaces         | Durable implementations, capacity, worker isolation, recovery, user-visible SLAs             |
+| Agent Card/ERC/AP2 metadata    | Generation/parsing for documented subset               | Authenticity/freshness verification and correct interoperability claims                      |
+| Framework adapter              | Canonical route binding                                | TLS, proxy limits, auth middleware composition, headers, shutdown, host hardening            |
+| Observability                  | IDs and analytics over payment tracker                 | Secure logs/traces, redaction, SLOs, alerts, incident response                               |
+
+## Wallet and secret policy
+
+- Use distinct buyer, seller, identity-owner, and deployer roles unless a
+  reviewed custody model requires consolidation.
+- Give autonomous wallets the minimum balance and contract/network authority.
+- Do not expose private keys or provider secrets to browser code, prompts,
+  model tools, build logs, stack traces, or support bundles.
+- Rotate bearer tokens without restarting into an inconsistent signer state;
+  revoke hosted wallet sessions after compromise.
+- Pin chain IDs and contract/recipient addresses from trusted configuration,
+  never from an untrusted request alone.
+
+## Storage and tenant isolation
+
+Production stores must be atomic across every worker that shares a budget,
+nonce, task, schedule, or idempotency namespace. A local SQLite file does not
+coordinate separate hosts. A Postgres connection alone does not provide tenant
+isolation unless every table/key/query is scoped and tested.
+
+Encrypt backups and sensitive columns according to the data model, restrict
+operator access, define retention/deletion, and test restore before launch.
+Task contents and retained idempotent responses may contain the full
+application output.
+
+## Logging and evidence policy
+
+Record stable correlation metadata, not credentials. Safe fields usually
+include sanitized run/task IDs, idempotency hash or internal reference,
+entrypoint/mode, normalized network, verified payer/recipient, decimal amount,
+policy group/result, status/error code, settlement evidence reference, and
+duration.
+
+Never record private keys, bearer tokens, `PAYMENT-SIGNATURE`, raw
+`Authorization: Payment`, SIWX signatures, task access tokens, cookies, full
+wallet challenges, or unredacted request/output bodies by default.
+
+## Required security tests
+
+Before production, automate:
+
+1. wrong recipient, price, network, chain, body, route, signer, and payer;
+2. expired, malformed, unknown, and concurrently replayed credentials;
+3. same idempotency key with the same and different subject/body;
+4. crash before settlement, after settlement, and before result/accounting
+   commit;
+5. discovery URLs targeting loopback, private, link-local, metadata, DNS
+   rebound, oversized, and redirect-loop destinations;
+6. cross-tenant reads, budget reservations, task access, and subscriptions;
+7. SIWX double-consume, wrong domain/URI/chain, expiry, and entitlement scope;
+8. task token leakage through logs/traces/errors and wrong-token behavior;
+9. secret rotation, wallet revocation, compromised facilitator/provider, and
+   dependency rollback;
+10. a redaction test over real logs, traces, analytics export, and support
+    bundle output.
+
+## Incident response minimum
+
+When signing or payment authority may be compromised: stop new paid admission,
+revoke/rotate credentials, freeze or restrict the wallet/provider policy,
+retain immutable evidence, enumerate unsettled/staged/idempotent operations,
+reconcile provider/chain outcomes, notify affected tenants, and resume through
+a low-limit canary. Do not delete staged records merely to clear an alert.
+
+Next, implement the [durable storage contract](/docs/operate/durable-storage),
+the [observability model](/docs/operate/observability), and the
+[payment recovery transaction](/docs/build/payment-model).

@@ -1,127 +1,98 @@
-# Trading Recommendation Agent - AI Implementation Guide
+# Trading recommendation service — coding-agent guide
 
-This template creates a shopper agent that buys data and generates trading signals.
+This template is a buyer-style example. It calls another Lucid service through
+Agent Card discovery and the Lucid HTTP client, then derives a mock trading
+signal.
 
-## Architecture
+The current generator still has pre-v3 composition/dependency/task-client
+wiring for this template. Treat this file as the target migration contract; do
+not report the generated project complete until it is added to the
+packed-workspace generated test and passes install, type-check, build, boot,
+policy, paid-invoke, and task-recovery verification.
 
-**Role**: Shopper agent (makes payments)
+## Compatibility boundary
 
-**Capabilities**:
-- Buys data from other agents via A2A
-- Uses payment-enabled fetch for automatic payments
-- Generates trading signals from data
+The relevant package is named `@lucid-agents/a2a`, but the current cards,
+`/entrypoints`, `/tasks`, states, and access tokens are Lucid contracts. They
+are not the official A2A v1 binding or TCK-conformant operations.
 
-## Key Concepts
+## Build the paid Fetch once
 
-### 1. Payment-Enabled A2A Calls
+The agent wallet supplies signing authority; policy must supply spending
+authority:
 
-The agent uses `createRuntimePaymentContext()` to get a payment-enabled `fetch`:
-
-```typescript
+```ts
 const paymentContext = await createRuntimePaymentContext({
-  runtime,
-  network: 'base-sepolia',
+  runtime: agent,
+  network: 'eip155:84532',
 });
-const fetchWithPayment = paymentContext.fetchWithPayment;
+
+const paidFetch = paymentContext.fetchWithPayment;
+if (!paidFetch) throw new Error('Compatible buyer wallet is required');
 ```
 
-This `fetch` automatically includes x402 payment headers when calling other agents.
+Do not pass private keys, payment credentials, or raw challenges through the
+model/handler input. Before autonomous use, put recipient, endpoint, network,
+asset, per-request, and durable total limits under the x402 wrapper.
 
-### 2. Fetching Agent Cards
+## Direct invoke profile
 
-Before calling an agent, fetch its Agent Card to discover capabilities and pricing:
-
-```typescript
-const dataCard = await runtime.a2a?.fetchCard(
+```ts
+const result = await agent.a2a.client.fetchAndInvoke(
   DATA_AGENT_URL,
-  fetchWithPayment
+  'getPrice',
+  { symbol: 'BTC/USD' },
+  paidFetch
 );
-const price = dataCard?.entrypoints?.getMarketData?.pricing?.invoke;
 ```
 
-### 3. Calling Other Agents
+Generate one business `Idempotency-Key` outside any retry/model loop when using
+the lower-level invoke options. Validate the returned output before deriving a
+signal.
 
-Use `fetchAndInvoke` from `@lucid-agents/a2a`:
+## Lucid task profile
 
-```typescript
-const result = await fetchAndInvoke(
-  DATA_AGENT_URL,
+```ts
+const card = await agent.a2a.fetchCard(DATA_AGENT_URL);
+const access = await agent.a2a.client.sendMessage(
+  card,
   'getMarketData',
   { symbol: 'BTC/USD', timeframe: '1h' },
-  fetchWithPayment  // Payment-enabled fetch
+  paidFetch
 );
+
+const task = await agent.a2a.client.getTask(card, access, paidFetch);
 ```
 
-## Template Structure
+Persist the complete `{ taskId, accessToken }` capability securely for polling.
+Never log or put the token in a URL/browser store. A slow task is not a reason
+to create another paid task.
 
-### Wallet Configuration
+Use `fetchCardWithEntrypoints()` only when the Lucid-specific entrypoint record
+is required. Discovery metadata is not wallet approval; validate the final URL,
+payee, network, and amount independently.
 
-The agent needs a wallet to pay for data:
+## Wallet configuration
 
-```typescript
-config: {
-  wallets: {
-    agent: {
-      type: 'private-key',
-      privateKey: process.env.AGENT_WALLET_PRIVATE_KEY,
-    },
-  },
-}
+The environment-backed local wallet requires:
+
+```dotenv
+AGENT_WALLET_TYPE=local
+AGENT_WALLET_PRIVATE_KEY=0xSERVER_ONLY_BUYER_KEY
+PAYMENTS_NETWORK=eip155:84532
+DATA_AGENT_URL=https://ALLOWLISTED_SELLER
 ```
 
-### Signal Generation
+Use a dedicated low-balance wallet. The buyer and seller must support the same
+x402 scheme/network/asset, but should not share private keys.
 
-The agent implements three trading strategies:
+## Completion evidence
 
-- **Momentum**: Detects price trends
-- **Mean Reversion**: Expects price to revert to mean
-- **Breakout**: Detects price breaking support/resistance
+Test wrong recipient/network, over-budget price, malformed card/output, unpaid
+challenge, successful testnet payment, same-key retry, task timeout/cancel, and
+timeout after signing. Reconcile payment receipt and seller fulfillment before
+allowing another ambiguous attempt.
 
-## Customization
-
-### Adding More Strategies
-
-Extend the strategy switch:
-
-```typescript
-case 'custom-strategy':
-  // Your analysis logic
-  break;
-```
-
-### Using Different Data Sources
-
-Call different data agents:
-
-```typescript
-const result = await fetchAndInvoke(
-  OTHER_DATA_AGENT_URL,
-  'getCustomData',
-  { /* params */ },
-  fetchWithPayment
-);
-```
-
-### Adding More Entrypoints
-
-Add new entrypoints that use different data or strategies:
-
-```typescript
-addEntrypoint({
-  key: 'portfolioAnalysis',
-  handler: async ctx => {
-    // Buy data from multiple agents
-    // Analyze portfolio
-    // Return recommendations
-  },
-});
-```
-
-## Next Steps
-
-- Add more sophisticated signal strategies
-- Integrate with real trading APIs
-- Add risk management
-- Implement backtesting
-- Add streaming for real-time signals
-
+The strategies are demonstration logic, not financial advice. Bound input,
+price history size, calls, duration, parallelism, and spend before using real
+data or funds.

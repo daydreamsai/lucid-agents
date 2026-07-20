@@ -1,25 +1,108 @@
 ---
 title: Schedule paid calls
-description: Lease recurring A2A invocations without duplicating work or spend.
+description: Lease recurring Lucid-profile invocations without silently duplicating work or spend.
 icon: CalendarClock
 status: next
 verifiedVersion: 0.2.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-`@lucid-agents/scheduler` runs leased, idempotent A2A jobs. A scheduler record
-should contain the target, capability key, input, payment context, schedule,
-and one stable invocation identity per occurrence.
+`@lucid-agents/scheduler` polls due jobs, claims a lease, discovers a remote
+Lucid card, and invokes one entrypoint with a stable idempotency key. Delivery
+is at least once: a worker can finish the remote paid call and die before it
+stores local success.
 
-Use a durable scheduler store in production. Workers acquire leases before
-calling, renew them during long work, and record terminal state before another
-worker can claim the occurrence. A lease prevents concurrent execution; an
-idempotency key prevents duplicate business fulfillment when a worker loses
-the lease after sending.
+The package uses Lucid `/entrypoints` calls through `@lucid-agents/a2a`; this is
+not an official A2A v1 scheduling protocol.
 
-Apply the same payment policy as an interactive buyer. Scheduling increases the
-importance of time-window totals because a configuration error can repeat
-without a human present.
+## Create the runtime and job
 
-See the [scheduler reference](/docs/packages/scheduler).
+```typescript
+const buyer = await createAgent({ name: 'scheduled-buyer', version: '1.0.0' })
+  .use(wallets({ config: walletsFromEnv() }))
+  .use(a2a())
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(
+    scheduler({
+      store: durableSchedulerStore,
+      leaseMs: 120_000,
+      defaultMaxRetries: 3,
+      defaultConcurrency: 5,
+    })
+  )
+  .build();
+
+const { hire, job } = await buyer.scheduler.createHire({
+  agentCardUrl: 'https://reports.example',
+  entrypointKey: 'daily-report',
+  schedule: { kind: 'interval', everyMs: 24 * 60 * 60_000 },
+  jobInput: { accountId: 'acct-123' },
+  idempotencyKey: 'daily-report-acct-123-generation-v1',
+});
+```
+
+The interval is due immediately. After success, the next occurrence is
+scheduled from the tick time plus `everyMs`; there is no cron/time-zone/misfire
+or missed-interval catch-up behavior.
+
+## Run a long-lived worker
+
+```typescript
+const worker = createSchedulerWorker(buyer.scheduler, 5_000);
+await buyer.scheduler.recoverExpiredLeases();
+worker.start();
+
+async function shutdown() {
+  worker.stop();
+  await buyer.close();
+}
+```
+
+The convenience loop can overlap `tick()` calls when work exceeds the polling
+interval and does not recover leases automatically after startup. A production
+orchestrator should call recovery periodically and rely on an atomic store.
+
+## Lease and duplicate boundary
+
+There is no lease heartbeat in this release. Set `leaseMs` longer than card
+refresh, payment negotiation, remote execution, and final persistence. A
+recovery worker can otherwise claim an expired job while the first worker is
+still calling.
+
+The same occurrence idempotency key is the final duplicate defense. The remote
+Lucid invoke service must retain that key durably longer than scheduler retry
+and lease-recovery windows, and the remote handler must pass it to downstream
+effects.
+
+The package ships only `createMemoryStore()`. Implement `SchedulerStore` with
+atomic `claimJob()`, durable writes, expired-lease discovery, tenant isolation,
+and stale-worker protection. Do not assume SQLite/Postgres support exists
+without your adapter.
+
+## Payment and retry behavior
+
+Budget is evaluated when the occurrence runs, not reserved when the hire is
+created. A future price/payee/network change can make a previously valid hire
+fail policy. Use the same recipient and total policy as an interactive buyer,
+backed by a shared payment store.
+
+Any thrown remote invocation error is retried with exponential jittered backoff
+up to `maxRetries`; the scheduler does not classify a permanent `4xx` policy or
+configuration failure. Alert and pause the hire when repeated errors are not
+transient.
+
+## Evidence and tests
+
+Record hire, job, occurrence/idempotency key, lease owner/expiry, target card
+version/interface, entrypoint, amount/payee/network, external settlement,
+remote run ID, attempts, and terminal job state.
+
+Test concurrent workers, overlapping ticks, lease expiry during a slow call,
+crash after remote success, price/payee drift, policy denial, card refresh/SSRF,
+store disconnect, retry exhaustion, pause/resume/cancel, restart recovery, and
+same-key target replay.
+
+See the complete [scheduler reference](/docs/packages/scheduler),
+[durable storage](/docs/operate/durable-storage), and
+[retry contract](/docs/buy/retries-idempotency).

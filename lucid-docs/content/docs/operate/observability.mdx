@@ -1,30 +1,185 @@
 ---
 title: Observe payments and fulfillment
-description: Correlate negotiation, policy, settlement, and application outcomes without logging credentials.
+description: Correlate challenge, policy, fulfillment, settlement, accounting, tasks, and retries without logging credentials.
 icon: ChartNoAxesCombined
 status: next
 verifiedVersion: 0.3.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Correlate one commercial operation with:
+One commercial operation crosses several HTTP attempts and systems. A request
+counter cannot tell whether a buyer was challenged, denied, charged, fulfilled,
+or left in an unknown crash window.
 
-- run and idempotency identifiers
-- capability key and operation mode
-- payer/recipient, network, asset, and amount
-- policy group and reservation result
-- verification and settlement outcome
-- task identity or response status
-- fulfillment duration, usage, and error code
+Lucid currently exposes run/task IDs, response headers, payment tracker data,
+and limited console messages. It does **not** yet publish a complete structured
+event bus or OpenTelemetry instrumentation. The event model below is the
+recommended application/operations contract, not a claim that every event is
+emitted automatically.
 
-`@lucid-agents/analytics` binds reporting operations to the payment tracker. It
-does not replace logs, traces, provider settlement reports, or business-level
-fulfillment records.
+## Correlation model
 
-Alert separately on challenge rate, policy rejection, facilitator verification
-errors, settlement errors, application failures after payment, reservation
-expiry, and task lease contention. A single aggregate “request error” metric
-cannot tell whether money movement or fulfillment is failing.
+Create one trace/business record per logical operation and carry:
 
-Never record `PAYMENT-SIGNATURE`, private keys, or bearer tokens.
+| Field                           | Source                          | Notes                                                         |
+| ------------------------------- | ------------------------------- | ------------------------------------------------------------- |
+| `operation_id`                  | Buyer/application               | Stable across unpaid, paid, and transport retries             |
+| `idempotency_key_ref`           | Buyer/server                    | Hash or internal reference; do not expose a sensitive raw key |
+| `attempt_id`                    | HTTP client/proxy               | New for each network attempt                                  |
+| `trace_id` / `span_id`          | OpenTelemetry or tracing system | Preserve through x402 protocol retry                          |
+| `run_id`                        | Lucid invoke/stream             | Returned in result/SSE envelopes                              |
+| `task_id`                       | Lucid task runtime              | Persist with the secret access token in a protected store     |
+| `scheduler_job_id` / occurrence | Scheduler                       | Join recurring execution and payment                          |
+| `settlement_ref`                | Facilitator/provider/chain      | Sanitized transaction/receipt reference                       |
+| `accounting_settlement_id`      | Payment store                   | Internal staged/committed accounting batch when available     |
+| `entrypoint`, `mode`, release   | Runtime/deployment              | Include package set and image/schema versions                 |
+
+Do not use a wallet address alone as a trace identifier. One wallet can perform
+many operations and addresses may be sensitive personal data.
+
+## Lifecycle event contract
+
+Instrument these phases in the adapter, custom stores, verifier/provider
+wrappers, and handlers. Use stable names/fields in your own telemetry schema:
+
+| Event                            | Required safe fields                                                       | Terminal/result                           |
+| -------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------- |
+| `lucid.request.received`         | attempt, operation ref, entrypoint/mode, method, route, release            | request admitted to adapter               |
+| `lucid.authorization.challenged` | protocol, version/draft, scheme/intent, network, amount, challenge ID hash | `401`/`402`                               |
+| `lucid.authorization.verified`   | protocol, verified subject hash/address policy class, network              | never include credential                  |
+| `lucid.authorization.rejected`   | stable error code, protocol, retryable                                     | no handler                                |
+| `lucid.idempotency.claimed`      | scope, key ref, fingerprint ref, expiry                                    | one owner                                 |
+| `lucid.idempotency.replayed`     | scope, key ref, retained-response age                                      | original response returned                |
+| `lucid.idempotency.conflict`     | scope, key ref, subject/fingerprint mismatch category                      | `409`                                     |
+| `lucid.policy.reserved`          | group, scope, direction, amount, reservation count                         | provisional                               |
+| `lucid.policy.rejected`          | group, rule class, direction, amount                                       | `403`/`503`                               |
+| `lucid.fulfillment.started`      | run/task ID, entrypoint/mode, bounded input class                          | handler/stream/task boundary              |
+| `lucid.fulfillment.completed`    | run/task ID, status, duration, output schema version, usage                | no raw output by default                  |
+| `lucid.settlement.staged`        | internal settlement ID, direction, amount, reservation count               | non-expiring local accounting             |
+| `lucid.settlement.committed`     | protocol, external settlement ref, payer/payee refs, network, amount       | money irreversible/confirmed per provider |
+| `lucid.settlement.failed`        | code, provider, retryability/ambiguity                                     | requires recovery decision                |
+| `lucid.accounting.committed`     | internal settlement ID, record count                                       | local ledger complete                     |
+| `lucid.accounting.failed`        | internal settlement ID, external ref present, code                         | alert/reconcile immediately               |
+| `lucid.task.transition`          | task ID, owner/lease ref, previous/next state, worker ref                  | terminal or recoverable                   |
+| `lucid.scheduler.lease`          | job/occurrence, worker ref, expiry, claim result                           | prevents duplicate occurrence             |
+
+Record sequence and timestamps from one monotonic clock where possible. Across
+systems, preserve source timestamp plus ingestion timestamp.
+
+## Trace layout
+
+```text
+logical operation trace
+  ├─ attempt 1: unpaid request → x402 challenge
+  ├─ buyer policy evaluation + signing
+  ├─ attempt 2: credential verification
+  │    ├─ idempotency claim
+  │    ├─ policy reservation
+  │    ├─ fulfillment boundary
+  │    ├─ accounting stage
+  │    ├─ facilitator/provider settlement
+  │    └─ accounting + retained response
+  └─ optional reconciliation/refund spans
+```
+
+Use span links when the unpaid and paid retries cannot share a direct parent.
+Never add raw `PAYMENT-SIGNATURE`, `Authorization: Payment`, SIWX signatures,
+task access tokens, cookies, or private keys as span attributes.
+
+## Built-in payment analytics
+
+`@lucid-agents/analytics` reads the payment tracker owned by
+`@lucid-agents/payments`:
+
+```typescript
+const summary = await runtime.analytics.getSummary(24 * 60 * 60_000);
+const transactions = await runtime.analytics.getTransactions();
+const csv = await runtime.analytics.exportCSV();
+const json = await runtime.analytics.exportJSON();
+```
+
+Tracker records contain group, scope, direction, six-decimal amount, and
+timestamp. They do not query the facilitator/chain, prove a refund, or include
+the entire challenge/fulfillment/settlement trace. Analytics is only as
+complete and durable as payment storage.
+
+CSV formula-like cells are escaped, but the export may still contain sensitive
+addresses, scopes, and commercial data. Authorize access, encrypt transport,
+set retention, and audit downloads.
+
+## Metrics
+
+At minimum, count/rate and measure latency for:
+
+- requests by entrypoint/mode/status;
+- challenges issued and paid retries observed;
+- verification, SIWX, and policy admission outcomes by stable error code;
+- amount reserved, staged, committed, and awaiting reconciliation;
+- settlement latency/failure/unknown outcome by provider/network;
+- handler duration/error and output-validation failure;
+- idempotency replay, in-progress, conflict, claim-loss, and store errors;
+- active SSE streams, disconnects, terminal success/failure;
+- tasks by state, age, lease recovery, timeout, and capacity rejection;
+- scheduler due/claimed/succeeded/retried/failed jobs and lease age;
+- database/provider pool saturation and runtime shutdown duration.
+
+Money metrics must use integer/base-unit or decimal-safe representations, not
+floating point labels. Avoid high-cardinality raw operation/task/wallet IDs in
+metrics; keep them in traces/logs with access controls.
+
+## Suggested SLO split
+
+Define separate objectives for:
+
+1. challenge/readiness availability;
+2. credential verification latency/success;
+3. policy/idempotency store availability;
+4. settlement success and unknown-outcome age;
+5. fulfillment success/latency after verified admission;
+6. stream/task accepted-to-terminal success;
+7. accounting reconciliation freshness.
+
+A single request success rate hides “charged but failed fulfillment” and
+“fulfilled but settlement unknown.” Page immediately on external settlement
+success plus local accounting failure, repeated duplicate/conflict spikes,
+staged settlement age above the runbook threshold, and cross-tenant/task-token
+security signals.
+
+## Redaction allowlist
+
+Prefer an allowlist serializer. Safe candidates include stable error code,
+entrypoint/mode, package release, normalized network, decimal amount, policy
+group/scope, hashed subject/reference, response status, duration, and sanitized
+external transaction reference.
+
+Always redact:
+
+- all private keys and seed material;
+- bearer/facilitator/Stripe/Tempo/hosted-wallet secrets;
+- payment and SIWX credentials/signatures/challenge payloads;
+- task access tokens and session cookies;
+- unbounded request/output bodies;
+- database connection strings;
+- headers not explicitly allowlisted.
+
+Test redaction against actual exceptions, structured logs, trace exporters,
+analytics CSV/JSON, crash reports, and support bundles.
+
+## Incident dashboard
+
+One operation view should answer:
+
+- Was a challenge issued, and what supported requirement class was selected?
+- Which verified subject and policy scope admitted or rejected it?
+- Did fulfillment start/finish, or was a stream/task merely accepted?
+- Was accounting staged? Did external settlement become irreversible?
+- Did local accounting and idempotent response commit?
+- Is a retry safe, must it query state, or does it require refund/compensation?
+
+If the telemetry cannot answer those questions without inspecting raw secrets,
+the instrumentation is incomplete.
+
+Next: use the [payment recovery state machine](/docs/build/payment-model),
+[troubleshooting runbook](/docs/operate/troubleshoot-payments), and
+[threat model](/docs/operate/security).

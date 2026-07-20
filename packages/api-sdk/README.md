@@ -1,225 +1,140 @@
 # @lucid-agents/api-sdk
 
-TypeScript SDK for the [Lucid Agents Runtime API](https://github.com/daydreamsai/lucid-client). This SDK is automatically generated from the OpenAPI specification.
+Generated TypeScript client for the separately operated Lucid Runtime API.
+This package does not call a local `AgentRuntime`, does not configure the
+open-source SDK, and is not required to expose or buy from a self-hosted Lucid
+service.
 
-## Installation
+## Availability boundary
+
+Do not infer a production service from this package. Before integration,
+obtain all of the following from the hosted product owner:
+
+- supported production base URL and region;
+- authentication/session contract and tenant/project identifiers;
+- API/schema version, deprecation policy, and changelog;
+- quotas, pricing, service status, data retention, and support path; and
+- authorization scope for agent, secret, analytics, identity, and invocation
+  operations.
+
+Development hosts previously shown in this README are intentionally not
+documented as supported production endpoints.
+
+## Install one channel
+
+Stable:
 
 ```bash
-npm install @lucid-agents/api-sdk
-# or
-bun add @lucid-agents/api-sdk
-# or
-pnpm add @lucid-agents/api-sdk
+bun add @lucid-agents/api-sdk@2.5.0
 ```
 
-## Usage
+The current repository package is version `3.0.0` and can be ahead of npm.
+Keep it with the matching generated API schema; do not upgrade this client
+independently and assume server compatibility.
 
-### Basic Client
+## Create a client
 
-```typescript
+```ts
 import { createClient, createConfig } from '@lucid-agents/api-sdk/client';
 
-const client = createClient(
-  createConfig({
-    baseUrl: 'https://api-lucid-dev.daydreams.systems',
-    // Optional: Add authentication headers
-    headers: {
-      'Authorization': 'Bearer your-token',
-    },
-  })
-);
+const baseUrl = process.env.LUCID_RUNTIME_API_BASE_URL;
+const token = process.env.LUCID_RUNTIME_API_TOKEN;
 
-// List agents
-const agents = await client.GET('/api/agents', {
-  params: {
-    query: {
-      limit: 10,
-      offset: 0,
-    },
-  },
-});
-
-// Create an agent
-const newAgent = await client.POST('/api/agents', {
-  body: {
-    name: 'My Agent',
-    slug: 'my-agent',
-    description: 'A test agent',
-    version: '1.0.0',
-    entrypoints: [],
-  },
-});
-
-// Invoke an entrypoint
-const result = await client.POST('/agents/{agentId}/entrypoints/{entrypointKey}/invoke', {
-  params: {
-    path: {
-      agentId: 'agent-123',
-      entrypointKey: 'echo',
-    },
-  },
-  body: {
-    input: { text: 'Hello, world!' },
-  },
-});
-```
-
-### React Query Integration
-
-If you're using React Query, you can use the generated hooks:
-
-```typescript
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { getApiAgentsOptions, useGetApiAgents } from '@lucid-agents/api-sdk/react-query';
-
-// Using the hook directly
-function AgentsList() {
-  const { data, isLoading, error } = useGetApiAgents({
-    params: {
-      query: {
-        limit: 10,
-      },
-    },
-  });
-
-  if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error.message}</div>;
-
-  return (
-    <ul>
-      {data?.agents.map(agent => (
-        <li key={agent.id}>{agent.name}</li>
-      ))}
-    </ul>
-  );
+if (!baseUrl || !token) {
+  throw new Error('Hosted Runtime API configuration is required');
 }
 
-// Or using query options for more control
-function AgentsListAdvanced() {
-  const queryOptions = getApiAgentsOptions({
-    params: {
-      query: { limit: 10 },
-    },
-  });
-
-  const { data } = useQuery(queryOptions);
-  // ...
-}
-```
-
-### Authentication
-
-The SDK supports multiple authentication methods:
-
-#### Session-based (Better Auth)
-
-```typescript
 const client = createClient(
   createConfig({
-    baseUrl: 'https://api-lucid-dev.daydreams.systems',
-    fetch: (url, init) => {
-      return fetch(url, {
-        ...init,
-        credentials: 'include', // Include cookies for session auth
-      });
-    },
-  })
-);
-```
-
-#### Token-based
-
-```typescript
-const client = createClient(
-  createConfig({
-    baseUrl: 'https://api-lucid-dev.daydreams.systems',
+    baseUrl,
     headers: {
-      'Authorization': `Bearer ${token}`,
+      authorization: `Bearer ${token}`,
     },
   })
 );
 ```
 
-#### Payment-based (x402)
+The bearer example is illustrative. Use only the authentication mechanism and
+header/cookie behavior specified by your service contract. Never expose an
+administrative token through browser code.
 
-For agent-to-agent authentication via x402 payments:
+## Call generated paths
 
-```typescript
-const client = createClient(
-  createConfig({
-    baseUrl: 'https://api-lucid-dev.daydreams.systems',
-    headers: {
-      'PAYMENT-SIGNATURE': paymentSignature, // Base64-encoded payment signature
-    },
-  })
-);
-```
+The client and types are generated from the OpenAPI snapshot committed under
+`src/sdk/`. In the current repository snapshot:
 
-## API Reference
-
-The SDK provides type-safe access to all endpoints defined in the OpenAPI specification:
-
-- **Agents**: Create, read, update, delete agents
-- **Invocation**: Invoke agent entrypoints
-- **Analytics**: Get usage and payment analytics
-- **Identity**: Manage ERC-8004 agent identity
-- **Rankings**: Get live agent rankings
-- **Secrets**: Manage encrypted secrets (if enabled)
-
-See the [OpenAPI documentation](https://api-lucid-dev.daydreams.systems/doc) for full endpoint details.
-
-## Generating the SDK
-
-To regenerate the SDK from the OpenAPI spec:
-
-```bash
-# Set the OpenAPI URL (defaults to https://api-lucid-dev.daydreams.systems/doc)
-export OPENAPI_URL=https://api.example.com/doc
-
-# Generate the SDK
-bun run generate
-```
-
-The SDK is automatically regenerated via CI when the API specification changes.
-
-## Type Safety
-
-All request and response types are automatically generated from the OpenAPI schema, ensuring full type safety:
-
-```typescript
-// Type-safe - TypeScript will catch errors
-const result = await client.POST('/api/agents', {
-  body: {
-    name: 'My Agent',
-    slug: 'my-agent',
-    // TypeScript error: missing required field 'entrypoints'
-  },
-});
-
-// Response types are inferred
-const agents = await client.GET('/api/agents');
-// agents.data is typed as AgentListResponse
-```
-
-## Error Handling
-
-The SDK uses standard HTTP status codes. Check the response status:
-
-```typescript
-const response = await client.GET('/api/agents/{agentId}', {
+```ts
+const response = await client.GET('/api/agents', {
   params: {
-    path: { agentId: 'invalid-id' },
+    query: { limit: 10, offset: 0 },
   },
 });
 
 if (response.error) {
-  // Handle error
-  console.error(response.error);
-} else {
-  // Use data
-  console.log(response.data);
+  throw new Error(`Runtime API request failed: ${response.response.status}`);
 }
+
+const agents = response.data;
 ```
+
+Use TypeScript completion from the installed package as the path/body source of
+truth. A path existing in generated code proves it existed in the input schema;
+it does not prove the endpoint is enabled for your tenant or current server.
+
+Generated operation functions and types are also exported from the package
+root. Client primitives are available from `@lucid-agents/api-sdk/client`.
+
+## React Query
+
+The optional `@lucid-agents/api-sdk/react-query` export is generated for
+TanStack Query v5. Install `@tanstack/react-query` in the application and use
+the generated option/hook names that exist in your pinned package.
+
+Keep authentication and privileged requests on the server unless the hosted
+product explicitly documents a browser-safe session model and CORS policy.
+
+## Error and compatibility handling
+
+- Check both `response.error` and the HTTP status; generated types do not make
+  an authorization or service failure impossible.
+- Do not retry create/update/secret/invocation operations unless the server
+  documents idempotency and you supply its required key.
+- Treat timeout after a mutating request as ambiguous and query by a stable
+  operation/resource ID before repeating it.
+- Redact auth headers, secret bodies, wallet/payment credentials, and tenant
+  data from logs.
+- Pin the package and run a contract smoke test against the intended server
+  before upgrade.
+
+## Regenerate from an authorized schema
+
+Set the OpenAPI document URL explicitly:
+
+```bash
+cd packages/api-sdk
+OPENAPI_URL=https://YOUR_AUTHORIZED_SCHEMA_URL bun run generate
+bun run type-check
+bun run build
+```
+
+Review the generated diff for removed/renamed paths, request/response changes,
+auth changes, new sensitive fields, and query-hook churn. A release should tie
+the generated package version to the schema/server release that produced it.
+
+The repository generator currently contains an internal development fallback
+for maintainers. Consumer and release workflows must not rely on that fallback
+as a public availability promise.
+
+## Open-source SDK versus hosted API client
+
+| Need                                                | Package/path                                               |
+| --------------------------------------------------- | ---------------------------------------------------------- |
+| Build a self-hosted typed paid service              | `@lucid-agents/core`, extensions, and a framework adapter  |
+| Call a self-hosted service over its public contract | Fetch/x402 client or Lucid Agent Card client               |
+| Administer the separately hosted Runtime API        | This generated package, after receiving a service contract |
+
+See the [hosted-product boundary](../../lucid-docs/content/docs/products/hosted-platform.mdx)
+and [release-channel matrix](../../lucid-docs/content/docs/reference/release-channels.mdx).
 
 ## License
 

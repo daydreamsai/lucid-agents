@@ -6,6 +6,7 @@
     "configuration",
     "environment",
     "errors",
+    "glossary",
     "docs-telemetry"
   ]
 }

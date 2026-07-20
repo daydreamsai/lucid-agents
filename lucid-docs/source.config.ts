@@ -17,6 +17,13 @@ const documentationProducts = [
   'provider',
 ] as const;
 
+const documentationPageTypes = [
+  'guide',
+  'reference',
+  'index',
+  'boundary',
+] as const;
+
 export const docs = defineDocs({
   dir: 'content/docs',
   docs: {
@@ -31,6 +38,7 @@ export const docs = defineDocs({
             : value.toISOString().slice(0, 'YYYY-MM-DD'.length)
         ),
       product: z.enum(documentationProducts),
+      pageType: z.enum(documentationPageTypes).optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

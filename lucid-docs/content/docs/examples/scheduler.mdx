@@ -1,6 +1,6 @@
 ---
 title: Scheduler examples
-description: Run leased, idempotent A2A calls on recurring schedules.
+description: Run leased, idempotent Lucid HTTP-profile calls on recurring schedules.
 icon: Clock
 status: next
 verifiedVersion: 0.2.3
@@ -8,9 +8,10 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-The scheduler is an application-level worker around Lucid's A2A client. A hire
-describes the target and schedule; a durable job store coordinates leases,
-attempts, and the next run time.
+The scheduler is an application-level worker around Lucid's Agent Card and
+HTTP entrypoint client. The package namespace is `a2a`, but these calls are not
+the official A2A v1 binding. A hire describes the target and schedule; a
+`SchedulerStore` coordinates leases, attempts, and the next run time.
 
 Use the repository sources as the executable reference:
 
@@ -37,8 +38,6 @@ its public npm version is listed as Stable in the
 const scheduler = createSchedulerRuntime({
   runtime: buyerRuntime,
   store,
-  paymentContext,
-  fetchAgentCard,
 });
 
 await scheduler.createHire({
@@ -49,17 +48,30 @@ await scheduler.createHire({
 });
 
 const worker = createSchedulerWorker(scheduler, 1_000);
+await scheduler.recoverExpiredLeases();
 worker.start();
 ```
 
+The runtime obtains card discovery from `buyerRuntime.a2a` and a payment-aware
+Fetch from `buyerRuntime.payments`; `paymentContext` and `fetchAgentCard` are
+not current constructor options.
+
 ## Production requirements
 
-- Use the SQLite or Postgres job store; the memory store loses schedules on restart.
+- Implement and inject a durable `SchedulerStore`; the package currently ships
+  only `createMemoryStore()` and does not include SQLite or Postgres stores.
 - Run multiple workers only with a store that provides atomic leases.
 - Set attempt timeouts and retry limits for the target's fulfillment profile.
 - Give every invocation a stable idempotency key so a recovered lease cannot
   produce duplicate work or charges.
 - Record both scheduler job IDs and payment records for reconciliation.
+
+<Callout type="warn">
+  A database name in an application architecture does not make it a supported
+  scheduler backend. The custom store must implement every `SchedulerStore`
+  method, atomic `claimJob()`, expired-lease recovery, persistence before
+  acknowledgement, and safe concurrent updates.
+</Callout>
 
 See [Schedule calls](/docs/buy/schedule) for the task guide and
 [`@lucid-agents/scheduler`](/docs/packages/scheduler) for the API boundary.

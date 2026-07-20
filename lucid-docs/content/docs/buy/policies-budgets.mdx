@@ -1,20 +1,40 @@
 ---
 title: Set policies and budgets
-description: Gate outgoing payments by recipient, endpoint, amount, rate, and durable totals.
+description: Gate outgoing and incoming payments by counterparty, endpoint, amount, rate, and atomic totals.
 icon: ShieldCheck
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Policy groups are cumulative: every configured group must admit a payment.
+Payment policy is deterministic code between an untrusted challenge and signing
+authority. It limits damage; it does not decide whether an LLM's purchase idea
+is sensible.
 
-```ts
-const policyGroups = [
+Policy groups are cumulative. Every group must admit the payment, and the first
+violation stops it.
+
+## Outgoing buyer policy
+
+```typescript
+import {
+  createInMemoryPaymentStorage,
+  createPaymentTracker,
+  wrapBaseFetchWithPolicy,
+} from '@lucid-agents/payments';
+import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
+
+const endpoint = 'https://service.example/entrypoints/search/invoke';
+
+const policyGroups: PaymentPolicyGroup[] = [
   {
-    name: 'daily-research',
-    allowedRecipients: ['0xAPPROVED_SELLER'],
+    name: 'approved-counterparties',
+    allowedRecipients: ['0x1111111111111111111111111111111111111111'],
+    blockedRecipients: ['0x0000000000000000000000000000000000000000'],
+  },
+  {
+    name: 'research-budget',
     outgoingLimits: {
       global: {
         maxPaymentUsd: 0.05,
@@ -22,22 +42,165 @@ const policyGroups = [
         windowMs: 24 * 60 * 60 * 1_000,
       },
       perEndpoint: {
-        'https://service.example/entrypoints/search/invoke': {
+        [endpoint]: {
+          maxPaymentUsd: 0.02,
           maxTotalUsd: 1,
           windowMs: 24 * 60 * 60 * 1_000,
         },
       },
     },
-    rateLimits: { maxPayments: 60, windowMs: 60 * 60 * 1_000 },
+    rateLimits: {
+      maxPayments: 60,
+      windowMs: 60 * 60 * 1_000,
+    },
   },
 ];
+
+const tracker = createPaymentTracker(createInMemoryPaymentStorage());
+const policyFetch = wrapBaseFetchWithPolicy(fetch, policyGroups, tracker);
 ```
 
-The wrapper reserves total-limit capacity when it admits a challenge, commits
-that capacity after a successful paid response, and releases it on failure.
-Use SQLite or Postgres storage when restarts or multiple workers must share the
-same totals. In-memory storage is process-local and intended for tests.
+Wrap this base Fetch with the x402 payment client **after** policy:
 
-Recipient policy is evaluated from payment requirements. Sender policy on a
-seller must use the payer identity verified by the facilitator, not an
-untrusted address claimed in the request body.
+```text
+application → x402 payment wrapper → policy wrapper → network Fetch
+```
+
+The initial unpaid request reaches the seller. On `402`, the policy wrapper
+decodes the selected x402 v2 requirement, evaluates the target URL, requirement
+payee, and six-decimal amount, then atomically reserves totals/rate capacity.
+Only then does the outer x402 wrapper sign and retry.
+
+## Scope precedence
+
+For outgoing limits, Lucid selects the most specific configured scope:
+
+```text
+perEndpoint > perTarget > global
+```
+
+Only one outgoing limit scope per group applies to one payment. Separate policy
+groups are the way to enforce independent organization, project, and endpoint
+ceilings simultaneously.
+
+Target matching normalizes URL casing/trailing slashes and can match a domain.
+For strict purchasing, prefer complete HTTPS endpoint URLs plus an explicit
+on-chain recipient allowlist. Domain matching alone does not protect against a
+compromised seller or changed receiving address.
+
+## Limit meanings
+
+| Option                   | Enforcement                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `maxPaymentUsd`          | Stateless ceiling for one selected six-decimal requirement              |
+| `maxTotalUsd`            | Stateful sum within `windowMs`, or lifetime when no window is set       |
+| `windowMs`               | Sliding query window used by the tracker; align it with business policy |
+| `rateLimits.maxPayments` | Number of admitted payments for that group/window                       |
+| `allowedRecipients`      | Allowlisted payee address or target domain                              |
+| `blockedRecipients`      | Denylist evaluated before allowlist                                     |
+| `perTarget`              | Target URL/domain total scope                                           |
+| `perEndpoint`            | Exact endpoint total scope                                              |
+
+Policy amount accounting assumes six-decimal USD/USDC. Do not use these fields
+for a non-USD MPP currency unless the verifier and policy conversion are
+explicitly designed for it.
+
+## Reservation lifecycle
+
+```text
+unpaid 402
+  → validate requirement
+  → evaluate every policy group
+  → reserve totals and rate capacity
+  → paid retry with matching request fingerprint
+  → stage non-expiring outgoing accounting
+  → receive successful response + PAYMENT-RESPONSE
+  → commit staged accounting
+```
+
+The wrapper fingerprints method, URL, non-payment headers, and body. A paid
+retry without a matching active reservation returns `503`. Outstanding
+attempts are bounded (10,000 by default) and expire after five minutes by
+default; configure `maxOutstandingAttempts` and `attemptTtlMs` for the expected
+challenge-to-signing delay.
+
+If the paid call throws, returns a non-success response, or omits
+`PAYMENT-RESPONSE`, Lucid releases the local staged accounting. A remote system
+could still have an ambiguous external outcome, so reconcile before signing a
+new payment after a timeout.
+
+## Incoming seller policy
+
+Configure incoming groups on the payments extension:
+
+```typescript
+const config = {
+  facilitatorUrl: process.env.PAYMENTS_FACILITATOR_URL!,
+  network: 'eip155:84532' as const,
+  payTo: process.env.PAYMENTS_RECEIVABLE_ADDRESS as `0x${string}`,
+  policyGroups: [
+    {
+      name: 'seller-admission',
+      allowedSenders: ['0x2222222222222222222222222222222222222222'],
+      incomingLimits: {
+        global: { maxPaymentUsd: 1, maxTotalUsd: 100 },
+        perSender: {
+          '0x2222222222222222222222222222222222222222': {
+            maxTotalUsd: 10,
+            windowMs: 24 * 60 * 60 * 1_000,
+          },
+        },
+      },
+      rateLimits: { maxPayments: 100, windowMs: 60_000 },
+    },
+  ],
+};
+```
+
+Incoming sender rules use the payer recovered by facilitator/credential
+verification. Never scope them from an address in the request body, `Origin`,
+or `Referer`. Scope precedence is `perEndpoint > perSender > global`.
+
+## Durable and multi-instance enforcement
+
+In-memory state gives each process its own budget. Four replicas with a `$2`
+limit can collectively admit close to `$8`. For any restart or horizontally
+scaled deployment, inject one shared atomic payment store—normally Postgres—so
+check/reserve/stage/commit operations serialize correctly.
+
+SQLite can persist one-host state but is not a generic multi-host coordinator.
+Use a stable `agentId` when several agents share the Postgres payment tables,
+and test cross-tenant isolation.
+
+## Human approvals
+
+Lucid policy groups do not implement an approval queue. Add an application
+approval step before calling `paidFetch` when a payment exceeds an autonomy
+tier, targets a new counterparty, changes network/recipient, or buys a
+high-risk action. The approval artifact should bind the exact URL, payee,
+network, maximum amount, purpose, expiry, and operation ID.
+
+Do not let an LLM approve its own exception or rewrite policy in response to a
+seller message.
+
+## Error handling
+
+| Response                                       | Meaning                                                               | Action                                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `403 policy_violation`                         | A configured limit, allowlist, denylist, or rate rule blocked payment | Treat as a control decision; do not bypass automatically                              |
+| `503 policy_storage_error`                     | Store/evaluation failed or paid retry had no reservation              | Stop signing; repair/retry with the same operation ID                                 |
+| `503` reservation capacity                     | Too many outstanding unpaid attempts                                  | Backpressure buyers; shorten abandoned attempt lifetime carefully                     |
+| Remote `402` after a paid retry                | Credential was not accepted                                           | Release local reservation; inspect version/network/asset/signature                    |
+| Successful response without `PAYMENT-RESPONSE` | Settlement evidence absent                                            | Local amount is not committed; escalate/reconcile before another charge               |
+| Recording failure after receipt                | External settlement may be irreversible                               | Keep staged record counted and reconcile; never reset the budget to silence the error |
+
+## Verification tests
+
+Test exact recipient and domain allow/deny behavior, boundary amounts, window
+rollover, concurrent calls at the remaining total, paid retry without
+reservation, reservation expiry, network exception, store disconnect,
+settlement receipt missing, and process loss after the external payment.
+
+Next: [build the budgeted buyer](/docs/start/budgeted-buyer),
+[handle retries](/docs/buy/retries-idempotency), and configure
+[durable storage](/docs/operate/durable-storage).

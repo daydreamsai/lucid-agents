@@ -2,6 +2,7 @@
   "title": "Start",
   "pages": [
     "index",
+    "when-to-use-lucid",
     "install",
     "sell-paid-api",
     "budgeted-buyer",

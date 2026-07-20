@@ -1,19 +1,154 @@
 ---
 title: Deploy
-description: Choose an adapter without changing the runtime's payment and capability contracts.
+description: Choose a runtime topology and adapter without changing payment, fulfillment, and durability contracts.
 icon: CloudUpload
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Adapter        | Best fit                              | Server shape                                 |
-| -------------- | ------------------------------------- | -------------------------------------------- |
-| Hono           | Bun/Fetch-native service              | Bind `runtime.http.routes`                   |
-| Express        | Existing Node application             | Bridge Node request/response                 |
-| Next.js        | App Router application/storefront     | Generated route modules delegate to handlers |
-| TanStack Start | Full-stack storefront or headless API | Framework handlers wrap Fetch contracts      |
+Choose an adapter for the web framework and a topology for the state/worker
+contract. The adapter translates HTTP; it does not change when payment settles,
+which stores must be atomic, or whether background work can survive the host.
 
-All adapters expose the same health, discovery, invoke, stream, and task plan
-for the extensions installed. Do not add a framework-specific paywall.
+## Adapter decision matrix
+
+| Adapter                                         | Best fit                          | Process model                    | Important constraint                                                 |
+| ----------------------------------------------- | --------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
+| [Hono](/docs/operate/deploy/hono)               | Bun/Fetch-native API or container | Long-lived by default            | Best direct path for streaming and explicit shutdown                 |
+| [Express](/docs/operate/deploy/express)         | Existing Node/Express service     | Long-lived by default            | Raw request stream must reach the Node-to-Fetch bridge               |
+| [Next.js](/docs/operate/deploy/next)            | App Router storefront plus API    | Host-dependent/serverless common | Generated routes only; instance memory/background work may disappear |
+| [TanStack Start](/docs/operate/deploy/tanstack) | Full storefront or headless API   | Nitro target-dependent           | Keep server handlers/runtime separate from browser storefront code   |
+
+All adapters delegate to the canonical Lucid health, discovery, invoke, stream,
+and—when installed—task plan. Never add an adapter-specific x402/MPP paywall or
+entrypoint registry.
+
+## Topology decision matrix
+
+| Requirement                                      | Suitable topology                                                                      |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Free/stateless invoke proof                      | Any supported adapter/runtime                                                          |
+| Paid invoke with restart-safe totals/idempotency | Long-lived or serverless with shared Postgres/custom idempotency store                 |
+| SQLite payment/SIWX state                        | One persistent Node/Bun host with durable disk                                         |
+| SSE streams                                      | Host/proxy with response streaming, no buffering, and adequate idle duration           |
+| Lucid background tasks                           | Long-lived worker process plus durable custom `TaskStore`                              |
+| Scheduler                                        | Long-lived worker/timer plus durable custom `SchedulerStore`                           |
+| Horizontally scaled paid service                 | Shared atomic stores, tenant namespace, readiness, graceful drain                      |
+| Multi-region active/active                       | Explicit single-writer/partition ownership for every budget, nonce, key, task, and job |
+
+Do not run in-process task execution or scheduler timers in a request-only
+serverless function unless the platform explicitly keeps work alive after the
+response and you have verified recovery. A durable task row does not make the
+local handler continue running.
+
+## Provider-neutral production topology
+
+```text
+TLS load balancer / reverse proxy
+  ├─ request/body/rate limits; SSE buffering disabled
+  └─ N Lucid web replicas
+       ├─ canonical adapter routes
+       ├─ shared Postgres payment + SIWX state
+       ├─ shared custom HTTP idempotency store
+       └─ enqueue/claim durable tasks (if enabled)
+
+Long-lived worker replicas (only when tasks/scheduler are used)
+  ├─ shared custom TaskStore / SchedulerStore
+  └─ payment-aware outbound calls
+
+External wallet/signer + facilitator/provider + chain
+Observability + settlement reconciliation + backups
+```
+
+Keep web and worker deployment versions compatible with the same store schema
+and package set.
+
+## Deployment sequence
+
+### 1. Pin and build
+
+- Pin one Stable or Next compatibility set and the runtime image/toolchain.
+- Run type-check, package tests, docs/quickstart fixture, and production build
+  from a clean lockfile.
+- Generate routes/templates in CI; fail if the repository becomes dirty after
+  generation.
+
+### 2. Provision state and secrets
+
+- Apply expand-compatible database migrations before new code.
+- Configure seller address, network, facilitator URL/auth, wallet/provider
+  secrets, database URL, and public origin/base path through the platform
+  secret/config system.
+- Refuse readiness when required configuration, schema, store atomic probe, or
+  facilitator support check fails.
+
+The built-in `/health` route proves the Lucid HTTP runtime responds. It is not a
+complete readiness check for Postgres, wallet, facilitator, asset/network
+support, or downstream fulfillment dependencies. Add a private readiness route
+or platform check that covers the dependencies your deployment requires.
+
+### 3. Configure the proxy
+
+- Preserve original host/proto information so Agent Card URLs are public and
+  correct.
+- Set request-body and header limits large enough for supported payloads but
+  small enough to prevent abuse.
+- Disable buffering/cache/transformation for SSE and payment responses.
+- Expose required payment headers only to approved browser origins.
+- Set request/idle timeouts beyond bounded invoke/stream behavior and below
+  lease/idempotency assumptions where appropriate.
+
+### 4. Start and drain safely
+
+On termination: remove readiness, stop new admission, stop scheduler polling,
+drain HTTP/SSE within a deadline, call `runtime.close()`, then close the server
+and database connections. Durable task/job leases—not forced terminal writes—
+should enable recovery by another worker.
+
+### 5. Canary
+
+Run, in order:
+
+1. liveness and private readiness;
+2. Agent Card/entrypoint URL and protocol metadata validation;
+3. one free schema-valid invoke;
+4. one unpaid priced call that must return `402`;
+5. one low-limit funded call with stable idempotency key;
+6. reconciliation of output, `PAYMENT-RESPONSE`, external transaction, and
+   local payment/idempotency record;
+7. restart and same-key replay; task/stream proof if those modes are enabled.
+
+### 6. Roll back
+
+Keep the previous image and a schema-compatible rollback path. Stop paid
+traffic when the outcome is ambiguous, preserve staged settlements and active
+idempotency claims, reconcile external money movement, then roll back code.
+Never truncate payment/idempotency/task tables or disable the paywall as a
+shortcut.
+
+## Scaling checklist
+
+- No production policy, nonce, idempotency, task, or schedule state relies on
+  per-instance memory.
+- Every custom store passes concurrent-claim and stale-owner contract tests.
+- Wallet/facilitator/provider quotas and connection pools scale with replicas.
+- Autoscaling does not exceed settlement/provider rate limits.
+- Stream connections have a separate concurrency/SLO budget.
+- Scheduler/task workers use independent scaling and backpressure.
+- Tenant/agent IDs are part of storage and metric dimensions without leaking
+  secrets.
+
+## Evidence to retain
+
+Record release/package set, image digest, migration version, public origin/base
+path, configuration fingerprint (not secrets), canary operation/idempotency
+key, run/task ID, settlement reference, local record, timestamps, and rollback
+decision. This is the minimum artifact for explaining whether a deployment
+both charged and fulfilled correctly.
+
+Before deploying, complete [durable storage](/docs/operate/durable-storage),
+the [threat model](/docs/operate/security),
+[observability](/docs/operate/observability), and the
+[production checklist](/docs/operate/production-checklist).

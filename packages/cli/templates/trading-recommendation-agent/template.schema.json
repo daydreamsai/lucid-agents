@@ -25,9 +25,8 @@
       "type": "string",
       "enum": ["ethereum", "base", "base-sepolia", "solana", "solana-devnet"],
       "default": "ethereum",
-      "description": "Payment network (must match data agent)"
+      "description": "Wizard network alias; it must resolve to the same canonical CAIP-2 network as the data agent"
     }
   },
   "required": ["AGENT_DESCRIPTION", "AGENT_VERSION", "DATA_AGENT_URL"]
 }
-

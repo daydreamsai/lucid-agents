@@ -1,24 +1,78 @@
 ---
 title: AP2 role metadata
-description: Add AP2 role descriptors to an Agent Card without implying mandate or payment execution.
+description: Lucid's v0.1 AP2 role descriptor and its boundary from the upstream v0.2 authorization protocol.
 icon: ArrowLeftRight
 status: next
 verifiedVersion: 0.4.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The current `@lucid-agents/ap2` extension adds an AP2 extension descriptor and
-configured roles to the generated Agent Card.
+[AP2](https://ap2-protocol.org/ap2/specification/) is an agent-commerce
+authorization and evidence protocol. Upstream v0.2 defines human-present and
+human-not-present flows, mandates, receipts, and deterministic verification. It
+is not itself a settlement rail or complete catalog/checkout API.
 
-```ts
+The current `@lucid-agents/ap2` implementation is deliberately much smaller: it
+adds an **AP2 v0.1 role descriptor** to the generated Agent Card.
+
+## Support matrix
+
+| Capability                                                                | Lucid status    |
+| ------------------------------------------------------------------------- | --------------- |
+| v0.1 extension URI and role list                                          | Supported       |
+| `merchant`, `shopper`, `credentials-provider`, `payment-processor` labels | Supported       |
+| AP2 v0.2 descriptor/migration                                             | Not implemented |
+| Intent, cart, checkout, and payment mandates                              | Not implemented |
+| Human-present / human-not-present flows                                   | Not implemented |
+| Credential exchange and key confirmation                                  | Not implemented |
+| Deterministic mandate verification                                        | Not implemented |
+| Receipt/evidence storage, revocation, retrieval, or disputes              | Not implemented |
+| Payment authorization or settlement                                       | Not implemented |
+
+## Configure metadata
+
+```typescript
 const runtime = await createAgent(meta)
-  .use(ap2({ roles: ['merchant'] }))
+  .use(
+    ap2({
+      roles: ['merchant'],
+      description: 'Sells typed research capabilities',
+      required: true,
+    })
+  )
   .build();
 ```
 
-This release does **not** implement AP2 mandates, payment authorization,
-credential exchange, checkout, or settlement. Those capabilities must not be
-inferred from the presence of role metadata.
+The generated descriptor is:
 
-See the exact [package reference](/docs/packages/ap2).
+```json
+{
+  "uri": "https://github.com/google-agentic-commerce/ap2/tree/v0.1",
+  "description": "Sells typed research capabilities",
+  "required": true,
+  "params": { "roles": ["merchant"] }
+}
+```
+
+This is self-declared discovery metadata. Consumers must not interpret a
+`merchant` role as proof that checkout, mandates, payment, refunds, or disputes
+are implemented.
+
+## Composition with payments
+
+Use `@lucid-agents/payments` or `@lucid-agents/mpp` for the payment gate. The
+AP2 extension neither observes nor authorizes those settlements. If you build
+an AP2 workflow above Lucid, the application must verify every signed artifact
+deterministically outside the LLM, bind it to the exact cart/payment state,
+enforce expiry/replay/revocation, and retain evidence for disputes.
+
+## Interoperability claim
+
+Lucid does not currently claim AP2 v0.2 interoperability. The descriptor points
+to v0.1 and only advertises roles. Upgrade the URI and documentation only after
+the corresponding mandate, verifier, security, storage, and cross-implementation
+tests exist.
+
+See the [package API](/docs/packages/ap2) and the upstream
+[AP2 security considerations](https://ap2-protocol.org/ap2/security_and_privacy_considerations/).

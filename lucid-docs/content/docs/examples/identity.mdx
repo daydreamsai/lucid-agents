@@ -1,252 +1,184 @@
 ---
-title: Identity Examples
-description: ERC-8004 on-chain identity registration and registry operations.
+title: Identity examples
+description: Safely resolve, register, publish, and inspect draft ERC-8004 identity.
 icon: Fingerprint
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The identity examples demonstrate how to register agents on the ERC-8004 registry and interact with identity, reputation, and validation registries.
+These examples exercise the draft ERC-8004 identity and reputation clients.
+Registration and writes consume gas and may be irreversible. Start with lookup
+only; enable registration in a deliberate deployment step.
 
-## Quick Start
-
-**File:** `packages/examples/src/identity/quick-start.ts`
-
-The simplest way to register your agent on-chain.
-
-### The code
-
-```typescript title="quick-start.ts"
-import { createAgent } from '@lucid-agents/core';
-import { createAgentIdentity, registerAgent } from '@lucid-agents/identity';
-import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
-
-async function main() {
-  // Create a minimal runtime with wallet configuration
-  const agent = await createAgent({
-    name: 'quick-start-agent',
-    version: '1.0.0',
-    description: 'Quick start example agent',
-  })
-    .use(wallets({ config: walletsFromEnv() }))
-    .build();
-
-  // Example 1: Simple registration with env vars
-  console.log('Example 1: Simple Registration');
-  const identity = await createAgentIdentity({
-    runtime: agent,
-    autoRegister: true,
-  });
-
-  console.log('Status:', identity.status);
-
-  if (identity.didRegister) {
-    console.log('Agent registered successfully!');
-    console.log('Transaction:', identity.transactionHash);
-    console.log(
-      'Next step: Host your registration file at:',
-      `https://${identity.domain}/.well-known/agent-registration.json`
-    );
-  } else if (identity.trust) {
-    console.log('Found existing registration');
-    console.log('Agent ID:', identity.record?.agentId);
-  } else {
-    console.log('No on-chain identity (agent will run without it)');
-  }
-
-  // Example 2: Explicit registration
-  console.log('Example 2: Explicit Registration');
-  const registration = await registerAgent({
-    runtime: agent,
-    domain: 'my-agent.example.com',
-  });
-
-  console.log('Status:', registration.status);
-  if (registration.didRegister) {
-    console.log('TX:', registration.transactionHash);
-  }
-
-  // Example 3: Custom configuration
-  console.log('Example 3: Custom Configuration');
-  const customIdentity = await createAgentIdentity({
-    runtime: agent,
-    domain: 'custom-agent.example.com',
-    autoRegister: true,
-    trustModels: ['feedback', 'tee-attestation'],
-    trustOverrides: {
-      feedbackDataUri: 'https://custom-agent.example.com/feedback.json',
-    },
-  });
-
-  console.log('Status:', customIdentity.status);
-  if (customIdentity.trust) {
-    console.log('Trust models:', customIdentity.trust.trustModels);
-    console.log('Feedback URI:', customIdentity.trust.feedbackDataUri);
-  }
-}
-
-main().catch(console.error);
-```
-
-### Key patterns explained
-
-#### Auto-registration
-
-The simplest path - set `autoRegister: true` and the SDK handles everything:
-
-```typescript
-const identity = await createAgentIdentity({
-  runtime: agent,
-  autoRegister: true,  // Register if not already registered
-});
-```
-
-#### Explicit registration
-
-When you want more control over when registration happens:
-
-```typescript
-const registration = await registerAgent({
-  runtime: agent,
-  domain: 'my-agent.example.com',
-});
-```
-
-#### Custom trust models
-
-Configure which trust models your agent supports:
-
-```typescript
-const identity = await createAgentIdentity({
-  runtime: agent,
-  domain: 'custom-agent.example.com',
-  autoRegister: true,
-  trustModels: ['feedback', 'tee-attestation'],
-  trustOverrides: {
-    feedbackDataUri: 'https://custom-agent.example.com/feedback.json',
-  },
-});
-```
-
-Available trust models:
-- `feedback` - Reputation feedback system
-- `tee-attestation` - Trusted Execution Environment attestation
-- `domain` - Domain ownership verification
-
-### Environment variables
+## Prerequisites
 
 ```bash
-# Required
-AGENT_WALLET_PRIVATE_KEY=0x...
-RPC_URL=https://sepolia.base.org
-CHAIN_ID=84532
-
-# Optional
-AGENT_DOMAIN=my-agent.example.com
+bun add @lucid-agents/core @lucid-agents/identity @lucid-agents/wallet viem
 ```
 
-### Running the example
+```bash
+AGENT_DOMAIN=my-agent.example.com
+RPC_URL=https://your-base-sepolia-rpc.example
+CHAIN_ID=84532
+DEVELOPER_WALLET_PRIVATE_KEY=0x...
+IDENTITY_AUTO_REGISTER=false
+```
+
+The examples also accept an agent wallet as a compatibility fallback, but a
+dedicated developer/operator wallet makes the on-chain authority clearer.
+
+## Resolve an existing identity
+
+```typescript title="identity-lookup.ts"
+import { createAgent } from '@lucid-agents/core';
+import { createAgentIdentity } from '@lucid-agents/identity';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const runtime = await createAgent({
+  name: 'lookup-agent',
+  version: '1.0.0',
+})
+  .use(wallets({ config: walletsFromEnv() }))
+  .build();
+
+const result = await createAgentIdentity({
+  runtime,
+  domain: process.env.AGENT_DOMAIN,
+  rpcUrl: process.env.RPC_URL,
+  chainId: Number(process.env.CHAIN_ID),
+  autoRegister: false,
+});
+
+if (!result.record) {
+  console.log('No existing identity:', result.status);
+  process.exit(0);
+}
+
+console.log({
+  agentId: result.record.agentId.toString(),
+  owner: result.record.owner,
+  agentURI: result.record.agentURI,
+});
+```
+
+Check `record`, not only `status`: bootstrap can warn and let an agent continue
+without identity when RPC/client setup fails.
+
+## Register in an explicit step
+
+After validating the chain, official registry addresses, domain, wallet, and
+gas balance:
+
+```typescript
+import { registerAgent } from '@lucid-agents/identity';
+
+if (process.env.CONFIRM_IDENTITY_WRITE !== 'yes') {
+  throw new Error('Set CONFIRM_IDENTITY_WRITE=yes after reviewing the write');
+}
+
+const registration = await registerAgent({
+  runtime,
+  domain: process.env.AGENT_DOMAIN,
+  rpcUrl: process.env.RPC_URL,
+  chainId: Number(process.env.CHAIN_ID),
+  agentURI:
+    `https://${process.env.AGENT_DOMAIN}` +
+    '/.well-known/agent-registration.json',
+});
+
+if (!registration.record) {
+  throw new Error(`Registration failed: ${registration.status}`);
+}
+
+console.log({
+  didRegister: registration.didRegister,
+  transactionHash: registration.transactionHash,
+  agentId: registration.record.agentId.toString(),
+});
+```
+
+`registerAgent()` forces auto-registration when the record is missing. Reusing
+the same domain does not replace the need to verify the current owner and URI.
+
+## Generate discovery documents
+
+```typescript
+import {
+  generateAgentRegistration,
+  generateOASFRecord,
+} from '@lucid-agents/identity';
+
+const options = {
+  name: 'Research Agent',
+  description: 'Finds and synthesizes primary sources',
+  selectedServices: ['A2A', 'web', 'OASF'] as ('A2A' | 'web' | 'OASF')[],
+  x402Support: true,
+  oasf: {
+    authors: ['ops@my-agent.example.com'],
+    skills: ['research'],
+    domains: ['knowledge'],
+    modules: ['https://my-agent.example.com/modules/core'],
+    locators: ['https://my-agent.example.com/.well-known/oasf-record.json'],
+  },
+};
+
+const registrationDocument = generateAgentRegistration(registration, options);
+const oasfDocument = generateOASFRecord(registration, options, runtime);
+```
+
+Host the first document at the exact `agentURI` stored on-chain. If OASF is
+enabled, host the second at the configured locator. The HTTP identity extension
+can generate these documents from live runtime entrypoints.
+
+## Read identity and reputation
+
+```typescript
+const clients = registration.clients;
+if (!clients) {
+  throw new Error('Registry clients were not created; inspect RPC warnings');
+}
+
+const current = await clients.identity.get(registration.record.agentId);
+const summary = await clients.reputation.getSummary(
+  registration.record.agentId
+);
+
+console.log(current?.owner, summary.count, summary.value);
+```
+
+Writes such as `setMetadata()`, identity transfers, approvals, and
+`giveFeedback()` require the configured wallet account. Make each write
+idempotent at the application/workflow level and record its transaction hash.
+
+## Validation is not part of the default example
+
+`registration.clients` contains identity and reputation clients. It does not
+contain a validation client by default. Validation is under active development;
+the package only retains a manual `createValidationRegistryClient()` export for
+backward compatibility.
+
+Do not use older examples that assume `identity.clients.validation` is always
+defined. Pin and audit the draft plus deployed validation contract before
+testing that compatibility client.
+
+## Repository examples
+
+The repository includes:
+
+- [`quick-start.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/identity/quick-start.ts)
+  for lookup/registration bootstrap;
+- [`full-integration.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/identity/full-integration.ts)
+  for identity and reputation operations, with deprecated validation guarded;
+- [`test-clients.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/identity/test-clients.ts)
+  for client/RPC diagnostics.
+
+Run them only against a funded test wallet and a reviewed test deployment:
 
 ```bash
 bun run packages/examples/src/identity/quick-start.ts
 ```
 
-## Full Integration
-
-**File:** `packages/examples/src/identity/full-integration.ts`
-
-Comprehensive example testing all three registries: Identity, Validation, and Reputation.
-
-### What it demonstrates
-
-1. **Identity Registry**
-   - Registration and lookups
-   - Metadata management
-   - Multiple agents per wallet
-
-2. **Validation Registry**
-   - Creating validation requests
-   - Submitting validation responses
-   - Querying validation status
-
-3. **Reputation Registry**
-   - Giving feedback to agents
-   - Responding to feedback
-   - Querying reputation summaries
-
-### Key operations
-
-```typescript
-// Identity Registry
-const record = await registry.identity.get(agentId);
-const metadata = await registry.identity.getMetadata(agentId, 'version');
-await registry.identity.setMetadata(
-  agentId,
-  'version',
-  new TextEncoder().encode('1.0.0')
-);
-
-// Validation Registry
-// hashValidationRequest is exported from @lucid-agents/identity
-const requestBody = '{"input":"work-data"}';
-const requestHash = hashValidationRequest(requestBody);
-await registry.validation.validationRequest({
-  validatorAddress,
-  agentId,
-  requestUri: 'ipfs://...',
-  requestBody,
-});
-await registry.validation.validationResponse({
-  requestHash,
-  response: 1,
-  responseUri: 'ipfs://...',
-  responseHash,
-  tag: 'validation',
-});
-
-// Reputation Registry
-const reputation = await registry.reputation.getSummary(agentId);
-const average =
-  reputation.valueDecimals === 0
-    ? Number(reputation.value)
-    : Number(reputation.value) / 10 ** reputation.valueDecimals;
-await registry.reputation.giveFeedback({
-  toAgentId: agentId,
-  value: 5,
-  valueDecimals: 0,
-  tag1: 'quality',
-  tag2: 'speed',
-});
-await registry.reputation.appendResponse(feedbackId, { ... });
-```
-
-## Test Clients
-
-**File:** `packages/examples/src/identity/test-clients.ts`
-
-A quick validation that all registry clients are properly initialized.
-
-```typescript
-import { createAgentIdentity } from '@lucid-agents/identity';
-
-const identity = await createAgentIdentity({ runtime: agent });
-
-// Access individual clients
-console.log('Identity client:', identity.clients.identity.address);
-console.log('Reputation client:', identity.clients.reputation.address);
-console.log('Validation client:', identity.clients.validation.address);
-
-// Check chain configuration
-console.log('Chain ID:', identity.clients.identity.chainId);
-```
-
-### Why this matters
-
-The test clients example verifies:
-- Registry contract addresses are correctly configured
-- RPC connection is working
-- Client methods are available
-
-This is useful for debugging configuration issues before running full integration tests.
+For configuration, deployment addresses, OASF, security, and error handling,
+use the complete [`@lucid-agents/identity` reference](/docs/packages/identity).

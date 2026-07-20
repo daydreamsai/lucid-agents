@@ -46,8 +46,9 @@ function Home() {
           </h1>
           <p className="mx-auto mb-9 max-w-3xl text-lg leading-relaxed text-fd-muted-foreground md:text-xl">
             Define a typed capability once. Let agents and applications
-            discover, pay for, and call it over x402 or MPP from the web
-            framework you already use.
+            discover, pay for, and call it over the verified Stable x402 path
+            from the web framework you already use. Qualified Next pages cover
+            the newer MPP surface.
           </p>
           <div className="flex flex-col justify-center sm:flex-row">
             <Link
@@ -174,7 +175,7 @@ function Home() {
           />
           <Feature
             title="Protocol-composable"
-            description="Use x402 as the default rail, add MPP, A2A, SIWX, ERC-8004, or AP2 metadata only when needed."
+            description="Use the verified x402 v2 exact path first; add only the versioned Next protocol subsets documented in each compatibility page."
           />
           <Feature
             title="Production-shaped"

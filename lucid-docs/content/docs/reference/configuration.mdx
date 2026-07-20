@@ -1,24 +1,169 @@
 ---
 title: Configuration
-description: Understand which extension owns each runtime concern.
+description: Compose Lucid by concern, understand precedence, and keep extension-owned behavior in its owning package.
 icon: Settings2
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Concern                                               | Owning extension/package                              |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| Metadata and entrypoints                              | `@lucid-agents/core`                                  |
-| HTTP routes, authorization orchestration, idempotency | `@lucid-agents/http`                                  |
-| x402, SIWX, payment policy/storage                    | `@lucid-agents/payments`                              |
-| MPP challenges and credentials                        | `@lucid-agents/mpp`                                   |
-| Agent/developer wallets                               | `@lucid-agents/wallet`                                |
-| Agent Cards, client, tasks                            | `@lucid-agents/a2a`                                   |
-| ERC-8004 initialization                               | `@lucid-agents/identity`                              |
-| Framework binding                                     | Hono, Express, TanStack, or generated Next.js adapter |
+Lucid is configured as a typed extension graph. Core owns agent metadata and
+the canonical entrypoint registry; each extension owns its own configuration,
+runtime state, validation, and lifecycle.
 
-Compose configuration where the concern is owned. The core must not translate
-or wrap an extension runtime when the extension already exposes the required
-public contract.
+## Ownership map
+
+| Concern                                                  | Owning package                                        | Configuration entrypoint                                 |
+| -------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------- |
+| Agent name, version, description                         | `@lucid-agents/core`                                  | `createAgent(meta)`                                      |
+| Entrypoints and handlers                                 | `@lucid-agents/core`                                  | `runtime.addEntrypoint(definition)` or an adapter helper |
+| HTTP routes, landing page, base path, invoke idempotency | `@lucid-agents/http`                                  | `http(options)`                                          |
+| x402, SIWX, payment policy, payment accounting           | `@lucid-agents/payments`                              | `payments({ config })`                                   |
+| MPP challenge and credential verification                | `@lucid-agents/mpp`                                   | `mpp({ config })`                                        |
+| Agent and developer wallets                              | `@lucid-agents/wallet`                                | `wallets({ config })`                                    |
+| Lucid Agent Card, client, and task runtime               | `@lucid-agents/a2a`                                   | `a2a(options)`                                           |
+| ERC-8004 initialization and trust metadata               | `@lucid-agents/identity`                              | `identity(options)` or `createAgentIdentity(options)`    |
+| AP2 role metadata                                        | `@lucid-agents/ap2`                                   | `ap2(config)`                                            |
+| Payment analytics                                        | `@lucid-agents/analytics`                             | `analytics(options)`                                     |
+| Scheduled Lucid task calls                               | `@lucid-agents/scheduler`                             | `createScheduler(options)`                               |
+| Catalog-defined entrypoints                              | `@lucid-agents/catalog`                               | Catalog parser/registration APIs                         |
+| Framework binding                                        | Hono, Express, TanStack, or generated Next.js adapter | Adapter-specific factory                                 |
+
+## Composition order
+
+Declare producer extensions before consumers. The builder validates
+dependencies and initializes extensions sequentially.
+
+```ts
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const walletConfig = walletsFromEnv();
+const paymentConfig = paymentsFromEnv();
+
+if (!paymentConfig) throw new Error('Payment configuration is required');
+
+const runtime = await createAgent({
+  name: 'paid-research-agent',
+  version: '1.0.0',
+  description: 'Returns a paid research result',
+})
+  .use(wallets({ config: walletConfig }))
+  .use(payments({ config: paymentConfig }))
+  .use(
+    http({
+      basePath: '/api/agent',
+      idempotency: {
+        // Replace the default in-memory store before horizontal scaling.
+        inProgressTtlMs: 15 * 60_000,
+        retentionMs: 24 * 60 * 60_000,
+      },
+    })
+  )
+  .build();
+```
+
+The runtime exposes each slice directly as `runtime.wallets`,
+`runtime.payments`, and `runtime.http`. Do not create application wrappers that
+duplicate an extension's config or transform its public runtime into another
+shape.
+
+## Precedence
+
+Configuration is resolved at the package boundary:
+
+1. Explicit function options take precedence over environment-backed fields.
+2. The package's environment helper applies its documented aliases and
+   defaults.
+3. Extension construction validates the resolved object.
+4. Entrypoint configuration selects per-capability behavior, such as price,
+   payment protocol, network, or SIWX requirements.
+
+There is no hidden global merge across packages. For example,
+`paymentsFromEnv()` does not configure a wallet, and `walletsFromEnv()` does
+not choose a payment network.
+
+## Entrypoint-level configuration
+
+The entrypoint is the commercial and execution boundary:
+
+```ts
+import { z } from 'zod';
+
+runtime.addEntrypoint({
+  key: 'summarize',
+  description: 'Summarize supplied text',
+  input: z.object({ text: z.string().min(1).max(50_000) }),
+  output: z.object({ summary: z.string() }),
+  price: { invoke: '0.02', stream: '0.03' },
+  paymentProtocol: 'x402',
+  network: 'eip155:84532',
+  handler: async ({ input }) => ({
+    output: { summary: input.text.slice(0, 200) },
+  }),
+});
+```
+
+- `price` is a USD decimal string, not atomic token units and not a JavaScript
+  number.
+- `paymentProtocol` selects one rail. Do not activate both x402 and MPP for the
+  same operation.
+- An entrypoint-level `network` overrides the payment runtime network for that
+  entrypoint.
+- Invoke and stream can have separate prices. Task creation uses the invoke
+  authorization path in the current Lucid task profile.
+- SIWX authentication is configured separately from payment price.
+
+## Defaults that matter in production
+
+| Surface                           | Current default                         | Production implication                                                             |
+| --------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- |
+| HTTP landing page                 | Enabled                                 | Disable or protect it if public discovery is not intended.                         |
+| HTTP base path                    | Empty                                   | Set it before publishing cards or reverse-proxy routes.                            |
+| HTTP invoke idempotency           | Enabled, bounded in-memory store        | Inject a durable atomic store for multiple replicas.                               |
+| HTTP in-progress claim            | 15 minutes                              | Size it above the longest supported invoke or claims can expire mid-run.           |
+| HTTP completed-response retention | 24 hours                                | Align client retry windows and data-retention policy.                              |
+| Payment/SIWX storage              | In-memory when no store is supplied     | Use shipped SQLite/Postgres factories or a custom port as topology requires.       |
+| MPP challenge key                 | Generated per process when absent       | Set a secret explicitly, while recognizing challenge state is still process-local. |
+| MPP challenge state               | Bounded process-local map               | Route retries to the same process or do not scale this path horizontally yet.      |
+| Lucid tasks                       | Bounded in-memory store unless injected | Supply a durable task store before relying on task recovery.                       |
+| Scheduler store                   | Bounded in-memory implementation        | Implement the scheduler store port for durable/multi-instance workers.             |
+
+See [Durable storage](/docs/operate/durable-storage) for the exact support
+matrix and [Payment lifecycle](/docs/build/payment-model) for commit timing.
+
+## Deployment configuration boundary
+
+Adapters bind the canonical routes; they must not add a second paywall,
+entrypoint registry, or manifest implementation. Keep these layers separate:
+
+| Layer              | Owns                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------- |
+| Extension config   | Payment verification, policy, wallet, task, and protocol behavior.                        |
+| Adapter config     | Request/response conversion, listener, framework route modules.                           |
+| Deployment config  | Secrets, public origin, database URLs, trusted proxies, replicas, and shutdown.           |
+| Application config | Model providers, tenant lookup, business limits, fulfillment, and downstream idempotency. |
+
+`DATABASE_URL` and `PORT` are examples of deployment variables that your app
+must wire explicitly. They are not read automatically by all Lucid packages.
+
+## Validation strategy
+
+Treat startup validation as part of the public contract:
+
+1. Parse and validate application-owned variables before building the runtime.
+2. Call package environment helpers explicitly.
+3. Reject a missing required extension configuration instead of silently
+   serving a free or in-memory fallback.
+4. Build the runtime during CI with production-shaped configuration and test
+   every published route.
+5. Assert negative cases: no credential, wrong network, over-budget request,
+   duplicate idempotency key, and unavailable durable store.
+
+For the exact environment inventory, see
+[Environment variables](/docs/reference/environment). Package pages contain
+the full public runtime surfaces; the monorepo source types remain the
+normative API when a generated API-reference page is not yet available.

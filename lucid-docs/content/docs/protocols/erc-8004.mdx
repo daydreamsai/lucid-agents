@@ -1,28 +1,116 @@
 ---
 title: ERC-8004 identity
-description: Register EVM identity and trust independently from the service's payment network.
+description: Lucid support for the draft ERC-8004 identity and reputation registries.
 icon: Fingerprint
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-`@lucid-agents/identity` initializes ERC-8004 identity, reputation, and
-validation registry clients and can register an agent identity.
+[ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) is an Ethereum
+standards-track **Draft** for agent identity, reputation, and validation
+registries. Draft specifications may change incompatibly.
 
-Identity registration is EVM-only and has on-chain side effects. Payment
-receiving is independent: an identity may be registered on Base while the
-service receives a supported Solana payment.
+Lucid can discover or register an EVM identity, publish registration/OASF
+metadata, enrich an Agent Card, and operate identity and reputation clients.
+It does not turn registry presence into an authorization decision.
 
-```ts
-const identity = await createAgentIdentity({
-  runtime,
-  domain: 'service.example',
-  autoRegister: true,
-});
+## Support matrix
+
+| Capability                     | Status                  | Lucid behavior                                                  |
+| ------------------------------ | ----------------------- | --------------------------------------------------------------- |
+| Identity registry reads/writes | Supported               | Register, lookup, metadata, agent wallet, transfer, approval    |
+| Registration document          | Supported               | Generate ERC-8004 registration-v1 JSON and service links        |
+| Domain proof                   | Partial                 | Message builder and signer; no challenge service or verifier    |
+| Reputation registry            | Supported               | Read summaries/feedback and submit/revoke/respond               |
+| Validation registry            | Experimental/deprecated | Manual compatibility client only; absent from default clients   |
+| OASF service record            | Supported               | Structured strict-mode record derived partly from entrypoints   |
+| EVM chains                     | Limited                 | Deployment map for Ethereum, Ethereum Sepolia, and Base Sepolia |
+| Solana identity                | Not supported           | Payment receiving may still use Solana independently            |
+| Trust/safety proof             | Not provided            | Registry data is evidence that callers must evaluate            |
+
+## Identity is separate from payment
+
+Identity registration is EVM-only and has gas, custody, and on-chain
+side-effects. Payment receiving is independent: an agent may register identity
+on Base Sepolia and receive an x402 payment on a supported Solana network.
+
+`x402Support` in a registration document is a self-description. It does not
+prove that a payment endpoint is online, correctly configured, or safe.
+
+## Trust model
+
+An ERC-8004 identity can establish ownership of an on-chain token and point to
+off-chain service metadata. Reputation can establish who submitted a feedback
+event. Neither establishes that:
+
+- the described endpoint is currently operated by the owner;
+- the agent's output is correct or free of prompt injection;
+- feedback is objective, independent, or Sybil-resistant;
+- a score is relevant to the action a caller is authorizing;
+- referenced off-chain content has remained unchanged.
+
+Applications should filter reviewers, verify service/domain bindings, combine
+several signals, and retain a separate authorization policy.
+
+## On-chain and off-chain data
+
+The registry identifier uses an EVM chain, registry contract, and agent ID.
+Lucid emits a CAIP-10-style `agentRegistry` such as:
+
+```text
+eip155:84532:0x8004A818BFB912233c491871b3d84c89A494BD9e
 ```
 
-Use `autoRegister` only in an environment where the configured developer wallet
-is authorized and funded. Treat registry reputation as one trust signal, not a
-substitute for service policy or output validation.
+The on-chain identity points to an `agentURI`. Host the registration document
+at that exact URI, version it deliberately, and monitor it for drift. Avoid
+putting secrets, mutable personal data, or confidential evidence in permanent
+on-chain metadata or hashes.
+
+## Registration safety
+
+```typescript
+const result = await createAgentIdentity({
+  runtime,
+  domain: 'service.example',
+  rpcUrl: process.env.RPC_URL,
+  chainId: 84532,
+  autoRegister: false,
+});
+
+if (!result.record) {
+  throw new Error(`Expected an existing identity: ${result.status}`);
+}
+```
+
+Keep auto-registration out of request handling. If it is enabled in a
+deployment step, verify the exact registry addresses, fund a dedicated wallet,
+cap transaction authority, wait for confirmation, and record the transaction
+and resulting agent ID.
+
+## Validation status
+
+The package retains `createValidationRegistryClient()` for backward
+compatibility, but the upstream validation design is still evolving. Lucid
+does not create `result.clients.validation` by default. Do not advertise
+inference validation as an operational capability merely because a trust-model
+string appears in a card.
+
+## Verification checklist
+
+1. Resolve the chain and registry address from trusted configuration.
+2. Verify the registry deployment and contract version against the official
+   [contracts repository](https://github.com/erc-8004/erc-8004-contracts).
+3. Resolve the agent ID and current owner on-chain.
+4. Fetch the exact `agentURI` over an allowed scheme and enforce size/time
+   limits.
+5. Verify domain proof, signature, nonce, and service endpoint ownership where
+   your policy requires them.
+6. Evaluate reputation by reviewer identity, tag, time, and application
+   context—not an unqualified aggregate.
+7. Fail closed when identity is a requirement. Lucid bootstrap may otherwise
+   log a warning and continue without a record.
+
+See the complete [`@lucid-agents/identity` reference](/docs/packages/identity)
+for configuration, registry operations, OASF, security, and troubleshooting.

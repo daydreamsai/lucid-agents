@@ -1,24 +1,149 @@
 ---
-title: Discover services
-description: Use Agent Cards and catalogs without conflating them with x402 Bazaar.
+title: Discover and trust services
+description: Compare direct URLs, Agent Cards, catalogs, storefronts, OASF, ERC-8004, and x402 Bazaar without treating discovery as authorization.
 icon: Compass
 status: next
 verifiedVersion: 0.6.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid currently exposes two discovery inputs:
+Discovery answers “where is a service and what does it claim?” Trust and
+authorization answer different questions. No discovered price, payee, role,
+identity, reputation, or capability should directly authorize a wallet.
 
-- **Agent Cards/A2A:** remote identity, skills, operation modes, and payment
-  metadata at the agent URL.
-- **Lucid catalogs:** local YAML or CSV configuration used to register many
-  entrypoints.
+## Discovery surfaces
 
-Fetch a card through the A2A runtime, validate the origin you intended to
-contact, and select a skill by stable key. Discovery is not authorization:
-apply recipient and spending policy after resolving the service.
+| Surface                    | Producer / authority                         | Contains                                                       | Freshness and authenticity                                               | Lucid support                  |
+| -------------------------- | -------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| Direct HTTPS URL           | Your application/config/operator             | Target only                                                    | As trusted/current as configuration ownership                            | Supported                      |
+| Agent Card-shaped document | Service at `/.well-known/agent-card.json`    | Name, skills, interfaces, capabilities, payment/trust metadata | Fetched live; signatures may be preserved but Lucid does not verify them | Partial Lucid profile          |
+| Lucid YAML/CSV catalog     | Your deployment repository/operator          | Local product/entrypoint definitions                           | Loaded at build; no remote signature/index/freshness protocol            | Supported Next package         |
+| Lucid storefront           | Service UI derived from card/entrypoints     | Human-readable capabilities, forms, wallet flow                | Same authority as deployed service; UI can become stale/misconfigured    | Generated Next UI              |
+| OASF record                | Service/identity extension                   | Structured skills/domains/modules/locators                     | Off-chain document; validate origin, schema, and locator                 | Generated with identity config |
+| ERC-8004 record            | EVM registry owner plus off-chain `agentURI` | On-chain identity/owner/URI and reputation evidence            | On-chain ownership, mutable/off-chain metadata, Draft semantics          | Identity/reputation subset     |
+| x402 Bazaar                | Bazaar-compatible publisher/index/provider   | x402 discovery declarations                                    | Provider/index-specific freshness and trust                              | Not published by Lucid         |
+| AP2 role descriptor        | Service Agent Card                           | Self-declared commerce role                                    | Metadata only; current Lucid URI is v0.1                                 | Role metadata only             |
 
-Lucid does not currently publish x402 Bazaar extension declarations. A service
-settled through a facilitator may appear in provider-owned discovery systems,
-but that is not the same as Lucid implementing Bazaar publication.
+A service may appear in several surfaces. Agreement increases confidence but
+does not replace deterministic verification at payment time.
+
+## Safe buyer flow
+
+```text
+trusted seed (allowlisted URL / registry / operator catalog)
+  → fetch with SSRF and redirect controls
+  → parse bounded card/registration/OASF schema
+  → verify expected origin, owner/signature policy, version, and freshness
+  → select a stable capability key and compatible Lucid HTTP profile
+  → compare payment metadata with buyer policy
+  → make an unpaid request and inspect the actual x402/MPP challenge
+  → require exact endpoint + payee + network + amount + scheme/intent approval
+  → sign, fulfill, and reconcile
+```
+
+The payment challenge is authoritative for the credential the seller will
+verify, but an attacker-controlled seller can advertise an attacker-controlled
+payee. The buyer's allowlist/approval remains the spending authority.
+
+## Agent Card lookup
+
+```typescript
+const card = await runtime.a2a.fetchCard(
+  'https://service.example/.well-known/agent-card.json',
+  safeFetch
+);
+
+const skill = card.skills?.find(candidate => candidate.id === 'search');
+if (!skill) throw new Error('Expected search skill is not advertised');
+
+const httpInterface = card.supportedInterfaces?.find(candidate =>
+  candidate.protocolBinding.toUpperCase().includes('HTTP')
+);
+if (!httpInterface) throw new Error('No supported Lucid HTTP interface');
+```
+
+The Lucid client uses the first HTTP interface and then calls Lucid
+`/entrypoints/:key/...` routes. It does not negotiate `A2A-Version` or speak an
+official A2A v1 binding. Only call services that explicitly support the Lucid
+profile or place an official protocol adapter between them.
+
+## Network-fetch security
+
+`agentCardUrl`, interface URLs, registration `agentURI`, OASF locators, and
+catalog metadata are untrusted URLs. A production `safeFetch` should:
+
+- allow only `https:` and approved host/port patterns;
+- resolve/block loopback, private, link-local, multicast, and cloud metadata
+  addresses, including after redirects and DNS changes;
+- cap redirects, response bytes, decompressed bytes, and total/idle time;
+- reject credentials embedded in URLs and strip ambient cookies/auth on
+  cross-origin redirects;
+- validate content type and schema before following nested locators;
+- cache with explicit TTL/ETag while retaining last-known identity/version;
+- reapply all checks on refresh, not only initial enrollment.
+
+If a fetched card changes interface, payee, network, identity owner, or protocol
+version, require policy review rather than silently accepting drift.
+
+## Identity and reputation
+
+ERC-8004 can prove current ownership of a registry token and record who
+submitted feedback. Verify the chain, registry contract, agent ID, owner,
+`agentURI`, domain/service binding, reviewer identity, tags, and age.
+
+Registration does not prove the endpoint is online, the advertised skill
+works, the owner wrote the current off-chain document, or reputation is
+Sybil-resistant. Use it as one signal. Validation is not created by Lucid's
+identity helper by default and remains experimental.
+
+## Local catalogs and storefronts
+
+A Lucid catalog is deployment input that generates local entrypoints. It is not
+a signed marketplace feed. Review catalog changes like code: schema validation,
+duplicate keys, trusted source, price/network/payee policy, approval, and
+rollback.
+
+The storefront presents the service's own public model. It improves human
+inspection but is not a trust oracle or x402 Bazaar. Browser wallet approval
+must still show the exact final requirement.
+
+## Freshness policy
+
+Define TTL and revalidation per source:
+
+- direct allowlist/config: release/change-control driven;
+- Agent Card/OASF/registration: short cache plus ETag and drift alert;
+- ERC owner/registry: confirmation-aware chain query and reorg policy;
+- reputation: time/tag/reviewer-filtered, not a lifetime aggregate;
+- actual payment challenge: validate on every operation;
+- provider/Bazaar index: follow provider update/SLA semantics.
+
+Retain the version/digest used for each paid operation so a dispute can explain
+what the buyer saw.
+
+## Failure behavior
+
+| Failure                                              | Default                                                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Discovery unavailable                                | Use only a bounded last-known record when policy explicitly allows; otherwise stop |
+| Schema/version unknown                               | Fail closed or route through a compatible adapter                                  |
+| Card origin/interface leaves allowlist               | Stop and require review                                                            |
+| Identity owner/agent URI changes                     | Stop high-trust/paid automation until reverified                                   |
+| Advertised payee differs from challenge              | Stop; never “prefer whichever is latest” automatically                             |
+| Challenge differs from approved payee/network/amount | Deny before signing                                                                |
+| Reputation missing/negative/stale                    | Apply application policy; do not convert absence directly into protocol failure    |
+
+## Evidence and tests
+
+Persist source URL, retrieval time, ETag/digest, schema/protocol version,
+verified identity/owner, selected interface/capability, expected payment policy,
+actual challenge, and approval/rejection outcome. Redact credentials.
+
+Test stale cache, redirect to private IP, DNS rebinding, oversized/compressed
+body, unknown version, changed interface/payee, ERC owner transfer, conflicting
+surfaces, missing skill, and challenge drift.
+
+Next: [call a paid service](/docs/buy/call-paid-service), apply
+[policies and budgets](/docs/buy/policies-budgets), and review
+[A2A compatibility](/docs/protocols/a2a).

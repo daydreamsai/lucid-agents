@@ -1,7 +1,9 @@
 /**
  * Full Integration Example - Comprehensive ERC-8004 Testing
  *
- * This example exercises ALL functionality of the ERC-8004 identity SDK:
+ * This example exercises identity and reputation functionality plus guarded,
+ * deprecated validation compatibility operations when a validation client is
+ * explicitly available:
  * - Identity Registry (registration, lookups, metadata)
  * - Validation Registry (requests, responses, queries)
  * - Reputation Registry (feedback, responses, queries)
@@ -27,7 +29,7 @@ import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
 async function main() {
   console.log('='.repeat(80));
-  console.log('ERC-8004 Identity SDK - Comprehensive Integration Test');
+  console.log('ERC-8004 Identity SDK - Integration Test');
   console.log('='.repeat(80));
   console.log('');
 

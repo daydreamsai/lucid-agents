@@ -101,14 +101,14 @@ Replace all old network strings with CAIP-2 format:
 const config: PaymentsConfig = {
   payTo: '0x...',
   network: 'base-sepolia',
-  facilitatorUrl: 'https://facilitator.daydreams.systems',
+  facilitatorUrl: 'https://YOUR_FACILITATOR_URL',
 };
 
 // After
 const config: PaymentsConfig = {
   payTo: '0x...',
   network: 'eip155:84532', // Base Sepolia in CAIP-2 format
-  facilitatorUrl: 'https://facilitator.daydreams.systems',
+  facilitatorUrl: 'https://YOUR_FACILITATOR_URL',
 };
 ```
 
@@ -120,9 +120,9 @@ const config: PaymentsConfig = {
 // Before
 import type { Network, Money, RouteConfig, RoutesConfig } from 'x402/types';
 
-// After
-import type { Network, Money } from '@x402/core/types';
-import type { RouteConfig, RoutesConfig } from '@x402/core/server';
+// After: import each type from the scoped package that owns it.
+import type { Network } from '@x402/core/types';
+import type { RouteConfig } from '@x402/core/server';
 ```
 
 #### Payment Middleware Imports
@@ -171,16 +171,16 @@ const wallet = createWallet(privateKey, 'base');
 const x402Fetch = wrapFetchWithX402(fetch, wallet);
 
 // After
-import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
-import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
+import { x402Client } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
 import { privateKeyToAccount } from 'viem/accounts';
 
-const account = privateKeyToAccount(privateKey);
-const signer = toClientEvmSigner(account);
-const client = new x402Client()
-  .register('eip155:8453', new ExactEvmScheme(signer)) // Base
-  .register('eip155:84532', new ExactEvmScheme(signer)) // Base Sepolia
-  .register('eip155:1', new ExactEvmScheme(signer)); // Ethereum
+const client = new x402Client();
+registerExactEvmScheme(client, {
+  signer: privateKeyToAccount(privateKey),
+  networks: ['eip155:84532'],
+});
 
 const x402Fetch = wrapFetchWithPayment(fetch, client);
 ```
@@ -199,6 +199,9 @@ const paymentContext = await createRuntimePaymentContext({
 });
 
 // Use the payment-enabled fetch
+if (!paymentContext.fetchWithPayment) {
+  throw new Error('No compatible buyer wallet is configured');
+}
 const response = await paymentContext.fetchWithPayment(url, options);
 ```
 
@@ -285,7 +288,7 @@ If you're using environment variables for network configuration, update them:
 NETWORK=base-sepolia
 
 # After
-NETWORK=eip155:84532
+PAYMENTS_NETWORK=eip155:84532
 ```
 
 Update your environment variable documentation:
@@ -293,7 +296,7 @@ Update your environment variable documentation:
 ```typescript
 /**
  * Required environment variables:
- *   - NETWORK - Network identifier in CAIP-2 format (e.g., eip155:84532 for Base Sepolia)
+ *   - PAYMENTS_NETWORK - CAIP-2 identifier (for example, eip155:84532)
  */
 ```
 
@@ -301,15 +304,19 @@ Update your environment variable documentation:
 
 ### Required Changes
 
-1. ✅ **Update packages**: Replace all `x402*` packages with `@x402/*`
-2. ✅ **Update networks**: Convert to CAIP-2 format (e.g., `"base"` → `"eip155:8453"`)
-3. ✅ **Update imports**: Change import paths from `x402/types` to `@x402/core/*`
-4. ✅ **Update tests**: Mock v2 facilitator responses and use CAIP-2 networks
+1. **Update packages**: Replace all `x402*` packages with `@x402/*`.
+2. **Update networks**: Convert to CAIP-2 format (for example,
+   `"base"` → `"eip155:8453"`).
+3. **Update imports**: Change import paths from `x402/types` to the owning
+   scoped package.
+4. **Update tests**: Mock v2 facilitator responses and use CAIP-2 networks.
 
 ### Optional (If Using Raw x402 Client)
 
-5. ✅ **Update client creation**: Use new `x402Client` API with `register()` method
-6. ✅ **Update signers**: Use `toClientEvmSigner` from `@x402/evm`
+5. **Update client creation**: Create `x402Client`, then register the selected
+   exact scheme helper.
+6. **Update signer**: Supply the chain-compatible signer required by that
+   scheme helper.
 
 ## Supported Networks
 
@@ -354,10 +361,11 @@ import type { Network } from '@x402/core/types';
 **Solution**: Register the network in CAIP-2 format:
 
 ```typescript
-const client = new x402Client().register(
-  'eip155:8453',
-  new ExactEvmScheme(signer)
-);
+const client = new x402Client();
+registerExactEvmScheme(client, {
+  signer,
+  networks: ['eip155:8453'],
+});
 ```
 
 ### Test Failures
@@ -370,8 +378,8 @@ const client = new x402Client().register(
 
 - [x402 Protocol Documentation](https://x402.org)
 - [CAIP-2 Specification](https://chainagnostic.org/CAIPs/caip-2)
-- [Lucid Agents Examples](/docs/examples/calling-paid-endpoints)
-- [Payment Policies Guide](/docs/examples/payment-policies)
+- [Call a Paid Service](/docs/buy/call-paid-service)
+- [Payment Policies and Budgets](/docs/buy/policies-budgets)
 
 ## Need Help?
 

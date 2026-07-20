@@ -9,9 +9,18 @@ import {
 function page(
   path: string,
   source: string,
-  routes: string[] = ['/docs/start/install']
+  routes: string[] = ['/docs/start/install'],
+  redirectSources: string[] = [],
+  padBody = true
 ): DocumentationPage {
-  return { path, source, routes: new Set(routes) };
+  return {
+    path,
+    source: padBody
+      ? `${source}\n${'Complete task guidance with verified evidence and production failure handling. '.repeat(20)}`
+      : source,
+    routes: new Set(routes),
+    redirectSources: new Set(redirectSources),
+  };
 }
 
 describe('documentation content validation', () => {
@@ -136,6 +145,69 @@ NETWORK=base-sepolia
     expect(issues).toEqual([]);
   });
 
+  it('rejects documented wallet and identity APIs that do not exist', () => {
+    const issues = validateDocumentationPages([
+      page(
+        'packages/wallet.mdx',
+        `---
+title: Wallet
+status: next
+verifiedVersion: 0.6.3
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+type Config = WalletConnectorConfig;
+await runtime.wallets.agent.connector.signMessage('unsafe');
+`
+      ),
+      page(
+        'packages/identity.mdx',
+        `---
+title: Identity
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+await identity.createDomainChallenge('agent.example');
+`
+      ),
+    ]);
+
+    expect(
+      issues.filter(issue => issue.code === 'forbidden-current-reference')
+    ).toHaveLength(3);
+  });
+
+  it('requires current pages to link to canonical routes instead of redirects', () => {
+    const issues = validateDocumentationPages([
+      page(
+        'buy/index.mdx',
+        `---
+title: Buy
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+[Policy](/docs/examples/payment-policies)
+`,
+        ['/docs/examples/payment-policies', '/docs/buy/policies-budgets'],
+        ['/docs/examples/payment-policies']
+      ),
+    ]);
+
+    expect(issues).toContainEqual({
+      path: 'buy/index.mdx',
+      code: 'redirected-internal-route',
+      message:
+        'Current documentation links through a redirect: /docs/examples/payment-policies',
+    });
+  });
+
   it('reports unresolved absolute documentation routes', () => {
     const issues = validateDocumentationPages([
       page(
@@ -180,6 +252,75 @@ product: sdk
       code: 'invalid-version',
       message: 'Next pages must use a semver verifiedVersion',
     });
+  });
+
+  it('requires a short page to declare an intentional index or boundary', () => {
+    const issues = validateDocumentationPages([
+      page(
+        'build/thin-guide.mdx',
+        `---
+title: Thin guide
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+This destination does not yet explain the complete task.
+`,
+        [],
+        [],
+        false
+      ),
+    ]);
+
+    expect(issues).toContainEqual({
+      path: 'build/thin-guide.mdx',
+      code: 'thin-undesignated-page',
+      message:
+        'Pages under 150 words must be expanded or declared as pageType: index/boundary',
+    });
+  });
+
+  it('accepts intentionally short index and boundary pages', () => {
+    const issues = validateDocumentationPages([
+      page(
+        'build/index.mdx',
+        `---
+title: Build
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-21
+product: sdk
+pageType: index
+---
+
+Choose a complete guide.
+`,
+        [],
+        [],
+        false
+      ),
+      page(
+        'products/unavailable.mdx',
+        `---
+title: Unavailable product
+status: hosted
+verifiedVersion: unversioned
+verifiedAt: 2026-07-21
+product: hosted-platform
+pageType: boundary
+---
+
+There is no public product contract.
+`,
+        [],
+        [],
+        false
+      ),
+    ]);
+
+    expect(issues).toEqual([]);
   });
 
   it('rejects redirect targets that do not resolve and redirect cycles', () => {

@@ -1,0 +1,78 @@
+---
+title: When to use Lucid
+description: Decide whether you need the Lucid application runtime, a protocol SDK, or provider infrastructure.
+icon: GitCompareArrows
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+Lucid is the application layer between a TypeScript function and the protocols
+and infrastructure that let another machine buy it. It is useful when the paid
+request must remain correct after the first `402`, not merely when a route needs
+a payment challenge.
+
+## The layer Lucid owns
+
+```text
+Your schemas, handler, and business result
+                    ↓
+Lucid: capability contract, policy, retries, fulfillment, tasks, discovery
+                    ↓
+x402 or MPP negotiation and payment evidence
+                    ↓
+Wallet, facilitator, network, provider, and deployment infrastructure
+```
+
+Lucid does not replace the lower layers. You still choose and operate a wallet,
+facilitator, network, asset, and deployment target. The protocol still defines
+its wire headers and cryptographic payment proof. Lucid connects that proof to
+validated application work and one typed result.
+
+## Choose the smallest correct layer
+
+| Need                                                              | Start with                        | Why                                                                                       |
+| ----------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- |
+| Protect one existing route with a fixed x402 price                | Official x402 middleware          | It is the smallest protocol-native integration.                                           |
+| Expose several typed functions through one runtime                | Lucid                             | One capability definition drives validation, invocation, discovery, and adapters.         |
+| Add recipient limits, budgets, rate limits, and safe paid retries | Lucid payments policy             | These are application controls outside the x402 core protocol.                            |
+| Run streaming or long-lived work with owned state                 | Lucid Next                        | The HTTP and A2A extensions share payment admission, task ownership, and lifecycle state. |
+| Use a hosted wallet or facilitator                                | The provider plus Lucid or x402   | The provider owns custody or settlement; the runtime owns application behavior.           |
+| Implement AP2 mandates, full A2A v1 bindings, or x402 Bazaar      | The upstream implementation today | Lucid's current compatibility pages mark these surfaces as partial or unsupported.        |
+
+Using an official protocol SDK directly is a good choice. Adopt Lucid when the
+code around that SDK would otherwise become a second framework for schemas,
+policy, duplicate prevention, tasks, discovery, and adapter behavior.
+
+## What “one capability” means
+
+A Lucid capability combines a stable key, description, input and output schema,
+fulfillment handler, operation modes, and optional price. The SDK calls this an
+`entrypoint`. It is an application contract, not a new payment protocol.
+
+From that contract, installed extensions can produce:
+
+- canonical invoke and stream routes;
+- Agent Card and entrypoint discovery;
+- x402 or MPP payment requirements;
+- a human service storefront;
+- owned asynchronous tasks;
+- payment analytics and policy dimensions.
+
+Only installed and documented projections exist. Lucid does not currently
+generate MCP tools or x402 Bazaar declarations, and its A2A support is not a
+complete A2A v1 transport implementation. Read the
+[protocol compatibility pages](/docs/protocols) before promising
+interoperability.
+
+## Stable versus Next
+
+The public npm set is **Stable**. This repository is **Next** and includes a
+newer runtime contract, stronger payment/idempotency boundaries, and packages
+that have not all reached npm. Choose one channel as a set; do not copy a Next
+snippet into a Stable project package by package.
+
+Use the [release-channel table](/docs/reference/release-channels) to select
+versions, then continue with [Sell a paid API](/docs/start/sell-paid-api) or
+[Add Lucid to an existing app](/docs/start/existing-app).

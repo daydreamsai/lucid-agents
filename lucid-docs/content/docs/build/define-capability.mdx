@@ -12,6 +12,8 @@ A **capability** is what a buyer understands: a description, input contract,
 output contract, price, and fulfillment behavior. `EntrypointDef` is the SDK
 object that represents it.
 
+## Define the public contract
+
 ```ts
 runtime.entrypoints.add({
   key: 'classify',
@@ -44,6 +46,68 @@ runtime.entrypoints.add({
 - Keep framework objects out of the handler. Request headers belong in typed
   metadata supplied by the HTTP extension.
 
+The invoke route accepts either the input value directly or the canonical
+`{ "input": ... }` envelope. A successful response contains `run_id`,
+`status: "succeeded"`, the validated `output`, and optional `usage`/`model`.
+Treat that wire shape as public even when a generated storefront hides it.
+
+## Choose price and operation modes
+
+`price` is a USD decimal string, not a token atomic amount or JavaScript
+number. A single string applies to the capability's priced operation; use an
+object when invoke and stream differ:
+
+```ts
+price: { invoke: '0.02', stream: '0.03' }
+```
+
+When both x402 and MPP extensions are installed, set `paymentProtocol`
+explicitly. An entrypoint-level `network` overrides the payments runtime
+network for that capability. Do not advertise a stream price without a stream
+handler or a task capability without `a2a()`.
+
+## Bound fulfillment
+
+Schema validation is necessary but not sufficient. Put explicit limits on
+input bytes, array sizes, remote fetches, model/tool iterations, duration,
+concurrency, and output size. Propagate `signal` to every downstream operation
+and stop work when the caller disconnects or the task is cancelled.
+
+Use `runId` for correlation. Use a stable business idempotency key and a
+database uniqueness constraint for effects that must not repeat; a run ID is
+new for each execution and is not a deduplication key.
+
+## Failure contract
+
+| Failure                    | HTTP behavior         | What to fix                                                |
+| -------------------------- | --------------------- | ---------------------------------------------------------- |
+| Invalid JSON/outer request | `400 invalid_request` | Client envelope                                            |
+| Input schema failure       | `400 invalid_input`   | Client fields/limits                                       |
+| Output schema failure      | `500 invalid_output`  | Handler implementation                                     |
+| Handler throw              | `500 internal_error`  | Application/dependency; inspect payment state before retry |
+| Missing handler            | `501 not_implemented` | Capability registration                                    |
+
+Input/output errors can occur inside the payment transaction. Read
+[Payment lifecycle](/docs/build/payment-model) before promising whether a
+specific failure is charged or refundable.
+
+## Verify the capability
+
+1. Unit-test the handler with minimum, maximum, invalid, cancelled, and
+   downstream-failure inputs.
+2. Invoke the free route and assert the exact response schema.
+3. Add a testnet price and assert an unpaid request returns the expected `402`
+   without running the handler.
+4. Complete one paid request and reconcile schema-valid output plus settlement
+   evidence.
+5. Retry the same operation concurrently with one idempotency key and assert
+   the business effect occurs once.
+
 The adapter-level `addEntrypoint` helper remains a compatibility delegate. New
 runtime-oriented code should register through the canonical registry so the
 same definition serves every adapter.
+
+Next: [receive x402](/docs/build/receive-x402), choose
+[streaming](/docs/build/stream-meter) or
+[asynchronous tasks](/docs/build/async-tasks), and consult the
+[core package reference](/docs/packages/core).

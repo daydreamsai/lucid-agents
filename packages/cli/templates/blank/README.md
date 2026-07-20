@@ -1,35 +1,56 @@
-## {{AGENT_NAME}}
+# {{AGENT_NAME}}
 
-This project was scaffolded with `@lucid-agents/cli` and ships with a ready-to-run agent app built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core).
+Generated Lucid service with one canonical runtime and the selected Hono,
+Express, TanStack Start, or Next.js adapter.
 
-### Quick start
+## Run
 
-```sh
+Inspect `package.json` and `.env.example` before installing. Keep the package
+set on the same Stable or Next channel used by the CLI that generated it.
+
+```bash
 bun install
+bun run type-check
+bun run build
 bun run dev
 ```
 
-The dev command runs `bun` in watch mode, starts the HTTP server, and reloads when you change files inside `src/`.
+The adapter-specific server prints or uses its local port (normally `3000`).
+Check:
 
-### Project structure
+```bash
+curl -i http://localhost:3000/health
+curl -i http://localhost:3000/.well-known/agent-card.json
+curl -i http://localhost:3000/entrypoints/echo/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: generated-echo-request-000001' \
+  --data '{"input":{"text":"hello"}}'
+```
 
-- `src/agent.ts` – defines your agent manifest and entrypoints.
-- `src/index.ts` – boots a Bun HTTP server with the agent.
+TanStack/Next generated APIs use the configured `/api/agent` base path; inspect
+the generated Agent Card rather than assuming the root paths above.
 
-### Default entrypoints
+## Runtime boundary
 
-- `echo` – Echo input text
+- Core owns the typed entrypoint registry.
+- `@lucid-agents/http` owns request validation, canonical routes,
+  authorization, idempotency, and SSE.
+- The selected adapter binds that runtime; do not add another paywall,
+  manifest, or entrypoint map.
 
-### Available scripts
+The default `echo` entrypoint is free. To sell a capability, add an explicit USD
+decimal `price` such as `'0.01'` and configure the complete x402 seller group in
+`.env`. There is no global default-price environment variable.
 
-- `bun run dev` – start the agent in watch mode.
-- `bun run start` – start the agent once.
-- `bun run agent` – run the agent module directly (helpful for quick experiments).
-- `bunx tsc --noEmit` – type-check the project.
+## Secrets and state
 
-### Next steps
+The blank service does not require a private key merely to boot or receive at a
+public destination address. Buyer wallets, identity signers, facilitator auth,
+Stripe keys, and model-provider keys are separate server-only roles.
 
-- Update `src/agent.ts` with your use case.
-- Wire up `@lucid-agents/core` configuration and secrets (see `AGENTS.md` in the repo for details).
-- Update `.env` with your actual PRIVATE_KEY and configuration values.
-- Deploy with your preferred Bun-compatible platform when you're ready.
+In-memory payment, SIWX, and HTTP idempotency defaults are for one-process
+development. Before multiple replicas, inject the durable stores documented by
+the installed package surface and test a same-key replay from another instance.
+
+See `AGENTS.md` for extension/adaptor rules and the repository documentation
+for release channels, x402, retries, deployment, and production checks.

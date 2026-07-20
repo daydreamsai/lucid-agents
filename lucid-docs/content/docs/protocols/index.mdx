@@ -1,24 +1,99 @@
 ---
 title: Protocols
-description: Understand which wire, discovery, identity, and metadata contracts Lucid composes.
+description: The exact wire, identity, discovery, and authorization contracts Lucid composes.
 icon: Waypoints
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid is an application runtime above these protocols, not a replacement for
-them.
+Lucid is an application runtime above payment and agent protocols. It adds the
+typed entrypoint, policy, idempotency, storage, task, and adapter transaction
+that the protocols do not provide on their own.
 
-| Protocol | Lucid role                                                          |
-| -------- | ------------------------------------------------------------------- |
-| x402     | HTTP payment challenge, verification, settlement, and buyer signing |
-| MPP      | Alternative `402` challenge and credential verification extension   |
-| SIWX     | Wallet proof and reusable entitlement extension around x402         |
-| A2A      | Agent Card discovery, invocation, streaming, and owned tasks        |
-| ERC-8004 | EVM identity and trust registries                                   |
-| AP2      | Agent Card role metadata only                                       |
+## Compatibility at a glance
 
-Install only the protocols required by the application. The extension system
-keeps their state and lifecycle out of the core runtime.
+| Protocol                             | Upstream status at verification                                   | Lucid implementation                                                         | Important boundary                                               |
+| ------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [x402](/docs/protocols/x402)         | v2                                                                | HTTP seller for EVM/Solana `exact`; EVM buyer                                | No `upto`, batch, Bazaar, MCP transport, or Solana buyer         |
+| [SIWX](/docs/protocols/siwx)         | x402 extension family                                             | Wallet proof plus Lucid-managed nonce and entitlement reuse                  | Wallet control is not application authorization                  |
+| [MPP](/docs/protocols/mpp)           | Active individual Internet-Draft `draft-ryan-httpauth-payment-01` | Next-only Payment-Auth integration through `mppx` 0.1                        | Tempo, Stripe, or application verifier; not the full MPP surface |
+| [A2A](/docs/protocols/a2a)           | v1.0.1; v1.0 is the first stable line                             | Agent Card-shaped discovery plus Lucid HTTP invocation, SSE, and owned tasks | Lucid routes and task model are not an official A2A v1 binding   |
+| [ERC-8004](/docs/protocols/erc-8004) | Ethereum Draft                                                    | EVM identity/reputation clients, registration metadata, OASF                 | Validation is experimental; registration does not prove trust    |
+| [AP2](/docs/protocols/ap2)           | v0.2                                                              | v0.1 role descriptor only                                                    | No mandates, authorization, credentials, checkout, or settlement |
+
+This matrix is a product contract, not a claim that every upstream feature is
+implemented. Pin it to a release and rerun interoperability tests before using
+one protocol name in procurement, compliance, or partner documentation.
+
+## How the layers compose
+
+```text
+Agent Card / ERC-8004       discovery and public identity evidence
+            ↓
+Lucid entrypoint            typed application operation
+            ↓
+x402 or MPP (+ optional SIWX) payment/authentication gate
+            ↓
+Lucid policy + idempotency  budgets, sender rules, reservations, replay scope
+            ↓
+Handler or owned task       fulfillment
+            ↓
+Settlement + accounting    receipt, durable record, operational reconciliation
+```
+
+AP2 sits beside this flow as authorization and evidence metadata in the wider
+agent-commerce ecosystem. The current Lucid AP2 package does not execute that
+authorization flow.
+
+## Product-owned versus protocol-owned behavior
+
+| Concern                                                        | Owner                                 |
+| -------------------------------------------------------------- | ------------------------------------- |
+| Header and credential formats                                  | x402 or MPP                           |
+| On-chain identity/reputation data model                        | ERC-8004                              |
+| Agent Card schema and official bindings                        | A2A                                   |
+| Human-present/absent mandates and commerce evidence            | AP2                                   |
+| Typed entrypoints and adapter-neutral route plan               | Lucid                                 |
+| Spending/incoming limits and sender/recipient policy           | Lucid                                 |
+| Atomic policy reservations and staged settlement accounting    | Lucid                                 |
+| Idempotent application replay                                  | Lucid plus application-defined keys   |
+| Durable payment, SIWX, task, and scheduler stores              | Lucid ports and your infrastructure   |
+| Refunds, disputes, tax, invoicing, and business reconciliation | Your application and payment provider |
+
+## Selecting a payment protocol
+
+Use x402 when the counterparty supports x402 v2 HTTP `exact` payments on one of
+Lucid's supported networks. Use MPP only from the Next channel when its
+Payment-Auth credential model and one of the implemented verifiers matches the
+commercial contract. If both extensions are installed, every priced entrypoint
+must set `paymentProtocol` explicitly.
+
+Do not infer compatibility from HTTP `402` alone. x402 and MPP use different
+challenge, credential, verification, and receipt formats.
+
+## Before claiming conformance
+
+For every integration, record:
+
+1. the upstream protocol/draft version and Lucid package versions;
+2. the binding or transport, scheme/intent, network, asset, and provider;
+3. supported and explicitly unsupported extension features;
+4. test vectors, peer implementations, and conformance tooling exercised;
+5. replay, key, storage, failure, settlement, and recovery behavior;
+6. migration ownership when either side upgrades.
+
+Lucid currently makes a narrow interoperability claim for each page below. It
+does not claim blanket A2A, AP2, ERC-8004, MPP, or x402 ecosystem conformance.
+
+## Primary specifications
+
+- [x402 v2 specification](https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md)
+- [A2A v1 documentation](https://a2a-protocol.org/latest/)
+- [ERC-8004 draft](https://eips.ethereum.org/EIPS/eip-8004)
+- [AP2 specification](https://ap2-protocol.org/ap2/specification/)
+- [MPP Internet-Draft](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/)
+
+These sources define the upstream contract. The Lucid pages define which
+subset this repository implements.

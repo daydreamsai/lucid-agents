@@ -12,6 +12,19 @@ The Stable path composes Lucid's service runtime with the official scoped x402
 v2 client. It sends an initial request, parses `PAYMENT-REQUIRED`, signs one
 accepted EVM `exact` payment, and retries with `PAYMENT-SIGNATURE`.
 
+This minimal client proves interoperability; it does not enforce a recipient
+allowlist or spend budget. Complete [Build a budgeted buyer](/docs/start/budgeted-buyer)
+before pointing an autonomous wallet at an untrusted service.
+
+## Prerequisites
+
+- Use the pinned Stable dependencies from [installation](/docs/start/install).
+- Fund a dedicated Base Sepolia buyer with testnet USDC.
+- Obtain the HTTPS endpoint, expected payee, network, maximum amount, and output
+  schema through a trusted channel.
+- Generate one stable `operationId` for the business operation before the first
+  call.
+
 ```ts
 import { x402Client } from '@x402/core/client';
 import { registerExactEvmScheme } from '@x402/evm/exact/client';
@@ -45,11 +58,67 @@ const receipt = response.headers.get('PAYMENT-RESPONSE');
 const result = await response.json();
 ```
 
+The same `operationId` must be sent on the unpaid request, signed protocol
+retry, and any later transport retry. `wrapFetchWithPayment` preserves the
+request headers across the x402 exchange.
+
+## Expected wire evidence
+
+With plain Fetch, the endpoint should first return:
+
+```text
+HTTP/1.1 402 Payment Required
+PAYMENT-REQUIRED: <base64url x402 v2 requirement>
+```
+
+The wrapped Fetch validates the requirement, signs one supported EVM `exact`
+payment, and resends:
+
+```text
+PAYMENT-SIGNATURE: <redacted credential>
+Idempotency-Key: <same operation ID>
+```
+
+On success, expect a `2xx` application response and `PAYMENT-RESPONSE`. Keep a
+sanitized settlement/transaction reference; never log either credential
+header.
+
 An HTTP `200` proves the service returned successfully; the payment response
 header carries settlement information. Validate the response body against the
 service's advertised output schema. Do not interpret “the wallet signed” as
 proof that fulfillment was correct.
 
+## Validate before signing
+
+The official x402 wrapper negotiates protocol requirements; your application
+still owns commercial policy. Before production, put Lucid's policy wrapper
+under it and require:
+
+- an allowlisted `https:` origin and exact endpoint;
+- the expected payee address and canonical CAIP-2 network;
+- a price below the per-request ceiling and inside durable total/rate limits;
+- a supported scheme/asset/facilitator combination;
+- a human or deterministic approval artifact for a new counterparty or an
+  amount above the autonomous tier.
+
+An Agent Card, ERC-8004 record, or seller-provided challenge is discovery
+evidence, not permission for the wallet to spend.
+
+## Failure handling
+
+| Observation                                                             | Action                                                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Plain request is `200`                                                  | Confirm the route is intentionally free; a priced route may be misconfigured         |
+| Challenge is missing/malformed or advertises several unselected options | Fail closed; do not guess what to sign                                               |
+| Paid retry remains `402`                                                | Inspect balance, signature, expiry, version, asset, network, and facilitator support |
+| `4xx` after payment negotiation                                         | Do not retry automatically; preserve evidence and inspect the application error      |
+| `5xx` or timeout after signing                                          | Outcome is ambiguous; query task/business/provider state with the same operation ID  |
+| `2xx` without `PAYMENT-RESPONSE`                                        | Treat settlement as unproven and reconcile                                           |
+| Output fails schema validation                                          | Record fulfillment failure; follow the seller's refund/dispute policy separately     |
+
 This buyer is EVM-only. Solana receiving support does not imply the EVM client
 can sign Solana payments. The Next Lucid buyer helper is documented on the
 [payments package page](/docs/packages/payments), not used by this Stable flow.
+
+Next: add [policies and budgets](/docs/buy/policies-budgets), then implement
+[retry and reconciliation rules](/docs/buy/retries-idempotency).

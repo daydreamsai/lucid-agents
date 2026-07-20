@@ -1,39 +1,108 @@
 ---
 title: Configure a wallet
-description: Separate buyer signing, seller receiving, and identity registration keys.
+description: Separate buyer signing, seller receiving, and identity registration authority.
 icon: Wallet
 status: next
 verifiedVersion: 0.6.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid uses wallets for distinct jobs:
+“The wallet” is not one role. Separate receiving, buyer payment, and identity
+registration authority so a compromise has a bounded result.
 
-| Job                        | Required capability               | Keep separate when possible                      |
-| -------------------------- | --------------------------------- | ------------------------------------------------ |
-| Receive x402 payments      | Public address                    | No signing key is required by the seller runtime |
-| Buy x402 services          | Transaction authorization/signing | Bind to outgoing policy and a small balance      |
-| Register ERC-8004 identity | EVM contract signing              | May have broader on-chain authority              |
+| Job                        | Required capability            | Recommended boundary                                                      |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| Receive x402 payments      | Public destination address     | Seller runtime does not need that address's private key merely to receive |
+| Buy x402 services          | Supported scheme signer/client | Dedicated low-balance wallet behind recipient and spend policy            |
+| Register ERC-8004 identity | EVM message/transaction signer | Separate developer wallet with deliberate contract authority              |
 
-For a local server-side buyer:
+## Configure a local agent wallet
 
 ```ts
-const runtime = await createAgent(meta)
-  .use(
-    wallets({
-      config: {
-        agent: {
-          type: 'local',
-          privateKey: process.env.AGENT_WALLET_PRIVATE_KEY as `0x${string}`,
-        },
-      },
-    })
-  )
-  .build();
+import { createAgent } from '@lucid-agents/core';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const config = walletsFromEnv();
+if (!config?.agent) throw new Error('Agent wallet is required');
+
+const runtime = await createAgent(meta).use(wallets({ config })).build();
 ```
 
-Use a secrets manager in production, rotate compromised credentials, and
-never expose a local private key to a service storefront. Third-party wallet
-connectors have their own trust, availability, and signing semantics; review
-them before granting autonomous access.
+```dotenv
+AGENT_WALLET_TYPE=local
+AGENT_WALLET_PRIVATE_KEY=0xSERVER_ONLY_KEY
+AGENT_WALLET_RPC_URL=https://YOUR_RPC
+AGENT_WALLET_CHAIN_ID=84532
+AGENT_WALLET_CAIP2=eip155:84532
+```
+
+The runtime handle exposes the connector and its kind. Ask the connector for
+metadata, optional signer, or optional wallet client; do not assume every
+connector supports the same low-level operations.
+
+```ts
+const wallet = runtime.wallets?.agent;
+if (!wallet) throw new Error('Agent wallet is unavailable');
+
+const metadata = await wallet.connector.getWalletMetadata();
+const signer = await wallet.connector.getSigner?.();
+const walletClient = await wallet.connector.getWalletClient?.();
+```
+
+The base connector signs authentication challenges through
+`signChallenge()`. EVM message, typed-data, or transaction methods belong to an
+optional `LocalEoaSigner`/wallet client, not direct connector methods.
+
+## Choose a connector
+
+| Connector  | Configuration                                                    | Production questions                                                             |
+| ---------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `local`    | Private key, optional metadata/RPC client                        | Secret storage, process access, chain binding, rotation, balance cap             |
+| `signer`   | A code-supplied viem `WalletClient`                              | Browser/server custody, user approval, account/chain changes; no env selector    |
+| `thirdweb` | Engine secret, label, chain ID                                   | Provider auth, wallet selection, availability, rate limits, transaction approval |
+| `lucid`    | Remote base URL, agent reference, optional token/headers/context | Hosted service contract, tenant isolation, auth context, retries, audit/export   |
+
+`walletsFromEnv()` supports `local`, `thirdweb`, and `lucid` for the agent
+role. A code-supplied `signer` cannot be reconstructed from environment text.
+
+## Configure the developer wallet separately
+
+`DEVELOPER_WALLET_PRIVATE_KEY` creates the environment-backed developer
+wallet. `DEVELOPER_WALLET_ADDRESS` alone does not create one. Use the developer
+role for identity/contract operations and avoid granting the buyer wallet the
+same authority.
+
+```dotenv
+DEVELOPER_WALLET_PRIVATE_KEY=0xSEPARATE_SERVER_ONLY_KEY
+DEVELOPER_WALLET_RPC_URL=https://YOUR_RPC
+DEVELOPER_WALLET_CHAIN_ID=84532
+```
+
+## Bind spending policy to the signer
+
+Wallet configuration proves that code can request a signature; it does not
+approve a counterparty or price. Put the policy wrapper before the x402 client
+and require the expected HTTPS endpoint, payee, network, asset, per-request
+amount, and durable total/rate budget.
+
+Use a different wallet or policy namespace for each tenant. Do not share an
+in-memory total across replicas or rely on wallet balance as the budget.
+
+## Verify and operate
+
+1. Confirm metadata/account and selected chain at startup.
+2. Test a testnet payment plus a denied wrong-recipient/wrong-network request.
+3. Rotate a credential in staging and confirm the old one can no longer sign.
+4. Alert on new recipients, chain changes, signature failure, provider errors,
+   and spend near limits.
+5. Redact private keys, provider secrets, access tokens, authorization context,
+   payment credentials, and signed challenges from logs.
+6. Close connector resources through `runtime.close()` during shutdown.
+
+If a wallet provider is unavailable, fail closed. Do not fall back to a more
+privileged local key or bypass buyer policy.
+
+See [wallet package reference](/docs/packages/wallet),
+[policies and budgets](/docs/buy/policies-budgets), and
+[environment variables](/docs/reference/environment).

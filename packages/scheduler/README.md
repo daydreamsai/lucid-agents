@@ -1,7 +1,8 @@
 # @lucid-agents/scheduler
 
-A pull-style, lease-based scheduler for invoking remote Lucid agents through
-their A2A agent cards.
+A pull-style, lease-based scheduler for invoking remote Lucid services through
+their Agent Cards and Lucid HTTP entrypoint profile. The package depends on
+`@lucid-agents/a2a` helpers, but it is not an official A2A v1 scheduler.
 
 ## Runtime extension
 
@@ -12,6 +13,7 @@ invocations may need x402 payment handling.
 import { a2a } from '@lucid-agents/a2a';
 import { createAgent } from '@lucid-agents/core';
 import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 import {
   createMemoryStore,
   createSchedulerWorker,
@@ -19,6 +21,7 @@ import {
 } from '@lucid-agents/scheduler';
 
 const agent = await createAgent({ name: 'buyer', version: '1.0.0' })
+  .use(wallets({ config: walletsFromEnv() }))
   .use(a2a())
   .use(payments({ config: paymentsFromEnv() }))
   .use(
@@ -48,7 +51,9 @@ await agent.close();
 
 If the buyer does not make paid calls, omit `payments()` entirely. The scheduler
 uses `runtime.a2a.client.invoke` and automatically asks `runtime.payments` for a
-payment-aware Fetch implementation when that capability exists.
+payment-aware Fetch implementation when that capability exists. A paid buyer
+also needs a compatible agent wallet/signer and spending policy; payments
+configuration alone is not signing authority.
 
 ## Jobs and schedules
 
@@ -91,9 +96,13 @@ Every job gets an idempotency seed unless the caller supplies one:
 - one-time jobs use a caller-supplied key unchanged;
 - seeds must contain 20–256 characters after trimming.
 
-The key is sent as `Idempotency-Key` by the A2A client. Lucid HTTP runtimes
-deduplicate it by default; other remote agents must provide an equivalent
-target-side idempotency boundary.
+The key is sent as `Idempotency-Key` by the Lucid Agent Card/HTTP client. Lucid
+HTTP runtimes deduplicate it by default; other remote services must provide an
+equivalent target-side idempotency boundary.
+
+Delivery remains at least once. A target-side idempotency record and
+idempotent downstream effects are required because a worker can finish the
+remote paid call and crash before it stores local success.
 
 ## Durable stores
 
@@ -105,6 +114,12 @@ The critical store operation is an atomic `claimJob(jobId, workerId, leaseMs,
 now)`. `recoverExpiredLeases()` returns expired leased jobs to pending state for
 another worker. The extension calls an optional store `close()` method from
 `runtime.close()`.
+
+There is no lease heartbeat/renewal in this release. Set `leaseMs` longer than
+the worst-case discovery, payment, invocation, and final store write. The
+convenience worker does not call `recoverExpiredLeases()` automatically and can
+start overlapping ticks if one tick exceeds its interval; orchestrate recovery
+and rely on atomic claims.
 
 For an externally managed worker loop, call:
 

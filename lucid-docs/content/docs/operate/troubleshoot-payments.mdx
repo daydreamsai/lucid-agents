@@ -1,31 +1,191 @@
 ---
 title: Troubleshoot payments
-description: Locate failures in configuration, negotiation, policy, verification, settlement, or fulfillment.
+description: Diagnose configuration, challenge, policy, verification, idempotency, fulfillment, settlement, and recording failures safely.
 icon: Wrench
-status: stable
-verifiedVersion: 2.5.0
-verifiedAt: 2026-07-20
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Symptom                                 | Likely stage  | Check                                                  |
-| --------------------------------------- | ------------- | ------------------------------------------------------ |
-| Paid route returns `200` to plain Fetch | Activation    | Entrypoint price and installed payments extension      |
-| `503` before a challenge                | Configuration | Facilitator URL, network, receiving address            |
-| `402` never becomes a paid retry        | Buyer         | Signing key, registered network, testnet USDC          |
-| `403` from buyer wrapper                | Policy        | Recipient, per-request limit, totals, rate limit       |
-| Facilitator rejects verification        | Verification  | Network/asset match, signature, clock, payload version |
-| Settlement fails after handler          | Settlement    | Facilitator/provider status and on-chain transaction   |
-| Timeout after signing                   | Ambiguous     | Idempotency/task state before retrying payment         |
+Troubleshoot from the outside in and preserve the operation's identity. Do not
+change the idempotency key, disable policy, or retry with a new payment until
+you know whether the prior attempt settled or fulfilled.
 
-## Safe diagnostic request
+## Fast triage
 
-Use plain Fetch or curl first and retain the `PAYMENT-REQUIRED` header. Decode
-it only in a safe local tool; it should advertise x402 v2, `exact`, the expected
-CAIP-2 network, seller address, and amount. Do not paste payment signatures or
-private keys into an issue.
+| Symptom                                       | Likely stage            | First check                                                                              |
+| --------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------- |
+| Priced route returns `200` to plain Fetch     | Activation/routing      | Entrypoint price, selected rail, installed payments runtime, unprotected duplicate route |
+| `404`/framework HTML                          | Adapter/proxy           | Public base path, generated route set, rewrite/mount prefix                              |
+| `503` before a challenge                      | Configuration/readiness | Payee, facilitator URL/auth, network, storage factory/schema                             |
+| `402` lacks usable requirement                | Seller/facilitator      | x402 version, scheme, canonical network, asset, payee, `/supported`                      |
+| Buyer never sends a paid retry                | Buyer/signing           | Registered EVM network, wallet key/account, test funds, policy wrapper order             |
+| Buyer gets `403`                              | Policy                  | Recipient/endpoint, per-request/total/rate group, verified sender                        |
+| Paid retry remains `402`                      | Verification/settlement | Credential encoding, expiry/clock, amount, asset, network, balance, facilitator logs     |
+| `409`                                         | Idempotency             | In-progress versus fingerprint/subject conflict                                          |
+| Handler runs but response is `503`            | Settlement/accounting   | Error code plus presence of settlement response header                                   |
+| Timeout after signing                         | Ambiguous               | Same-key invoke/task/business state plus facilitator/chain outcome                       |
+| Stream/task later fails after paid acceptance | Fulfillment             | Terminal stream/task evidence; settlement is not automatically reversed                  |
+| Duplicate after scale/restart                 | Durability              | Per-instance memory, retention/lease, custom store atomicity                             |
 
-When reporting a problem, include Lucid/package versions, adapter, HTTP status,
-network, facilitator hostname, capability key, sanitized requirement, run ID,
-and whether fulfillment executed. Keep secrets and full wallet payloads out of
-the report.
+## Step 1: prove route ownership
+
+```bash
+curl -i https://service.example/health
+curl -i https://service.example/.well-known/agent-card.json
+curl -i https://service.example/entrypoints
+```
+
+Check that the card's interface and entrypoint URLs use the public HTTPS origin
+and exactly one configured base path. A framework-local legacy route can bypass
+Lucid even while discovery looks correct.
+
+`/health` is only liveness. If payment dependencies are unavailable while
+health is `200`, inspect the application's private readiness check.
+
+## Step 2: capture an unpaid challenge
+
+Use plain Fetch/curl with a stable idempotency key:
+
+```bash
+curl -i https://service.example/entrypoints/quote/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: troubleshoot-quote-000001' \
+  --data '{"input":{"symbol":"ETH"}}'
+```
+
+Save the HTTP status, date, request target, sanitized body, error code, and
+`PAYMENT-REQUIRED`. Decode the challenge only in a trusted local process and
+verify:
+
+- x402 version `2` and supported `exact` scheme;
+- canonical CAIP-2 network;
+- exact expected payee and decimal/base-unit amount;
+- asset and facilitator combination supported by both sides;
+- resource/method binding and unexpired time bounds.
+
+Never paste a payment signature, `Authorization: Payment`, SIWX signature,
+private key, bearer token, or task access token into a decoder or issue.
+
+## Step 3: probe the facilitator/provider
+
+Query its documented `/supported` endpoint with the same authentication and
+network environment used by Lucid. Confirm x402 version, scheme, network,
+asset, and any provider-specific limits. Then distinguish:
+
+- DNS/TLS/connectivity failure;
+- authentication/authorization failure;
+- unsupported requirement;
+- verification rejection;
+- settlement rejection;
+- timeout/unknown outcome;
+- rate limit or provider incident.
+
+Do not treat a brand's general network support page as proof that this account,
+endpoint, asset, and scheme are enabled.
+
+## Error-code reference
+
+| Code/status                                                  | Phase                    | Retryability and action                                                                  |
+| ------------------------------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------- |
+| `payment_configuration_error` (`500`/`503`)                  | Rail/config              | Not retryable until runtime config/rail selection is corrected                           |
+| `authorization_configuration_error` (`503`)                  | SIWX/payment setup       | Enable the required runtime/store or remove the route requirement deliberately           |
+| `payment_required` / HTTP `402`                              | Challenge                | Expected for unpaid request; validate and retry once with supported credential           |
+| `auth_required` (`401`)                                      | SIWX                     | Sign the exact declaration with expected wallet/network                                  |
+| `auth_failed` (`401`)                                        | SIWX verify              | Do not loop; inspect domain/URI/chain/nonce/expiry/signature/store                       |
+| `policy_violation` (`403`)                                   | Buyer/seller policy      | Final control decision unless an authorized policy change occurs                         |
+| `policy_storage_error` (`503`)                               | Buyer tracking           | Stop signing; repair shared tracker/reservation state                                    |
+| `invalid_idempotency_key` (`400`)                            | Invoke admission         | Generate a 20–256 character operation key before first attempt                           |
+| `idempotency_in_progress` (`409`)                            | Invoke replay            | Wait `Retry-After`, then use the same key/request                                        |
+| `idempotency_key_conflict` (`409`)                           | Invoke replay            | Stop; same key has different body/URL/security subject                                   |
+| `idempotency_store_error` / `idempotency_claim_lost` (`503`) | Durable replay           | Inspect store/TTL; never switch to a new key blindly                                     |
+| `invalid_request` / `invalid_input` (`400`)                  | Parsing/schema           | Fix payload; changed business input requires deliberate operation identity               |
+| `invalid_output` / `internal_error` (`500`)                  | Fulfillment              | Lucid does not settle a failed invoke, but inspect downstream handler effects            |
+| `authorization_admission_failed` (`503`)                     | Reservation/store        | Repair dependency and retry same key after checking state                                |
+| `payment_reservation_release_failed` (`503`)                 | Cleanup                  | Reservation may remain counted; reconcile tracker before more traffic                    |
+| `settlement_failed` (`402`/`503`)                            | Facilitator/provider     | Inspect external outcome and handler/task state before retry                             |
+| `payment_recording_failed` (`503`)                           | Stage/commit/entitlement | If settlement header/ref exists, treat payment as potentially irreversible and reconcile |
+| `task_capacity_exhausted` / `task_creation_failed` (`503`)   | Task reservation         | No accepted task expected; back off and inspect capacity/store                           |
+| `task_execution_failed` (`503`)                              | Post-accept startup      | Check whether settlement already succeeded and inspect/cancel existing task              |
+| `task_access_required` (`401`) / `task_not_found` (`404`)    | Task ownership           | Supply correct secret token; wrong token intentionally resembles missing task            |
+
+Error messages may contain dependency details not suitable for public clients.
+Expose stable codes and safe correlation IDs; keep sensitive internals in
+access-controlled logs.
+
+## Distinguish recording failure before and after settlement
+
+`payment_recording_failed` covers more than one window:
+
+1. **Accounting could not be staged:** external settlement was not started by
+   Lucid, but invoke handler/stream/task admission may already have occurred.
+2. **External settlement succeeded, local commit failed:** money is
+   irreversible while a non-expiring staged batch remains counted.
+3. **SIWX entitlement recording failed after settlement:** payment may be
+   complete but reusable access was not recorded.
+
+Check settlement headers/reference, staged store state, facilitator/chain, and
+fulfillment evidence. Never delete the staged record or issue a new charge just
+to clear the error.
+
+## Buyer-side checks
+
+For an EVM buyer:
+
+- the signer account/address is the expected dedicated wallet;
+- the x402 client registered the challenge's canonical `eip155:*` network;
+- the wallet has the correct asset and any required gas;
+- policy Fetch is inside/below the x402 wrapper;
+- the requirement payee is allowlisted and the amount fits every group;
+- unpaid and paid requests have the same URL, method, body, and idempotency key;
+- proxy/client code did not drop `PAYMENT-SIGNATURE` or response headers.
+
+Lucid's convenience buyer is not a Solana signer. A Solana-capable seller
+challenge cannot be paid by an EVM-only client.
+
+## Adapter-specific checks
+
+| Adapter  | Common failure                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------- |
+| Hono     | Proxy forwarded host/proto or SSE buffering is wrong                                            |
+| Express  | `express.json()` consumed the raw request before the adapter bridge                             |
+| Next.js  | Missing generated route, wrong function runtime, per-instance memory, duration cap              |
+| TanStack | Stale generated route tree, server import leaking into client, Nitro preset buffering/lifecycle |
+
+Always reproduce against the adapter directly and through the production
+proxy/CDN to isolate the layer.
+
+## Recovery by outcome
+
+| Known state                                 | Safe action                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| No verification/admission                   | Repair and retry same logical operation/key                                     |
+| Policy reservation only                     | Release/expire through tracker; then retry same key                             |
+| Handler external side effect, no settlement | Reuse downstream idempotency or compensate before retry                         |
+| Settlement definitely failed                | Inspect fulfillment; retry same key only after side-effect decision             |
+| Settlement definitely succeeded             | Complete local accounting/result recovery; do not pay again                     |
+| Settlement unknown                          | Query provider/chain until classified or escalate manually                      |
+| Task accepted                               | Poll/cancel the same task with protected access token                           |
+| Stream accepted then failed                 | Apply documented service credit/refund policy; do not assume automatic reversal |
+
+## Escalation bundle
+
+Include:
+
+- UTC timestamps and sanitized trace/operation/run/task IDs;
+- Lucid and package versions, release channel/commit, adapter, runtime image;
+- public route and base path (without sensitive query data);
+- HTTP status and stable error code;
+- x402/MPP version, scheme/intent, canonical network, asset, amount, expected
+  payee, facilitator hostname;
+- whether a payment credential was sent, whether settlement evidence exists,
+  and whether fulfillment ran;
+- relevant store/provider health and sanitized external transaction reference.
+
+Exclude all credentials, private keys, tokens, cookies, connection strings,
+full wallet payloads, and unredacted input/output.
+
+Read the [payment transaction model](/docs/build/payment-model),
+[observability contract](/docs/operate/observability), and
+[durable storage guide](/docs/operate/durable-storage) for recovery ownership.

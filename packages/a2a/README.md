@@ -1,7 +1,13 @@
 # @lucid-agents/a2a
 
-A2A agent-card discovery, direct invocation, streaming, and owned asynchronous
-tasks for Lucid Agents.
+A2A Agent Card-shaped discovery plus Lucid-specific direct invocation,
+streaming, and owned asynchronous tasks.
+
+> Compatibility boundary: this package does not implement an official A2A v1
+> JSON-RPC, gRPC, or HTTP+JSON binding. Its `/entrypoints` and `/tasks` routes,
+> task statuses, message shape, access tokens, and SSE events are Lucid
+> contracts; `A2A-Version` negotiation and the A2A TCK are not implemented.
+> Do not claim blanket A2A v1 conformance.
 
 ## Install
 
@@ -104,6 +110,9 @@ Pass `options.accessToken` to `sendMessage` when several tasks should belong to
 the same owner and be returned by one `listTasks` call.
 
 ## HTTP task contract
+
+The routes below are the Lucid HTTP profile, not the official A2A v1
+HTTP+JSON operation contract.
 
 With the default empty base path, `@lucid-agents/http` exposes:
 

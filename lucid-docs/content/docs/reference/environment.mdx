@@ -1,25 +1,220 @@
 ---
 title: Environment variables
-description: Canonical server-side configuration names used by the SDK and generated projects.
+description: Exact server-side variables read by Lucid helpers, including precedence, aliases, and application-owned configuration.
 icon: FileKey
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-| Variable                       | Required when          | Meaning                             |
-| ------------------------------ | ---------------------- | ----------------------------------- |
-| `PAYMENTS_FACILITATOR_URL`     | Receiving x402         | Facilitator base URL                |
-| `PAYMENTS_FACILITATOR_AUTH`    | Provider requires auth | Server-side bearer token            |
-| `PAYMENTS_NETWORK`             | Receiving x402         | Network alias or CAIP-2 identifier  |
-| `PAYMENTS_RECEIVABLE_ADDRESS`  | Static destination     | Seller receiving address            |
-| `PAYMENTS_DESTINATION`         | Dynamic destination    | `static` or supported provider mode |
-| `STRIPE_SECRET_KEY`            | Stripe destination     | Server-side Stripe secret           |
-| `DEVELOPER_WALLET_PRIVATE_KEY` | Identity/contracts     | EVM signing key                     |
-| `AGENT_WALLET_PRIVATE_KEY`     | Local buyer wallet     | Server-side buyer signing key       |
+Lucid does not read one global configuration object from the environment. Each
+package owns an explicit helper—`paymentsFromEnv()`, `walletsFromEnv()`,
+`identityFromEnv()`, or `mppFromEnv()`—and only that helper reads the variables
+listed here.
 
-The runtime accepts some historical aliases for compatibility, but new docs and
-templates use prefixed names. There is no global default price environment
-variable in the current extension contract; attach an explicit USD decimal
-price to each commercial capability.
+## Resolution rules
+
+1. Explicit values passed to a helper override its environment values.
+2. The returned object must still satisfy the package's runtime validation.
+3. A variable is server-only unless this page says otherwise. Do not expose
+   private keys, provider secrets, facilitator tokens, or wallet authorization
+   context through a browser bundle.
+4. `DATABASE_URL`, `PORT`, and public origin variables are application-owned.
+   The SDK does not consume them globally; your application must map them into
+   the relevant config or server adapter.
+
+## x402 payments
+
+Read by `paymentsFromEnv()` from `@lucid-agents/payments`.
+
+| Preferred variable            | Required when             | Meaning                                                                                                                    |
+| ----------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `PAYMENTS_FACILITATOR_URL`    | x402 is enabled           | Facilitator base URL.                                                                                                      |
+| `PAYMENTS_FACILITATOR_AUTH`   | Facilitator requires auth | Bearer token applied to supported, verify, and settle requests. A raw token or an existing `Bearer ...` value is accepted. |
+| `PAYMENTS_NETWORK`            | x402 is enabled           | Network alias or CAIP-2 identifier. Prefer canonical CAIP-2 values in production.                                          |
+| `PAYMENTS_RECEIVABLE_ADDRESS` | Static destination        | Seller address for the selected network.                                                                                   |
+| `PAYMENTS_DESTINATION=stripe` | Stripe destination        | Selects dynamic Stripe-backed `payTo` resolution. Any other value follows static-destination behavior.                     |
+| `STRIPE_SECRET_KEY`           | Stripe destination        | Server-side Stripe key. Merely setting this key does not select Stripe mode.                                               |
+
+Compatibility aliases are resolved in this order:
+
+| Field            | Resolution order                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Facilitator URL  | explicit `facilitatorUrl` → `FACILITATOR_URL` → `PAYMENTS_FACILITATOR_URL`                                             |
+| Network          | explicit `network` → `NETWORK` → `PAYMENTS_NETWORK`                                                                    |
+| Facilitator auth | explicit `facilitatorAuth` → `FACILITOR_AUTH` → `FACILITATOR_AUTH` → `PAYMENTS_FACILITATOR_AUTH` → `DREAMS_AUTH_TOKEN` |
+
+`FACILITOR_AUTH` is a historical misspelling and `DREAMS_AUTH_TOKEN` is a
+legacy provider alias. Keep them only for compatibility; new deployments
+should use the preferred `PAYMENTS_*` names.
+
+There is no environment variable for a default price. Put a USD decimal string
+on every commercial entrypoint, such as `price: "0.01"`.
+
+```ts
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const config = paymentsFromEnv({
+  // Explicit fields win over environment values.
+  network: 'eip155:84532',
+});
+
+if (!config) throw new Error('x402 configuration is required');
+
+const extension = payments({ config });
+```
+
+## Wallets
+
+Read by `walletsFromEnv()` from `@lucid-agents/wallet`. Explicit `agent` and
+`developer` objects replace the environment-derived object for that role.
+
+### Agent wallet selector
+
+| Variable            | Required when                        | Meaning                                                               |
+| ------------------- | ------------------------------------ | --------------------------------------------------------------------- |
+| `AGENT_WALLET_TYPE` | Configuring an agent wallet from env | `local`, `thirdweb`, or `lucid`. The `signer` connector is code-only. |
+
+### Local agent wallet
+
+| Variable                   | Required | Meaning                                                                     |
+| -------------------------- | -------- | --------------------------------------------------------------------------- |
+| `AGENT_WALLET_PRIVATE_KEY` | Yes      | `0x`-prefixed private key.                                                  |
+| `AGENT_WALLET_RPC_URL`     | No       | RPC URL for the optional viem wallet client.                                |
+| `AGENT_WALLET_CHAIN_ID`    | No       | Numeric chain ID for that client. Invalid values are ignored by the helper. |
+| `AGENT_WALLET_CHAIN_NAME`  | No       | Display name for the client chain.                                          |
+| `AGENT_WALLET_ADDRESS`     | No       | Metadata override; it does not replace the signing key.                     |
+| `AGENT_WALLET_CAIP2`       | No       | CAIP-2 metadata.                                                            |
+| `AGENT_WALLET_CHAIN`       | No       | Human-readable chain metadata.                                              |
+| `AGENT_WALLET_CHAIN_TYPE`  | No       | Chain-family metadata such as `evm`.                                        |
+| `AGENT_WALLET_PROVIDER`    | No       | Provider metadata.                                                          |
+| `AGENT_WALLET_LABEL`       | No       | Wallet label metadata.                                                      |
+
+### thirdweb agent wallet
+
+| Variable                                                                                      | Required | Default or meaning                                                                            |
+| --------------------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `AGENT_WALLET_SECRET_KEY`                                                                     | Yes      | thirdweb Engine secret key.                                                                   |
+| `AGENT_WALLET_CLIENT_ID`                                                                      | No       | thirdweb client ID.                                                                           |
+| `AGENT_WALLET_LABEL`                                                                          | No       | Engine wallet label; defaults to `agent-wallet`.                                              |
+| `AGENT_WALLET_CHAIN_ID`                                                                       | No       | Integer chain ID; defaults to `84532`. Unlike local-wallet metadata, an invalid value throws. |
+| `AGENT_WALLET_ADDRESS`, `AGENT_WALLET_CAIP2`, `AGENT_WALLET_CHAIN`, `AGENT_WALLET_CHAIN_TYPE` | No       | Optional metadata.                                                                            |
+
+### Lucid-hosted agent wallet connector
+
+| Variable                             | Required | Meaning                                                                                     |
+| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------- |
+| `AGENT_WALLET_BASE_URL`              | Yes      | Wallet API base URL. `LUCID_BASE_URL` and `LUCID_API_URL` are accepted aliases.             |
+| `AGENT_WALLET_AGENT_REF`             | Yes      | Remote agent identifier.                                                                    |
+| `AGENT_WALLET_ACCESS_TOKEN`          | No       | Server-side access token.                                                                   |
+| `AGENT_WALLET_HEADERS`               | No       | JSON object converted to string-valued request headers. Invalid JSON or arrays are ignored. |
+| `AGENT_WALLET_AUTHORIZATION_CONTEXT` | No       | JSON object forwarded as authorization context. Invalid JSON or arrays are ignored.         |
+
+### Developer wallet
+
+A developer wallet is created from the environment only when
+`DEVELOPER_WALLET_PRIVATE_KEY` exists. An address by itself is metadata and does
+not create a wallet.
+
+The optional suffixes match the local agent wallet:
+`DEVELOPER_WALLET_ADDRESS`, `DEVELOPER_WALLET_CAIP2`,
+`DEVELOPER_WALLET_CHAIN`, `DEVELOPER_WALLET_CHAIN_TYPE`,
+`DEVELOPER_WALLET_PROVIDER`, `DEVELOPER_WALLET_LABEL`,
+`DEVELOPER_WALLET_RPC_URL`, `DEVELOPER_WALLET_CHAIN_ID`, and
+`DEVELOPER_WALLET_CHAIN_NAME`.
+
+## ERC-8004 identity
+
+`identityFromEnv()` resolves the high-level identity configuration. The direct
+`createAgentIdentity()` helper and lower-level registry client also read the
+runtime variables noted below.
+
+| Variable                    | Required when                      | Meaning                                                                                                                             |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_DOMAIN`              | Creating or looking up an identity | Domain used for the registration URI and domain proof.                                                                              |
+| `RPC_URL`                   | Calling a registry                 | EVM RPC endpoint.                                                                                                                   |
+| `CHAIN_ID`                  | Calling a registry                 | Numeric registry chain ID.                                                                                                          |
+| `REGISTER_IDENTITY`         | No                                 | Auto-registration switch; checked before `IDENTITY_AUTO_REGISTER`. Truthy values are `1`, `true`, `yes`, or `on`, case-insensitive. |
+| `IDENTITY_AUTO_REGISTER`    | No                                 | Auto-registration alias used when `REGISTER_IDENTITY` is absent.                                                                    |
+| `IDENTITY_REGISTRY_ADDRESS` | Custom deployment                  | Lower-level override for the Identity Registry address. It is not a field returned by `identityFromEnv()`.                          |
+| `IDENTITY_SIGNATURE_NONCE`  | Domain-proof signing               | Optional lower-level signature nonce.                                                                                               |
+
+Registration service selection:
+
+| Variable                   | Effect when truthy                     |
+| -------------------------- | -------------------------------------- |
+| `IDENTITY_INCLUDE_A2A`     | Include the Lucid Agent Card endpoint. |
+| `IDENTITY_INCLUDE_WEB`     | Include the website service.           |
+| `IDENTITY_INCLUDE_OASF`    | Include structured OASF metadata.      |
+| `IDENTITY_INCLUDE_TWITTER` | Include the X/Twitter service.         |
+| `IDENTITY_INCLUDE_EMAIL`   | Include the email service.             |
+
+Service details use `IDENTITY_A2A_ENDPOINT`, `IDENTITY_A2A_VERSION`,
+`IDENTITY_WEBSITE`, `IDENTITY_TWITTER`, and `IDENTITY_EMAIL`.
+
+When `IDENTITY_INCLUDE_OASF=true`, all five JSON-array fields are required:
+
+- `IDENTITY_OASF_AUTHORS_JSON`
+- `IDENTITY_OASF_SKILLS_JSON`
+- `IDENTITY_OASF_DOMAINS_JSON`
+- `IDENTITY_OASF_MODULES_JSON`
+- `IDENTITY_OASF_LOCATORS_JSON`
+
+`IDENTITY_OASF_ENDPOINT` and `IDENTITY_OASF_VERSION` are optional. Module and
+locator values must be valid URI strings. Supplying any OASF field while OASF
+is disabled is a configuration error.
+
+## MPP
+
+Read by `mppFromEnv()` from `@lucid-agents/mpp`. Explicit overrides win. If an
+explicit `methods` array is present, environment method construction is
+skipped.
+
+| Variable               | Default                   | Meaning                                                                                                                                |
+| ---------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `MPP_METHOD`           | `tempo`                   | One or more comma-separated method names. The helper builds only `tempo` and `stripe`; custom methods are code-only.                   |
+| `MPP_CURRENCY`         | `usd`                     | Default display currency.                                                                                                              |
+| `MPP_DEFAULT_INTENT`   | `charge`                  | `charge` or `session`.                                                                                                                 |
+| `MPP_CHALLENGE_EXPIRY` | `300`                     | Challenge lifetime in seconds.                                                                                                         |
+| `MPP_SECRET_KEY`       | Per-process generated key | HMAC key used by built-in `mppx` verification. Set a stable secret deliberately, but note that challenge state is still process-local. |
+| `MPP_REALM`            | Agent name                | Payment-Auth realm.                                                                                                                    |
+
+Tempo requires `MPP_TEMPO_CURRENCY` and `MPP_TEMPO_RECIPIENT`; the recipient
+falls back to `PAYMENTS_RECEIVABLE_ADDRESS`. `MPP_TEMPO_CHAIN_ID` is optional.
+
+Stripe requires `MPP_STRIPE_SECRET_KEY` (falling back to
+`STRIPE_SECRET_KEY`) and `MPP_STRIPE_NETWORK_ID`.
+
+An incomplete or unknown method is skipped with a warning. If no valid methods
+remain, the MPP extension rejects the configuration at build time.
+
+## Application-owned variables
+
+Generated projects commonly use variables such as `PORT`, `AGENT_ORIGIN`,
+`AGENT_URL`, or `DATABASE_URL`. These are conventions in the generated app,
+not universal SDK inputs:
+
+```ts
+import { createPostgresPaymentStorage } from '@lucid-agents/payments';
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required');
+
+const storage = createPostgresPaymentStorage({ connectionString });
+```
+
+HTTP, A2A, AP2, analytics, scheduler, and catalog configuration is code-owned
+in the current packages. See [Configuration](/docs/reference/configuration)
+and [Durable storage](/docs/operate/durable-storage) for the owning contracts.
+
+## Secret handling
+
+- Load signing keys and access tokens from a secret manager at process start.
+- Scope facilitator and wallet credentials to the minimum environment and
+  rotate them independently.
+- Never log `*_PRIVATE_KEY`, `*_SECRET_KEY`, `*_ACCESS_TOKEN`,
+  `*_AUTHORIZATION_CONTEXT`, or facilitator authorization values.
+- Fail startup on a missing required production variable; do not silently
+  downgrade to a process-local or unauthenticated configuration.
+- Run a testnet payment after rotation before sending production traffic.

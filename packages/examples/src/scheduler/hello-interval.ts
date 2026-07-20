@@ -10,7 +10,7 @@
  *
  * - SCHEDULER: Hires the agent to run on a schedule
  *   - Has a PAYER wallet to PAY for each invocation (configured via wallets extension)
- *   - Uses a2aClient + paymentContext for automatic x402 payments
+ *   - Uses the Lucid Agent Card client and payments runtime for x402 calls
  *
  * PAYMENT FLOW (handled automatically by scheduler):
  *   1. Scheduler checks if job is due
@@ -23,8 +23,8 @@
  * Environment variables:
  *   AGENT_WALLET_PRIVATE_KEY     - Private key for the payer's wallet (pays for agent calls)
  *   PAYMENTS_RECEIVABLE_ADDRESS  - Agent's address to receive payments
- *   FACILITATOR_URL              - x402 facilitator endpoint
- *   NETWORK                      - Network (e.g., base-sepolia)
+ *   PAYMENTS_FACILITATOR_URL     - x402 facilitator endpoint
+ *   PAYMENTS_NETWORK             - Canonical network (for example, eip155:84532)
  */
 
 import { a2a } from '@lucid-agents/a2a';

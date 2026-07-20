@@ -1,17 +1,24 @@
 ---
 title: SIWX
-description: Verify wallet ownership and reuse a bounded entitlement around x402 challenges.
+description: Lucid wallet-proof verification and bounded entitlement reuse around protected entrypoints.
 icon: KeyRound
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Sign-In-With-X (SIWX) lets a buyer prove control of a wallet and lets a server
-reuse an entitlement according to the entrypoint's configuration.
+Sign-In-With-X (SIWX) lets a caller prove control of a wallet and lets Lucid
+reuse a server-managed entitlement according to entrypoint policy. It can be
+used on a paid route or as an auth-only gate.
 
-```ts
+SIWX proves control of a signing key for one bound message. It does not prove a
+human identity, ownership of funds, agent safety, or permission to perform an
+application action.
+
+## Modes
+
+```typescript
 runtime.entrypoints.add({
   key: 'member-report',
   price: '0.02',
@@ -23,10 +30,60 @@ runtime.entrypoints.add({
 });
 ```
 
-The server adds an SIWX declaration to the unpaid x402 challenge. A compatible
-client signs the message, retries, and receives/reuses the resulting access
-according to server policy.
+| Entrypoint configuration                    | First response                   | Meaning                                                               |
+| ------------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| `siwx: { enabled: true }` on a priced route | `402` with SIWX declaration      | A valid entitlement may bypass a repeated payment according to policy |
+| `siwx: { authOnly: true }`                  | `401` with SIWX declaration      | Wallet proof is required without a price                              |
+| SIWX disabled                               | Normal x402 or unprotected route | No wallet entitlement is created                                      |
 
-Use durable SIWX storage in production. Bind messages to the expected domain,
-URI, chain, nonce, issue time, and expiry. SIWX proves wallet control; it does
-not replace application authorization or spending policy.
+A compatible client parses the declaration, signs the bound message, retries,
+and receives/reuses access according to the server's expiry and storage state.
+
+## Verification requirements
+
+Bind every message to:
+
+- the expected domain and URI;
+- wallet address and chain;
+- a cryptographically random, single-use nonce;
+- issued-at and expiration times;
+- the exact entrypoint and invoke/stream operation;
+- any statement or resource scope your authorization policy depends on.
+
+Reject an unexpected chain, domain, URI, signer, signature encoding, expired
+message, or consumed nonce. Never use `Origin`, `Referer`, or a caller-provided
+address as proof of the signer.
+
+## Storage and scaling
+
+The default storage is in-memory and process-local. It is appropriate for local
+development only. Production must inject the SQLite or Postgres SIWX storage
+factory; horizontally scaled enforcement requires shared Postgres state so a
+nonce cannot be accepted by two workers.
+
+Entitlements and nonces have different semantics: an entitlement may be reused
+within its bounded scope, while a signing nonce must be atomically consumed.
+Retain enough audit metadata to explain an authorization without retaining raw
+credentials longer than necessary.
+
+## Composition with payment protocols
+
+The payments extension owns SIWX verification. A verified entitlement can be
+checked before either an x402 or MPP payment challenge when those extensions
+are composed. It does not alter either protocol's wire format or prove that a
+past payment remains refundable or undisputed.
+
+## Production checklist
+
+- use HTTPS and a trusted canonical public origin;
+- configure short expiry and clock-skew policy;
+- use a durable atomic store and test concurrent nonce consumption;
+- scope entitlement lookup to the verified subject and exact resource;
+- rotate signing/verifier dependencies without invalidating active access
+  unexpectedly;
+- redact messages, signatures, and entitlement tokens from logs;
+- test expiry, replay, wrong domain, wrong chain, wrong signer, restart, and
+  multi-worker races.
+
+For storage configuration and the client wrapper, see
+[`@lucid-agents/payments`](/docs/packages/payments).

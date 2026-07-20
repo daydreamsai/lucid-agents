@@ -22,18 +22,18 @@
     },
     "PAYMENTS_FACILITATOR_URL": {
       "type": "string",
-      "description": "x402 facilitator endpoint URL for payment processing",
+      "description": "x402 facilitator endpoint. The template default is for development; choose and validate a production facilitator before launch.",
       "default": "https://facilitator.daydreams.systems",
       "format": "uri"
     },
     "PAYMENTS_FACILITATOR_AUTH": {
       "type": "string",
-      "description": "Optional bearer token for facilitator requests. If empty, runtime falls back to DREAMS_AUTH_TOKEN when available.",
+      "description": "Optional bearer token for facilitator requests. PAYMENTS_FACILITATOR_AUTH is canonical; DREAMS_AUTH_TOKEN remains a legacy fallback.",
       "default": ""
     },
     "PAYMENTS_NETWORK": {
       "type": "string",
-      "description": "Payment network (EVM or Solana)",
+      "description": "Wizard network alias. The generated runtime normalizes supported aliases; use the canonical CAIP-2 identifier when editing production configuration.",
       "default": "ethereum",
       "enum": [
         "ethereum",
@@ -66,11 +66,21 @@
       "default": "",
       "examples": ["sk_live_...", "sk_test_...", ""]
     },
-    "PRIVATE_KEY": {
+    "DEVELOPER_WALLET_PRIVATE_KEY": {
       "type": "string",
-      "description": "Wallet private key for signing transactions (optional, can be added later)",
+      "description": "Optional server-only developer-wallet key for application-owned contract interactions. It is not the payment receivable address.",
       "default": "",
       "examples": ["0x...", ""]
+    },
+    "OPENAI_API_KEY": {
+      "type": "string",
+      "description": "Optional application-owned OpenAI API key; Lucid itself does not require a model provider.",
+      "default": ""
+    },
+    "NEXT_PUBLIC_PROJECT_ID": {
+      "type": "string",
+      "description": "Optional WalletConnect project ID for application UI code. Values with NEXT_PUBLIC_ prefixes are browser-visible.",
+      "default": ""
     }
   },
   "required": ["AGENT_NAME", "AGENT_DESCRIPTION", "AGENT_VERSION"]

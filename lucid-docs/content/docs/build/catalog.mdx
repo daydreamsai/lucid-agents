@@ -1,23 +1,120 @@
 ---
 title: Publish a catalog
-description: Register many typed offerings from YAML or CSV on the Next SDK surface.
+description: Register many typed offerings from reviewed YAML or CSV on the Next SDK surface.
 icon: Library
 status: next
 verifiedVersion: 0.2.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-`@lucid-agents/catalog` turns a maintained YAML or CSV catalog into canonical
-entrypoint registrations. It is useful when many products share one fulfillment
-handler and differ mainly in schema, description, and price.
+`@lucid-agents/catalog` turns a YAML or CSV file into canonical Lucid
+entrypoints. Use it when many offerings share one handler shape and differ in
+key, description, price, network, protocol, or metadata.
 
-The package is currently available from the repository, not the Stable npm
-channel. A Lucid catalog is application configuration; it does not publish to
-x402 Bazaar and should not be described as marketplace discovery.
+The package is currently available from this repository, not the Stable npm
+channel. A Lucid catalog is local application configuration: it does not
+publish to x402 Bazaar, register an ERC-8004 identity, or create a marketplace.
 
-Use explicit validation at load time, reject duplicate keys, and keep the
-catalog under the same review process as code. A price change is a commercial
-API change even when it is only a YAML edit.
+## Define reviewed catalog data
 
-See the [catalog package reference](/docs/packages/catalog).
+```yaml
+products:
+  - key: sentiment
+    name: Sentiment analysis
+    description: Classify bounded text as positive, negative, or neutral
+    price: '0.05'
+    network: 'eip155:84532'
+    paymentProtocol: x402
+    metadata:
+      tier: basic
+
+  - key: summarize
+    name: Summary
+    description: Return or stream a bounded summary
+    price:
+      invoke: '0.10'
+      stream: '0.15'
+```
+
+YAML accepts either a top-level array or a `products` array. CSV requires a
+`key` column and supports `key`, `name`, `description`, `price`, `network`,
+`paymentProtocol`, plus `meta_*` columns. CSV currently represents only a flat
+price; use YAML for separate invoke/stream prices.
+
+Prices are USD decimal strings. Use canonical CAIP-2 network identifiers and
+explicitly select `x402` or `mpp` when both rails exist.
+
+## Register through the Node-only extension
+
+The file-loading extension uses `fs`, so import it from the Node subpath:
+
+```ts
+import type { CatalogItem, HandlerFactory } from '@lucid-agents/catalog';
+import { catalog } from '@lucid-agents/catalog/node';
+import { fileURLToPath } from 'node:url';
+
+const handlerFactory: HandlerFactory = (item: CatalogItem) => {
+  return async ({ input }) => ({
+    output: await fulfillCatalogItem(item, input),
+  });
+};
+
+const runtime = await createAgent(meta)
+  .use(payments({ config }))
+  .use(
+    catalog({
+      file: fileURLToPath(new URL('./products.yaml', import.meta.url)),
+      keyPrefix: 'store/',
+      paymentProtocol: 'x402',
+      inputSchema: z.object({
+        params: z.record(z.string(), z.unknown()).optional(),
+      }),
+      handlerFactory,
+    })
+  )
+  .use(http())
+  .build();
+```
+
+The extension parses during build and registers generated definitions during
+initialization. `runtime.catalog?.items` exposes the parsed records. If you need
+portable/browser parsing, use `parseCatalogYaml()`, `parseCatalogCsv()`, and
+`generateEntrypoints()` from the package root and provide the file contents
+yourself.
+
+## Validation and change control
+
+The built-in schema requires `key` and `name`, but application correctness
+needs more:
+
+- reject duplicate or route-unsafe keys before deployment;
+- require descriptions and bounded input/output schemas for public offerings;
+- verify every priced item has an installed matching payment rail, network,
+  destination, and facilitator method;
+- treat price, network, protocol, key, and output changes as commercial API
+  changes requiring review;
+- sign or review catalog artifacts if they come from another system; and
+- keep environment-specific secrets out of catalog metadata.
+
+Do not allow an untrusted tenant to choose arbitrary handler identifiers,
+recipient addresses, module paths, or outbound URLs through metadata.
+
+## Verify generated offerings
+
+In CI, load the production catalog and assert:
+
+1. parsing succeeds and keys are unique;
+2. the expected entrypoint count and key set are present;
+3. every item appears once in the Agent Card/storefront;
+4. free items invoke successfully;
+5. priced items return the expected unpaid `402`/MPP challenge;
+6. one low-limit testnet item completes and reconciles; and
+7. a removed or renamed item follows a documented deprecation plan.
+
+Catalog loading is startup-time, not a live control plane. A file change does
+not update a running process unless your application rebuilds/restarts it.
+
+See the full [catalog package reference](/docs/packages/catalog),
+[service storefront](/docs/build/storefront), and
+[x402 support matrix](/docs/protocols/x402).

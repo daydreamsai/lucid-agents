@@ -28,7 +28,7 @@ const agent = await createAgent({
 /**
  * Trading Recommendation Agent - Buys data and generates trading signals
  *
- * This agent uses A2A client to buy data from the data agent,
+ * This agent uses Lucid Agent Card/client helpers to buy data from the data agent,
  * then processes it to generate trading signals/recommendations.
  */
 const DATA_AGENT_URL = process.env.DATA_AGENT_URL || 'http://localhost:3001';
@@ -254,4 +254,3 @@ agent.entrypoints.add({
     };
   },
 });
-

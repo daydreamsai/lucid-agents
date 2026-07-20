@@ -1,0 +1,165 @@
+---
+title: Use Lucid with MCP
+description: Wrap paid HTTP calls as MCP tools today without implying native paid-MCP protocol support.
+icon: Cable
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+Lucid does not currently ship an MCP server adapter, MCP client adapter, MCP
+tool generator, or a native payment transport for MCP. The supported seam today
+is a server-side MCP tool whose implementation calls a canonical Lucid HTTP
+endpoint with a policy-controlled paid Fetch client.
+
+That distinction matters: an HTTP tool wrapper can compose the products safely,
+but it does not make the Lucid service MCP-native and does not let an arbitrary
+MCP client complete x402 or Payment-Auth negotiation by itself.
+
+## Current support boundary
+
+| Capability                                                            | Current Lucid status                                    |
+| --------------------------------------------------------------------- | ------------------------------------------------------- |
+| Expose typed invoke/stream HTTP routes                                | Supported                                               |
+| Call those routes with a budgeted x402 client                         | Supported                                               |
+| Register that client function as an application-owned MCP tool        | Supported composition pattern; no Lucid adapter package |
+| Generate MCP tool schemas from Lucid entrypoints                      | Not implemented                                         |
+| Advertise MCP transport in the Agent Card                             | Not implemented                                         |
+| Carry x402 challenge/credential/receipt through MCP protocol messages | Not implemented                                         |
+| Implement the Payment Authentication JSON-RPC/MCP transport draft     | Not implemented                                         |
+| Turn stdio MCP into a payer identity or secure network boundary       | Not provided by MCP stdio or Lucid                      |
+
+Do not label a service “paid MCP” merely because an MCP tool happens to make a
+paid HTTP request internally.
+
+## Safe current architecture
+
+```text
+MCP host / agent framework
+  → application-owned MCP server
+    → tool argument schema + approval
+      → budgeted paid Fetch client
+        → canonical Lucid HTTPS endpoint
+          → payment + policy + idempotency + handler
+        ← output + settlement evidence
+    ← redacted MCP tool result
+```
+
+The MCP server is the buyer. Its server-side wallet and policy decide whether
+the tool may spend. The remote MCP host never receives the wallet key or x402
+credential.
+
+```ts
+async function executePaidResearchTool(args: unknown, requestId: string) {
+  const input = researchInput.parse(args);
+  const operationId = `mcp:research:${requestId}`;
+
+  const output = await buyResearch(input, { operationId });
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify(output),
+      },
+    ],
+  };
+}
+```
+
+Register that function with the current SDK for your MCP server. The MCP SDK's
+registration syntax is intentionally not reproduced here because Lucid does
+not own or version it; the paid-client contract is the integration seam.
+
+`buyResearch()` should be the independently tested client from
+[Compose with agent frameworks](/docs/integrate/agent-frameworks), built on
+the controls in [Build a budgeted buyer](/docs/start/budgeted-buyer).
+
+## Why the tool must call the HTTP route
+
+Do not import the seller's handler and invoke it directly from an MCP server if
+the tool is meant to preserve Lucid's paid service contract. A direct function
+call bypasses:
+
+- payment challenge and credential verification;
+- recipient and incoming policy admission;
+- target-side HTTP idempotency;
+- canonical request/output validation and response evidence;
+- adapter-independent observability and settlement finalization.
+
+If the MCP server and Lucid seller share one process, loopback HTTP is still
+the currently documented public seam. A future native adapter should enter the
+same authorization transaction directly through a supported runtime API rather
+than duplicating it.
+
+## Identity, trust, and approvals
+
+MCP tool discovery says which tool exists; it does not authorize wallet spend.
+Treat descriptions and schemas as untrusted input when they arrive from a
+remote server.
+
+- Allowlist the MCP server and Lucid service separately.
+- Validate the final HTTPS URL after redirects and DNS resolution.
+- Bind policy to the expected payee, network, asset, amount, and tool name.
+- Require human approval before the first payment to a new recipient or above
+  the autonomous tier.
+- Scope one buyer wallet and durable budget to the tenant/principal invoking
+  the tool.
+- Never return a payment credential, SIWX signature, wallet key, facilitator
+  token, or raw authorization context in MCP content.
+
+For remote MCP servers, follow the host/runtime's authentication and tool
+approval controls. For local stdio servers, remember that local process access
+and inherited environment variables become part of the trust boundary.
+
+## Retry and cancellation
+
+Map the MCP request/tool-call ID to a stable business operation ID. Preserve it
+when the host retries or resumes the tool call.
+
+| Event                                             | Correct behavior                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Tool arguments are invalid                        | Return a deterministic argument error; do not contact or pay the seller            |
+| Payment policy denies                             | Return a non-retryable approval error without exposing the challenge               |
+| Host cancels before payment submission            | Abort Fetch and release provisional budget reservations                            |
+| Host cancels after settlement became irreversible | Record the ambiguous fulfillment state and reconcile; cancellation is not a refund |
+| MCP connection drops after tool execution starts  | Recover by operation ID before accepting a second paid call                        |
+| Lucid returns a task ID                           | Return/persist the task identity and poll it; do not recreate the task             |
+
+## Observability contract
+
+Correlate, but do not conflate:
+
+```text
+MCP session ID → MCP request ID → tool call ID → business operation ID
+               → Lucid run/task ID → payment receipt/transaction ID
+```
+
+Log the tool name, sanitized target, policy decision, amount/network/payee,
+Lucid status/code, and receipt reference. Do not log full MCP prompts or tool
+arguments by default; they may contain tenant data.
+
+## What native support would require
+
+A future Lucid MCP profile should not be described as supported until it has:
+
+1. an explicit MCP protocol and SDK version;
+2. deterministic projection of entrypoint schemas into tool definitions;
+3. a specified x402 or Payment-Auth challenge, credential, and receipt mapping;
+4. request/body/tool binding and replay rules;
+5. cancellation, progress, streaming, and task semantics;
+6. stdio versus network transport threat models;
+7. official-client interoperability and negative conformance tests;
+8. the same policy, idempotency, settlement, and recording transaction as HTTP.
+
+The formal Payment Authentication work includes a separate
+[JSON-RPC/MCP transport Internet-Draft](https://paymentauth.org/draft-payment-transport-mcp-00).
+It is not implemented by Lucid's current `mppx` integration. x402 ecosystems
+also publish provider-specific MCP bridges, such as the
+[CDP x402 MCP guide](https://docs.cdp.coinbase.com/x402/mcp-server) and
+[Vercel 402-mcp announcement](https://vercel.com/changelog/402-mcp-enables-x402-payments-in-mcp);
+those do not automatically establish compatibility with Lucid.
+
+Continue with [MCP/framework security](/docs/operate/security) and
+[payment recovery](/docs/buy/retries-idempotency).

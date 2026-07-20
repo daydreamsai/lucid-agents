@@ -1,43 +1,196 @@
 ---
 title: Add Lucid to an existing app
-description: Keep your web framework and bind it to one canonical Lucid runtime.
+description: Keep your web framework and bind one canonical Lucid runtime without duplicating authorization or routes.
 icon: Blocks
 status: stable
 verifiedVersion: 2.5.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-Lucid does not require a framework migration. Build one runtime from extensions
-and let the adapter bind its canonical HTTP route plan.
+Add Lucid beside an existing application by building one runtime and binding
+its canonical route plan. The adapter owns framework translation; payment,
+idempotency, discovery, streaming, and task semantics remain inside runtime
+extensions.
 
-| Application         | Adapter                  | Integration shape                            |
-| ------------------- | ------------------------ | -------------------------------------------- |
-| Hono or Bun server  | `@lucid-agents/hono`     | Bind the runtime to a Hono app               |
-| Express/Node server | `@lucid-agents/express`  | Bridge Node requests to Fetch handlers       |
-| Next.js App Router  | CLI `--adapter=next`     | Generated route modules delegate to handlers |
-| TanStack Start      | `@lucid-agents/tanstack` | Use UI storefront or headless handlers       |
+This is an integration, not a promise that every existing middleware can stay
+in the same order. Body parsers, authentication, proxy paths, and streaming
+settings must preserve the original Request contract.
 
-## Shared runtime
+## Choose the adapter and channel
 
-```ts
+| Application         | Integration                 | Shape                                                                                              |
+| ------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| Hono or Bun server  | `@lucid-agents/hono`        | Adapter creates a Hono app; add existing middleware/routes through hooks or mount it once          |
+| Express/Node server | `@lucid-agents/express`     | Adapter creates an Express app and bridges raw Node streams to Fetch                               |
+| Next.js App Router  | Stable CLI `--adapter=next` | Generated route modules delegate to Lucid handlers; there is no standalone Next.js adapter package |
+| TanStack Start      | `@lucid-agents/tanstack`    | Next package; use returned handlers/runtime for headless or storefront shape                       |
+
+Choose Stable or Next before installing. Do not copy a Next adapter example
+into a Stable lockfile; see [release channels](/docs/reference/release-channels).
+
+## Reserve a public base path
+
+Pick one path that does not collide with application routes:
+
+```typescript
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 
 export const runtime = await createAgent({
   name: 'existing-service',
   version: '0.1.0',
+  description: 'Commercial capabilities for the existing application',
 })
-  .use(http())
+  .use(http({ basePath: '/api/agent' }))
   .build();
 ```
 
-Pass that completed runtime to your adapter. Do not implement an adapter-local
-entrypoint registry, paywall, manifest, or task state machine. Those contracts
-belong to the runtime extensions and must behave identically across adapters.
+The base path becomes part of every route and the generated Agent Card
+interface URL. Bind the adapter at the server root. Do not also mount it under
+`/api/agent`, or the public path becomes doubled.
 
-For a low-risk adoption, add one free health or echo capability first, verify
-its Agent Card, then add the payments extension and price only one capability.
+## Hono integration
 
-Continue with [deployment adapters](/docs/operate/deploy) or
-[define a capability](/docs/build/define-capability).
+Use the adapter hooks when the Lucid app can become the composed Hono app:
+
+```typescript
+import { createAgentApp } from '@lucid-agents/hono';
+
+const { app, addEntrypoint } = await createAgentApp(runtime, {
+  beforeMount(app) {
+    app.use('*', async (context, next) => {
+      context.header('x-content-type-options', 'nosniff');
+      await next();
+    });
+  },
+  afterMount(app) {
+    app.get('/api/application-health', context => context.json({ ok: true }));
+  },
+});
+
+addEntrypoint(capability);
+
+export default app;
+```
+
+If an existing Hono instance must remain the root, mount the returned app only
+once and ensure the runtime `basePath` describes the final external path. Verify
+the generated card after mounting; framework nesting that rewrites paths
+without updating the runtime creates stale discovery URLs.
+
+## Express integration
+
+Mount the adapter app at root when the runtime already has a base path:
+
+```typescript
+import express from 'express';
+import { createAgentApp } from '@lucid-agents/express';
+
+const existing = express();
+const { app: agentApp, addEntrypoint } = await createAgentApp(runtime);
+
+addEntrypoint(capability);
+
+existing.use(agentApp);
+existing.use(express.json()); // Existing non-Lucid routes after the raw bridge.
+existing.get('/api/application-health', (_request, response) => {
+  response.json({ ok: true });
+});
+
+export const server = existing.listen(Number(process.env.PORT ?? 3000));
+```
+
+The Lucid Express bridge reads the original Node request stream. A global body
+parser mounted before `agentApp` can consume the body and break request
+translation. Exclude `/api/agent` from the existing parser or mount the adapter
+first. Keep size limits at the proxy and/or a middleware that does not consume
+the stream unexpectedly.
+
+## Next.js App Router
+
+Generate the Stable route layout rather than inventing route files:
+
+```bash
+bunx @lucid-agents/cli@2.5.0 existing-agent --adapter=next
+```
+
+Copy the generated runtime/route pattern into the existing app while preserving
+its package versions. The modules should pass the original `Request` and
+validated route parameters to Lucid handlers. Do not add a second Next x402
+middleware around them.
+
+Confirm the route runtime supports streaming and the Node-only database/wallet
+imports you selected. Serverless instance memory is not durable idempotency or
+budget state.
+
+## Add one capability at a time
+
+Start free:
+
+```typescript
+addEntrypoint({
+  key: 'application-status',
+  input: statusInput,
+  output: statusOutput,
+  handler: async ({ input }) => ({ output: await readStatus(input) }),
+});
+```
+
+Verify the schema, output, logs, timeout, and route ownership. Then install the
+payments extension and price only that capability. Do not keep an unprotected
+legacy route that reaches the same paid handler; clients will bypass the
+canonical gate.
+
+## Middleware ownership
+
+| Concern                                                         | Correct owner/order                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| TLS, trusted proxy, request-size limit, coarse IP abuse control | Platform/proxy before the adapter                                                           |
+| Application session authentication                              | `beforeMount` or trusted auth passed to Lucid; must not consume/replace payment credentials |
+| x402/MPP/SIWX verification                                      | Lucid authorization transaction only                                                        |
+| Target idempotency                                              | Lucid HTTP extension with one shared store                                                  |
+| Input/output schema                                             | Lucid entrypoint definition                                                                 |
+| Error logging/redaction                                         | Framework error middleware after routes, using safe fields                                  |
+| CORS/security headers                                           | Deliberate framework middleware; expose required payment headers to approved origins only   |
+
+Avoid adapter-local entrypoint registries, Agent Cards, paywalls, task state,
+and settlement hooks. Two payment middlewares can both verify or settle the
+same retry while each sees incomplete policy/idempotency state.
+
+## Verify the integration
+
+```bash
+curl -i http://localhost:3000/api/agent/health
+curl -i http://localhost:3000/api/agent/.well-known/agent-card.json
+curl -i http://localhost:3000/api/agent/entrypoints
+curl -i http://localhost:3000/api/agent/entrypoints/application-status/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: existing-app-status-000001' \
+  --data '{"input":{}}'
+```
+
+Assert that every advertised interface/entrypoint URL includes exactly one
+`/api/agent` prefix, unknown routes still reach the existing app, invalid input
+returns a Lucid error, and a priced route returns `402` before a paid call.
+
+For SSE, test through the production proxy: headers must flush immediately,
+buffering/compression must not hold chunks, disconnect must abort the request,
+and idle timeouts must exceed the documented stream contract.
+
+## Rollout and rollback
+
+1. Deploy the free capability behind an allowlisted/canary route.
+2. Observe errors, latency, body limits, and route conflicts.
+3. Add testnet payment with a low per-request/total policy.
+4. Complete one canary paid call and reconcile output plus settlement.
+5. Move selected traffic and remove any unprotected duplicate route.
+
+To roll back, stop new paid traffic and restore the previous route version
+while preserving payment, idempotency, task, and staged-settlement records for
+reconciliation. Do not disable the paywall while leaving the paid handler
+public as a “temporary fallback.”
+
+Continue with [define a capability](/docs/build/define-capability), choose a
+[deployment adapter](/docs/operate/deploy), and apply the
+[production checklist](/docs/operate/production-checklist).

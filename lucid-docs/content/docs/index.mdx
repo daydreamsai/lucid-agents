@@ -8,10 +8,11 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-Lucid is the TypeScript application runtime for machine commerce. Turn a
-function into a typed, discoverable service; charge for it over x402 or MPP;
-and keep authorization, fulfillment, retries, tasks, and durable state in one
-runtime contract.
+Lucid is the TypeScript application runtime for machine commerce. The verified
+Stable path turns a function into a typed x402-paid service and keeps payment
+admission, fulfillment, and retries in one runtime contract. The Next
+repository adds the newer extension architecture, MPP integration, and owned
+task runtime documented on pages marked Next.
 
 ## What are you building?
 
@@ -32,6 +33,11 @@ runtime contract.
     href="/docs/start/existing-app"
   />
   <Card
+    title="An agent-framework or MCP integration"
+    description="Keep orchestration in its owning framework and connect through the paid HTTP service boundary."
+    href="/docs/integrate"
+  />
+  <Card
     title="A production deployment"
     description="Choose durable state, security, observability, facilitator, and adapter controls."
     href="/docs/operate/production-checklist"
@@ -43,15 +49,18 @@ runtime contract.
 ```text
 Your typed capability and fulfillment
               ↓
-Lucid: schemas, policy, authorization, tasks, discovery, state
+Lucid: schemas, policy, authorization, fulfillment, discovery, state
               ↓
-x402 or MPP payment negotiation
+x402 payment negotiation (Stable); x402 or MPP on qualified Next pages
               ↓
 Wallet + facilitator + network/provider infrastructure
 ```
 
 Lucid does not replace wallets, facilitators, networks, or payment protocols.
 It makes them usable as part of a coherent application transaction.
+
+Read [When to use Lucid](/docs/start/when-to-use-lucid) for a concrete decision
+table, including when the official x402 SDK is the smaller integration.
 
 ## Read the status badge
 

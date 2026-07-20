@@ -1,58 +1,76 @@
 ---
-title: "@lucid-agents/wallet"
-description: Wallet connectors and helpers for agent operations.
+title: '@lucid-agents/wallet'
+description: Configure signing wallets for identity, authentication, and outbound transactions.
 icon: Wallet
 status: next
 verifiedVersion: 0.6.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The wallet extension provides wallet management for agents, supporting multiple wallet types including local private keys, thirdweb Engine, and custom signers.
+`@lucid-agents/wallet` gives a Lucid runtime a consistent interface to local,
+thirdweb, custom viem, and Lucid-hosted signing wallets. Use it when an agent
+must sign an identity challenge, authenticate to another service, or submit an
+outbound transaction.
 
-## Installation
+It does **not** configure the address that receives x402 payments. A seller's
+receiving address belongs in the [payments configuration](/docs/build/receive-x402).
+
+## Install
 
 ```bash
 bun add @lucid-agents/wallet viem
 ```
 
-## Basic usage
+Install `thirdweb` as well only when you use the thirdweb connector:
+
+```bash
+bun add thirdweb
+```
+
+## Add wallets to a runtime
 
 ```typescript
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-const agent = await createAgent({
-  name: 'my-agent',
+const runtime = await createAgent({
+  name: 'identity-agent',
   version: '1.0.0',
 })
-  .use(http())
   .use(wallets({ config: walletsFromEnv() }))
+  .use(http())
   .build();
 ```
 
-## Configuration
+`wallets()` is optional and accepts `{ config?: WalletsConfig }`. When neither
+an agent nor developer wallet is configured, `runtime.wallets` is `undefined`.
 
-### Environment variables
+## Choose a wallet role
+
+| Role        | Purpose                                                                 | Supported configurations               |
+| ----------- | ----------------------------------------------------------------------- | -------------------------------------- |
+| `agent`     | Signs agent challenges and can expose a transaction-ready wallet client | `local`, `signer`, `thirdweb`, `lucid` |
+| `developer` | Optional operator-controlled signer                                     | `local`, `signer`                      |
+
+The developer role is still a signing wallet. An address without a private key
+does not create a developer wallet.
+
+## Configure from environment
+
+For a local agent wallet:
 
 ```bash
-# Agent wallet (for signing identity proofs, making payments)
+AGENT_WALLET_TYPE=local
 AGENT_WALLET_PRIVATE_KEY=0x...
-AGENT_WALLET_TYPE=local  # local, thirdweb, signer
-
-# For thirdweb Engine wallets
-AGENT_WALLET_SECRET_KEY=...
-AGENT_WALLET_CLIENT_ID=...
-AGENT_WALLET_LABEL=agent-wallet
-
-# Developer wallet (for receiving payments)
-DEVELOPER_WALLET_ADDRESS=0x...
+AGENT_WALLET_CAIP2=eip155:84532
+AGENT_WALLET_RPC_URL=https://your-base-sepolia-rpc.example
+AGENT_WALLET_CHAIN_ID=84532
+AGENT_WALLET_CHAIN_NAME="Base Sepolia"
 ```
 
-### walletsFromEnv()
-
-Loads wallet configuration from environment:
+Then load it:
 
 ```typescript
 import { walletsFromEnv } from '@lucid-agents/wallet';
@@ -60,259 +78,249 @@ import { walletsFromEnv } from '@lucid-agents/wallet';
 const config = walletsFromEnv();
 ```
 
-### WalletsConfig
+`walletsFromEnv(overrides?, env?)` reads environment values, then applies
+explicit overrides per role. It returns `undefined` when neither role is
+configured.
+
+### Agent wallet variables
+
+| Variable                             | Required                                  | Meaning                                                                       |
+| ------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `AGENT_WALLET_TYPE`                  | Yes for an agent wallet                   | `local`, `thirdweb`, or `lucid`                                               |
+| `AGENT_WALLET_PRIVATE_KEY`           | For `local`                               | `0x`-prefixed private key                                                     |
+| `AGENT_WALLET_SECRET_KEY`            | For `thirdweb`                            | thirdweb secret key                                                           |
+| `AGENT_WALLET_CLIENT_ID`             | No                                        | thirdweb client ID                                                            |
+| `AGENT_WALLET_LABEL`                 | No                                        | thirdweb server-wallet label; defaults to `agent-wallet`                      |
+| `AGENT_WALLET_CHAIN_ID`              | For thirdweb; optional metadata for local | Numeric EVM chain ID; thirdweb defaults to `84532`                            |
+| `AGENT_WALLET_BASE_URL`              | For `lucid`                               | Lucid wallet API base URL; `LUCID_BASE_URL` and `LUCID_API_URL` are fallbacks |
+| `AGENT_WALLET_AGENT_REF`             | For `lucid`                               | Agent identifier used by the wallet service                                   |
+| `AGENT_WALLET_ACCESS_TOKEN`          | No                                        | Initial bearer token for a Lucid-hosted wallet                                |
+| `AGENT_WALLET_HEADERS`               | No                                        | JSON object of additional request headers                                     |
+| `AGENT_WALLET_AUTHORIZATION_CONTEXT` | No                                        | JSON object merged into signing authorization context                         |
+
+Local wallets also accept metadata through `AGENT_WALLET_ADDRESS`,
+`AGENT_WALLET_CAIP2`, `AGENT_WALLET_CHAIN`, `AGENT_WALLET_CHAIN_TYPE`,
+`AGENT_WALLET_PROVIDER`, and `AGENT_WALLET_LABEL`. A local wallet client can
+use `AGENT_WALLET_RPC_URL`, `AGENT_WALLET_CHAIN_ID`, and
+`AGENT_WALLET_CHAIN_NAME`.
+
+### Developer wallet variables
+
+Set `DEVELOPER_WALLET_PRIVATE_KEY` to create the developer wallet. The same
+metadata and wallet-client suffixes used by local agent wallets are available
+under the `DEVELOPER_WALLET_` prefix.
+
+`DEVELOPER_WALLET_ADDRESS` by itself is metadata only and does not create a
+wallet.
+
+## Configure in code
+
+### Local private key
 
 ```typescript
-type WalletsConfig = {
-  agent?: WalletConnectorConfig;
-  developer?: WalletConnectorConfig;
+import type { WalletsConfig } from '@lucid-agents/types/wallets';
+
+const config: WalletsConfig = {
+  agent: {
+    type: 'local',
+    privateKey: process.env.AGENT_WALLET_PRIVATE_KEY!,
+    caip2: 'eip155:84532',
+    walletClient: {
+      rpcUrl: process.env.BASE_SEPOLIA_RPC_URL,
+      chainId: 84532,
+      chainName: 'Base Sepolia',
+    },
+  },
 };
-
-type WalletConnectorConfig =
-  | LocalWalletConfig
-  | ThirdwebWalletConfig
-  | SignerWalletConfig;
 ```
 
-## Wallet types
+Without a wallet-client RPC configuration, local development falls back to
+`http://localhost:8545` and chain ID `31337`. Supply an explicit chain ID when
+using a custom RPC URL.
 
-### Local wallet
-
-Uses a private key directly:
-
-```typescript
-const agent = await createAgent(meta)
-  .use(http())
-  .use(wallets({
-    config: {
-      agent: {
-        type: 'local',
-        privateKey: process.env.AGENT_WALLET_PRIVATE_KEY,
-        chainId: 84532,  // Base Sepolia
-      },
-    },
-  }))
-  .build();
-```
-
-### Thirdweb Engine wallet
-
-Uses thirdweb Engine for managed wallets:
+### Existing viem wallet client
 
 ```typescript
-const agent = await createAgent(meta)
-  .use(http())
-  .use(wallets({
-    config: {
-      agent: {
-        type: 'thirdweb',
-        secretKey: process.env.AGENT_WALLET_SECRET_KEY,
-        clientId: process.env.AGENT_WALLET_CLIENT_ID,
-        walletLabel: 'agent-wallet',
-        chainId: 84532,
-      },
-    },
-  }))
-  .build();
-```
-
-### Custom signer
-
-Use a viem WalletClient or compatible signer:
-
-```typescript
-import { createWalletClient, http } from 'viem';
+import { createWalletClient, http as viemHttp } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 
-const account = privateKeyToAccount('0x...');
 const walletClient = createWalletClient({
-  account,
+  account: privateKeyToAccount(process.env.AGENT_WALLET_PRIVATE_KEY!),
   chain: baseSepolia,
-  transport: http(),
+  transport: viemHttp(process.env.BASE_SEPOLIA_RPC_URL),
 });
 
-const agent = await createAgent(meta)
-  .use(http())
-  .use(wallets({
-    config: {
-      agent: {
-        type: 'signer',
-        signer: walletClient,
-      },
-    },
-  }))
-  .build();
-```
-
-## API reference
-
-### wallets(options)
-
-Creates the wallets extension.
-
-```typescript
-function wallets(options: {
-  config: WalletsConfig;
-}): Extension<WalletsExtensionContext>
-```
-
-### WalletsRuntime
-
-When wallets are configured, `agent.wallets` provides:
-
-```typescript
-type WalletsRuntime = {
-  agent?: {
-    connector: WalletConnector;
-    address: `0x${string}`;
-  };
-  developer?: {
-    connector: WalletConnector;
-    address: `0x${string}`;
-  };
+const config = {
+  agent: {
+    type: 'signer' as const,
+    walletClient,
+  },
 };
 ```
 
-### WalletConnector
+The configuration property is `walletClient`, not `signer`. Programmatic
+signer wallets are not selected through `AGENT_WALLET_TYPE`.
 
-All wallet types implement the connector interface:
+### thirdweb server wallet
 
 ```typescript
-type WalletConnector = {
-  getAddress: () => Promise<`0x${string}`>;
-  signMessage: (message: string) => Promise<`0x${string}`>;
-  signTypedData: (data: TypedData) => Promise<`0x${string}`>;
-  getCapabilities?: () => WalletCapabilities;
-  getWalletClient?: () => Promise<{ client: WalletClient }>;
-};
-
-type WalletCapabilities = {
-  walletClient?: boolean;
-  signTypedData?: boolean;
+const config = {
+  agent: {
+    type: 'thirdweb' as const,
+    secretKey: process.env.THIRDWEB_SECRET_KEY!,
+    clientId: process.env.THIRDWEB_CLIENT_ID,
+    walletLabel: 'production-agent',
+    chainId: 8453,
+  },
 };
 ```
 
-## Using wallet operations
+The connector creates or resolves a thirdweb Engine server wallet lazily on
+first use and adapts it to a viem wallet client.
 
-### Sign messages
+### Lucid-hosted wallet
 
 ```typescript
-const signature = await agent.wallets.agent.connector.signMessage(
-  'Hello, World!'
-);
+const config = {
+  agent: {
+    type: 'lucid' as const,
+    baseUrl: 'https://wallets.example.com',
+    agentRef: 'agent_123',
+    accessToken: process.env.LUCID_WALLET_TOKEN,
+  },
+};
 ```
 
-### Sign typed data (EIP-712)
+The hosted connector signs challenges over HTTP. It does not expose a local
+signer or wallet client. If a token is issued after startup, update it with
+`runtime.wallets?.agent?.setAccessToken?.(token)` before signing.
+
+## Runtime API
 
 ```typescript
-const signature = await agent.wallets.agent.connector.signTypedData({
-  domain: {
-    name: 'My App',
-    version: '1',
-    chainId: 84532,
-  },
-  types: {
-    Message: [{ name: 'content', type: 'string' }],
-  },
-  primaryType: 'Message',
-  message: {
-    content: 'Hello',
-  },
-});
+type WalletsRuntime =
+  | {
+      agent?: {
+        kind: 'local' | 'signer' | 'lucid' | 'thirdweb';
+        connector: WalletConnector;
+        setAccessToken?(token: string | null): void;
+      };
+      developer?: {
+        kind: 'local' | 'signer';
+        connector: WalletConnector;
+      };
+    }
+  | undefined;
 ```
 
-### Get wallet client (for transactions)
+Handles do not cache an `address` property. Resolve current metadata or an
+address through the connector:
 
 ```typescript
-const connector = agent.wallets.agent.connector;
-const capabilities = connector.getCapabilities?.();
+const connector = runtime.wallets?.agent?.connector;
+const address = await connector?.getAddress?.();
+const metadata = await connector?.getWalletMetadata();
+```
 
-if (capabilities?.walletClient && connector.getWalletClient) {
-  const { client: walletClient } = await connector.getWalletClient();
+Every connector implements challenge signing and metadata lookup:
 
-  // Send transaction
-  const hash = await walletClient.writeContract({
-    account: walletClient.account,
-    chain: walletClient.chain,
-    address: TOKEN_ADDRESS,
-    abi: erc20Abi,
-    functionName: 'transfer',
-    args: [recipient, amount],
-  });
+```typescript
+interface WalletConnector {
+  signChallenge(challenge: AgentChallenge): Promise<string>;
+  getWalletMetadata(): Promise<WalletMetadata | null>;
+  supportsCaip2?(caip2: string): boolean | Promise<boolean>;
+  getAddress?(): Promise<string | null>;
+  getCapabilities?(): WalletCapabilities | null | undefined;
+  getSigner?(): Promise<LocalEoaSigner | null>;
+  getWalletClient?<TClient = unknown>(): Promise<TClient | null>;
 }
 ```
 
-## Standalone wallet creation
+The shared contracts are imported from `@lucid-agents/types/wallets`; the
+wallet package does not re-export every shared type.
 
-Create wallets outside of the extension system:
+## Sign and transact
+
+Challenge signing is a connector method:
 
 ```typescript
-import { createAgentWallet, createDeveloperWallet } from '@lucid-agents/wallet';
+const signature =
+  await runtime.wallets?.agent?.connector.signChallenge(challenge);
+```
 
-// Create agent wallet
-const agentWallet = await createAgentWallet({
-  type: 'local',
-  privateKey: '0x...',
+There are no package-level `signChallenge()` or `verifyChallenge()` helpers.
+
+For a plain message, first request the optional signer:
+
+```typescript
+const signer = await runtime.wallets?.agent?.connector.getSigner?.();
+if (!signer) throw new Error('This connector does not expose a local signer');
+
+const signature = await signer.signMessage('Lucid authorization');
+```
+
+For contract calls, request the wallet client directly. The method returns the
+client itself, not an object containing `{ client }`:
+
+```typescript
+import type { WalletClient } from 'viem';
+
+const walletClient =
+  await runtime.wallets?.agent?.connector.getWalletClient?.<WalletClient>();
+
+if (!walletClient?.account) {
+  throw new Error('A transaction-ready wallet client is unavailable');
+}
+
+const hash = await walletClient.sendTransaction({
+  account: walletClient.account,
+  chain: walletClient.chain,
+  to: '0x0000000000000000000000000000000000000000',
+  value: 0n,
 });
-
-// Create developer wallet (address only, no signing)
-const devWallet = await createDeveloperWallet({
-  address: '0x...',
-});
 ```
 
-## Challenge-response signing
+Check `getCapabilities()` when code must support several connector kinds. A
+capability is a hint; still handle a `null` optional result.
 
-For identity verification:
+## Standalone factories and exports
 
-```typescript
-import { signChallenge, verifyChallenge } from '@lucid-agents/wallet';
+Use `createAgentWallet`, `createDeveloperWallet`, or `createWalletsRuntime`
+outside the extension builder. The package also exports:
 
-// Sign a challenge
-const signature = await signChallenge(
-  agent.wallets.agent.connector,
-  challenge
-);
+- `LocalEoaWalletConnector`, `ViemWalletConnector`,
+  `ThirdwebWalletConnector`, and `ServerOrchestratorWalletConnector`
+- `createPrivateKeySigner` and `createSignerConnector`
+- challenge normalization/extraction helpers
+- viem signature helpers `signMessageWithViem` and
+  `signTypedDataWithViem`
 
-// Verify the signature
-const isValid = await verifyChallenge(
-  signature,
-  challenge,
-  expectedAddress
-);
-```
+## Security and production checks
 
-## Exports
+- Do not put private keys in source, client bundles, logs, or checked-in `.env`
+  files. Prefer a secret manager or a remote signer in production.
+- Treat hosted-wallet access tokens as signing authority. Scope, rotate, and
+  revoke them like private credentials.
+- Validate the requested CAIP-2 network before signing or sending a
+  transaction. Wallet capability does not prove the caller intended that
+  network.
+- Bind authorization challenges to a short expiry, nonce, audience, and the
+  exact action being authorized. The wallet package signs the challenge; your
+  verifier owns replay prevention and policy.
+- Separate seller payment addresses from operational signing keys unless your
+  custody model explicitly requires them to be the same.
 
-```typescript
-// Extension
-export { wallets } from '@lucid-agents/wallet';
+## Troubleshooting
 
-// Configuration
-export { walletsFromEnv } from '@lucid-agents/wallet';
+| Symptom                                       | Cause                                               | Fix                                                                   |
+| --------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------- |
+| `AGENT_WALLET_TYPE ... is required`           | Agent wallet variables were supplied without a type | Set `local`, `thirdweb`, or `lucid`                                   |
+| `AGENT_WALLET_PRIVATE_KEY ... is required`    | A local agent wallet has no key                     | Inject a `0x`-prefixed key through secrets management                 |
+| `chainId must be explicitly provided`         | A custom RPC has no chain identity                  | Set wallet-client `chainId` or a numeric CAIP-2 value                 |
+| Hosted signing reports a missing bearer token | `accessToken` was absent or expired                 | Set it in config or call `setAccessToken()`                           |
+| `getWalletClient()` returns `null`            | The connector does not expose transactions          | Use a local, signer, or thirdweb connector, or branch on capabilities |
+| thirdweb import fails                         | Optional peer dependency is missing                 | Install a compatible `thirdweb` 5.x release                           |
 
-// Wallet creation
-export { createAgentWallet, createDeveloperWallet } from '@lucid-agents/wallet';
-export { createWalletsRuntime } from '@lucid-agents/wallet';
-
-// Connectors
-export {
-  LocalEoaWalletConnector,
-  ThirdwebWalletConnector,
-  ServerOrchestratorWalletConnector,
-  createSignerConnector,
-} from '@lucid-agents/wallet';
-
-// Utilities
-export { signChallenge, verifyChallenge } from '@lucid-agents/wallet';
-
-// Types
-export type {
-  WalletsConfig,
-  WalletsRuntime,
-  WalletConnector,
-  WalletConnectorConfig,
-  WalletCapabilities,
-} from '@lucid-agents/wallet';
-```
+For the identity flow that consumes an agent wallet, continue to
+[ERC-8004 identity](/docs/packages/identity).

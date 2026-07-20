@@ -1,6 +1,4 @@
-/**
- * Test script to verify all three registry clients are created and accessible
- */
+/** Test script to verify the default identity and reputation clients. */
 
 import { createAgent } from '@lucid-agents/core';
 import { createAgentIdentity } from '@lucid-agents/identity';
@@ -52,25 +50,11 @@ async function main() {
       )
     );
 
-    const validation = identity.clients.validation;
-    if (!validation) {
-      throw new Error('Validation registry is not configured for this chain');
-    }
-
-    // Test Validation Registry Client
-    console.log('\nValidation Registry:');
-    console.log('   - Address:', validation.address);
-    console.log('   - Chain ID:', validation.chainId);
     console.log(
-      '   - Methods:',
-      Object.keys(validation).filter(
-        k =>
-          typeof (validation as unknown as Record<string, unknown>)[k] ===
-          'function'
-      )
+      '\nValidation Registry: not created by default (deprecated compatibility surface)'
     );
 
-    console.log('\n🚀 All registry clients are ready to use!');
+    console.log('\nDefault registry clients are ready to use.');
 
     // Example: Query reputation summary
     if (identity.record?.agentId) {

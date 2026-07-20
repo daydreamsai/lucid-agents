@@ -1,0 +1,199 @@
+---
+title: Compose with agent frameworks
+description: Put Lucid around paid work while keeping model loops, tools, memory, and wallet providers in their owning framework.
+icon: Workflow
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+Lucid is not a replacement for an agent framework. It is the commercial
+application boundary around a function that may happen to run an agent. Use
+frameworks for model calls, tools, memory, handoffs, workflows, and evaluation;
+use Lucid for the typed service contract, payment admission, spend policy,
+idempotency, fulfillment state, and settlement evidence.
+
+## Choose one of two compositions
+
+### Sell framework-backed work
+
+```text
+Buyer
+  → Lucid HTTP route
+    → schema + payment/policy/idempotency gate
+      → entrypoint handler
+        → OpenAI / AI SDK / Mastra / LangGraph workflow
+      → output validation
+    → settlement + response evidence
+```
+
+The entrypoint handler calls your existing framework. Framework state stays
+behind the handler and the returned value must satisfy the public output
+schema.
+
+```ts
+runtime.entrypoints.add({
+  key: 'research-brief',
+  description: 'Produce a cited brief from a bounded question',
+  input: researchInput,
+  output: researchOutput,
+  price: '0.05',
+  handler: async ({ input, signal, runId }) => {
+    const brief = await runResearchWorkflow(input, {
+      signal,
+      traceId: runId,
+    });
+
+    return { output: researchOutput.parse(brief) };
+  },
+});
+```
+
+`runResearchWorkflow()` is application code owned by the selected framework;
+Lucid does not prescribe its model, memory, or orchestration API.
+
+### Buy a Lucid service as a tool
+
+```text
+Framework agent
+  → tool approval and argument schema
+    → budgeted paid Fetch client
+      → Lucid seller
+    ← validated output + settlement evidence
+  ← compact tool result
+```
+
+Create and test one framework-independent client function first:
+
+```ts
+type ResearchInput = { question: string };
+type ResearchOutput = { answer: string; sources: string[] };
+
+export async function buyResearch(
+  input: ResearchInput,
+  context: { operationId: string }
+): Promise<ResearchOutput> {
+  const response = await paidFetch(process.env.RESEARCH_SERVICE_URL!, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'idempotency-key': context.operationId,
+    },
+    body: JSON.stringify({ input }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Research service failed: ${response.status}`);
+  }
+  if (!response.headers.has('PAYMENT-RESPONSE')) {
+    throw new Error('Settlement evidence is missing');
+  }
+
+  return researchOutput.parse(await response.json());
+}
+```
+
+Build `paidFetch` with the recipient and budget controls from
+[Build a budgeted buyer](/docs/start/budgeted-buyer). Then expose
+`buyResearch()` through the framework's normal tool interface. This keeps
+payment code out of prompts and makes it independently testable.
+
+## Framework ownership map
+
+| Ecosystem            | Keep there                                                         | Connect to Lucid at                                                                                    |
+| -------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| OpenAI Agents SDK    | Agents, tools, handoffs, guardrails, sessions, tracing             | A tool implementation calls the paid client; or a Lucid handler runs an agent/workflow                 |
+| Vercel AI SDK        | Model/provider abstraction, tool loops, streaming UI               | A server-side tool calls the paid client; or a Lucid stream handler emits bounded SSE progress         |
+| Mastra               | Agents, workflows, server features, memory, scorers, observability | A workflow step/tool calls the paid client; propagate one operation ID into its trace                  |
+| LangGraph/LangChain  | Graph state, nodes, checkpoints, interrupts, tools                 | A graph node/tool calls the paid client; persist payment result in graph state without credentials     |
+| AgentKit/CDP wallets | Wallet provider and onchain action capabilities                    | Adapt an explicitly approved signer/client to the x402 buyer; Lucid still owns spend policy/accounting |
+
+These are composition patterns, not shipped Lucid framework adapters. Use the
+framework's current official API rather than copying an old wrapper signature
+from this page.
+
+Primary framework scope references:
+
+- [OpenAI Agents SDK overview](https://developers.openai.com/api/docs/guides/agents)
+- [Vercel AI SDK introduction](https://ai-sdk.dev/docs/introduction)
+- [Mastra documentation](https://mastra.ai/docs)
+- [LangGraph overview](https://docs.langchain.com/oss/javascript/langgraph/overview)
+- [AgentKit architecture](https://docs.cdp.coinbase.com/agent-kit/core-concepts/architecture-explained)
+
+## Approval belongs outside the model
+
+The model may propose a tool call, but it must not choose an unbounded payee,
+network, or amount. Before the x402 wrapper signs:
+
+1. validate tool arguments with a deterministic schema;
+2. resolve the service from an allowlisted HTTPS URL or reviewed discovery
+   record;
+3. compare recipient, network, asset, and amount with policy;
+4. reserve the per-request and time-window budget atomically;
+5. require an explicit approval artifact for a new counterparty or higher
+   spend tier.
+
+Do not inject private keys, payment credentials, raw challenges, or facilitator
+tokens into model context. Return only the business result and a sanitized
+receipt reference to the framework.
+
+## Correlation and duplicate prevention
+
+Generate the business operation ID outside the framework's retry loop. Reuse
+it across the unpaid request, signed retry, transport retry, resumed graph, or
+agent handoff.
+
+```text
+framework run/trace ID
+  └─ business operation ID
+       ├─ HTTP Idempotency-Key
+       ├─ Lucid run ID
+       ├─ payment/facilitator receipt ID
+       └─ task ID, if fulfillment is asynchronous
+```
+
+A framework checkpoint prevents graph replay only within that framework. It
+does not replace Lucid target idempotency or downstream business
+deduplication. Conversely, an HTTP idempotency record does not make arbitrary
+database writes inside the handler transactional.
+
+## Streaming and asynchronous work
+
+- Use direct invoke for bounded work that finishes inside one request.
+- Use SSE when partial output is useful and the work should stop on disconnect.
+  Current Lucid x402 streaming has a fixed admission price and settles before
+  the response body completes; it is not token-level metering.
+- Use a task when work outlives the connection. The caller should persist and
+  poll the returned task ID instead of making a second paid tool call.
+
+Framework-level streaming or checkpoints do not change those payment timing
+rules. Read [Payment lifecycle](/docs/build/payment-model) before deciding
+which result counts as fulfilled.
+
+## Error mapping
+
+| Lucid result                  | Framework tool result                                                                           |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| `400 invalid_input`           | Deterministic tool-argument error; let the model correct arguments within a bounded retry count |
+| `402 payment_required`        | Internal negotiation event; never display raw credentials to the model                          |
+| `403 policy_violation`        | Approval/policy denial; return a non-retryable tool error unless a human changes policy         |
+| `409 idempotency_in_progress` | Pause or poll using the same operation ID                                                       |
+| Timeout/`5xx` after signing   | Ambiguous; reconcile payment and task/business state before allowing another call               |
+| Valid `2xx` plus receipt      | Parse the advertised output schema and return the business result                               |
+
+## Production checklist
+
+- Test the paid client independently from the agent loop with deterministic
+  `402`, denial, timeout, duplicate, and malformed-output fixtures.
+- Bound model-driven tool calls, parallelism, recursion, total spend, input,
+  duration, and output.
+- Keep one durable budget/idempotency store across every framework worker.
+- Propagate abort signals and enforce downstream timeouts.
+- Redact prompts, tool arguments, and traces according to tenant policy.
+- Reconcile application fulfillment against settlement evidence, not against
+  “tool call succeeded” alone.
+
+Next, review [MCP composition](/docs/integrate/mcp),
+[retry semantics](/docs/buy/retries-idempotency), and the
+[security threat model](/docs/operate/security).

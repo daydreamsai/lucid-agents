@@ -1,32 +1,222 @@
 ---
 title: Handle retries and idempotency
-description: Retry network attempts without duplicating paid business operations.
+description: Retry transport attempts without duplicating charges, fulfillment, tasks, or downstream effects.
 icon: RefreshCcw
 status: next
 verifiedVersion: 3.0.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-x402 already requires one protocol retry: unpaid request, then paid request.
-Application retries add another layer and must retain one business identity.
+x402 already performs one expected protocol retry: an unpaid request receives a
+challenge, then the client resends a signed request. Application retries sit
+outside that exchange and must preserve one logical business identity.
 
-## Rules
+## The invariant
 
-- Generate an idempotency key before the first attempt and reuse it for every
-  retry of that operation.
-- Do not retry a paid `4xx` response automatically.
-- On timeout after signing, query task or application state before paying
-  again.
-- Bound attempts and use exponential backoff for transient `5xx` or network
-  failures.
-- Persist target-side idempotency records for at least as long as buyers may
-  retry.
-- Never use a random key per HTTP attempt.
+Generate one idempotency key **before** the first request and reuse it for every
+attempt that means “perform this exact operation once.” Never create a fresh key
+because the client timed out or received `503`.
 
-Lucid's HTTP extension owns target-side idempotency for canonical routes. The
-payments runtime binds authorization reservations to request attempts. Durable
-ports are required when process loss must not erase either protection.
+```typescript
+const operationId = `report:${reportId}:generation:v1`;
 
-Treat `PAYMENT-RESPONSE` as settlement evidence and your output/task record as
-fulfillment evidence. Reconciliation needs both.
+const response = await paidFetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'idempotency-key': operationId,
+  },
+  body: JSON.stringify({ input: { reportId } }),
+});
+```
+
+Lucid requires 20–256 characters for invoke keys. A key must not contain a
+private key, access token, email address, or other sensitive raw identifier.
+
+## What the server fingerprints
+
+For invoke, Lucid scopes a key to the entrypoint/mode and fingerprints:
+
+- HTTP method and full URL;
+- request body;
+- the verified payment or SIWX subject when available;
+- relevant ambient authorization/cookie/API-key context when needed.
+
+The same key and fingerprint returns the stored successful response with
+`Idempotency-Replayed: true`. The same key with a different request or subject
+returns `409 idempotency_key_conflict`.
+
+An in-progress duplicate returns `409 idempotency_in_progress` plus
+`Retry-After: 1`. It is not permission to send a new key.
+
+## Retry decision table
+
+| Observation                                             | Payment/fulfillment certainty                                     | Default action                                                                        |
+| ------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Initial `402`                                           | Not paid; expected protocol negotiation                           | Let the x402 client validate, sign, and retry under the same key                      |
+| `400 invalid_request` / `invalid_input`                 | Lucid does not settle                                             | Fix the request; a changed body is a new logical operation/key                        |
+| `401`/`403` authorization or policy denial              | Not admitted/settled by Lucid                                     | Stop; retry only after legitimate auth/policy change                                  |
+| `402` after a signed retry                              | Credential/settlement rejected                                    | Stop automatic retries; inspect requirement/version/network/asset/signature           |
+| `409 idempotency_in_progress`                           | Another attempt owns the operation                                | Wait `Retry-After`, then query/retry the same key                                     |
+| `409 idempotency_key_conflict`                          | Key was used for different material                               | Stop and investigate caller/key-generation bug                                        |
+| `429` or transient pre-payment capacity response        | No successful result evidenced                                    | Back off and retry same operation/key within a bounded attempt budget                 |
+| Handler `500`                                           | Lucid does not settle, but handler may have external side effects | Inspect downstream state; retry same key only when effects are idempotent/compensated |
+| `503` before a challenge                                | Configuration/store/provider unavailable                          | Do not sign; back off with same key after health recovers                             |
+| `503 payment_recording_failed` with settlement evidence | Payment may be irreversible; local record incomplete              | Reconcile/query same key; do not issue a new payment                                  |
+| Network timeout after signing                           | Unknown                                                           | Query invoke/task/business/provider state first; retry only same key                  |
+| `200` with `PAYMENT-RESPONSE`                           | Settlement and successful response evidenced                      | Persist receipt plus output; do not retry                                             |
+| `200` without expected payment header on a priced call  | Fulfillment response exists but settlement evidence is missing    | Treat as inconsistent; reconcile rather than assuming free or paid                    |
+
+HTTP status alone cannot distinguish every crash window. Keep both settlement
+evidence and fulfillment/task evidence.
+
+## Bounded retry loop
+
+The payment-aware Fetch already handles the protocol challenge. Wrap the whole
+call only for transport/transient application attempts:
+
+```typescript
+async function invokeOnce(
+  paidFetch: typeof fetch,
+  endpoint: string,
+  operationId: string,
+  input: unknown
+): Promise<Response> {
+  return paidFetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'idempotency-key': operationId,
+    },
+    body: JSON.stringify({ input }),
+  });
+}
+
+async function invokeWithBoundedRetry(
+  paidFetch: typeof fetch,
+  endpoint: string,
+  operationId: string,
+  input: unknown
+): Promise<Response> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await invokeOnce(
+        paidFetch,
+        endpoint,
+        operationId,
+        input
+      );
+
+      if (response.ok) return response;
+      if (response.status === 409) {
+        const error = (await response.clone().json()) as {
+          error?: { code?: string };
+        };
+        if (error.error?.code === 'idempotency_in_progress') {
+          await new Promise(resolve => setTimeout(resolve, 1_000));
+          continue;
+        }
+      }
+
+      if (response.status < 500 || attempt === 2) return response;
+    } catch (error) {
+      if (attempt === 2) throw error;
+      // Outcome may be ambiguous. A production caller should query its
+      // business/task/provider state here before resending the same key.
+    }
+
+    await new Promise(resolve =>
+      setTimeout(resolve, 250 * 2 ** attempt + Math.random() * 100)
+    );
+  }
+
+  throw new Error('Retry loop exhausted');
+}
+```
+
+This skeleton intentionally does not retry arbitrary `4xx`, does not change the
+key, and caps attempts. Replace the timeout comment with an application-specific
+status/reconciliation query before production.
+
+## Server configuration
+
+Target-side invoke idempotency is enabled by default with a bounded in-memory
+store. Configure it explicitly:
+
+```typescript
+const runtime = await createAgent(meta)
+  .use(
+    http({
+      idempotency: {
+        store: durableIdempotencyStore,
+        inProgressTtlMs: 15 * 60_000,
+        retentionMs: 7 * 24 * 60 * 60_000,
+      },
+    })
+  )
+  .build();
+```
+
+Choose `inProgressTtlMs` longer than worst-case handler plus settlement time.
+Choose retention longer than client retry, support, queue, and reconciliation
+windows. An expired in-progress claim can allow another execution; a completed
+record that expires can allow a later duplicate.
+
+The store must atomically claim, complete, and release across all replicas. A
+separate in-memory store per replica is not idempotency for a load-balanced
+service.
+
+## Downstream idempotency
+
+Lucid can prevent the canonical invoke handler from running twice only while
+its target claim is valid. The handler must pass the same operation identity to
+databases, queues, model jobs, email, webhooks, and other paid APIs. Use a
+unique constraint, transactional outbox, provider idempotency key, or equivalent
+at every irreversible boundary.
+
+This matters because invoke fulfillment runs before settlement. A settlement
+failure can follow a handler side effect.
+
+## Streaming and task differences
+
+The HTTP idempotency store applies to **invoke**, not the stream or task-create
+routes.
+
+- A stream settles when its SSE response is admitted. After receiving a run ID
+  or any event, reconnect/resume through an application protocol rather than
+  opening a new paid stream blindly.
+- A task settles after durable task reservation and returns `{ taskId,
+accessToken }`. Persist that access capability before doing anything else;
+  poll the existing task after a timeout.
+- If the task-create response itself is lost, the current Lucid task profile
+  does not provide target-side creation idempotency. Add an application
+  submission identifier/store when duplicate accepted tasks are unacceptable.
+- Scheduler jobs derive a stable key for each occurrence; a durable scheduler
+  store must preserve it through lease recovery.
+
+## Reconciliation record
+
+For each logical operation, persist:
+
+- your business operation ID and Lucid idempotency key;
+- target URL, entrypoint, mode, normalized network, expected recipient/amount;
+- request fingerprint or immutable request version;
+- run/task ID and terminal fulfillment state;
+- `PAYMENT-RESPONSE` or MPP receipt reference and external transaction ID;
+- local payment/accounting state and last retry/error;
+- timestamps and safe trace correlation IDs.
+
+Do not persist raw payment credentials, private keys, task access tokens in
+general logs, or unredacted bodies by default.
+
+## Tests
+
+Run same-key concurrent calls, different-body conflict, different-subject
+conflict, claim expiry during a slow handler, store disconnect at claim and
+complete, settlement success plus record failure, handler side effect plus
+settlement failure, process kill at every boundary, and replay after restart.
+
+Read the normative [payment transaction model](/docs/build/payment-model) and
+configure [durable storage](/docs/operate/durable-storage) before enabling
+automatic retries.

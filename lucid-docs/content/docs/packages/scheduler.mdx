@@ -1,39 +1,276 @@
 ---
 title: '@lucid-agents/scheduler'
-description: Leased, idempotent scheduled A2A invocation jobs.
+description: Pull, lease, retry, and idempotently invoke remote Lucid HTTP-profile entrypoints on one-time or interval schedules.
 icon: CalendarClock
 status: next
 verifiedVersion: 0.2.3
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The scheduler extension depends on A2A and can use the optional payments
-runtime for paid invocations.
+`@lucid-agents/scheduler` is an application worker that discovers a remote
+Lucid service card and calls one entrypoint on a one-time or interval schedule.
+Jobs are pull-based, leased, and delivered at least once.
+
+The scheduler uses `@lucid-agents/a2a` discovery/client helpers, which call the
+Lucid `/entrypoints` HTTP profile. It is not a generic cron service or an
+official A2A v1 scheduler.
+
+## Install and dependencies
 
 ```bash
 bun add @lucid-agents/scheduler @lucid-agents/a2a
 ```
 
-```ts
-const runtime = await createAgent(meta)
+The extension requires `a2a()`. Install `payments()` and a buyer wallet before
+it when scheduled calls may require x402:
+
+```typescript
+import { a2a } from '@lucid-agents/a2a';
+import { createAgent } from '@lucid-agents/core';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import {
+  createMemoryStore,
+  createSchedulerWorker,
+  scheduler,
+} from '@lucid-agents/scheduler';
+import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
+
+const runtime = await createAgent({ name: 'buyer', version: '1.0.0' })
+  .use(wallets({ config: walletsFromEnv() }))
   .use(a2a())
-  .use(payments({ config }))
+  .use(payments({ config: paymentsFromEnv() }))
   .use(
     scheduler({
-      store,
+      store: createMemoryStore(),
       leaseMs: 30_000,
       defaultMaxRetries: 3,
-      defaultConcurrency: 4,
+      defaultConcurrency: 5,
+      maxDueBatch: 25,
+      agentCardTtlMs: 5 * 60_000,
     })
   )
   .build();
 ```
 
-The package exposes `scheduler()`, `createSchedulerRuntime()`,
-`createSchedulerWorker()`, and `createMemoryStore()`. Production stores
-implement `SchedulerStore`; the memory store is process-local.
+`createMemoryStore()` is for tests/local use. The package ships no SQLite or
+Postgres scheduler store.
 
-Workers lease due jobs, resolve Agent Cards with a bounded cache, invoke through
-the A2A runtime, and record retry/terminal state. Close the runtime to release
-the store and stop owned resources.
+## Create a hire and job
+
+```typescript
+const { hire, job } = await runtime.scheduler.createHire({
+  agentCardUrl: 'https://worker.example',
+  entrypointKey: 'daily-report',
+  schedule: { kind: 'interval', everyMs: 24 * 60 * 60_000 },
+  jobInput: { accountId: 'acct-123' },
+  maxRetries: 3,
+  idempotencyKey: 'daily-report-account-acct-123-v1',
+  metadata: { ownerTeam: 'research-ops' },
+});
+
+console.log(hire.id, job.id, job.nextRunAt);
+```
+
+`createHire()` fetches the card and verifies that its Lucid `entrypoints`
+record contains the key before persisting the hire/job. Creating one hire and
+its first job is compensating rather than fully transactional: if `putJob()`
+fails, Lucid calls optional `deleteHire()`.
+
+Use `addJob()` to add another scheduled entrypoint to an existing non-cancelled
+hire.
+
+## Schedule semantics
+
+```typescript
+type Schedule =
+  | { kind: 'once'; at: number }
+  | { kind: 'interval'; everyMs: number };
+```
+
+- `once.at` is a non-negative Unix timestamp in milliseconds.
+- An interval job is due immediately when created.
+- After success, its next occurrence is `tickNow + everyMs`; missed intervals
+  are not caught up and execution duration/tick delay can cause drift.
+- Cron expressions, calendars, time zones, daylight-saving rules, start/end
+  dates, and misfire policies are not implemented.
+
+Use an external calendar/cron system to create/trigger jobs when wall-clock
+semantics matter.
+
+## Job and hire state
+
+```text
+hire: active ↔ paused → canceled
+
+job: pending → leased → completed        (one-time success)
+              ↘ pending                  (interval success or retry)
+              ↘ failed                   (retry budget exhausted / invalid hire)
+       pending/failed ↔ paused/resumed    (subject to lifecycle rules)
+```
+
+Cancelling a hire prevents future work but does not delete records. Pausing a
+hire defers a claimed job by `leaseMs`. A completed job cannot be resumed; a
+failed or paused job can be resumed with an optional new `nextRunAt`.
+
+## Worker loop
+
+```typescript
+const worker = createSchedulerWorker(runtime.scheduler, 5_000);
+worker.start();
+
+// On shutdown:
+worker.stop();
+await runtime.close();
+```
+
+The convenience worker calls `tick()` on `setInterval`. It logs and continues
+when a tick rejects. It does not automatically call `recoverExpiredLeases()`
+and does not prevent overlapping ticks when one tick lasts longer than the
+poll interval. Store-level atomic claims are therefore mandatory even in one
+process.
+
+For explicit orchestration:
+
+```typescript
+const recovered = await runtime.scheduler.recoverExpiredLeases();
+await runtime.scheduler.tick({
+  workerId: `scheduler:${process.env.INSTANCE_ID}`,
+  concurrency: 10,
+});
+console.log({ recovered });
+```
+
+Call lease recovery on startup and periodically in a controlled leader/worker
+loop.
+
+## Lease contract
+
+`tick()` reads at most `maxDueBatch` due jobs and processes batches of
+`defaultConcurrency`. For each job, `SchedulerStore.claimJob()` must atomically
+grant one worker a lease.
+
+There is no lease heartbeat/renewal in this release. Set `leaseMs` longer than
+the worst-case card refresh, payment negotiation, remote invocation, and final
+store write. If recovery runs after the lease expires while the original call
+is still active, a second worker can invoke the same occurrence; target-side
+idempotency is the final duplicate defense.
+
+The store must also prevent stale whole-record `putJob()` updates from
+overwriting a newer worker's state. Use transactions/version columns or
+equivalent conditional writes even though the current port exposes `putJob()`.
+
+## Delivery and idempotency
+
+Delivery is at least once: a worker can complete the remote paid call and crash
+before saving local success.
+
+Every job has a 20–256 character key/seed:
+
+- retries of one occurrence reuse the same key;
+- interval occurrences derive distinct keys from the seed and scheduled time;
+- a one-time caller-supplied key is used unchanged;
+- generated keys start with `scheduler-run:`.
+
+The key is sent through the Lucid A2A client as `Idempotency-Key`. A Lucid
+target invoke deduplicates it when its `HttpIdempotencyStore` is durable.
+Third-party targets must provide equivalent semantics.
+
+Idempotency protects the target handler only while its record is retained.
+Make downstream effects and external payment/provider calls idempotent with the
+same occurrence identity.
+
+## Payment behavior
+
+When a payments runtime exists, each execution asks it for a payment-aware
+Fetch and calls the remote entrypoint. Buyer recipient/amount/total policy must
+be configured on that Fetch/payment runtime and stored durably across workers.
+
+The scheduler does not reserve a future budget when the hire is created. Budget
+is evaluated at execution time against the then-current remote challenge.
+Therefore a job can fail later because price, payee, network, balance, policy,
+or facilitator support changed.
+
+The scheduler treats every thrown remote invocation error as retryable until
+`maxRetries` is exceeded; it does not classify `4xx` policy/configuration errors
+separately. The backoff is exponential from about one second, ±20% jitter,
+capped at 60 seconds. With `maxRetries: 3`, the initial execution plus up to
+three retries can occur.
+
+If non-retryable errors matter, supervise `tick()`/records or extend the
+application with an error classifier before autonomous production use.
+
+## Agent Card cache and discovery security
+
+Cards are cached per hire for five minutes by default and refreshed after
+`agentCardTtlMs`. The first HTTP `supportedInterfaces` URL becomes the call base
+and can change on refresh.
+
+Treat `agentCardUrl` and advertised interface URL as untrusted network input:
+allowlist HTTPS origins, block private/link-local/metadata destinations,
+validate redirects and size/time limits, and verify expected identity/payee
+before payment. A cached card can become stale; a fresh card can be malicious.
+
+## `SchedulerStore` reference
+
+```typescript
+type SchedulerStore = {
+  putHire(hire: Hire): Promise<void>;
+  getHire(id: string): Promise<Hire | undefined>;
+  deleteHire?(id: string): Promise<void>;
+  putJob(job: Job): Promise<void>;
+  getJob(id: string): Promise<Job | undefined>;
+  getJobs?(): Promise<Job[]>;
+  getDueJobs(now: number, limit: number): Promise<Job[]>;
+  claimJob(
+    jobId: string,
+    workerId: string,
+    leaseMs: number,
+    now: number
+  ): Promise<boolean>;
+  getExpiredLeases?(now: number): Promise<Job[]>;
+  close?(): Promise<void> | void;
+};
+```
+
+Production implementations must persist before returning, atomically claim,
+isolate tenants, support required indexes, preserve idempotency fields, and
+recover expired leases. If `getExpiredLeases()` is absent, the runtime cannot
+recover leases through its helper.
+
+## Standalone construction and exports
+
+```typescript
+import {
+  createMemoryStore,
+  createSchedulerRuntime,
+  createSchedulerWorker,
+  scheduler,
+} from '@lucid-agents/scheduler';
+
+const standalone = createSchedulerRuntime({
+  runtime,
+  store: createMemoryStore(),
+});
+```
+
+The package re-exports scheduler contracts such as `Hire`, `Job`, `Schedule`,
+`SchedulerRuntime`, and `SchedulerStore` from `@lucid-agents/types/scheduler`.
+
+## Production checklist
+
+- Use a long-lived worker and a durable custom store; separate it from web
+  autoscaling.
+- Recover expired leases on startup and test overlapping ticks/workers.
+- Set lease longer than worst-case work or add a reviewed renewal design.
+- Use a durable remote idempotency store and downstream operation key.
+- Enforce buyer policy at execution and alert on price/payee/network drift.
+- Pin/verify service origin and Agent Card freshness; block SSRF.
+- Record hire/job/occurrence, operation key, target, amount, settlement, result,
+  attempts, lease owner, and terminal status.
+- Test crash after remote success/before `putJob()`, wallet/facilitator timeout,
+  policy denial, stale card, lease expiry, pause/cancel, and shutdown.
+
+See [Schedule calls](/docs/buy/schedule),
+[durable storage](/docs/operate/durable-storage), and
+[A2A compatibility](/docs/protocols/a2a).

@@ -4,26 +4,104 @@ description: Present Agent Card capabilities as a human-readable service page wi
 icon: Store
 status: next
 verifiedVersion: 0.8.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The Next.js and TanStack UI adapters generate a **service storefront**. It
-renders public identity, health, capability schemas, operation URLs, and payment
-requirements from HTTP contracts.
+The generated Next.js and TanStack UI adapters render a public **service
+storefront**. It helps a human inspect what a service offers; it is not an
+operations dashboard, marketplace listing, wallet custodian, or substitute for
+a protocol-aware buyer.
 
-Generate one with:
+## Generate the Next workspace surface
+
+Build the repository packages, then run the local CLI so the generated project
+uses the same Next contracts as these docs:
 
 ```bash
-bunx @lucid-agents/cli my-service --adapter=tanstack-ui
+bun run build:packages
+bun packages/cli/dist/index.js my-service --adapter=tanstack-ui
 # or
-bunx @lucid-agents/cli my-service --adapter=next
+bun packages/cli/dist/index.js my-service --adapter=next
 ```
 
-Storefront components consume `buildServicePageModel()` from
-`@lucid-agents/http`. They must not inspect `runtime.entrypoints`, payments
-internals, or adapter-specific registries. This keeps the UI truthful across
-frameworks and lets headless deployments expose the same service contract.
+The public npm CLI is the Stable channel. Do not use an unpinned public CLI to
+reproduce this Next page; see [Release channels](/docs/reference/release-channels).
 
-The storefront is not an operations dashboard. Payment reconciliation,
-analytics, alerts, and task administration belong to your production tooling.
+## Public data flow
+
+```text
+canonical entrypoint registry
+  → Agent Card + health handlers
+    → buildServicePageModel(card, { health, baseUrl })
+      → generated React storefront
+```
+
+`buildServicePageModel()` from `@lucid-agents/http` accepts only public Agent
+Card and health data. It derives:
+
+- agent name, version, description, and icon;
+- online/degraded/offline/unknown status;
+- registration/signature trust indicators;
+- streaming, task, and extension capability summaries;
+- public card, health, entrypoint, and task endpoints;
+- payment method/network summaries; and
+- per-offering schemas, SIWX requirements, prices, and invoke/stream URLs.
+
+Storefront code must not inspect private runtime config, payment trackers,
+wallet connectors, secrets, internal task records, or adapter-local registries.
+That boundary keeps the UI truthful across frameworks.
+
+## Configure the public origin
+
+The model prefers the first Agent Card `supportedInterfaces` URL unless the
+caller supplies `baseUrl`. Configure one canonical external origin and base
+path after reverse-proxy rewriting. An internal host such as
+`http://agent.local` must never leak into production cards or copyable URLs.
+
+Test these through the public proxy:
+
+```bash
+curl -fsS https://service.example/.well-known/agent-card.json
+curl -fsS https://service.example/health
+```
+
+Every displayed operation URL should resolve, carry exactly one configured
+base-path prefix, and return the same schema/price advertised by the card.
+
+## Protected operations
+
+The storefront can explain that an offering uses x402, MPP, or SIWX and can
+support generated wallet flows where the adapter implements them. It must not:
+
+- expose a server wallet key or facilitator credential to the browser;
+- imply that an unauthenticated `fetch()` can complete a protected operation;
+- treat “wallet connected” as payment approval;
+- promise usage metering when the operation has a fixed price; or
+- display a registration as proof that an output will be correct.
+
+Browser input, output, task access tokens, and payment credentials should stay
+out of local storage. Apply a strict content-security policy and render model
+output as untrusted content.
+
+## Verify the page
+
+1. Add one free and one priced capability with input/output schemas.
+2. Load the storefront on desktop and mobile.
+3. Confirm the free invoke works and the protected invoke shows the correct
+   protocol/price rather than silently failing.
+4. Change a capability price and verify the UI updates from the card without a
+   second hard-coded catalog.
+5. Disable the Lucid task runtime and verify task controls disappear.
+6. Break health deliberately and confirm the status becomes degraded/offline
+   without hiding the public contract.
+
+## Production boundary
+
+Reconciliation, payment analytics, alerts, task administration, tenant data,
+and refunds belong in authenticated operational tooling. Do not add them to the
+public storefront merely because they are convenient to render.
+
+Continue with [Publish a catalog](/docs/build/catalog),
+[deployment runbooks](/docs/operate/deploy), and the
+[security threat model](/docs/operate/security).

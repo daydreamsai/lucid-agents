@@ -407,13 +407,16 @@ This produces routes like `nlp/sentiment`, `nlp/translate`, `vision/classify`, e
 
 Network identifiers follow the [CAIP-2](https://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-2.md) format. Common values:
 
-| Network        | CAIP-2 ID        |
-| -------------- | ---------------- |
-| Base           | `eip155:8453`    |
-| Base Sepolia   | `eip155:84532`   |
-| Ethereum       | `eip155:1`       |
-| Solana Mainnet | `solana:mainnet` |
-| Solana Devnet  | `solana:devnet`  |
+| Network        | CAIP-2 ID                                 |
+| -------------- | ----------------------------------------- |
+| Base           | `eip155:8453`                             |
+| Base Sepolia   | `eip155:84532`                            |
+| Ethereum       | `eip155:1`                                |
+| Solana Mainnet | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` |
+| Solana Devnet  | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` |
+
+`solana:mainnet` and `solana:devnet` are legacy payment aliases rather than
+canonical CAIP-2 identifiers. Use the values above in new catalog data.
 
 Set a default network for all items via the `network` option, or override per item in your catalog file.
 

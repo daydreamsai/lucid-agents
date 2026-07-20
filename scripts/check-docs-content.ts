@@ -38,12 +38,14 @@ const pageRoutes = new Set(
 );
 const routes = new Set(pageRoutes);
 for (const route of Object.keys(docsRedirects)) routes.add(route);
+const redirectSources = new Set(Object.keys(docsRedirects));
 
 const pages: DocumentationPage[] = await Promise.all(
   files.map(async path => ({
     path: relative(docsRoot, path).split(sep).join('/'),
     source: await readFile(path, 'utf8'),
     routes,
+    redirectSources,
   }))
 );
 const issues = [

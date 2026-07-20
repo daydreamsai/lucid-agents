@@ -1,25 +1,102 @@
 ---
-title: MPP
-description: Use the Next-only MPP extension for standard challenges and credential verification.
+title: MPP compatibility
+description: Lucid's Next-only Payment-Auth integration and its boundary from the wider MPP draft.
 icon: Banknote
 status: next
 verifiedVersion: 0.2.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-`@lucid-agents/mpp` protects invoke, stream, and task operations with MPP
-`WWW-Authenticate` challenges. It can use native Tempo/Stripe methods exposed
-by `mppx` or an application-supplied credential verifier.
+The formal Machine Payments Protocol artifact is
+[`draft-ryan-httpauth-payment-01`](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/),
+an active **individual Internet-Draft**. It is not an IETF standard or an IETF
+endorsement. Implementations can be operational while the protocol still
+changes.
 
-The package is not published in the Stable npm channel. Use it from the
-repository as one compatible Next workspace set.
+`@lucid-agents/mpp` is a Next-only integration built on `mppx` 0.1. It protects
+Lucid invoke, stream, and task admission with Payment-Auth credentials.
 
-When both payments and MPP extensions are installed, every priced capability
-must set `paymentProtocol: 'x402'` or `paymentProtocol: 'mpp'`. The shared HTTP
-authorization transaction selects the owning extension and preserves the same
-fulfillment/failure behavior across adapters.
+## Support matrix
 
-Choose MPP when its credential or session model matches the commercial
-contract. Choose x402 `exact` for the documented on-chain per-call path. Do not
-describe the two as interchangeable wire formats.
+| Capability                                 | Lucid status                     | Detail                                                                            |
+| ------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------- |
+| HTTP `402` + `WWW-Authenticate: Payment`   | Supported                        | Standard challenge emitted through `mppx`                                         |
+| `Authorization: Payment`                   | Supported                        | Credential decoded and verified before admission                                  |
+| `Payment-Receipt`                          | Supported                        | Added after successful authorization/response                                     |
+| Tempo                                      | Supported                        | Native `mppx` charge/session method materialization                               |
+| Stripe                                     | Supported                        | Native `mppx` method with Business Network ID                                     |
+| Custom method                              | Supported with verifier          | Application owns signature, amount, recipient, settlement, and payer verification |
+| Lightning descriptor                       | Descriptor only without verifier | Fails closed without an application verifier                                      |
+| Outbound HTTP client                       | Supported                        | Payment-aware Fetch from native `mppx/client` intents                             |
+| Shared Lucid incoming policies             | Supported                        | Requires verified payer/network for identity-scoped rules                         |
+| Durable challenge/replay store             | Not implemented                  | Registry is process-local                                                         |
+| OpenAPI discovery                          | Not implemented                  | No MPP discovery document from Lucid                                              |
+| MCP/JSON-RPC or WebSocket transport        | Not implemented                  | Lucid binding is HTTP entrypoint routes                                           |
+| Every MPP rail, subscription, or extension | Not implemented                  | Do not infer support from the protocol name                                       |
+
+## Wire and trust boundary
+
+```text
+HTTP/1.1 402 Payment Required
+WWW-Authenticate: Payment id="...", realm="...", method="tempo", intent="charge", request="...", expires="..."
+
+Authorization: Payment <base64url-credential>
+```
+
+Native Tempo/Stripe methods delegate verification to `mppx`. A custom method
+is only a descriptor until `verifyCredential()` cryptographically verifies the
+signature, bound request, amount, currency, recipient, method, settlement, and
+claimed payer. `decodeMppCredential()` is decode-only and never authorizes a
+request.
+
+## Replay, idempotency, and storage
+
+Challenge IDs are short-lived, target-bound, and consumed before asynchronous
+verification, preventing concurrent replay in one process. However, the
+outstanding-challenge/replay registry is not durable or shared. Even with a
+stable `MPP_SECRET_KEY`, a restart loses outstanding challenges and multiple
+workers need sticky routing.
+
+For a production multi-instance service, this is a known limitation—not a
+configuration detail. Do not claim restart-safe MPP replay protection until a
+shared atomic store is implemented and tested.
+
+If a custom verifier performs settlement, it must deduplicate the external
+side effect with the request's `Idempotency-Key`. Lucid's target replay and
+policy accounting occur after verification and cannot undo a duplicated
+external settlement.
+
+## Failure semantics
+
+- malformed, expired, unknown, wrong-target, replayed, and rejected
+  credentials fail closed;
+- a custom method without a verifier fails closed;
+- method/intent mismatch is a configuration error and does not execute the
+  entrypoint;
+- native session-management responses can bypass the application handler while
+  retaining their protocol receipt;
+- unknown external settlement outcomes require provider reconciliation before
+  a retry.
+
+## Security and deployment checks
+
+- Pin `@lucid-agents/mpp`, `mppx`, and the exact draft behavior together.
+- Set a stable, high-entropy `MPP_SECRET_KEY`; never log challenges,
+  credentials, receipts, or provider secrets.
+- Use HTTPS and bind credentials to the method, URL, request/body digest,
+  intent, price, recipient, expiry, and challenge ID.
+- Keep Stripe/Tempo server secrets out of outbound client bundles.
+- Test concurrent replay, restart between challenge/retry, wrong-body retry,
+  provider timeout, receipt recovery, and custom-verifier idempotency.
+- Describe sticky routing and process-local replay state in the runbook.
+
+## Choosing x402 or MPP
+
+Choose MPP only when its credential/intent model and one implemented verifier
+match the counterparty. Choose x402 `exact` for Lucid's documented on-chain
+per-call path. The protocols both use HTTP `402`, but their wire credentials and
+receipts are not interchangeable.
+
+See the complete [MPP package reference](/docs/packages/mpp). The package is
+not part of the Stable npm channel.

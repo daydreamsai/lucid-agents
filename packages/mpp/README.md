@@ -1,9 +1,14 @@
 # @lucid-agents/mpp
 
 Machine Payments Protocol (MPP) authorization for Lucid Agents. The extension
-uses the standard Payment-Auth wire format, delegates Tempo and Stripe
-verification to mppx, and routes every adapter and A2A task through the same
+uses the Payment-Auth wire format, delegates Tempo and Stripe
+verification to mppx, and routes every adapter and Lucid task through the same
 authorization gate.
+
+MPP is currently the individual Internet-Draft
+`draft-ryan-httpauth-payment-01`, not an IETF standard. This package uses
+`mppx` 0.1 and implements a Lucid HTTP subset; it does not provide every MPP
+transport, discovery mechanism, rail, subscription, or session feature.
 
 ## Built-in payment methods
 

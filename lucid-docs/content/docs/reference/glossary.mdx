@@ -1,0 +1,37 @@
+---
+title: Glossary
+description: Canonical Lucid, payment, discovery, and runtime terms used throughout the documentation.
+icon: Languages
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-21
+product: sdk
+---
+
+Use these terms consistently in code reviews, support reports, and product
+documentation.
+
+| Term                    | Meaning in Lucid                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Capability**          | A machine-callable service understood by a buyer: its purpose, input, output, operations, and commercial terms.                       |
+| **Entrypoint**          | The SDK definition that implements a capability. Its `key` is used by routes and discovery.                                           |
+| **Runtime**             | The built object containing the core registry and exactly the extension capabilities that were installed.                             |
+| **Extension**           | A package-owned runtime slice with dependencies, lifecycle hooks, optional manifest contribution, and cleanup.                        |
+| **Adapter**             | A thin Hono, Express, TanStack, or generated Next.js binding over the canonical HTTP handlers.                                        |
+| **Payment rail**        | The negotiation and payment path, currently x402 or MPP. Lucid is not itself a payment protocol.                                      |
+| **Facilitator**         | External x402 infrastructure that verifies payment payloads and submits settlement.                                                   |
+| **Payment admission**   | Verification plus application policy checks and capacity reservation before fulfillment may run.                                      |
+| **Fulfillment**         | The application work and typed result a buyer intended to purchase. Settlement alone is not fulfillment.                              |
+| **Settlement evidence** | Protocol/provider data showing the payment result, such as `PAYMENT-RESPONSE` or `Payment-Receipt`.                                   |
+| **Idempotency key**     | A stable identifier reused across retries of one business operation so it is not fulfilled or paid twice.                             |
+| **Agent Card**          | Discovery metadata describing an agent and its advertised skills or interfaces. A card is not proof that the service is safe or live. |
+| **Service storefront**  | A generated human-facing view of public capabilities and invocation forms. It is not an operations dashboard.                         |
+| **SIWX**                | Sign-In-With-X, a wallet-control proof and reusable entitlement flow around a payment challenge.                                      |
+| **Owned task**          | Long-running work protected by an opaque access token; only its hash is stored.                                                       |
+| **Stable**              | Public npm packages verified from a clean project.                                                                                    |
+| **Next**                | The current repository surface, which may be ahead of or absent from npm.                                                             |
+
+Protocol names have narrower meanings than “agent commerce stack.” x402 and
+MPP negotiate payment; A2A describes discovery and agent interaction;
+ERC-8004 publishes identity and trust signals; AP2 specifies authorization and
+evidence concepts. Read [Protocols](/docs/protocols) for Lucid's exact coverage.

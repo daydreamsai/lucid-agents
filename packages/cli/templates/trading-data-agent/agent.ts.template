@@ -19,7 +19,7 @@ const appOptions = {
 /**
  * Trading Data Agent - Provides mock trading data
  *
- * This agent sells trading data to other agents via A2A.
+ * This agent sells trading data through Lucid's Agent Card and HTTP profile.
  * Entrypoints are priced and require payment.
  */
 addEntrypoint({

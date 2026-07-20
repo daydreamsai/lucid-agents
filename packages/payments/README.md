@@ -56,7 +56,7 @@ payments({
   config: {
     payTo: '0xabc0000000000000000000000000000000000000',
     facilitatorUrl: 'https://facilitator.example',
-    facilitatorAuth: process.env.FACILITATOR_AUTH,
+    facilitatorAuth: process.env.PAYMENTS_FACILITATOR_AUTH,
     network: 'eip155:84532',
     storage: { type: 'in-memory' },
   },
@@ -65,14 +65,14 @@ payments({
 
 Supported aliases normalize to CAIP-2 identifiers:
 
-| Alias           | Canonical network |
-| --------------- | ----------------- |
-| `base`          | `eip155:8453`     |
-| `base-sepolia`  | `eip155:84532`    |
-| `ethereum`      | `eip155:1`        |
-| `sepolia`       | `eip155:11155111` |
-| `solana`        | `solana:mainnet`  |
-| `solana-devnet` | `solana:devnet`   |
+| Alias           | Canonical network                         |
+| --------------- | ----------------------------------------- |
+| `base`          | `eip155:8453`                             |
+| `base-sepolia`  | `eip155:84532`                            |
+| `ethereum`      | `eip155:1`                                |
+| `sepolia`       | `eip155:11155111`                         |
+| `solana`        | `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` |
+| `solana-devnet` | `solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1` |
 
 `paymentsFromEnv(overrides?, env?)` reads:
 

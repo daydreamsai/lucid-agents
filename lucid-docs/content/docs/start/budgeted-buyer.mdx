@@ -4,13 +4,27 @@ description: Pay for x402 services from a server-side wallet with recipient and 
 icon: WalletCards
 status: stable
 verifiedVersion: 2.5.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
 Automatic payment is convenient; unrestricted automatic spending is not. A
 buyer should bind its wallet to an explicit recipient, per-request ceiling,
 and time-bounded total before wrapping Fetch.
+
+This Stable example targets x402 v2 `exact` payments on Base Sepolia. It is an
+EVM server-side buyer, not a general approval system or a Solana buyer.
+
+## Prerequisites
+
+- Install the exact Stable package set from [Install Lucid](/docs/start/install).
+- Use a dedicated Base Sepolia buyer wallet funded with testnet USDC and any
+  native gas required by the selected scheme/provider behavior.
+- Obtain the seller's canonical HTTPS endpoint and receiving address through a
+  trusted channel. Do not learn the allowlist only from the challenge you are
+  about to authorize.
+- Define a business operation ID and maximum acceptable price before calling
+  the service.
 
 ## Start with a server-only wallet
 
@@ -52,29 +66,99 @@ registerExactEvmScheme(client, {
 const paidFetch = wrapFetchWithPayment(policyFetch, client);
 ```
 
-The policy wrapper must sit **before** the x402 payment wrapper. It inspects the
-challenge and reserves budget before a signature is created. Use durable
-payment storage when multiple processes share a budget.
+The policy wrapper must sit **before** the x402 payment wrapper:
+
+```text
+application → x402 payment wrapper → policy wrapper → network Fetch
+```
+
+It inspects the unpaid x402 v2 requirement and reserves budget before a
+signature is created. It must select one valid requirement with the expected
+receiving address and an amount inside every policy group. A malformed,
+ambiguous, or disallowed challenge fails before signing.
+
+Use durable payment storage when multiple processes share a budget. The
+in-memory tracker above is intentionally a local proof.
 
 ## Call deliberately
 
-Pass an idempotency key that represents the business operation, not an
+Create and persist an idempotency key for the business operation, not an
 individual HTTP attempt:
 
 ```ts
+const operationId = `analysis:${documentId}:v1`;
+
 const response = await paidFetch(serviceUrl, {
   method: 'POST',
   headers: {
     'content-type': 'application/json',
-    'idempotency-key': crypto.randomUUID(),
+    'idempotency-key': operationId,
   },
   body: JSON.stringify({ input: { text: 'Analyze this once' } }),
 });
 ```
 
-Handle policy rejection separately from payment or fulfillment failure. A
-blocked payment is a control working as designed, not a reason to bypass the
+Require both successful fulfillment and settlement evidence:
+
+```ts
+if (!response.ok) {
+  const details = await response.text();
+  throw new Error(`Paid call failed (${response.status}): ${details}`);
+}
+
+const settlement = response.headers.get('PAYMENT-RESPONSE');
+if (!settlement) {
+  throw new Error('Priced call succeeded without settlement evidence');
+}
+
+const result = await response.json();
+console.log({ operationId, settlement, result });
+```
+
+Expected evidence is HTTP `200`, a `PAYMENT-RESPONSE` header, and output that
+matches the seller's advertised schema. Persist the operation ID, sanitized
+settlement/transaction reference, target, payee, amount, and fulfillment
+status for reconciliation.
+
+## Prove the controls work
+
+Before funding the wallet materially:
+
+1. set `maxPaymentUsd` below the advertised amount and expect
+   `403 policy_violation` without a signature;
+2. replace the allowlisted receiving address and confirm the same denial;
+3. issue two concurrent calls when only one fits under `maxTotalUsd` and
+   confirm only one reservation wins;
+4. retry one timed-out logical operation with the same idempotency key and
+   verify it does not create a second fulfilled charge;
+5. stop the process and confirm in-memory totals disappear—evidence that this
+   configuration is not production-safe.
+
+## Failure handling
+
+| Result                           | Meaning                                                          | Action                                                                       |
+| -------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `403 policy_violation`           | Recipient, amount, total, or rate rule blocked signing           | Stop or request a separate approval; never bypass automatically              |
+| `503 policy_storage_error`       | Budget state is unavailable or a paid retry lost its reservation | Stop signing and repair state                                                |
+| `402` after a paid retry         | Seller/facilitator rejected the credential                       | Inspect version, network, asset, balance, signature, and expiry              |
+| Timeout after signing            | Payment and fulfillment are unknown                              | Query application/provider state using the same operation ID before retrying |
+| `2xx` without `PAYMENT-RESPONSE` | Settlement evidence is missing                                   | Reconcile; do not assume the call was free or paid                           |
+
+A blocked payment is a control working as designed, not a reason to remove the
 wrapper.
 
-Next: [set policies and budgets](/docs/buy/policies-budgets) and
-[handle retries](/docs/buy/retries-idempotency).
+## Production delta
+
+- Replace the buyer key with a secret manager or remote signer and cap its
+  balance and transaction authority.
+- Replace in-memory tracking with one atomic store shared by every replica.
+- Add a deterministic approval tier for new recipients, networks, or amounts.
+- Allowlist the full HTTPS service URL and protect discovery against SSRF and
+  stale metadata.
+- Keep idempotency and payment records longer than the maximum retry/support
+  window, and rehearse process loss after signing.
+- Close trackers and runtimes during graceful shutdown.
+
+Next: [set policies and budgets](/docs/buy/policies-budgets),
+[handle retries](/docs/buy/retries-idempotency), and review the
+[buyer threat model](/docs/operate/security).

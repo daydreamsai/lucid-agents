@@ -28,17 +28,17 @@
     },
     "IDENTITY_INCLUDE_A2A": {
       "type": "boolean",
-      "description": "Include A2A service in registration services[]",
+      "description": "Include an A2A-labeled service entry in registration services[]. This metadata label does not make the generated project A2A v1 conformant.",
       "default": true
     },
     "IDENTITY_A2A_ENDPOINT": {
       "type": "string",
-      "description": "A2A service endpoint",
+      "description": "Endpoint advertised by the A2A-labeled identity service entry",
       "default": "https://agent.example.com/.well-known/agent-card.json"
     },
     "IDENTITY_A2A_VERSION": {
       "type": "string",
-      "description": "A2A protocol version",
+      "description": "Version metadata advertised by the A2A-labeled service entry; verify it against the behavior you actually expose",
       "default": "0.3.0"
     },
     "IDENTITY_INCLUDE_WEB": {
@@ -122,18 +122,18 @@
     },
     "PAYMENTS_FACILITATOR_URL": {
       "type": "string",
-      "description": "x402 facilitator endpoint URL for payment processing",
+      "description": "x402 facilitator endpoint. The template default is for development; choose and validate a production facilitator before launch.",
       "default": "https://facilitator.daydreams.systems",
       "format": "uri"
     },
     "PAYMENTS_FACILITATOR_AUTH": {
       "type": "string",
-      "description": "Optional bearer token for facilitator requests. If empty, runtime falls back to DREAMS_AUTH_TOKEN when available.",
+      "description": "Optional bearer token for facilitator requests. PAYMENTS_FACILITATOR_AUTH is canonical; DREAMS_AUTH_TOKEN remains a legacy fallback.",
       "default": ""
     },
     "PAYMENTS_NETWORK": {
       "type": "string",
-      "description": "Payment network (EVM or Solana)",
+      "description": "Wizard network alias. The generated runtime normalizes supported aliases; use the canonical CAIP-2 identifier when editing production configuration.",
       "default": "ethereum",
       "enum": [
         "ethereum",
@@ -152,7 +152,7 @@
     },
     "PAYMENTS_RECEIVABLE_ADDRESS": {
       "type": "string",
-      "description": "Payment address for static destination mode - Ethereum (0x...) or Solana (Base58) format depending on network. Separate from PRIVATE_KEY which is used for EVM identity registration. Can be shared across multiple agents.",
+      "description": "Payment address for static destination mode: an EVM 0x address or Solana Base58 address, depending on the network. It is independent of AGENT_WALLET_PRIVATE_KEY.",
       "default": "",
       "examples": [
         "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
@@ -188,9 +188,15 @@
       "description": "Auto-register agent on ERC-8004 identity registry at startup",
       "default": true
     },
-    "PRIVATE_KEY": {
+    "AGENT_WALLET_PRIVATE_KEY": {
       "type": "string",
-      "description": "Wallet private key for signing transactions (required for identity registration)",
+      "description": "Server-only local agent-wallet key used to sign ERC-8004 registration transactions when auto-registration is enabled.",
+      "default": "",
+      "examples": ["0x...", ""]
+    },
+    "DEVELOPER_WALLET_PRIVATE_KEY": {
+      "type": "string",
+      "description": "Optional server-only developer-wallet key for application-owned contract interactions. It is separate from the agent identity signer.",
       "default": "",
       "examples": ["0x...", ""]
     }
@@ -203,5 +209,5 @@
     "RPC_URL",
     "CHAIN_ID"
   ],
-  "notes": "This template requires a PRIVATE_KEY for on-chain identity registration. Ensure the wallet has sufficient gas for the target network."
+  "notes": "The current wizard defaults IDENTITY_AUTO_REGISTER to true, so review it before first start. On-chain auto-registration requires an AGENT_WALLET_PRIVATE_KEY (or another configured agent-wallet signer) with sufficient gas on CHAIN_ID. Payment receiving and DEVELOPER_WALLET_PRIVATE_KEY are separate concerns."
 }

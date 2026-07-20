@@ -1,6 +1,6 @@
 ---
-title: A2A Examples
-description: Multi-agent composition with discovery and task operations.
+title: Lucid multi-service task example
+description: Compose Agent Card-shaped discovery with Lucid-owned HTTP task operations.
 icon: Users
 status: next
 verifiedVersion: 0.6.3
@@ -8,9 +8,17 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-The A2A (Agent-to-Agent) examples demonstrate how agents discover each other, communicate, and compose into complex workflows.
+This example demonstrates how Lucid services discover cards and compose Lucid
+HTTP task operations.
 
-## Full Integration (Three Agents)
+<Callout type="warn">
+  The example does not use an official A2A v1 JSON-RPC, gRPC, or HTTP+JSON
+  binding. `/entrypoints`, `/tasks`, the task states, `message.content`, access
+  token, and SSE events are Lucid contracts. `A2A-Version` and the A2A TCK are
+  not implemented.
+</Callout>
+
+## Full integration (three Lucid services)
 
 **File:** `packages/examples/src/a2a/full-integration.ts`
 
@@ -24,11 +32,11 @@ Agent 3 (Client) → Agent 2 (Facilitator) → Agent 1 (Worker)
 
 ### Architecture
 
-| Agent | Role | Description |
-|-------|------|-------------|
-| Agent 1 | Worker | Does the actual work (echo, process, stream) |
+| Agent   | Role        | Description                                           |
+| ------- | ----------- | ----------------------------------------------------- |
+| Agent 1 | Worker      | Does the actual work (echo, process, stream)          |
 | Agent 2 | Facilitator | Receives calls, delegates to Agent 1, returns results |
-| Agent 3 | Client | Initiates requests to Agent 2 |
+| Agent 3 | Client      | Initiates requests to Agent 2                         |
 
 ### The code
 
@@ -56,7 +64,8 @@ const agent1 = await createAgent({
   .use(a2a())
   .build();
 
-const { app: app1, addEntrypoint: addEntrypoint1 } = await createAgentApp(agent1);
+const { app: app1, addEntrypoint: addEntrypoint1 } =
+  await createAgentApp(agent1);
 
 addEntrypoint1({
   key: 'echo',
@@ -81,10 +90,13 @@ const agent2 = await createAgent({
   .use(a2a())
   .build();
 
-const { app: app2, addEntrypoint: addEntrypoint2, runtime: runtime2 } =
-  await createAgentApp(agent2);
+const {
+  app: app2,
+  addEntrypoint: addEntrypoint2,
+  runtime: runtime2,
+} = await createAgentApp(agent2);
 
-// Get A2A client from facilitator
+// Get the Lucid Agent Card/task client from the facilitator runtime
 const a2aClient = runtime2.a2a;
 
 addEntrypoint2({
@@ -99,18 +111,12 @@ addEntrypoint2({
     const agent1Card = await a2aClient.fetchCard('http://localhost:8787');
 
     // Create task on Agent 1
-    const taskAccess = await a2aClient.client.sendMessage(
-      agent1Card,
-      'echo',
-      { text: ctx.input.text }
-    );
+    const taskAccess = await a2aClient.client.sendMessage(agent1Card, 'echo', {
+      text: ctx.input.text,
+    });
 
     // Wait for result
-    const task = await waitForTask(
-      a2aClient.client,
-      agent1Card,
-      taskAccess
-    );
+    const task = await waitForTask(a2aClient.client, agent1Card, taskAccess);
 
     if (task.status === 'failed') {
       throw new Error(task.error?.message || 'Task failed');
@@ -145,19 +151,19 @@ console.log('Final result:', result.result?.output);
 // Output: { text: "Echo: Hello from Agent 3!" }
 ```
 
-### Key patterns explained
+### Lucid profile patterns
 
-#### Agent discovery
+#### Agent Card-shaped discovery
 
 Fetch another agent's capabilities at runtime:
 
 ```typescript
 const card = await fetchAgentCard('https://other-agent.com');
 
-console.log(card.name);                    // Agent name
-console.log(card.skills);                  // Available entrypoints
-console.log(hasCapability(card, 'streaming'));  // Check capabilities
-console.log(supportsPayments(card));       // Check payment support
+console.log(card.name); // Agent name
+console.log(card.skills); // Available entrypoints
+console.log(hasCapability(card, 'streaming')); // Check capabilities
+console.log(supportsPayments(card)); // Check payment support
 ```
 
 #### Task-based operations
@@ -196,13 +202,10 @@ const first = await client.sendMessage(
 );
 
 // Second message reuses the same owner and conversation
-await client.sendMessage(
-  card,
-  'chat',
-  { text: 'Tell me more' },
-  undefined,
-  { contextId, accessToken: first.accessToken }
-);
+await client.sendMessage(card, 'chat', { text: 'Tell me more' }, undefined, {
+  contextId,
+  accessToken: first.accessToken,
+});
 
 // List all messages in conversation
 const { tasks } = await client.listTasks(card, first.accessToken, {
@@ -217,7 +220,7 @@ Cancel a running task:
 ```typescript
 try {
   const cancelled = await client.cancelTask(card, taskAccess);
-  console.log('Cancelled:', cancelled.status);  // 'cancelled'
+  console.log('Cancelled:', cancelled.status); // 'cancelled'
 } catch (error) {
   // Task may have already completed
   const task = await client.getTask(card, taskAccess);
@@ -261,11 +264,14 @@ STEP 6: A2A Composition (Agent 3 -> Agent 2 -> Agent 1)
 Final result at Agent 3: {"text":"Echo: Hello from Agent 3!"}
 ```
 
-### Why this matters
+### What this proves—and does not
 
-This pattern enables:
+The example proves card lookup, Lucid task ownership, polling, composition, and
+remote-output validation across three local services. It does not prove A2A v1
+interoperability, marketplace publication, production load balancing, durable
+task recovery, payment settlement, or trust in a discovered origin.
 
-- **Agent marketplaces** - Agents discover and call other agents
-- **Supply chains** - Requests flow through multiple specialized agents
-- **Load balancing** - Facilitators can route to different workers
-- **Abstraction** - Clients don't need to know about underlying workers
+For production, add an origin/SSRF allowlist, durable `TaskStore`, task-token
+secret handling, target idempotency, payment policy, timeouts, and trace
+correlation. See [A2A compatibility](/docs/protocols/a2a) and the
+[`@lucid-agents/a2a` reference](/docs/packages/a2a).

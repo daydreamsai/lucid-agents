@@ -1,128 +1,92 @@
-## {{AGENT_NAME}}
+# {{AGENT_NAME}}
 
-This project was scaffolded with `@lucid-agents/cli` and includes **ERC-8004 identity registration** built on [`@lucid-agents/core`](https://www.npmjs.com/package/@lucid-agents/core) and [`@lucid-agents/identity`](https://www.npmjs.com/package/@lucid-agents/identity).
+Generated Lucid service with wallet, payments, HTTP, and draft ERC-8004
+identity/trust metadata.
 
-### Features
+ERC-8004 is Draft. Registration advertises an identity and service document; it
+does not prove the service is safe, correct, available, or reputable.
 
-- ✅ ERC-8004 on-chain identity registration
-- ✅ Automatic trust metadata in agent manifest
-- ✅ x402 payment support
-- ✅ Access to all three registries (Identity, Reputation, Validation)
-- ✅ Domain ownership proof signing
+## Review before running
 
-### Quick start
+Copy and edit the environment file:
 
-1. **Set up your environment:**
-
-   ```sh
-   cp .env.example .env
-   # Edit .env and add your PRIVATE_KEY
-   ```
-
-   The private key is used to:
-
-   - Register your agent on-chain (ERC-8004 Identity Registry)
-   - Sign domain ownership proofs
-
-   By default, the agent is configured for **Base Sepolia testnet**. If you want to use a different network, update `CHAIN_ID` and `RPC_URL` in your `.env` file.
-
-2. **Install dependencies:**
-
-   ```sh
-   bun install
-   ```
-
-3. **Run the agent:**
-   ```sh
-   bun run dev
-   ```
-
-The agent will:
-
-- Check if it's registered on the ERC-8004 Identity Registry
-- Auto-register if not found (when `AUTO_REGISTER=true`)
-- Sign a domain ownership proof
-- Include trust metadata in `/.well-known/agent.json`
-
-### Project structure
-
-- `src/agent.ts` – Agent definition with identity bootstrap and entrypoints
-- `src/index.ts` – HTTP server that serves the agent
-
-### Default entrypoints
-
-- `echo` – Echo input text
-
-### ERC-8004 Registries
-
-Your agent has access to all three registries:
-
-```typescript
-import { identityClient, reputationClient, validationClient } from "./agent";
-
-// Give feedback to another agent
-await reputationClient.giveFeedback({
-  toAgentId: 42n,
-  value: 90,
-  valueDecimals: 0,
-  tag1: "helpful",
-  tag2: "reliable",
-  endpoint: "https://agent.example.com/api", // Optional parameter (defaults to empty string if not provided)
-});
-
-// Create a validation request (function renamed: createRequest → validationRequest)
-await validationClient.validationRequest({
-  validatorAddress: "0x...",
-  agentId: 1n,
-  requestUri: "ipfs://...",
-  requestBody: '{"input":"work-data"}',
-});
+```bash
+cp .env.example .env
 ```
 
-### Environment Variables
+At minimum, set the intended `AGENT_DOMAIN`, `RPC_URL`, and `CHAIN_ID`. Set
+`AGENT_WALLET_TYPE=local` plus `AGENT_WALLET_PRIVATE_KEY` only when the identity
+operation needs that signer. Keep `IDENTITY_AUTO_REGISTER=false` until you have
+verified the chain, registry address, domain/agent URI, gas funding, and
+on-chain side effect.
 
-**Required:**
+Payment receiving is independent. Configure the full `PAYMENTS_*` group only
+for priced entrypoints.
 
-- `PRIVATE_KEY` – Your wallet's private key for signing transactions and payments
+## Run and verify
 
-**Pre-configured from setup:**
+```bash
+bun install
+bun run type-check
+bun run build
+bun run dev
+```
 
-- `AGENT_DOMAIN` – Configured during agent creation
-- `PAYMENTS_FACILITATOR_URL`, `PAYMENTS_RECEIVABLE_ADDRESS`, `PAYMENTS_NETWORK` – Payment settings from setup
+Verify the adapter's health route and fetch:
 
-**Optional:**
+```bash
+curl -i http://localhost:3000/.well-known/agent-card.json
+curl -i http://localhost:3000/.well-known/oasf-record.json
+```
 
-- `RPC_URL` – Blockchain RPC endpoint (default: Base Sepolia)
-- `CHAIN_ID` – Chain ID (default: 84532 for Base Sepolia)
+The runtime may use `/api/agent` for TanStack/Next. The registration document
+must be hosted at the exact `agentURI` recorded on-chain, commonly:
 
-**Optional (server):**
+```text
+https://agent.example.com/.well-known/agent-registration.json
+```
 
-- `PORT` – HTTP server port (default: 3000)
+Printing a document locally is not proof that the public URI serves it.
 
-> **Note:** ERC-8004 registry addresses are automatically configured using CREATE2 deterministic addresses. You don't need to specify them.
+## Identity runtime
 
-### Available scripts
+Read the extension result instead of bootstrapping identity a second time:
 
-- `bun run dev` – Start with hot reload
-- `bun run start` – Start once
-- `bun run agent` – Run agent module directly
-- `bunx tsc --noEmit` – Type-check
+```ts
+const result = agent.identity?.result;
 
-### Next steps
+if (!result?.record) {
+  throw new Error('Required identity was not resolved');
+}
 
-1. **Deploy your agent** - Both well-known files are auto-served:
+export const identityClient = result.clients?.identity;
+export const reputationClient = result.clients?.reputation;
+```
 
-   - `/.well-known/agent-card.json` - Full agent manifest
-   - `/.well-known/agent-registration.json` - ERC-8004 registration file (only if registered)
+Identity and reputation clients may be available after successful registry
+setup. The validation client is deprecated and is not created by default.
 
-2. **Customize your agent** in `src/agent.ts`
+Domain proof helpers are standalone exports (`buildDomainProofMessage()` and
+`signDomainProof()`), not methods on `agent.identity`.
 
-3. **Add more entrypoints** with different capabilities
+## Registration services and OASF
 
-4. **Deploy** to your favorite platform
+Enable only services you actually host. The package name includes `a2a`, but
+the generated Agent Card/Lucid task profile is not the official A2A v1 binding.
 
-### Learn more
+When `IDENTITY_INCLUDE_OASF=true`, all five authors/skills/domains/modules/
+locators JSON arrays in `.env.example` are required; module and locator values
+must be valid URIs.
 
-- [Core Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/core/README.md)
-- [Identity Kit Documentation](https://github.com/lucid-dreams/lucid-agents/blob/master/packages/identity/README.md)
-- [ERC-8004 Specification](https://eips.ethereum.org/EIPS/eip-8004)
+## Production boundary
+
+- Separate the identity signer from buyer/admin wallets where possible.
+- Use a secret manager and test key rotation/revocation.
+- Pin and verify chain/registry contracts; do not trust an RPC response alone.
+- Publish/fetch the registration and Agent Card through the real proxy/origin.
+- Treat registration and reputation as signals, not authorization.
+- Keep payments/idempotency durable before multiple replicas.
+- Call the runtime close path during graceful shutdown.
+
+See `AGENTS.md` for the generated composition and repository docs for the exact
+draft ERC-8004, wallet, environment, and release-channel contracts.

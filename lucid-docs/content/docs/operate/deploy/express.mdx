@@ -1,19 +1,178 @@
 ---
 title: Deploy with Express
-description: Bridge an existing Node/Express server to the shared Fetch handlers.
+description: Bridge Node request/response streams to Lucid's canonical Fetch handlers without consuming payment bodies twice.
 icon: Server
 status: next
 verifiedVersion: 0.6.0
-verifiedAt: 2026-07-20
+verifiedAt: 2026-07-21
 product: sdk
 ---
 
-```ts
-const { app } = await createAgentApp(runtime);
-const server = app.listen(Number(process.env.PORT ?? 3000));
+Use Express when Lucid must live inside a Node-style application. The adapter
+creates an Express app, turns the original incoming stream into a Web
+`Request`, calls the canonical route handler, and pipes the Web `Response` back
+to Node.
+
+The bridge must see the original body. A global body parser mounted before
+Lucid can consume it and break invoke, stream, task, or payment verification.
+
+## Bind routes with correct middleware order
+
+```typescript
+import { createAgentApp } from '@lucid-agents/express';
+
+export const runtime = await buildRuntime();
+
+const { app: agentApp, addEntrypoint } = await createAgentApp(runtime, {
+  beforeMount(app) {
+    app.disable('x-powered-by');
+    app.set('trust proxy', 1); // Match the exact trusted proxy topology.
+    app.use(securityHeadersMiddleware);
+  },
+  afterMount(app) {
+    app.get('/ready', async (_request, response) => {
+      const ready = await checkRequiredDependencies();
+      response.status(ready ? 200 : 503).json({ ready });
+    });
+    app.use(redactedErrorMiddleware);
+  },
+});
+
+addEntrypoint(capability);
+export const app = agentApp;
 ```
 
-Do not place body parsing or custom payment middleware in front of canonical
-Lucid routes unless the adapter documentation requires it. Preserve streaming
-and abort behavior through the Node/Web bridge. See the
-[Express reference](/docs/packages/express).
+If this app is mounted in a larger Express application, put it before the
+larger application's `express.json()`/`urlencoded()` middleware, or explicitly
+exclude every Lucid base-path route from those parsers:
+
+```typescript
+const root = express();
+root.use(agentApp);
+root.use(express.json({ limit: '256kb' })); // Non-Lucid routes only.
+```
+
+When `http({ basePath: '/api/agent' })` already prefixes Lucid routes, mount the
+adapter at root. Do not mount it again at `/api/agent`.
+
+## Start and stop the server
+
+```typescript title="src/index.ts"
+import { app, runtime } from './lib/agent';
+
+const port = Number(process.env.PORT ?? 3000);
+const server = app.listen(port, () => {
+  console.log(`Listening on ${port}`);
+});
+
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}; draining`);
+
+  await new Promise<void>((resolve, reject) => {
+    server.close(error => (error ? reject(error) : resolve()));
+  });
+  await runtime.close();
+}
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(signal, () => {
+    void shutdown(signal).then(
+      () => process.exit(0),
+      error => {
+        console.error('Shutdown failed', error);
+        process.exit(1);
+      }
+    );
+  });
+}
+```
+
+The platform should remove readiness before sending the termination signal and
+allow enough grace time for bounded invokes/streams. Force-close only after the
+deadline and preserve durable leases for recovery.
+
+## Proxy and public URL
+
+The adapter builds the Web Request URL from Express protocol, host, and
+`originalUrl`. Configure `trust proxy` only for known proxy hops so an untrusted
+client cannot forge public scheme/host metadata. Verify generated Agent Card
+interface URLs against the external origin after deploy.
+
+At the reverse proxy:
+
+- enforce request/header limits before Express without rewriting the signed
+  target unexpectedly;
+- forward host/proto consistently;
+- disable caching/transformation for payment responses;
+- preserve duplicate/set-cookie semantics required by the app;
+- set TLS and security headers at one reviewed layer.
+
+## SSE streaming
+
+The adapter converts the Web response body to a Node stream and pipes it to
+Express. Do not enable buffering compression middleware for
+`text/event-stream`. Configure proxy buffering off, flush headers, retain
+connection-close/abort propagation, and set idle timeouts beyond the maximum
+documented stream.
+
+Test streaming through the exact load balancer and CDN, not only against
+localhost. A server can pass unit tests while the proxy releases every event at
+the end.
+
+## Storage, replicas, and workers
+
+The same rules as other adapters apply:
+
+- in-memory payment, SIWX, idempotency, task, and scheduler state is per
+  process;
+- SQLite is a one-persistent-host option for payment/SIWX only;
+- multiple replicas need shared Postgres payment/SIWX and custom durable
+  idempotency/task/scheduler ports;
+- MPP challenge/replay state remains process-local;
+- scheduler timers and recoverable tasks belong in long-lived workers with
+  correct shared leases.
+
+Apply migrations separately before readiness, bound database pools per replica,
+and close the runtime during shutdown.
+
+## Container and process manager
+
+The generated Express project builds a Bun-targeted `dist/index.js` and starts
+it with `bun run start`. Use the same pinned OCI pattern as the
+[Hono guide](/docs/operate/deploy/hono), or configure a process manager to send
+`SIGTERM`, observe readiness/drain, and restart only after exit.
+
+Do not use cluster/multiple processes with in-memory budgets or idempotency.
+Each worker would enforce an independent limit.
+
+## Canary and diagnostics
+
+```bash
+curl --fail https://service.example/health
+curl --fail https://service.example/.well-known/agent-card.json
+curl -i https://service.example/entrypoints/quote/invoke \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: deploy-express-canary-000001' \
+  --data '{"input":{"symbol":"ETH"}}'
+```
+
+Require `402` for the unpaid canary, then one low-limit paid `2xx` with
+`PAYMENT-RESPONSE`, schema-valid output, and matching external/local records.
+Also test invalid JSON after middleware composition, a long SSE stream through
+the proxy, graceful `SIGTERM`, restart, and same-key replay.
+
+| Symptom                                 | Likely deployment cause                             |
+| --------------------------------------- | --------------------------------------------------- |
+| Invalid/empty body only in Express      | Parser consumed the request before the bridge       |
+| Agent Card uses `http` or internal host | Trusted proxy/forwarded host configuration is wrong |
+| Stream arrives all at once              | Proxy or compression middleware buffered SSE        |
+| Duplicate spend after scaling           | Per-process storage remained enabled                |
+| Requests fail during deploy             | Readiness/drain/termination grace is incomplete     |
+
+Roll back only to a store-schema-compatible image and preserve payment evidence.
+See the [Express package reference](/docs/packages/express),
+[durable storage](/docs/operate/durable-storage), and
+[deployment overview](/docs/operate/deploy).
