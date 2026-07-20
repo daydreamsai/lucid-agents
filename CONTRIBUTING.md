@@ -228,6 +228,28 @@ SDK exports and generated route trees are excluded from export analysis; edit
 their generators rather than generated output when a generated artifact needs to
 change. Build output and local `.context` artifacts are excluded entirely.
 
+### Documentation contracts
+
+Run the documentation contract suite before changing SDK examples, workspace
+packages, or the documentation navigation:
+
+```bash
+bun run test:docs
+```
+
+In addition to content metadata, redirects, internal links, and executable
+golden paths, this command checks three repository-derived drift contracts:
+
+- every page and nested group is represented exactly once by its local
+  `meta.json` navigation;
+- every public `@lucid-agents/*` workspace has a package reference or an
+  explicit product relocation, with no references left for removed packages;
+- every Lucid repository file linked as example source or a changelog exists in
+  the current checkout.
+
+Run only the structural drift checker with `bun run docs:drift`. Pull requests
+run the complete documentation contract suite in the documentation CI job.
+
 ### Writing Tests
 
 Tests are located in `__tests__/` directories within each package.

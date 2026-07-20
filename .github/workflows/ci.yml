@@ -153,7 +153,7 @@ jobs:
       - run: bun run test:portability
 
   docs:
-    name: Documentation types and build
+    name: Documentation contracts and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -163,7 +163,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run build:packages
-      - run: bun run test:docs
+      - name: Test documentation content and drift contracts
+        run: bun run test:docs
       - run: bun run --cwd lucid-docs types:check
       - run: bun run test:docs-stable
       - run: bun run --cwd lucid-docs build
