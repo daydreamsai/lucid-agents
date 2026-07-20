@@ -24,6 +24,9 @@
   },
   "include": [
     "src",
-    "tests"
+    "tests",
+    "adapters/ui/src/lib/invocation-state.ts",
+    "adapters/ui/src/lib/service-client.ts",
+    "adapters/ui/src/lib/service-utils.ts"
   ]
 }

@@ -24,6 +24,7 @@ const ADAPTERS = [
 type Adapter = (typeof ADAPTERS)[number];
 
 const repoRoot = resolve(import.meta.dir, '..');
+const preserveGeneratedProjects = Bun.env.GENERATED_PROJECT_KEEP === 'true';
 
 async function run(
   command: string[],
@@ -127,33 +128,68 @@ async function verifyAdapter(
     root
   );
   const projectDir = join(root, projectName);
-  await usePackedWorkspaces(projectDir, packed);
-  await run(['bun', 'install'], projectDir);
-  await run(['bun', 'run', 'type-check'], projectDir);
-  await run(['bun', 'run', 'build'], projectDir);
-
-  const port = await allocatePort();
-  const healthPath =
-    adapter === 'hono' || adapter === 'express'
-      ? '/health'
-      : '/api/agent/health';
-  const process = await startTestProcess({
-    command: ['bun', 'run', 'start'],
-    cwd: projectDir,
-    env: { PORT: String(port) },
-    readyUrl: `http://127.0.0.1:${port}${healthPath}`,
-    timeoutMs: 30_000,
-  });
   try {
-    const health = await fetch(`${process.origin}${healthPath}`);
-    if (!health.ok) {
-      throw new Error(`${adapter} health returned ${health.status}`);
+    await usePackedWorkspaces(projectDir, packed);
+    await run(['bun', 'install', '--no-cache'], projectDir);
+    await run(['bun', 'run', 'type-check'], projectDir);
+    await run(['bun', 'run', 'build'], projectDir);
+
+    const port = await allocatePort();
+    const healthPath =
+      adapter === 'hono' || adapter === 'express'
+        ? '/health'
+        : '/api/agent/health';
+    const process = await startTestProcess({
+      command: ['bun', 'run', 'start'],
+      cwd: projectDir,
+      env: { PORT: String(port) },
+      readyUrl: `http://127.0.0.1:${port}${healthPath}`,
+      timeoutMs: 30_000,
+    });
+    try {
+      const health = await fetch(`${process.origin}${healthPath}`);
+      if (!health.ok) {
+        throw new Error(`${adapter} health returned ${health.status}`);
+      }
+      const body = (await health.json()) as { ok?: boolean };
+      if (body.ok !== true)
+        throw new Error(`${adapter} health payload was invalid`);
+
+      const cardResponse = await fetch(
+        `${process.origin}/.well-known/agent-card.json`
+      );
+      if (!cardResponse.ok) {
+        throw new Error(
+          `${adapter} Agent Card returned ${cardResponse.status}`
+        );
+      }
+      const card = (await cardResponse.json()) as { name?: string };
+      if (card.name !== projectName) {
+        throw new Error(
+          `${adapter} Agent Card identity was ${card.name ?? 'missing'}, expected ${projectName}`
+        );
+      }
+
+      const home = await fetch(process.origin);
+      if (!home.ok) {
+        const responseBody = await home.text();
+        throw new Error(
+          `${adapter} service page returned ${home.status}\n${responseBody}\n${process.output()}`
+        );
+      }
+      const html = await home.text();
+      if (!html.includes(card.name)) {
+        throw new Error(
+          `${adapter} service page did not render the public agent identity`
+        );
+      }
+    } finally {
+      await process.stop();
     }
-    const body = (await health.json()) as { ok?: boolean };
-    if (body.ok !== true)
-      throw new Error(`${adapter} health payload was invalid`);
   } finally {
-    await process.stop();
+    if (!preserveGeneratedProjects) {
+      await rm(projectDir, { recursive: true, force: true });
+    }
   }
 }
 
@@ -183,5 +219,11 @@ try {
     console.log(`verified generated ${adapter} project from packed workspaces`);
   }
 } finally {
-  await rm(temporaryRoot, { recursive: true, force: true });
+  if (preserveGeneratedProjects) {
+    const rootFile = Bun.env.GENERATED_PROJECT_ROOT_FILE;
+    if (rootFile) await writeFile(rootFile, `${temporaryRoot}\n`);
+    console.log(`kept generated projects at ${temporaryRoot}`);
+  } else {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 }

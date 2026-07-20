@@ -31,14 +31,8 @@ const projectId =
   process.env.NEXT_PUBLIC_PROJECT_ID ??
   process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID;
 
-if (!projectId) {
-  throw new Error(
-    'NEXT_PUBLIC_PROJECT_ID or NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID is required'
-  );
-}
-
 const metadata = {
-  name: 'Lucid Agent Platform',
+  name: 'Agent Service',
   description: 'Full-stack agent platform with x402 micropayments',
   url: typeof window !== 'undefined' ? window.location.origin : '',
   icons: [],
@@ -46,14 +40,14 @@ const metadata = {
 
 const wagmiAdapter = new WagmiAdapter({
   networks,
-  projectId,
+  projectId: projectId ?? '',
   ssr: true,
   storage: createStorage({ storage: cookieStorage }),
 });
 
 const solanaAdapter = new SolanaAdapter();
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && projectId) {
   createAppKit({
     adapters: [wagmiAdapter, solanaAdapter],
     networks,

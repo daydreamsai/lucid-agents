@@ -30,7 +30,7 @@ if (!projectId) {
 
 // 2. Create a metadata object - optional
 const metadata = {
-  name: 'Lucid Agent Platform',
+  name: 'Agent Service',
   description: 'Full-stack agent platform with x402 micropayments',
   url: typeof window !== 'undefined' ? window.location.origin : '',
   icons: [],

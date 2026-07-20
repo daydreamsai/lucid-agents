@@ -93,7 +93,10 @@ addEntrypoint({
   'tanstack-ui': {
     id: 'tanstack-ui',
     displayName: 'TanStack Start (UI)',
-    baseFilesDirs: [join(ADAPTER_FILES_ROOT, 'tanstack', 'headless')],
+    baseFilesDirs: [
+      join(ADAPTER_FILES_ROOT, 'tanstack', 'headless'),
+      join(ADAPTER_FILES_ROOT, 'ui'),
+    ],
     filesDir: join(ADAPTER_FILES_ROOT, 'tanstack', 'ui'),
     placeholderTargets: ['src/lib/agent.ts.template'],
     httpBasePath: '/api/agent',
@@ -160,6 +163,7 @@ runtime.entrypoints.add({
   next: {
     id: 'next',
     displayName: 'Next.js',
+    baseFilesDirs: [join(ADAPTER_FILES_ROOT, 'ui', 'src')],
     filesDir: join(ADAPTER_FILES_ROOT, 'next'),
     placeholderTargets: ['lib/agent.ts.template'],
     httpBasePath: '/api/agent',

@@ -28,6 +28,18 @@ export function buildAgentManifest({
       output_schema: entrypoint.output
         ? z.toJSONSchema(entrypoint.output)
         : undefined,
+      payment_protocol: entrypoint.paymentProtocol,
+      network: entrypoint.network,
+      authorization: entrypoint.siwx
+        ? {
+            siwx: {
+              enabled: entrypoint.siwx.enabled !== false,
+              auth_only: entrypoint.siwx.authOnly === true,
+              statement: entrypoint.siwx.statement,
+              network: entrypoint.siwx.network,
+            },
+          }
+        : undefined,
     };
     entrypoints[entrypoint.key] = manifestEntrypoint;
   }

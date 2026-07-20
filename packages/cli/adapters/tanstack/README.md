@@ -12,7 +12,7 @@ Full-stack React application with:
 - TanStack Query (data fetching)
 - Tailwind CSS styling
 - Reown AppKit wallet integration
-- Pre-built dashboard UI
+- Shared agent service storefront
 - Schema forms for testing entrypoints
 
 ### Headless Variant (`tanstack/headless/`)

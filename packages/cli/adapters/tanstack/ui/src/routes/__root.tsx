@@ -1,9 +1,6 @@
-import { TanStackDevtools } from '@tanstack/react-devtools';
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
-import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools';
 
 import { AppKitProvider } from '../components/AppkitProvider';
-import Header from '../components/Header';
 import appCss from '../styles/global.css?url';
 
 export const Route = createRootRoute({
@@ -17,7 +14,7 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Lucid Agent Platform',
+        title: 'Agent service',
       },
     ],
     links: [
@@ -38,21 +35,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AppKitProvider>
-          <Header />
-          {children}
-        </AppKitProvider>
-        <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
-          plugins={[
-            {
-              name: 'Tanstack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
+        <AppKitProvider>{children}</AppKitProvider>
         <Scripts />
       </body>
     </html>

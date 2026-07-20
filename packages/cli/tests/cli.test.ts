@@ -360,16 +360,16 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
     );
-    const dashboardLoader = await readFile(
-      join(projectDir, 'src/lib/dashboard-loader.ts'),
-      'utf8'
-    );
-    const paymentApi = await readFile(
-      join(projectDir, 'src/lib/api.ts'),
-      'utf8'
-    );
-    const aboutRoute = await readFile(
-      join(projectDir, 'src/routes/about.tsx'),
+    await Promise.all([
+      readFile(join(projectDir, 'src/lib/service-client.ts'), 'utf8'),
+      readFile(
+        join(projectDir, 'src/components/service-storefront.tsx'),
+        'utf8'
+      ),
+      readFile(join(projectDir, 'src/styles/service.css'), 'utf8'),
+    ]);
+    const startTypes = await readFile(
+      join(projectDir, 'src/tanstack-start.d.ts'),
       'utf8'
     );
     const pkg = (await readJson(join(projectDir, 'package.json'))) as Record<
@@ -391,22 +391,15 @@ describe('create-agent-kit CLI', () => {
     expect(faviconRoute).toContain('handlers.favicon({ request })');
     expect(routeTree).toContain("'/api/agent/'");
     expect(routeTree).toContain('/api/agent/favicon.svg');
-    expect(routeTree).toContain("'/about'");
-    expect(dashboardRoute).toContain('WalletSummary');
-    expect(dashboardRoute).not.toContain('entrypointLabel');
-    expect(dashboardRoute).not.toContain('setHealthData');
-    expect(dashboardRoute).toMatch(/runtime\.entrypoints\s*\.snapshot\(\)/);
-    expect(dashboardRoute).not.toContain('agent.listEntrypoints()');
-    expect(dashboardRoute).not.toContain('configPayments.defaultPrice');
-    expect(dashboardLoader).toMatch(/runtime\.entrypoints\s*\.snapshot\(\)/);
-    expect(dashboardLoader).toContain('runtime.agent.config.meta');
-    expect(paymentApi).toContain('new mod.x402Client()');
-    expect(paymentApi).toContain('new evm.ExactEvmScheme');
-    expect(paymentApi).not.toContain('wrapFetchWithPayment(fetch, signer)');
-    expect(dashboardRoute).toContain('from "@x402/fetch"');
-    expect(dashboardRoute).toContain('ExactEvmScheme');
-    expect(dashboardRoute).not.toContain('x402-fetch');
-    expect(aboutRoute).not.toContain('x402-fetch');
+    expect(routeTree).not.toContain("'/about'");
+    expect(dashboardRoute).toContain('buildServicePageModel');
+    expect(dashboardRoute).toContain('handlers.manifest');
+    expect(dashboardRoute).not.toContain('runtime.entrypoints');
+    expect(dashboardRoute).not.toContain('runtime.agent.config.meta');
+    expect(startTypes).toContain("import type {} from '@tanstack/react-start'");
+    await expect(
+      readFile(join(projectDir, 'src/routes/about.tsx'), 'utf8')
+    ).rejects.toThrow();
     expect(routeTree).toContain('/api/agent/.well-known/agent-card.json');
     expect(routeTree).toContain('/api/agent/.well-known/agent.json');
     expect(routeTree).toContain('/api/agent/.well-known/oasf-record.json');
@@ -415,11 +408,16 @@ describe('create-agent-kit CLI', () => {
     ).toBe(true);
     expect(deps['@wagmi/connectors']).toBe('6.2.0');
     expect(deps['@wagmi/core']).toBe('2.22.1');
+    expect(deps['@x402/svm']).toBe('2.2.0');
+    expect(deps['@lucid-agents/types']).toBe('latest');
     expect(deps['@tailwindcss/vite']).toBeUndefined();
     expect(devDeps['@tailwindcss/vite']).toBe('^4.1.16');
+    expect((pkg.scripts as Record<string, string>).start).toBe(
+      'node --env-file=.env .output/server/index.mjs'
+    );
     expect(Object.values(deps)).not.toContain('catalog:');
     expect(Object.values(deps)).not.toContain('workspace:*');
-    expect(getAdapterDefinition('tanstack-ui').baseFilesDirs).toHaveLength(1);
+    expect(getAdapterDefinition('tanstack-ui').baseFilesDirs).toHaveLength(2);
   });
 
   it('scaffolds projects with the Next.js adapter', async () => {
@@ -475,14 +473,15 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'app/api/agent/favicon.svg/route.ts'),
       'utf8'
     );
-    const paymentApiSrc = await readFile(
-      join(projectDir, 'lib/api.ts'),
+    await Promise.all([
+      readFile(join(projectDir, 'lib/service-client.ts'), 'utf8'),
+      readFile(join(projectDir, 'components/service-storefront.tsx'), 'utf8'),
+    ]);
+    const appKitProviderSrc = await readFile(
+      join(projectDir, 'components/AppKitProvider.tsx'),
       'utf8'
     );
-    const dashboardSrc = await readFile(
-      join(projectDir, 'components/dashboard.tsx'),
-      'utf8'
-    );
+    const pageSrc = await readFile(join(projectDir, 'app/page.tsx'), 'utf8');
     const envFile = await readFile(join(projectDir, '.env'), 'utf8');
     const pkg = (await readJson(join(projectDir, 'package.json'))) as Record<
       string,
@@ -503,14 +502,13 @@ describe('create-agent-kit CLI', () => {
     expect(canonicalOasfRouteSrc).toContain('handlers.oasf(request)');
     expect(landingRouteSrc).toContain('handlers.landing?.(request)');
     expect(faviconRouteSrc).toContain('handlers.favicon(request)');
-    expect(paymentApiSrc).toContain('new mod.x402Client()');
-    expect(paymentApiSrc).toContain('new evm.ExactEvmScheme');
-    expect(paymentApiSrc).not.toContain(
-      'wrapFetchWithPayment(baseFetcher, signer)'
+    expect(appKitProviderSrc).toContain("projectId: projectId ?? ''");
+    expect(appKitProviderSrc).not.toContain(
+      'NEXT_PUBLIC_PROJECT_ID or NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID is required'
     );
-    expect(dashboardSrc).toContain('from "@x402/fetch"');
-    expect(dashboardSrc).toContain('ExactEvmScheme');
-    expect(dashboardSrc).not.toContain('x402-fetch');
+    expect(pageSrc).toContain('buildServicePageModel');
+    expect(pageSrc).toContain('handlers.manifest');
+    expect(pageSrc).not.toContain('runtime.manifest');
     await expect(
       readFile(join(projectDir, 'proxy.ts'), 'utf8')
     ).rejects.toThrow();
@@ -520,6 +518,8 @@ describe('create-agent-kit CLI', () => {
     expect(pkg.dependencies?.next).toBeDefined();
     expect(pkg.dependencies?.['@wagmi/connectors']).toBe('6.2.0');
     expect(pkg.dependencies?.['@wagmi/core']).toBe('2.22.1');
+    expect(pkg.dependencies?.['@x402/svm']).toBe('2.2.0');
+    expect(pkg.dependencies?.['@lucid-agents/types']).toBe('latest');
     expect(pkg.dependencies?.['@x402/next']).toBeUndefined();
     expect(Object.values(pkg.dependencies ?? {})).not.toContain('catalog:');
     expect(Object.values(pkg.dependencies ?? {})).not.toContain('workspace:*');
@@ -576,9 +576,23 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
     );
+    const startTypes = await readFile(
+      join(projectDir, 'src/tanstack-start.d.ts'),
+      'utf8'
+    );
+    const pkg = (await readJson(join(projectDir, 'package.json'))) as Record<
+      string,
+      unknown
+    >;
 
     await expect(readdir(componentsDir)).rejects.toThrow();
-    expect(indexRoute).toContain('HeadlessDashboard');
+    expect(indexRoute).toContain('ApiDirectory');
+    expect(indexRoute).toContain('handlers.manifest');
+    expect(indexRoute).not.toContain('runtime.entrypoints');
+    expect(startTypes).toContain("import type {} from '@tanstack/react-start'");
+    expect((pkg.scripts as Record<string, string>).start).toBe(
+      'node --env-file=.env .output/server/index.mjs'
+    );
   });
 
   it('prompts for a project name when not provided and prompt is available', async () => {

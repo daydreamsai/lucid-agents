@@ -1,4 +1,5 @@
-import type { EntrypointDef } from './entrypoint';
+import type { EntrypointDef, PaymentProtocol } from './entrypoint';
+import type { Network } from './network';
 
 /** Protocol-neutral metadata supplied when creating an agent runtime. */
 export type AgentMeta = {
@@ -17,6 +18,19 @@ export type ManifestEntrypoint = {
   input_schema?: unknown;
   output_schema?: unknown;
   pricing?: { invoke?: string; stream?: string };
+  /** Payment rail selected for this entrypoint when it is protected. */
+  payment_protocol?: PaymentProtocol;
+  /** Entrypoint-specific payment or authorization network. */
+  network?: Network;
+  /** Public authorization requirements safe to expose in discovery. */
+  authorization?: {
+    siwx?: {
+      enabled: boolean;
+      auth_only: boolean;
+      statement?: string;
+      network?: string;
+    };
+  };
 };
 
 export type AgentManifest = {

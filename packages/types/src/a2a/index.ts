@@ -16,16 +16,7 @@ export type Manifest = {
   name: string;
   version: string;
   description?: string;
-  entrypoints: Record<
-    string,
-    {
-      description?: string;
-      streaming: boolean;
-      input_schema?: ManifestEntrypoint['input_schema'];
-      output_schema?: ManifestEntrypoint['output_schema'];
-      pricing?: ManifestEntrypoint['pricing'];
-    }
-  >;
+  entrypoints: Record<string, ManifestEntrypoint>;
 };
 
 /**

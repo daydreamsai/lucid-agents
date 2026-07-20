@@ -12,7 +12,7 @@ export type SIWxClientConfig = {
 };
 
 /**
- * Check if a 402 response includes a SIWX extension declaration.
+ * Check if an authorization or payment response includes a SIWX declaration.
  * Checks both the X-SIWX-EXTENSION header and the response body.
  * Note: this clones the response to read the body, so the original remains consumable.
  */
@@ -32,7 +32,7 @@ export async function hasSIWxExtension(response: Response): Promise<boolean> {
 }
 
 /**
- * Parse SIWX extension from a 402 response.
+ * Parse a SIWX extension from an authorization or payment response.
  * Checks the X-SIWX-EXTENSION header first, then falls back to the response body.
  */
 export async function parseSIWxExtension(
@@ -73,8 +73,8 @@ export function buildSIWxHeaderValue(payload: Record<string, unknown>): string {
 
 /**
  * Create a SIWX-aware fetch wrapper.
- * When a 402 response includes a SIWX extension, the wrapper will attempt
- * to sign and retry before falling through to payment.
+ * When a 401 or 402 response includes a SIWX extension, the wrapper attempts
+ * to sign and retry. A 402 without SIWX continues to the payment wrapper.
  */
 type FetchFn = (
   input: RequestInfo | URL,
@@ -91,8 +91,8 @@ export function wrapFetchWithSIWx(
   ): Promise<Response> => {
     const response = await baseFetch(input, init);
 
-    // Only intercept 402 responses
-    if (response.status !== 402) return response;
+    // Auth-only SIWX uses 401; combined SIWX and payment uses 402.
+    if (response.status !== 401 && response.status !== 402) return response;
 
     // Check for SIWX extension
     const siwxExt = await parseSIWxExtension(response);

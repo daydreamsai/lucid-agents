@@ -170,6 +170,35 @@ describe('SIWX Client', () => {
       expect(callCount).toBe(2);
     });
 
+    it('should retry auth-only 401 challenges with a SIWX header', async () => {
+      let callCount = 0;
+      const extension = {
+        scheme: 'sign-in-with-x',
+        domain: 'test.com',
+        uri: 'http://test.com/api',
+        nonce: 'auth-only-nonce',
+      };
+      const baseFetch = async (
+        _input: RequestInfo | URL,
+        init?: RequestInit
+      ) => {
+        callCount++;
+        if (callCount === 1) {
+          return Response.json({ error: { siwx: extension } }, { status: 401 });
+        }
+        expect(new Headers(init?.headers).has('SIGN-IN-WITH-X')).toBe(true);
+        return new Response('authorized');
+      };
+
+      const response = await wrapFetchWithSIWx(
+        baseFetch,
+        mockSigner
+      )('http://test.com/api');
+
+      expect(response.status).toBe(200);
+      expect(callCount).toBe(2);
+    });
+
     it('should include signature in SIWX payload', async () => {
       let capturedHeaders: Headers | undefined;
       const ext = {

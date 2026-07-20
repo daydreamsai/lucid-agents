@@ -10,10 +10,13 @@ import { a2a, waitForTask } from '@lucid-agents/a2a';
 import { analytics } from '@lucid-agents/analytics';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
-import { http } from '@lucid-agents/http';
+import { buildServicePageModel, http } from '@lucid-agents/http';
 import { mpp, tempo } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
-import type { A2ARuntime } from '@lucid-agents/types/a2a';
+import type {
+  A2ARuntime,
+  AgentCardWithEntrypoints,
+} from '@lucid-agents/types/a2a';
 import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import { wallets } from '@lucid-agents/wallet';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
@@ -53,21 +56,13 @@ async function invokeOk(
 /** Fetch agent card from in-process app */
 async function fetchCard(app: {
   fetch: (req: Request) => Response | Promise<Response>;
-}) {
+}): Promise<AgentCardWithEntrypoints> {
   const req = new Request('http://localhost/.well-known/agent-card.json');
   const res = await app.fetch(req);
   if (!res.ok) {
     throw new Error(`agent card failed: ${res.status} ${await res.text()}`);
   }
-  return (await res.json()) as {
-    name: string;
-    version: string;
-    skills: Array<{ id: string; [k: string]: unknown }>;
-    capabilities?: {
-      extensions?: Array<{ uri?: string; [k: string]: unknown }>;
-    };
-    [k: string]: unknown;
-  };
+  return (await res.json()) as AgentCardWithEntrypoints;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,6 +193,21 @@ describe('Example Smoke Tests', () => {
       const card = await fetchCard(app);
       expect(card.name).toBe('paid-service');
       expect(Array.isArray(card.skills)).toBe(true);
+
+      const service = buildServicePageModel(card, {
+        health: { ok: true, status: 'healthy' },
+        baseUrl: 'http://localhost',
+      });
+      expect(service.status.state).toBe('online');
+      expect(service.offerings).toHaveLength(2);
+      expect(service.offerings[0]?.payment).toMatchObject({
+        required: true,
+        protocol: 'x402',
+        network: 'eip155:84532',
+      });
+      expect(service.offerings[0]?.operations.invoke.url).toBe(
+        'http://localhost/entrypoints/echo/invoke'
+      );
     });
 
     it('echo entrypoint returns 402 without payment header', async () => {

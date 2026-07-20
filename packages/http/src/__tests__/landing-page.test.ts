@@ -1,129 +1,129 @@
-import type { AgentMeta, EntrypointDef } from '@lucid-agents/types/core';
-import type { PaymentsConfig } from '@lucid-agents/types/payments';
+import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import type { ServicePageHealthInput } from '../service-page-model';
 import { describe, expect, it } from 'bun:test';
-import { z } from 'zod';
 
 import { renderLandingPage } from '../landing-page';
 
-const meta: AgentMeta = {
+const card: AgentCardWithEntrypoints = {
   name: 'Coverage <Agent>',
   version: '1.2.3',
-  description: 'Exercises the generated landing page',
-  image: 'https://example.com/agent.png',
-  url: 'https://docs.example.com',
-  type: 'article',
+  description: 'Exercises the generated service storefront',
+  supportedInterfaces: [
+    {
+      url: 'https://agent.example.com/api/agent/',
+      protocolBinding: 'HTTP+JSON',
+    },
+  ],
+  capabilities: {
+    streaming: true,
+    stateTransitionHistory: true,
+    extensions: [
+      {
+        uri: 'https://example.com/extensions/research',
+        description: 'Research provenance',
+      },
+    ],
+  },
+  payments: [{ method: 'x402', network: 'eip155:8453' }],
+  registrations: [{ agentId: 7, agentRegistry: 'eip155:8453:0xregistry' }],
+  trustModels: ['feedback'],
+  entrypoints: {
+    summarize: {
+      description: 'Summarize a document',
+      streaming: true,
+      input_schema: {
+        type: 'object',
+        required: ['source', 'count'],
+        properties: {
+          source: { type: 'string', format: 'uri' },
+          count: { type: 'number', minimum: 2 },
+        },
+      },
+      output_schema: {
+        type: 'object',
+        properties: { summary: { type: 'string' } },
+      },
+      pricing: { invoke: '$0.01', stream: '$0.02' },
+      payment_protocol: 'x402',
+      network: 'eip155:8453',
+    },
+    ping: {
+      description: 'Check basic service behavior',
+      streaming: false,
+    },
+  },
 };
 
-const payments = {
-  facilitatorUrl: 'https://facilitator.example.com',
-  network: 'eip155:84532',
-  payTo: '0x0000000000000000000000000000000000000001',
-} satisfies PaymentsConfig;
-
 const render = async (
-  entrypoints: EntrypointDef[],
-  options: {
-    activePayments?: PaymentsConfig;
-    resolvePrice?: (
-      entrypoint: EntrypointDef,
-      which: 'invoke' | 'stream'
-    ) => string | null;
-    pageMeta?: AgentMeta;
-  } = {}
+  manifest: AgentCardWithEntrypoints = card,
+  health: ServicePageHealthInput = { ok: true, version: manifest.version }
 ): Promise<string> =>
   String(
     await renderLandingPage({
-      meta: options.pageMeta ?? meta,
-      origin: 'https://agent.example.com',
-      entrypoints,
-      activePayments: options.activePayments,
-      resolvePrice: options.resolvePrice,
-      manifestPath: '/api/agent/.well-known/agent-card.json',
+      manifest,
+      health,
       faviconDataUrl: 'data:image/svg+xml;base64,PHN2Zy8+',
       x402ClientExample: 'const response = await fetch(url);',
     })
   );
 
 describe('renderLandingPage', () => {
-  it('renders paid invoke and streaming entrypoints with schemas', async () => {
-    const entrypoints: EntrypointDef[] = [
-      {
-        key: 'summarize',
-        description: 'Summarize a document',
-        network: 'eip155:8453',
-        input: z.object({
-          email: z.email(),
-          source: z.url(),
-          count: z.number().min(2),
-          enabled: z.boolean(),
-          tags: z.array(z.string()),
-        }),
-        output: z.object({ summary: z.string() }),
-        stream: async () => ({ status: 'succeeded' }),
-      },
-      {
-        key: 'classify',
-        input: z.object({
-          mode: z.enum(['quick', 'careful']),
-          value: z.union([z.literal('fixed'), z.number().max(9)]),
-        }),
-      },
-    ];
-
-    const page = await render(entrypoints, {
-      activePayments: payments,
-      resolvePrice: (entrypoint, which) => {
-        if (entrypoint.key === 'summarize') {
-          return which === 'invoke' ? '$0.01' : '$0.02';
-        }
-        return null;
-      },
-    });
+  it('renders the public service, trust, capabilities, and offering operations', async () => {
+    const page = await render();
 
     expect(page).toContain('<!DOCTYPE html>');
     expect(page).toContain('<title>Coverage &lt;Agent&gt;</title>');
-    expect(page).toMatch(
-      /class="stat-value">2<\/span>[\s\S]*class="stat-label">Entrypoints/
-    );
-    expect(page).toMatch(/class="stat-value"\s*>Enabled<\/span/);
-    expect(page).toContain('Invoke: $0.01 · Stream: $0.02');
-    expect(page).toContain('POST /api/agent/entrypoints/summarize/stream');
-    expect(page).toContain(
-      'https://agent.example.com/api/agent/entrypoints/summarize/invoke'
-    );
+    expect(page).toContain('class="service-page"');
+    expect(page).toContain('Agent offerings');
+    expect(page).toContain('Summarize');
+    expect(page).toContain('$0.01 invoke · $0.02 stream');
+    expect(page).toContain('x402');
+    expect(page).toContain('eip155:8453');
+    expect(page).toContain('Registered identity');
+    expect(page).toContain('Research provenance');
     expect(page).toContain('/api/agent/entrypoints/summarize/invoke');
-    expect(page).toContain('agent@example.com');
+    expect(page).toContain('/api/agent/entrypoints/summarize/stream');
     expect(page).toContain('https://example.com');
     expect(page).toContain('&quot;count&quot;: 2');
+    expect(page).toContain('aria-live="polite"');
+    expect(page).toContain('data-action="invoke"');
+    expect(page).toContain('data-action="stream"');
+    expect(page).toContain('data-action="back"');
+    expect(page).toContain('@media (min-width: 1200px)');
+    expect(page).toContain('grid-template-columns: 320px minmax(0, 1fr)');
+    expect(page).toContain('@media (max-width: 767px)');
+    expect(page).toContain('position: sticky');
     expect(page).toContain('const response = await fetch(url);');
-    expect(page).toContain(
-      'const manifestUrl = "/api/agent/.well-known/agent-card.json";'
-    );
   });
 
-  it('renders the empty and metadata fallback states', async () => {
-    const page = await render([], {
-      pageMeta: { name: 'Bare agent', version: '0.0.1' },
-    });
+  it('makes protected flows explicit and only executes free operations', async () => {
+    const page = await render();
 
-    expect(page).toMatch(
-      /class="stat-value">0<\/span>[\s\S]*class="stat-label">Entrypoints/
-    );
-    expect(page).toMatch(/class="stat-value"\s*>None<\/span/);
-    expect(page).toContain('No entrypoints registered yet.');
-    expect(page).toContain('content="https://agent.example.com"');
-    expect(page).toContain('content="website"');
+    expect(page).toContain('Protected operation');
+    expect(page).toContain('Use a protocol-aware client');
+    expect(page).toContain('data-protected="true"');
+    expect(page).toContain('data-protected="false"');
+    expect(page).toContain("if (button.dataset.protected === 'true')");
+    expect(page).not.toContain('localStorage');
+    expect(page).not.toContain('Powered by @lucid/agent-kit');
+    expect(page).not.toContain('radial-gradient');
   });
 
-  it('renders a free schema-less invoke entrypoint', async () => {
-    const page = await render([{ key: 'ping' }]);
-
-    expect(page).toMatch(
-      /class="stat-value">1<\/span>[\s\S]*class="stat-label">Entrypoint/
+  it('renders an honest empty service state and safe metadata fallbacks', async () => {
+    const page = await render(
+      {
+        name: 'Bare agent',
+        entrypoints: {},
+        supportedInterfaces: [
+          { url: 'https://bare.example/', protocolBinding: 'HTTP+JSON' },
+        ],
+      },
+      null
     );
-    expect(page).toContain('No description provided yet.');
-    expect(page).toContain('No input schema provided.');
-    expect(page).toContain('Free');
-    expect(page).not.toContain('POST /entrypoints/ping/stream');
+
+    expect(page).toContain('No offerings published');
+    expect(page).toContain('Status unknown');
+    expect(page).toContain('No additional capabilities published.');
+    expect(page).toContain('This agent has not published a description yet.');
   });
 });

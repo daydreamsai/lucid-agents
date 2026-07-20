@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@lucid-agents/core": "latest",
+    "@lucid-agents/types": "latest",
     "@tanstack/react-query": "^5.90.6",
     "@reown/appkit": "^1.8.12",
     "@reown/appkit-adapter-solana": "^1.8.12",
@@ -27,6 +28,9 @@
     "wagmi": "^2.19.2",
     "@x402/fetch": "^2.2.0",
     "@x402/evm": "^2.2.0",
+    "@x402/svm": "2.2.0",
+    "@solana/kit": "^5.5.1",
+    "@solana/web3.js": "^1.98.4",
     "@wagmi/connectors": "6.2.0",
     "@wagmi/core": "2.22.1",
     "zod": "^4.1.12"

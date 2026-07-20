@@ -1,4 +1,5 @@
 import type {
+  AgentCardWithEntrypoints,
   SendMessageRequest,
   TaskError,
   TaskStatus,
@@ -215,7 +216,6 @@ export function http(
       faviconSvg = resolveFaviconSvg(meta.icon);
       faviconDataUrl = `data:image/svg+xml;base64,${toBase64(faviconSvg)}`;
 
-      const manifestPath = `${basePath}/.well-known/agent-card.json`;
       const x402ClientExample = [
         'import { config } from "dotenv";',
         'import {',
@@ -267,7 +267,6 @@ export function http(
         '});',
       ].join('\n');
 
-      const activePayments = runtime.payments?.config;
       const identityRuntime = runtime.identity;
 
       const actualHandlers: AgentHttpHandlers = {
@@ -299,14 +298,12 @@ export function http(
         landing: landingEnabled
           ? async req => {
               const origin = `${normalizeOrigin(req)}${basePath}`;
-              const entrypoints = runtime.entrypoints.snapshot();
+              const manifest = runtime.manifest.build(
+                origin
+              ) as AgentCardWithEntrypoints;
               const html = await renderLandingPage({
-                meta,
-                origin,
-                entrypoints,
-                activePayments,
-                resolvePrice: runtime.payments?.resolvePrice,
-                manifestPath,
+                manifest,
+                health: { ok: true, version: meta.version },
                 faviconDataUrl: faviconDataUrl!,
                 x402ClientExample,
               });

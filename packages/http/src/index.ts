@@ -12,6 +12,16 @@ export type { InMemoryHttpIdempotencyStoreOptions } from './idempotency';
 export { stream } from './stream';
 export { authorizeEntrypointRequest } from './authorization';
 export type { EntrypointAuthorization } from './authorization';
+export { buildServicePageModel } from './service-page-model';
+export { createServicePayloadExample } from './schema-example';
+export type {
+  BuildServicePageModelOptions,
+  ServicePageHealthInput,
+  ServicePageModel,
+  ServicePageOffering,
+  ServicePageOperation,
+  ServicePageStatus,
+} from './service-page-model';
 
 export {
   createSSEStream,

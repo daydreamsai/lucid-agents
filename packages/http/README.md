@@ -22,6 +22,32 @@ agent.http.handlers; // transport-neutral Fetch handlers
 agent.http.routes; // canonical route/capability plan
 ```
 
+## Service page model
+
+`buildServicePageModel(card, options)` converts a public Agent Card and health
+response into the canonical storefront model used by generated UIs:
+
+```ts
+import { buildServicePageModel } from '@lucid-agents/http';
+
+const card = await agent.http.handlers
+  .manifest(new Request('https://agent.example/.well-known/agent-card.json'))
+  .then(response => response.json());
+
+const service = buildServicePageModel(card, {
+  health: { ok: true, version: card.version },
+});
+```
+
+The model contains public identity, health, trust, offerings, schemas, prices,
+payment and SIWX requirements, task support, endpoints, and extension
+descriptors. It does not accept or expose private runtime configuration.
+
+The default Hono and Express landing page renders the same model as a portable
+service storefront. It supports free invoke and stream operations directly and
+provides an explicit integration handoff for protected operations. It never
+collects wallet or payment credentials.
+
 Install domain extensions such as `payments()`, `mpp()`, `identity()`, and
 `a2a()` before HTTP when possible. The kernel also honors HTTP's ordering
 constraints if call-site order differs.

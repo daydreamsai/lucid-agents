@@ -556,6 +556,35 @@ describe('createAgentRuntime manifest', () => {
     expect(manifest.name).toBe('test');
   });
 
+  it('publishes entrypoint payment and authorization capabilities', async () => {
+    const builder = createAgent({ name: 'test', version: '1.0.0' });
+    builder.addEntrypoint({
+      key: 'summarize',
+      paymentProtocol: 'mpp',
+      network: 'eip155:8453',
+      siwx: {
+        authOnly: true,
+        statement: 'Sign in to summarize this document',
+      },
+      handler: async () => ({ output: { summary: 'done' } }),
+    });
+    const agent = await builder.build();
+
+    expect(
+      agent.manifest.build('https://example.com').entrypoints.summarize
+    ).toMatchObject({
+      payment_protocol: 'mpp',
+      network: 'eip155:8453',
+      authorization: {
+        siwx: {
+          enabled: true,
+          auth_only: true,
+          statement: 'Sign in to summarize this document',
+        },
+      },
+    });
+  });
+
   it('caches manifest for same origin', async () => {
     const agent = await createAgent({ name: 'test', version: '1.0.0' }).build();
 

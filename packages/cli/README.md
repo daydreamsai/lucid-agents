@@ -84,11 +84,36 @@ When you select an adapter, the CLI copies the corresponding runtime framework f
 
 - `hono` - Traditional HTTP server with Hono framework
 - `express` - Node-style HTTP server built on Express with `@lucid-agents/express`
-- `tanstack-ui` - TanStack Start with full UI dashboard (wallet integration, entrypoint testing, schema forms)
+- `tanstack-ui` - TanStack Start service storefront with wallet authorization, payments, streaming, tasks, and schema-derived inputs
 - `tanstack-headless` - TanStack Start API-only (no UI components)
-- `next` – Next.js App Router shell whose routes delegate to the shared HTTP runtime, plus the dashboard UI
+- `next` – Next.js App Router shell with the same shared service storefront
 
 The adapter provides the runtime skeleton (routing, server setup, build config), while templates provide the agent logic (entrypoints, features, configuration).
+
+### Generated Service UI
+
+Next and TanStack UI projects share one generated frontend layer. The page is a
+public service storefront rather than an operations dashboard. It presents the
+Agent Card identity and trust signals, lists offerings with their prices and
+protocols, and opens a schema-derived invocation workspace for the selected
+offering.
+
+The React storefront supports:
+
+- free invoke and SSE stream operations;
+- progressive SIWX and x402 wallet readiness;
+- session-only MPP credential entry;
+- A2A task creation, polling, and cancellation when published;
+- integration snippets, schemas, endpoints, and public capability descriptors;
+- responsive drill-in navigation and accessible live status updates.
+
+Inputs, results, task access tokens, and payment credentials are not written to
+browser storage. The generated page reads the public Agent Card and health
+handlers instead of inspecting private runtime configuration.
+
+Hono and Express use the portable version of the same service model. The
+portable page can invoke and stream free offerings and explains how to use a
+protocol-aware client for protected operations.
 
 ## CLI Options
 
