@@ -1,0 +1,39 @@
+---
+title: '@lucid-agents/scheduler'
+description: Leased, idempotent scheduled A2A invocation jobs.
+icon: CalendarClock
+status: next
+verifiedVersion: 0.2.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The scheduler extension depends on A2A and can use the optional payments
+runtime for paid invocations.
+
+```bash
+bun add @lucid-agents/scheduler @lucid-agents/a2a
+```
+
+```ts
+const runtime = await createAgent(meta)
+  .use(a2a())
+  .use(payments({ config }))
+  .use(
+    scheduler({
+      store,
+      leaseMs: 30_000,
+      defaultMaxRetries: 3,
+      defaultConcurrency: 4,
+    })
+  )
+  .build();
+```
+
+The package exposes `scheduler()`, `createSchedulerRuntime()`,
+`createSchedulerWorker()`, and `createMemoryStore()`. Production stores
+implement `SchedulerStore`; the memory store is process-local.
+
+Workers lease due jobs, resolve Agent Cards with a bounded cache, invoke through
+the A2A runtime, and record retry/terminal state. Close the runtime to release
+the store and stop owned resources.

@@ -1,29 +1,33 @@
 ---
-title: Migration Guides
-description: Guides for migrating between major versions of Lucid Agents
+title: Migration guides
+description: Upgrade Lucid runtime and x402 integrations without mixing release channels.
 icon: ArrowRight
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
-This section contains migration guides to help you upgrade your Lucid Agents projects when there are breaking changes.
-
-## Available Guides
+Read the [release channel contract](/docs/reference/release-channels) before an
+upgrade. Stable describes clean-room-tested public npm artifacts; Next describes
+the current repository surface.
 
 <Cards>
   <Card
-    title="Lucid Agents v4 Runtime Migration"
-    description="Move to the extension-owned runtime, canonical HTTP routes, and package-owned protocol capabilities"
-    href="/docs/migration-guides/v4-runtime"
+    title="Lucid runtime v3 (Next)"
+    description="Adopt extension-owned runtime slices, the canonical registry, and shared HTTP authorization."
+    href="/docs/migration-guides/v3-runtime"
   />
   <Card
-    title="x402 v2 Migration"
-    description="Migrate to x402 v2 protocol with scoped packages and CAIP-2 network format"
+    title="x402 v2"
+    description="Move from legacy unscoped dependencies and headers to scoped x402 v2 packages and CAIP-2 networks."
     href="/docs/migration-guides/x402-v2"
   />
 </Cards>
 
-## Need Help?
+Before changing production dependencies, reproduce the target version in a
+clean project and run the paid seller/buyer transaction. Do not infer npm
+availability from a package version in the repository.
 
-If you encounter issues during migration:
-- Check the [GitHub Issues](https://github.com/daydreamsai/lucid-agents/issues)
-- Join our [Discord community](https://discord.gg/daydreams)
-- Review the [changelog](https://github.com/daydreamsai/lucid-agents/blob/master/CHANGELOG.md)
+For defects or ambiguous behavior, include the exact Lucid and x402 package
+versions in a [GitHub issue](https://github.com/daydreamsai/lucid-agents/issues).

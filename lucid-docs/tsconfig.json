@@ -1,5 +1,5 @@
 {
-  "include": ["**/*.ts", "**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", ".source/**/*.ts"],
   "compilerOptions": {
     "strict": true,
     "noUnusedLocals": true,
@@ -9,7 +9,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "bun"],
     "isolatedModules": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,

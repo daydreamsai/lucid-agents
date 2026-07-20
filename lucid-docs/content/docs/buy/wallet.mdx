@@ -1,0 +1,39 @@
+---
+title: Configure a wallet
+description: Separate buyer signing, seller receiving, and identity registration keys.
+icon: Wallet
+status: next
+verifiedVersion: 0.6.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid uses wallets for distinct jobs:
+
+| Job                        | Required capability               | Keep separate when possible                      |
+| -------------------------- | --------------------------------- | ------------------------------------------------ |
+| Receive x402 payments      | Public address                    | No signing key is required by the seller runtime |
+| Buy x402 services          | Transaction authorization/signing | Bind to outgoing policy and a small balance      |
+| Register ERC-8004 identity | EVM contract signing              | May have broader on-chain authority              |
+
+For a local server-side buyer:
+
+```ts
+const runtime = await createAgent(meta)
+  .use(
+    wallets({
+      config: {
+        agent: {
+          type: 'local',
+          privateKey: process.env.AGENT_WALLET_PRIVATE_KEY as `0x${string}`,
+        },
+      },
+    })
+  )
+  .build();
+```
+
+Use a secrets manager in production, rotate compromised credentials, and
+never expose a local private key to a service storefront. Third-party wallet
+connectors have their own trust, availability, and signing semantics; review
+them before granting autonomous access.

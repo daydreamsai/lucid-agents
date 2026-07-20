@@ -1,0 +1,170 @@
+---
+title: Sell a paid API
+description: Define a priced capability, inspect its x402 challenge, and complete a Base Sepolia payment.
+icon: BadgeDollarSign
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+This guide turns a typed function into a local paid HTTP service. The first
+request proves the paywall is active; a funded buyer then completes the loop.
+
+## Prerequisites
+
+- Complete [installation](/docs/start/install).
+- Use two EVM addresses: a seller receiving address and a buyer signing wallet.
+- Fund the buyer with Base Sepolia testnet USDC. The buyer private key is a
+  secret; never put it in client-side code or commit it.
+
+## Configure the seller
+
+```dotenv
+PAYMENTS_FACILITATOR_URL=https://x402.org/facilitator
+PAYMENTS_NETWORK=eip155:84532
+PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_EVM_RECEIVING_ADDRESS
+```
+
+The x402.org facilitator is testnet-only and requires no API key. It is not a
+production default.
+
+## Define the capability
+
+In the generated Hono project, configure the runtime and replace the free echo
+entrypoint with this priced capability:
+
+```ts title="paid-service.ts"
+import { createAgent } from '@lucid-agents/core';
+import { createAgentApp } from '@lucid-agents/hono';
+import { http } from '@lucid-agents/http';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+import { z } from 'zod';
+
+const runtime = await createAgent({
+  name: 'text-service',
+  version: '0.1.0',
+  description: 'Paid text analysis',
+})
+  .use(http())
+  .use(payments({ config: paymentsFromEnv() }))
+  .build();
+
+const { app, addEntrypoint } = await createAgentApp(runtime);
+
+addEntrypoint({
+  key: 'analyze',
+  description: 'Count the words and characters in text',
+  price: '0.01',
+  input: z.object({ text: z.string().min(1) }),
+  output: z.object({ words: z.number(), characters: z.number() }),
+  handler: async ({ input }) => ({
+    output: {
+      words: input.text.trim().split(/\s+/u).length,
+      characters: input.text.length,
+    },
+  }),
+});
+
+export { app };
+```
+
+Start the server with the generated `bun run dev` command.
+
+## Observe the payment challenge
+
+```bash
+curl -i http://localhost:3000/entrypoints/analyze/invoke \
+  -H 'content-type: application/json' \
+  --data '{"input":{"text":"machine commerce works"}}'
+```
+
+Expect HTTP `402` and a `PAYMENT-REQUIRED` header. If you receive `200`, the
+entrypoint is not priced or the payments extension was not configured. If you
+receive `503`, check the facilitator, network, and receiving address.
+
+## Pay from a buyer
+
+Create these two files in a server-only directory. Keeping signer setup separate
+makes the paid Fetch wrapper reusable without exposing the key to browser code.
+
+```ts title="buyer-client.ts"
+import { x402Client } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { privateKeyToAccount } from 'viem/accounts';
+
+export type PaidFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit
+) => Promise<Response>;
+
+export function createPaidFetch(
+  privateKey: `0x${string}`,
+  fetchImpl: typeof fetch = fetch
+): PaidFetch {
+  const client = new x402Client();
+  registerExactEvmScheme(client, {
+    signer: privateKeyToAccount(privateKey),
+    networks: ['eip155:84532'],
+  });
+  return wrapFetchWithPayment(fetchImpl, client);
+}
+```
+
+```ts title="buyer.ts"
+import { createPaidFetch } from './buyer-client';
+
+const privateKey = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
+if (!privateKey) throw new Error('BUYER_PRIVATE_KEY is required');
+
+const paidFetch = createPaidFetch(privateKey);
+
+const response = await paidFetch(
+  'http://localhost:3000/entrypoints/analyze/invoke',
+  {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'idempotency-key': crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      input: { text: 'machine commerce works' },
+    }),
+  }
+);
+
+if (!response.ok) throw new Error(`Paid call failed: ${response.status}`);
+
+console.log({
+  result: await response.json(),
+  settlement: response.headers.get('PAYMENT-RESPONSE'),
+});
+```
+
+Run it with `BUYER_PRIVATE_KEY` set in your shell:
+
+```bash
+bun run buyer.ts
+```
+
+Expected application output:
+
+```json
+{
+  "run_id": "...",
+  "status": "succeeded",
+  "output": { "words": 3, "characters": 22 }
+}
+```
+
+The response also carries the x402 settlement response header. Treat a
+successful payment and successful fulfillment as one application transaction;
+read [retries and idempotency](/docs/buy/retries-idempotency) before adding
+automatic retries.
+
+## Before production
+
+Use [durable storage](/docs/operate/durable-storage), secure both seller and
+buyer keys, select a mainnet facilitator, and work through the
+[production checklist](/docs/operate/production-checklist).

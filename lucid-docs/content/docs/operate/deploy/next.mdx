@@ -1,0 +1,21 @@
+---
+title: Deploy with Next.js
+description: Generate App Router modules that delegate to the Lucid HTTP runtime.
+icon: PanelsTopLeft
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Next.js support is a CLI adapter, not an `@lucid-agents/next` package.
+
+```bash
+bunx @lucid-agents/cli my-service --adapter=next
+```
+
+Keep generated API route modules thin: construct/import the shared runtime and
+delegate to `runtime.http.handlers`. The generated UI consumes public Agent
+Card and health contracts rather than importing server runtime internals.
+
+Verify both the service storefront and API routes in the deployment runtime.

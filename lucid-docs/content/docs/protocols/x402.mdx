@@ -1,0 +1,48 @@
+---
+title: x402 support
+description: Exact Lucid x402 support by protocol version, scheme, network, client, and extension.
+icon: CreditCard
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid receives and buys HTTP-native payments using x402 v2. Upstream x402
+supports more features and networks than this Lucid release.
+
+## Support matrix
+
+| Capability                     | Status        | Lucid behavior                                                        |
+| ------------------------------ | ------------- | --------------------------------------------------------------------- |
+| x402 v2 headers                | Supported     | `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`           |
+| `exact` scheme                 | Supported     | One fixed USD decimal price per operation                             |
+| `upto` scheme                  | Not supported | Do not advertise usage-based settlement                               |
+| Batch settlement               | Not supported | Each admitted call settles independently                              |
+| Multiple `accepts` options     | Not supported | Lucid emits one accepted option                                       |
+| EVM seller networks            | Supported     | Ethereum, Sepolia, Base, Base Sepolia, Polygon, Amoy, Avalanche, Fuji |
+| Solana seller networks         | Supported     | Mainnet and Devnet canonical identifiers                              |
+| `createX402Fetch` EVM buyer    | Supported     | EVM signer; defaults to Ethereum/Sepolia/Base/Base Sepolia            |
+| `createX402Fetch` Solana buyer | Not supported | Seller support does not imply buyer signing support                   |
+| SIWX                           | Supported     | Optional challenge declaration and entitlement reuse                  |
+| Payment identifiers extension  | Not supported | HTTP idempotency is separate                                          |
+| Bazaar declaration/publication | Not supported | A2A and local catalogs are separate discovery inputs                  |
+| Signed offers and receipts     | Not supported | The normal settlement response is not this extension                  |
+| Gas sponsorship extension      | Not supported | Depends on external wallet/provider behavior                          |
+| Stripe dynamic destination     | Partial       | Base mainnet only through the server-only provider export             |
+
+## Network identifiers
+
+New configuration should use CAIP-2 identifiers such as `eip155:84532` and
+`solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1`. Legacy aliases are normalized at the
+configuration boundary but are not emitted in runtime metadata.
+
+The facilitator must support the same x402 version, scheme, network, and asset.
+Query its supported endpoint instead of assuming compatibility from a brand or
+network name.
+
+## Application transaction
+
+Lucid surrounds the protocol exchange with policy reservation, fulfillment,
+settlement finalization, task ownership, and recording. An adapter must not
+install a second x402 paywall because that would split this transaction.

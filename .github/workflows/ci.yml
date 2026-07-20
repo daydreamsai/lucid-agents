@@ -162,5 +162,8 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
+      - run: bun run build:packages
+      - run: bun run test:docs
       - run: bun run --cwd lucid-docs types:check
+      - run: bun run test:docs-stable
       - run: bun run --cwd lucid-docs build

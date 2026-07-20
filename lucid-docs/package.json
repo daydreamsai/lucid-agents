@@ -8,7 +8,11 @@
     "build": "vite build",
     "start": "node .output/server/index.mjs",
     "routes:generate": "tsr generate",
+    "content:check": "bun run ../scripts/check-docs-content.ts",
+    "freshness": "bun run ../scripts/report-docs-freshness.ts",
+    "examples:test": "bun test examples/paid-service.test.ts",
     "types:check": "bun run routes:generate && fumadocs-mdx && tsc --noEmit",
+    "verify": "bun run content:check && bun run types:check && bun run examples:test && bun run build",
     "postinstall": "fumadocs-mdx",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
@@ -26,9 +30,17 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.3.1",
-    "vite": "^7.2.0"
+    "vite": "^7.2.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/hono": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "@lucid-agents/payments": "workspace:*",
+    "@x402/core": "catalog:",
+    "@x402/evm": "catalog:",
+    "@x402/fetch": "catalog:",
     "@cloudflare/vite-plugin": "^1.17.0",
     "@tailwindcss/vite": "^4.1.16",
     "@tanstack/router-cli": "1.140.0",
@@ -38,6 +50,7 @@
     "@vitejs/plugin-react": "^5.1.0",
     "tailwindcss": "^4.1.16",
     "typescript": "^5.9.3",
+    "viem": "catalog:",
     "vite-tsconfig-paths": "^5.1.4",
     "wrangler": "^4.53.0"
   }

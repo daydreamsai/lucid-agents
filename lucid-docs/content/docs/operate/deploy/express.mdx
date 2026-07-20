@@ -1,0 +1,19 @@
+---
+title: Deploy with Express
+description: Bridge an existing Node/Express server to the shared Fetch handlers.
+icon: Server
+status: next
+verifiedVersion: 0.6.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+```ts
+const { app } = await createAgentApp(runtime);
+const server = app.listen(Number(process.env.PORT ?? 3000));
+```
+
+Do not place body parsing or custom payment middleware in front of canonical
+Lucid routes unless the adapter documentation requires it. Preserve streaming
+and abort behavior through the Node/Web bridge. See the
+[Express reference](/docs/packages/express).

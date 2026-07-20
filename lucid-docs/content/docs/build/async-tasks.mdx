@@ -1,0 +1,31 @@
+---
+title: Run asynchronous tasks
+description: Preserve ownership, payment admission, and retry safety for long-running fulfillment.
+icon: ListChecks
+status: next
+verifiedVersion: 0.6.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Install `a2a()` to expose owned task routes backed by the canonical entrypoint
+registry. A task reservation is created only after authorization succeeds.
+
+```ts
+const runtime = await createAgent(meta)
+  .use(payments({ config }))
+  .use(a2a({ taskStore }))
+  .use(http())
+  .build();
+```
+
+Task state follows an owned state machine: submitted, working, completed,
+failed, or canceled. Store task records durably in production and use leases so
+two workers cannot fulfill the same task concurrently.
+
+Payment admission does not make fulfillment infallible. Define what happens
+when work fails after verification and before settlement, and never create a
+second business task merely because a client retried an HTTP request. Use a
+stable idempotency key and return the existing task identity.
+
+See [A2A](/docs/protocols/a2a) for discovery and client operations.

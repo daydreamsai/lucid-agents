@@ -2,6 +2,10 @@
 title: '@lucid-agents/mpp'
 description: Standard Machine Payments Protocol authorization with native and custom verifiers.
 icon: Banknote
+status: next
+verifiedVersion: 0.2.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
 The MPP extension protects invoke, stream, and A2A task execution with standard Payment-Auth `402 Payment Required` challenges. Every adapter delegates to the same authorization gate.
@@ -11,6 +15,12 @@ The MPP extension protects invoke, stream, and A2A task execution with standard 
 ```bash
 bun add @lucid-agents/mpp @lucid-agents/core @lucid-agents/http
 ```
+
+<Callout type="warn">
+  This command applies after `@lucid-agents/mpp` is published. As of the
+  verification date, MPP is a Next workspace package and is not part of the
+  clean-room Stable npm set. Do not add it to a Stable lockfile yet.
+</Callout>
 
 The package includes mppx. Tempo requires Viem `>=2.44.4`, declared as a peer dependency.
 

@@ -1,0 +1,21 @@
+---
+title: Deploy with TanStack Start
+description: Choose a generated service storefront or a headless Fetch-handler deployment.
+icon: Layers
+status: next
+verifiedVersion: 0.8.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+```bash
+bunx @lucid-agents/cli my-service --adapter=tanstack-ui
+# or
+bunx @lucid-agents/cli my-service --adapter=tanstack-headless
+```
+
+The UI variant includes the shared service storefront. The headless variant is
+API-only. Both delegate generated route modules to the same HTTP handlers; do
+not copy entrypoint execution or payment logic into TanStack loaders.
+
+See the [TanStack reference](/docs/packages/tanstack).

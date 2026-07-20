@@ -1,79 +1,74 @@
 ---
-title: Lucid Agents
-description: The protocol-agnostic multi-runtime framework for building and monetizing AI agents.
+title: Lucid documentation
+description: Build, buy, and operate typed machine services with x402 as the default payment rail.
 icon: Sparkles
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
-Build, deploy, and monetize autonomous AI agents with typed entrypoints, on-chain identity, and built-in payment infrastructure.
+Lucid is the TypeScript application runtime for machine commerce. Turn a
+function into a typed, discoverable service; charge for it over x402 or MPP;
+and keep authorization, fulfillment, retries, tasks, and durable state in one
+runtime contract.
 
-## Quick start
+## What are you building?
 
-Get your first agent running in minutes:
+<Cards>
+  <Card
+    title="A paid API"
+    description="Complete the primary seller path from schema to testnet settlement."
+    href="/docs/start/sell-paid-api"
+  />
+  <Card
+    title="A service buyer"
+    description="Call x402 endpoints from a wallet constrained by recipient and spend policy."
+    href="/docs/start/budgeted-buyer"
+  />
+  <Card
+    title="An existing web application"
+    description="Keep your framework and add one shared Lucid runtime."
+    href="/docs/start/existing-app"
+  />
+  <Card
+    title="A production deployment"
+    description="Choose durable state, security, observability, facilitator, and adapter controls."
+    href="/docs/operate/production-checklist"
+  />
+</Cards>
 
-```bash
-bunx @lucid-agents/cli my-agent
-cd my-agent
-bun run dev
+## Where Lucid fits
+
+```text
+Your typed capability and fulfillment
+              ↓
+Lucid: schemas, policy, authorization, tasks, discovery, state
+              ↓
+x402 or MPP payment negotiation
+              ↓
+Wallet + facilitator + network/provider infrastructure
 ```
 
-<Cards>
-  <Card
-    title="Introduction"
-    description="Learn what Lucid Agents is and why you should use it"
-    href="/docs/getting-started/introduction"
-  />
-  <Card
-    title="Installation"
-    description="Install packages and set up your environment"
-    href="/docs/getting-started/installation"
-  />
-  <Card
-    title="Quickstart"
-    description="Build your first agent in 5 minutes"
-    href="/docs/getting-started/quickstart"
-  />
-</Cards>
+Lucid does not replace wallets, facilitators, networks, or payment protocols.
+It makes them usable as part of a coherent application transaction.
 
-## Core concepts
+## Read the status badge
 
-<Cards>
-  <Card
-    title="Agents"
-    description="Understand agent configuration and the extension system"
-    href="/docs/concepts/agents"
-  />
-  <Card
-    title="Entrypoints"
-    description="Define typed API capabilities with Zod schemas"
-    href="/docs/concepts/entrypoints"
-  />
-</Cards>
+The repository is ahead of the public package set. Every page states whether it
+describes Stable npm packages, the Next repository surface, an experiment, a
+deprecated migration, or a separately operated hosted product. See
+[release channels](/docs/reference/release-channels) before combining examples.
 
-## Build with agents
+## Current x402 scope
 
-<Cards>
-  <Card
-    title="AI Router"
-    description="OpenAI-compatible x402 router with permit sessions and streaming responses"
-    href="/docs/ai-router"
-  />
-  <Card
-    title="Skills"
-    description="Install reusable skill files with a curl command and use them in your AI client"
-    href="/docs/skills"
-  />
-  <Card
-    title="Autonomous agents"
-    description="Use agents to create and evolve full applications on top of Lucid"
-    href="/docs/autonomous-agents"
-  />
-</Cards>
+Lucid currently supports x402 v2 fixed-price `exact` payments. It does not yet
+expose `upto`, batch settlement, Bazaar publication, payment identifiers,
+signed offers/receipts, or gas-sponsorship declarations. Buyer and seller
+network support also differ. Use the [x402 support matrix](/docs/protocols/x402)
+as the source of truth.
 
-## Key features
-
-- **Type-safe APIs** - Define inputs/outputs with Zod schemas, get automatic validation and TypeScript inference
-- **Framework flexibility** - Deploy on Hono, TanStack Start, Express, or Next.js
-- **Accept payments** - x402 protocol for USDC payments on Base or Solana
-- **On-chain identity** - ERC-8004 standard for verifiable agent reputation
-- **Agent-to-Agent** - A2A protocol for agent discovery and communication
-- **Real-time streaming** - Server-Sent Events for LLM responses and long operations
+<Callout type="info">
+  The fastest proof is the [paid API quickstart](/docs/start/sell-paid-api): an
+  unpaid request returns `402`, then a funded testnet buyer signs and retries.
+</Callout>

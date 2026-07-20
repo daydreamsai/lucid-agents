@@ -1,0 +1,13 @@
+{
+  "title": "Operate",
+  "pages": [
+    "index",
+    "production-checklist",
+    "facilitator",
+    "durable-storage",
+    "security",
+    "observability",
+    "troubleshoot-payments",
+    "deploy"
+  ]
+}

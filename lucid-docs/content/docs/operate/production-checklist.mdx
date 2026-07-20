@@ -1,0 +1,43 @@
+---
+title: Production checklist
+description: Verify release, money movement, fulfillment, durability, and operations before mainnet.
+icon: ClipboardCheck
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+## Release and compatibility
+
+- Pin one compatible Stable or Next package set.
+- Run generated-project, type, and payment smoke tests from a clean install.
+- Confirm the x402 version, scheme, network, asset, and facilitator together.
+
+## Money movement
+
+- Use a production facilitator with documented auth, limits, and incident path.
+- Verify receiving addresses and configured networks out of band.
+- Put per-request and time-window limits on buyer wallets.
+- Reconcile settlement evidence with application fulfillment records.
+
+## Correctness and durability
+
+- Use durable payment, SIWX, idempotency, task, and scheduler stores where the
+  corresponding feature is enabled.
+- Test process loss between verify, fulfill, settle, and record.
+- Bound input, execution time, output, retries, and concurrent work.
+- Make task ownership and lease expiry observable.
+
+## Security and operations
+
+- Keep wallet keys, facilitator credentials, and provider tokens in a secret
+  manager.
+- Log run, idempotency, task, payer, network, amount, settlement, and failure
+  identifiers without logging credentials.
+- Alert on `402`, policy rejection, verification, settlement, and fulfillment
+  error-rate changes independently.
+- Publish health checks and a rollback/incident procedure.
+
+Do not enable mainnet merely by changing `PAYMENTS_NETWORK`; review every item
+above and run a low-limit canary payment first.

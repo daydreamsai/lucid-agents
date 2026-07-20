@@ -1,0 +1,26 @@
+---
+title: x402 Router
+description: Availability boundary for the hosted OpenAI-compatible x402 inference router.
+icon: Network
+status: hosted
+verifiedVersion: unversioned
+verifiedAt: 2026-07-20
+product: router
+---
+
+The x402 Router is a hosted, OpenAI-compatible inference proxy. It is not part
+of the `@lucid-agents/*` runtime packages and does not define the SDK's x402
+support matrix.
+
+Before integrating, obtain from the hosted product owner:
+
+- current production base URL and service status
+- supported models/providers and pricing
+- wallet/permit format and session limits
+- settlement and receipt behavior
+- authentication, rate limits, data retention, and support contact
+
+Configure clients with the provided production URL rather than a hard-coded
+development host. OpenCode, OpenClaw, IronClaw, and NanoClaw integrations all
+follow that product-specific contract; their availability is not implied by
+installing the OSS SDK.

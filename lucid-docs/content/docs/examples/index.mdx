@@ -1,97 +1,73 @@
 ---
 title: Examples
-description: Working examples demonstrating Lucid Agents capabilities.
+description: Tested source and focused examples for Lucid's machine-commerce runtime.
 icon: Code
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
-The `@lucid-agents/examples` package contains working examples that demonstrate real-world usage patterns. Each example is a complete, runnable script.
+Start with the [paid service quickstart](/docs/start/sell-paid-api). Its seller
+and buyer files are compiled and exercised together in CI: the first request
+returns `402`, the buyer signs and retries, and the service returns a settled
+response.
 
-## Running examples
+The pages here explain larger repository examples. Treat them as Next examples:
+clone the repository and use its workspace versions rather than copying them into
+a Stable application.
 
 ```bash
-# Clone the repository
 git clone https://github.com/daydreamsai/lucid-agents.git
 cd lucid-agents
-
-# Install dependencies
 bun install
-
-# Build packages
 bun run build:packages
-
-# Run an example
-bun run packages/examples/src/core/full-agent.ts
 ```
-
-## Example categories
 
 <Cards>
   <Card
-    title="Core"
-    description="Full agent setup with HTTP, payments, identity, and streaming"
+    title="Paid seller and buyer"
+    description="The Stable, clean-room-tested x402 transaction."
+    href="/docs/start/sell-paid-api"
+  />
+  <Card
+    title="Core composition"
+    description="HTTP, payments, wallets, identity, invoke, and streaming in one runtime."
     href="/docs/examples/core"
   />
   <Card
-    title="Identity"
-    description="ERC-8004 on-chain identity registration and registry operations"
-    href="/docs/examples/identity"
-  />
-  <Card
-    title="Agent-to-Agent"
-    description="Multi-agent composition with discovery and task operations"
+    title="Agent-to-agent"
+    description="Agent Card discovery and owned A2A tasks."
     href="/docs/examples/a2a"
   />
   <Card
-    title="Wallet"
-    description="Wallet connectors including thirdweb Engine integration"
-    href="/docs/examples/wallet"
+    title="MPP paid service"
+    description="Next-only MPP challenges and verification."
+    href="/docs/examples/mpp-paid-service"
   />
   <Card
-    title="Payment Policies"
-    description="Spending limits, rate limiting, and recipient filtering"
-    href="/docs/examples/payment-policies"
-  />
-  <Card
-    title="Stripe Destination Mode"
-    description="Dynamic payTo resolution using Stripe PaymentIntents on Base"
-    href="/docs/examples/stripe-destination-mode"
-  />
-  <Card
-    title="Scheduler"
-    description="Automated agent hiring and interval-based execution"
+    title="Scheduled calls"
+    description="Leased, idempotent recurring A2A invocations."
     href="/docs/examples/scheduler"
+  />
+  <Card
+    title="Stripe destination mode"
+    description="Provider-specific dynamic destination resolution."
+    href="/docs/examples/stripe-destination-mode"
   />
 </Cards>
 
-## Environment setup
+## Shared environment contract
 
-Most examples require environment variables. Create a `.env` file based on the example's requirements:
+Use the prefixed payment variables in new applications:
 
 ```bash
-# Common variables
-FACILITATOR_URL=https://facilitator.x402.org
-PAYMENTS_RECEIVABLE_ADDRESS=0x...
-NETWORK=ethereum
-AGENT_WALLET_PRIVATE_KEY=0x...
-
-# Stripe destination mode (alternative to PAYMENTS_RECEIVABLE_ADDRESS)
-PAYMENTS_DESTINATION=stripe
-STRIPE_SECRET_KEY=sk_test_...
-
-# For identity examples
-RPC_URL=https://eth.llamarpc.com
-CHAIN_ID=1
-AGENT_DOMAIN=my-agent.example.com
+PAYMENTS_FACILITATOR_URL=https://YOUR_FACILITATOR_URL
+PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_ADDRESS
+PAYMENTS_NETWORK=eip155:84532
+AGENT_WALLET_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
 ```
 
-## What you'll learn
-
-| Example                  | Key concepts                                               |
-| ------------------------ | ---------------------------------------------------------- |
-| **Full Agent**           | Complete agent with all extensions, streaming entrypoints  |
-| **Identity Quick Start** | Simplest path to on-chain registration                     |
-| **A2A Integration**      | Agent discovery, task operations, multi-turn conversations |
-| **Thirdweb Wallets**     | Enterprise wallet management with thirdweb Engine          |
-| **Payment Policies**     | Spending limits, allowlists, blocklists                    |
-| **Stripe Destination**   | Dynamic payTo resolution with Stripe PaymentIntents        |
-| **Scheduler**            | Automated agent invocation with payments                   |
+The facilitator, network, asset, and signer must support the same x402 scheme.
+See the exact [x402 support matrix](/docs/protocols/x402) before choosing a
+production provider.

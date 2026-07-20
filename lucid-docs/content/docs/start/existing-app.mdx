@@ -1,0 +1,43 @@
+---
+title: Add Lucid to an existing app
+description: Keep your web framework and bind it to one canonical Lucid runtime.
+icon: Blocks
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid does not require a framework migration. Build one runtime from extensions
+and let the adapter bind its canonical HTTP route plan.
+
+| Application         | Adapter                  | Integration shape                            |
+| ------------------- | ------------------------ | -------------------------------------------- |
+| Hono or Bun server  | `@lucid-agents/hono`     | Bind the runtime to a Hono app               |
+| Express/Node server | `@lucid-agents/express`  | Bridge Node requests to Fetch handlers       |
+| Next.js App Router  | CLI `--adapter=next`     | Generated route modules delegate to handlers |
+| TanStack Start      | `@lucid-agents/tanstack` | Use UI storefront or headless handlers       |
+
+## Shared runtime
+
+```ts
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+
+export const runtime = await createAgent({
+  name: 'existing-service',
+  version: '0.1.0',
+})
+  .use(http())
+  .build();
+```
+
+Pass that completed runtime to your adapter. Do not implement an adapter-local
+entrypoint registry, paywall, manifest, or task state machine. Those contracts
+belong to the runtime extensions and must behave identically across adapters.
+
+For a low-risk adoption, add one free health or echo capability first, verify
+its Agent Card, then add the payments extension and price only one capability.
+
+Continue with [deployment adapters](/docs/operate/deploy) or
+[define a capability](/docs/build/define-capability).

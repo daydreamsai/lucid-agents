@@ -1,0 +1,24 @@
+---
+title: Discover services
+description: Use Agent Cards and catalogs without conflating them with x402 Bazaar.
+icon: Compass
+status: next
+verifiedVersion: 0.6.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid currently exposes two discovery inputs:
+
+- **Agent Cards/A2A:** remote identity, skills, operation modes, and payment
+  metadata at the agent URL.
+- **Lucid catalogs:** local YAML or CSV configuration used to register many
+  entrypoints.
+
+Fetch a card through the A2A runtime, validate the origin you intended to
+contact, and select a skill by stable key. Discovery is not authorization:
+apply recipient and spending policy after resolving the service.
+
+Lucid does not currently publish x402 Bazaar extension declarations. A service
+settled through a facilitator may appear in provider-owned discovery systems,
+but that is not the same as Lucid implementing Bazaar publication.

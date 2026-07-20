@@ -1,0 +1,25 @@
+---
+title: Schedule paid calls
+description: Lease recurring A2A invocations without duplicating work or spend.
+icon: CalendarClock
+status: next
+verifiedVersion: 0.2.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+`@lucid-agents/scheduler` runs leased, idempotent A2A jobs. A scheduler record
+should contain the target, capability key, input, payment context, schedule,
+and one stable invocation identity per occurrence.
+
+Use a durable scheduler store in production. Workers acquire leases before
+calling, renew them during long work, and record terminal state before another
+worker can claim the occurrence. A lease prevents concurrent execution; an
+idempotency key prevents duplicate business fulfillment when a worker loses
+the lease after sending.
+
+Apply the same payment policy as an interactive buyer. Scheduling increases the
+importance of time-window totals because a configuration error can repeat
+without a human present.
+
+See the [scheduler reference](/docs/packages/scheduler).

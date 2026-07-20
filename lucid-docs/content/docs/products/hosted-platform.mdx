@@ -1,0 +1,21 @@
+---
+title: Hosted Lucid Platform
+description: Boundary and prerequisites for the separately operated Runtime API and API SDK.
+icon: CloudCog
+status: hosted
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: hosted-platform
+---
+
+`@lucid-agents/api-sdk` is a generated client for the Hosted Lucid Platform's
+Runtime API. It does not call a local `AgentRuntime` and is not required for
+direct x402 requests.
+
+Use it only after receiving a production API base URL, authentication method,
+tenant/project identifiers, quotas, data-retention terms, and support path from
+the hosted product owner. Development endpoints previously shown in the OSS
+documentation are intentionally not treated as Stable service URLs.
+
+For local or self-hosted applications, call the canonical HTTP routes directly
+or use the A2A/payments clients.

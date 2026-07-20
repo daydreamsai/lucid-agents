@@ -1,0 +1,50 @@
+---
+title: Lucid Agents v3 runtime migration
+description: Move from adapter-owned application behavior to extension-owned runtime contracts.
+icon: ArrowRight
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid Agents v3 in this repository makes the completed runtime the single owner
+of entrypoints, HTTP authorization, payments, tasks, and manifest composition.
+The public Stable channel remains v2.5.0 until the v3 package set is published.
+
+## Build one runtime
+
+```ts
+const runtime = await createAgent(meta)
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(a2a({ taskStore }))
+  .use(http())
+  .build();
+```
+
+Register capabilities through `runtime.entrypoints.add()` or on the builder
+before `build()`. Adapter `addEntrypoint` helpers delegate to this registry for
+compatibility.
+
+## Delegate framework routes
+
+- Hono and Express bind `runtime.http.routes`.
+- TanStack and generated Next.js modules delegate to
+  `runtime.http.handlers`.
+- Remove adapter-local paywalls, task stores, manifests, and registries.
+
+## Use server-only subpaths
+
+Portable imports stay at package roots. Node-only storage and provider drivers
+use their declared subpaths, for example:
+
+```ts
+import { createPostgresPaymentStorage } from '@lucid-agents/payments/storage/postgres';
+import { createSQLitePaymentStorage } from '@lucid-agents/payments/storage/sqlite';
+```
+
+## Verify the migration
+
+Test health, Agent Card shape, free invocation, unpaid `402`, paid settlement,
+streaming, task ownership, idempotent retry, process restart with durable state,
+and `runtime.close()`.

@@ -88,7 +88,7 @@ await validationClient.validationRequest({
 **Pre-configured from setup:**
 
 - `AGENT_DOMAIN` – Configured during agent creation
-- `FACILITATOR_URL`, `PAYMENTS_RECEIVABLE_ADDRESS`, `NETWORK`, `DEFAULT_PRICE` – Payment settings from setup
+- `PAYMENTS_FACILITATOR_URL`, `PAYMENTS_RECEIVABLE_ADDRESS`, `PAYMENTS_NETWORK` – Payment settings from setup
 
 **Optional:**
 

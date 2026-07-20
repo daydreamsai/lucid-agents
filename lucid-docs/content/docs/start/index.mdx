@@ -1,0 +1,55 @@
+---
+title: Choose your path
+description: Start with the machine-commerce outcome you need to deliver.
+icon: Signpost
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid turns typed TypeScript capabilities into paid services. Start with the
+economic role your application plays; you can add the other side later.
+
+<Cards>
+  <Card
+    title="Sell a paid API"
+    description="Define a priced capability, observe its x402 challenge, and complete a testnet payment."
+    href="/docs/start/sell-paid-api"
+  />
+  <Card
+    title="Build a budgeted buyer"
+    description="Give an application a wallet while keeping recipients and spend within policy."
+    href="/docs/start/budgeted-buyer"
+  />
+  <Card
+    title="Add Lucid to an existing app"
+    description="Keep Hono, Express, Next.js, or TanStack Start and add one shared runtime."
+    href="/docs/start/existing-app"
+  />
+  <Card
+    title="Prepare for production"
+    description="Choose storage, secrets, a facilitator, observability, and deployment controls."
+    href="/docs/operate/production-checklist"
+  />
+</Cards>
+
+## The commercial loop
+
+1. A seller defines a typed **capability**. In the SDK, its definition is an
+   `entrypoint`.
+2. Lucid publishes HTTP and Agent Card discovery metadata from that definition.
+3. An unpaid request receives an x402 `402 Payment Required` challenge.
+4. A buyer checks its policy, signs the accepted payment, and retries.
+5. Lucid verifies the payment, runs fulfillment, settles, and records the
+   result.
+
+Lucid owns the application transaction around the payment rail. It does not
+replace wallets, facilitators, networks, or the x402 protocol.
+
+## Stable and Next
+
+**Stable** examples install public npm releases. **Next** pages document the
+newer workspace surface in this repository and say so visibly. Read
+[release channels](/docs/reference/release-channels) before mixing examples
+from the two channels.

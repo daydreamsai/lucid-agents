@@ -1,0 +1,55 @@
+---
+title: Call a paid service
+description: Negotiate an x402 challenge, pay, and verify application fulfillment.
+icon: Send
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The Stable path composes Lucid's service runtime with the official scoped x402
+v2 client. It sends an initial request, parses `PAYMENT-REQUIRED`, signs one
+accepted EVM `exact` payment, and retries with `PAYMENT-SIGNATURE`.
+
+```ts
+import { x402Client } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { privateKeyToAccount } from 'viem/accounts';
+
+const key = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
+if (!key) throw new Error('BUYER_PRIVATE_KEY is required');
+
+const client = new x402Client();
+registerExactEvmScheme(client, {
+  signer: privateKeyToAccount(key),
+  networks: ['eip155:84532'],
+});
+const paidFetch = wrapFetchWithPayment(fetch, client);
+
+const response = await paidFetch(endpoint, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'idempotency-key': operationId,
+  },
+  body: JSON.stringify({ input }),
+});
+
+if (!response.ok) {
+  throw new Error(`Service failed after negotiation: ${response.status}`);
+}
+
+const receipt = response.headers.get('PAYMENT-RESPONSE');
+const result = await response.json();
+```
+
+An HTTP `200` proves the service returned successfully; the payment response
+header carries settlement information. Validate the response body against the
+service's advertised output schema. Do not interpret “the wallet signed” as
+proof that fulfillment was correct.
+
+This buyer is EVM-only. Solana receiving support does not imply the EVM client
+can sign Solana payments. The Next Lucid buyer helper is documented on the
+[payments package page](/docs/packages/payments), not used by this Stable flow.

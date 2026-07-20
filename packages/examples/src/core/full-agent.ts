@@ -9,9 +9,9 @@
  * Run with: bun run examples/full-agent.ts
  *
  * Environment variables (all optional):
- *   FACILITATOR_URL              - x402 facilitator (defaults to https://facilitator.daydreams.systems)
+ *   PAYMENTS_FACILITATOR_URL     - x402 facilitator selected by the operator
  *   PAYMENTS_RECEIVABLE_ADDRESS  - Wallet address to receive payments
- *   NETWORK                       - Network (e.g. base-sepolia, base, solana)
+ *   PAYMENTS_NETWORK              - Canonical CAIP-2 network identifier
  *   AGENT_DOMAIN                  - Domain for ERC-8004 identity
  *   PRIVATE_KEY                   - Wallet private key for identity registration
  *   RPC_URL                       - RPC endpoint for blockchain
@@ -73,7 +73,7 @@ async function main() {
     description: 'Echo back the input text',
     input: z.object({ text: z.string() }),
     output: z.object({ text: z.string() }),
-    price: paymentsConfig ? '1000' : undefined, // 0.001 USDC if payments enabled
+    price: paymentsConfig ? '0.001' : undefined,
     handler: async ctx => {
       const input = ctx.input as { text: string };
       return {
@@ -88,7 +88,7 @@ async function main() {
     key: 'stream',
     description: 'Stream characters back one by one',
     input: z.object({ prompt: z.string() }),
-    price: paymentsConfig ? '2000' : undefined, // 0.002 USDC if payments enabled
+    price: paymentsConfig ? '0.002' : undefined,
     stream: async (ctx, emit) => {
       const input = ctx.input as { prompt: string };
       const prompt = input.prompt;

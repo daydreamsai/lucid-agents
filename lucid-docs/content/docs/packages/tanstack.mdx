@@ -2,6 +2,10 @@
 title: '@lucid-agents/tanstack'
 description: TanStack Start handlers for a completed Lucid HTTP runtime.
 icon: Layers
+status: next
+verifiedVersion: 0.8.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
 The TanStack adapter exposes Fetch-native Lucid HTTP handlers in the context shape expected by TanStack Start route modules. It delegates to the completed `runtime.http.handlers`; it does not create a second registry, execute handlers directly, or install an adapter-local paywall.
@@ -26,8 +30,7 @@ const agent = await createAgent({
   .use(http({ basePath: '/api/agent' }))
   .build();
 
-export const { runtime, handlers, routes } =
-  await createTanStackRuntime(agent);
+export const { runtime, handlers, routes } = await createTanStackRuntime(agent);
 ```
 
 Always install `http()` before creating the TanStack wrapper. Call `await runtime.close()` during server shutdown.
@@ -46,11 +49,11 @@ type TanStackRuntime<TRuntime> = {
 };
 ```
 
-| Property | Description |
-| --- | --- |
-| `runtime` | The same completed runtime passed to the adapter. |
-| `handlers` | TanStack-context wrappers around `runtime.http.handlers`. |
-| `routes` | The same route paths, methods, and capability checks used by Hono and Express. |
+| Property   | Description                                                                    |
+| ---------- | ------------------------------------------------------------------------------ |
+| `runtime`  | The same completed runtime passed to the adapter.                              |
+| `handlers` | TanStack-context wrappers around `runtime.http.handlers`.                      |
+| `routes`   | The same route paths, methods, and capability checks used by Hono and Express. |
 
 ### createTanStackHandlers(runtime)
 
@@ -69,21 +72,21 @@ type TanStackRouteHandler<Params> = (context: {
 
 `TanStackHandlers` includes:
 
-| Handler | Parameters | Purpose |
-| --- | --- | --- |
-| `health` | `{ request }` | Health response. |
-| `entrypoints` | `{ request }` | Entrypoint discovery. |
-| `manifest` | `{ request }` | Agent Card. |
-| `oasf` | `{ request }` | OASF record or `404`. |
-| `favicon` | `{ request }` | SVG favicon. |
-| `landing` | `{ request }` | Optional landing page. |
-| `invoke` | `{ request, params: { key } }` | Canonical invoke flow. |
-| `stream` | `{ request, params: { key } }` | Canonical SSE flow. |
-| `tasks` | `{ request }` | Create a task. |
-| `listTasks` | `{ request }` | List owned tasks. |
-| `getTask` | `{ request, params: { taskId } }` | Read an owned task. |
-| `cancelTask` | `{ request, params: { taskId } }` | Cancel an owned task. |
-| `subscribeTask` | `{ request, params: { taskId } }` | Stream task updates. |
+| Handler         | Parameters                        | Purpose                |
+| --------------- | --------------------------------- | ---------------------- |
+| `health`        | `{ request }`                     | Health response.       |
+| `entrypoints`   | `{ request }`                     | Entrypoint discovery.  |
+| `manifest`      | `{ request }`                     | Agent Card.            |
+| `oasf`          | `{ request }`                     | OASF record or `404`.  |
+| `favicon`       | `{ request }`                     | SVG favicon.           |
+| `landing`       | `{ request }`                     | Optional landing page. |
+| `invoke`        | `{ request, params: { key } }`    | Canonical invoke flow. |
+| `stream`        | `{ request, params: { key } }`    | Canonical SSE flow.    |
+| `tasks`         | `{ request }`                     | Create a task.         |
+| `listTasks`     | `{ request }`                     | List owned tasks.      |
+| `getTask`       | `{ request, params: { taskId } }` | Read an owned task.    |
+| `cancelTask`    | `{ request, params: { taskId } }` | Cancel an owned task.  |
+| `subscribeTask` | `{ request, params: { taskId } }` | Stream task updates.   |
 
 ## Route modules
 
@@ -93,9 +96,7 @@ TanStack route files should pass the original request and validated route parame
 import { createFileRoute } from '@tanstack/react-router';
 import { handlers } from '@/lib/agent';
 
-export const Route = createFileRoute(
-  '/api/agent/entrypoints/$key/invoke'
-)({
+export const Route = createFileRoute('/api/agent/entrypoints/$key/invoke')({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
@@ -115,9 +116,7 @@ export const Route = createFileRoute(
 Streaming uses the same delegation; do not build a second `ReadableStream` or rewrite SSE headers:
 
 ```typescript title="src/routes/api/agent/entrypoints/$key/stream.ts"
-export const Route = createFileRoute(
-  '/api/agent/entrypoints/$key/stream'
-)({
+export const Route = createFileRoute('/api/agent/entrypoints/$key/stream')({
   server: {
     handlers: {
       POST: ({ request, params }) =>
@@ -166,8 +165,7 @@ const agent = await createAgent({
   })
   .build();
 
-export const { runtime, handlers, routes } =
-  await createTanStackRuntime(agent);
+export const { runtime, handlers, routes } = await createTanStackRuntime(agent);
 ```
 
 The HTTP runtime uses one authorization path for invoke, stream, and task creation. x402, MPP, SIWX entitlements, payment-policy admission, settlement, and idempotency therefore match Hono and Express. If both x402 and MPP are installed, each priced entrypoint must set `paymentProtocol: 'x402' | 'mpp'`.
@@ -182,8 +180,8 @@ Task creation accepts a 20–256 character `Task-Access-Token` header or generat
 
 The CLI supplies two composable TanStack Start shells:
 
-- `tanstack-headless` provides the runtime route modules without a dashboard.
-- `tanstack-ui` layers the dashboard, wallet integration, and schema forms over the same headless route modules.
+- `tanstack-headless` provides the runtime route modules without a storefront.
+- `tanstack-ui` layers the service storefront, wallet integration, and schema forms over the same headless route modules.
 
 ```bash
 bunx @lucid-agents/cli my-agent --adapter=tanstack-headless

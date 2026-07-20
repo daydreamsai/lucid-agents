@@ -2,6 +2,10 @@
 title: Stripe Destination Mode
 description: Configure dynamic payTo resolution with Stripe in @lucid-agents/payments.
 icon: CreditCard
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: provider
 ---
 
 This example shows how to run an agent in Stripe destination mode, where the payment destination (`payTo`) is resolved dynamically per request.
@@ -21,8 +25,8 @@ Use Stripe destination mode when:
 ## Environment
 
 ```bash
-FACILITATOR_URL=https://facilitator.x402.org
-NETWORK=base
+PAYMENTS_FACILITATOR_URL=https://YOUR_FACILITATOR_URL
+PAYMENTS_NETWORK=eip155:8453
 PAYMENTS_DESTINATION=stripe
 STRIPE_SECRET_KEY=sk_test_...
 ```

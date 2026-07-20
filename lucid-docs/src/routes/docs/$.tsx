@@ -1,9 +1,9 @@
-import { createFileRoute, notFound } from '@tanstack/react-router';
+import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { createServerFn } from '@tanstack/react-start';
 import { source } from '@/lib/source';
 import type * as PageTree from 'fumadocs-core/page-tree';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import browserCollections from 'fumadocs-mdx:collections/browser';
 import {
   DocsBody,
@@ -14,6 +14,9 @@ import {
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import { baseOptions } from '@/lib/layout.shared';
 import { LLMCopyButton, ViewOptions } from '@/components/page-actions';
+import { DocStatus } from '@/components/doc-status';
+import { docsRedirects } from '@/lib/docs-redirects';
+import { trackDocsEvent } from '@/lib/docs-telemetry';
 
 export const Route = createFileRoute('/docs/$')({
   component: Page,
@@ -30,6 +33,11 @@ const loader = createServerFn({
 })
   .inputValidator((slugs: string[]) => slugs)
   .handler(async ({ data: slugs }) => {
+    const requestedPath = `/docs${slugs.length > 0 ? `/${slugs.join('/')}` : ''}`;
+    const redirectTarget = docsRedirects[requestedPath];
+    if (redirectTarget) {
+      throw redirect({ href: redirectTarget, statusCode: 308 });
+    }
     const page = source.getPage(slugs);
     if (!page) throw notFound();
 
@@ -50,12 +58,18 @@ const clientLoader = browserCollections.docs.createClientLoader<DocsPageProps>({
         <div className="flex flex-row gap-2 items-center border-b pt-2 pb-6">
           <LLMCopyButton markdownUrl={markdownUrl} />
           <ViewOptions
-            markdownUrl={`${markdownUrl}.mdx`}
-            githubUrl={`https://github.com/daydreamsai/lucid-agents/blob/master/lucid-docs/content/${markdownUrl}`}
+            markdownUrl={markdownUrl}
+            githubUrl={`https://github.com/daydreamsai/lucid-agents/blob/master/lucid-docs/content${markdownUrl}`}
           />
         </div>
         <DocsTitle>{frontmatter.title}</DocsTitle>
         <DocsDescription>{frontmatter.description}</DocsDescription>
+        <DocStatus
+          status={frontmatter.status}
+          verifiedVersion={frontmatter.verifiedVersion}
+          verifiedAt={frontmatter.verifiedAt}
+          product={frontmatter.product}
+        />
         <DocsBody>
           <MDX
             components={{
@@ -78,6 +92,21 @@ function Page() {
     () => transformPageTree(data.tree as PageTree.Folder),
     [data.tree]
   );
+
+  useEffect(() => {
+    const path = `/docs${slugPath ? `/${slugPath}` : ''}`;
+    const stage =
+      slugPath === 'start/install'
+        ? 'install'
+        : slugPath === 'start/sell-paid-api'
+          ? 'seller-quickstart'
+          : slugPath === 'start/budgeted-buyer'
+            ? 'buyer-quickstart'
+            : slugPath === 'operate/production-checklist'
+              ? 'production'
+              : undefined;
+    trackDocsEvent({ name: 'page_view', path, ...(stage ? { stage } : {}) });
+  }, [slugPath]);
 
   return (
     <DocsLayout {...baseOptions()} tree={tree}>

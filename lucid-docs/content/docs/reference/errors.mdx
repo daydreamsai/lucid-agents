@@ -1,0 +1,23 @@
+---
+title: Errors
+description: Classify HTTP, policy, payment, task, and fulfillment failures.
+icon: CircleAlert
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+| Class                            | Typical status/state | Retry guidance                                      |
+| -------------------------------- | -------------------- | --------------------------------------------------- |
+| Input/schema                     | `400`                | Fix input; do not repay blindly                     |
+| Payment required                 | `402`                | Let a compatible buyer evaluate and retry once      |
+| Policy denied                    | `403`                | Change intent/policy; do not bypass controls        |
+| Missing payment configuration    | `503`                | Operator action required                            |
+| Verification/settlement provider | `5xx`                | Check provider and ambiguous state before retry     |
+| Fulfillment exception            | `5xx` or failed task | Query idempotency/task state before another payment |
+| Task lease/cancellation          | Task state           | Follow task state machine, not generic HTTP retry   |
+
+Expose stable machine-readable error codes and a safe message. Log correlated
+internal detail by run/idempotency/task ID without returning secrets or payment
+credentials.

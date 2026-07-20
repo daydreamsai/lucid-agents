@@ -1,0 +1,36 @@
+---
+title: Build with a coding agent
+description: Give a coding agent accurate Lucid context without coupling the SDK to a hosted creator.
+icon: Bot
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+A coding agent can scaffold and modify a Lucid service, but generated code must
+still pass the same build and payment tests as hand-written code.
+
+## Give the agent repository context
+
+Keep the generated `AGENTS.md` file. It describes the template's public APIs,
+environment variables, and test commands. Ask the agent to:
+
+1. Preserve the runtime/extension/adapter boundary.
+2. Add Zod input and output schemas before implementing business logic.
+3. State prices as USD decimal strings.
+4. Keep private keys and facilitator credentials server-side.
+5. Run typechecking and the unpaid `402` test before reporting completion.
+
+## Example request
+
+```text
+Add a capability named summarize. It accepts non-empty text and returns a
+summary plus usage. Charge $0.02 USDC per invocation over x402. Preserve the
+existing adapter and add a test that an unpaid request receives 402.
+```
+
+The open-source workflow does not require the Hosted Lucid Platform. Hosted
+agent creation is a separate product surface; see
+[Hosted agent creation](/docs/products/agent-creation) only if that service is
+available to your account.

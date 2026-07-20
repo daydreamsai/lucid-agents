@@ -43,7 +43,7 @@ addEntrypoint({
       volume: z.number(),
     })),
   }),
-  price: '5000', // Price in base units (e.g., wei for EVM)
+  price: '0.005', // USD decimal price for historical data
   handler: async ctx => {
     const { symbol, timeframe = '1h' } = ctx.input;
 
@@ -88,7 +88,7 @@ addEntrypoint({
     price: z.number(),
     timestamp: z.string(),
   }),
-  price: '1000', // Lower price for simple price query
+  price: '0.001', // USD decimal price for a simple query
   handler: async ctx => {
     const { symbol } = ctx.input;
 

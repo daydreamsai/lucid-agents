@@ -1,0 +1,29 @@
+---
+title: Create a service storefront
+description: Present Agent Card capabilities as a human-readable service page without coupling UI to runtime internals.
+icon: Store
+status: next
+verifiedVersion: 0.8.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The Next.js and TanStack UI adapters generate a **service storefront**. It
+renders public identity, health, capability schemas, operation URLs, and payment
+requirements from HTTP contracts.
+
+Generate one with:
+
+```bash
+bunx @lucid-agents/cli my-service --adapter=tanstack-ui
+# or
+bunx @lucid-agents/cli my-service --adapter=next
+```
+
+Storefront components consume `buildServicePageModel()` from
+`@lucid-agents/http`. They must not inspect `runtime.entrypoints`, payments
+internals, or adapter-specific registries. This keeps the UI truthful across
+frameworks and lets headless deployments expose the same service contract.
+
+The storefront is not an operations dashboard. Payment reconciliation,
+analytics, alerts, and task administration belong to your production tooling.

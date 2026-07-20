@@ -1,0 +1,31 @@
+---
+title: Troubleshoot payments
+description: Locate failures in configuration, negotiation, policy, verification, settlement, or fulfillment.
+icon: Wrench
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+| Symptom                                 | Likely stage  | Check                                                  |
+| --------------------------------------- | ------------- | ------------------------------------------------------ |
+| Paid route returns `200` to plain Fetch | Activation    | Entrypoint price and installed payments extension      |
+| `503` before a challenge                | Configuration | Facilitator URL, network, receiving address            |
+| `402` never becomes a paid retry        | Buyer         | Signing key, registered network, testnet USDC          |
+| `403` from buyer wrapper                | Policy        | Recipient, per-request limit, totals, rate limit       |
+| Facilitator rejects verification        | Verification  | Network/asset match, signature, clock, payload version |
+| Settlement fails after handler          | Settlement    | Facilitator/provider status and on-chain transaction   |
+| Timeout after signing                   | Ambiguous     | Idempotency/task state before retrying payment         |
+
+## Safe diagnostic request
+
+Use plain Fetch or curl first and retain the `PAYMENT-REQUIRED` header. Decode
+it only in a safe local tool; it should advertise x402 v2, `exact`, the expected
+CAIP-2 network, seller address, and amount. Do not paste payment signatures or
+private keys into an issue.
+
+When reporting a problem, include Lucid/package versions, adapter, HTTP status,
+network, facilitator hostname, capability key, sanitized requirement, run ID,
+and whether fulfillment executed. Keep secrets and full wallet payloads out of
+the report.

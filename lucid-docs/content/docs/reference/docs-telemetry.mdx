@@ -1,0 +1,41 @@
+---
+title: Documentation telemetry
+description: Privacy boundary and event contract for activation and search-quality reporting.
+icon: ChartNoAxesColumn
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The documentation site emits a small first-party event stream so its operators
+can see where readers leave the seller/buyer journey and which searches return
+no useful result.
+
+## Collected
+
+- documentation path views;
+- seller, buyer, application, and production-path selections;
+- scaffold-command copy events;
+- search query length and result count;
+- a truncated, keyed HMAC-SHA-256 query fingerprint when the deployment sets
+  `DOCS_SEARCH_HASH_SALT`.
+
+The raw search text is not logged. The keyed fingerprint allows repeated failed
+searches to be grouped without making common queries vulnerable to an offline
+dictionary. Without a deployment secret, no query fingerprint is emitted.
+
+## Not collected
+
+The event API rejects arbitrary event names and fields. Documentation events do
+not contain wallet addresses, private keys, payment headers or payloads,
+receiving addresses, IP-derived identity, cookies, or a persistent reader ID.
+
+Events are written as structured server logs. Retention and access control are
+deployment responsibilities. If a deployment cannot meet its privacy policy,
+it should discard `lucid_docs_event` and `lucid_docs_search` log records rather
+than forwarding them to an analytics processor.
+
+The documentation cannot observe whether a terminal command actually produced
+a `402` or settlement. Those stages must be measured through explicit,
+consent-aware product feedback rather than inferred from wallet activity.

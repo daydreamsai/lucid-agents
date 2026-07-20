@@ -1,0 +1,36 @@
+---
+title: Stream and meter work
+description: Stream typed progress while keeping the currently supported payment contract explicit.
+icon: Radio
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid streams over Server-Sent Events (SSE). A stream operation can have a
+different fixed price from direct invocation, but current x402 settlement is
+not usage-metered.
+
+```ts
+runtime.entrypoints.add({
+  key: 'generate',
+  price: { invoke: '0.03', stream: '0.05' },
+  input: z.object({ prompt: z.string().min(1).max(2_000) }),
+  output: z.object({ text: z.string() }),
+  handler: async ({ input }) => ({ output: await generate(input.prompt) }),
+  stream: async ({ input, signal }, emit) => {
+    let text = '';
+    for await (const token of generateTokens(input.prompt, signal)) {
+      text += token;
+      await emit({ kind: 'delta', delta: token, mime: 'text/plain' });
+    }
+    return { output: { text } };
+  },
+});
+```
+
+Bound the maximum input, duration, and output to make the advertised fixed
+price honest. Do not describe this as x402 `upto` or token-level settlement.
+If fulfillment can outlive the connection, use an
+[asynchronous task](/docs/build/async-tasks).

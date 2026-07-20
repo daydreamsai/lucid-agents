@@ -2,6 +2,10 @@
 title: '@lucid-agents/catalog'
 description: YAML/CSV catalog-driven route generation for large product catalogs.
 icon: List
+status: next
+verifiedVersion: 0.2.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
 The catalog extension generates entrypoint routes from YAML or CSV product catalog files. Instead of writing hundreds of `addEntrypoint()` calls, define your catalog in a single file and let the extension register all routes at build time.
@@ -11,6 +15,12 @@ The catalog extension generates entrypoint routes from YAML or CSV product catal
 ```bash
 bun add @lucid-agents/catalog
 ```
+
+<Callout type="warn">
+  This command applies after `@lucid-agents/catalog` is published. As of the
+  verification date, catalog is a Next workspace package and is not part of the
+  clean-room Stable npm set.
+</Callout>
 
 The root export contains portable parsers, schemas, types, and entrypoint generation. File-backed loading uses Node filesystem APIs and is available explicitly from `@lucid-agents/catalog/node`.
 

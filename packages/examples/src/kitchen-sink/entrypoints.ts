@@ -79,11 +79,11 @@ export function registerEntrypoints(
   });
 
   // ------------------------------------------------------------------
-  // 2. summarize — demonstrates: paid entrypoint (price in USDC atoms)
+  // 2. summarize — demonstrates: paid entrypoint (USD decimal price)
   //    Shows how to attach a price to gate access behind x402 payments.
   //    The payments() extension handles the paywall automatically.
   //
-  //    In production deployments, set `price: '1000'` (0.001 USDC) to
+  //    In production deployments, set `price: '0.001'` to
   //    activate the x402 paywall.  The field is omitted here so that
   //    integration tests can call the handler without on-chain payment
   //    infrastructure, while the comment documents the intent.
@@ -102,7 +102,7 @@ export function registerEntrypoints(
     }),
     ...(options?.profile === 'x402' || options?.profile === 'mpp'
       ? {
-          price: '1000',
+          price: '0.001',
           paymentProtocol: options.profile,
           ...(options.profile === 'x402' ? { siwx: { enabled: true } } : {}),
         }

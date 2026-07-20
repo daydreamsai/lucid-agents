@@ -1,0 +1,25 @@
+---
+title: MPP
+description: Use the Next-only MPP extension for standard challenges and credential verification.
+icon: Banknote
+status: next
+verifiedVersion: 0.2.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+`@lucid-agents/mpp` protects invoke, stream, and task operations with MPP
+`WWW-Authenticate` challenges. It can use native Tempo/Stripe methods exposed
+by `mppx` or an application-supplied credential verifier.
+
+The package is not published in the Stable npm channel. Use it from the
+repository as one compatible Next workspace set.
+
+When both payments and MPP extensions are installed, every priced capability
+must set `paymentProtocol: 'x402'` or `paymentProtocol: 'mpp'`. The shared HTTP
+authorization transaction selects the owning extension and preserves the same
+fulfillment/failure behavior across adapters.
+
+Choose MPP when its credential or session model matches the commercial
+contract. Choose x402 `exact` for the documented on-chain per-call path. Do not
+describe the two as interchangeable wire formats.

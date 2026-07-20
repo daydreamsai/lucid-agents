@@ -1,0 +1,80 @@
+---
+title: Build a budgeted buyer
+description: Pay for x402 services from a server-side wallet with recipient and spend controls.
+icon: WalletCards
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Automatic payment is convenient; unrestricted automatic spending is not. A
+buyer should bind its wallet to an explicit recipient, per-request ceiling,
+and time-bounded total before wrapping Fetch.
+
+## Start with a server-only wallet
+
+```ts
+import {
+  createInMemoryPaymentStorage,
+  createPaymentTracker,
+  wrapBaseFetchWithPolicy,
+} from '@lucid-agents/payments';
+import { x402Client } from '@x402/core/client';
+import { registerExactEvmScheme } from '@x402/evm/exact/client';
+import { wrapFetchWithPayment } from '@x402/fetch';
+import { privateKeyToAccount } from 'viem/accounts';
+
+const privateKey = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
+if (!privateKey) throw new Error('BUYER_PRIVATE_KEY is required');
+
+const tracker = createPaymentTracker(createInMemoryPaymentStorage());
+const policies = [
+  {
+    name: 'research-budget',
+    allowedRecipients: ['0xSELLER_RECEIVING_ADDRESS'],
+    outgoingLimits: {
+      global: {
+        maxPaymentUsd: 0.05,
+        maxTotalUsd: 1,
+        windowMs: 24 * 60 * 60 * 1_000,
+      },
+    },
+  },
+];
+
+const policyFetch = wrapBaseFetchWithPolicy(fetch, policies, tracker);
+const client = new x402Client();
+registerExactEvmScheme(client, {
+  signer: privateKeyToAccount(privateKey),
+  networks: ['eip155:84532'],
+});
+const paidFetch = wrapFetchWithPayment(policyFetch, client);
+```
+
+The policy wrapper must sit **before** the x402 payment wrapper. It inspects the
+challenge and reserves budget before a signature is created. Use durable
+payment storage when multiple processes share a budget.
+
+## Call deliberately
+
+Pass an idempotency key that represents the business operation, not an
+individual HTTP attempt:
+
+```ts
+const response = await paidFetch(serviceUrl, {
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'idempotency-key': crypto.randomUUID(),
+  },
+  body: JSON.stringify({ input: { text: 'Analyze this once' } }),
+});
+```
+
+Handle policy rejection separately from payment or fulfillment failure. A
+blocked payment is a control working as designed, not a reason to bypass the
+wrapper.
+
+Next: [set policies and budgets](/docs/buy/policies-budgets) and
+[handle retries](/docs/buy/retries-idempotency).

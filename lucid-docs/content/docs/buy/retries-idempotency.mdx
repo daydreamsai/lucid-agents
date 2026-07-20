@@ -1,0 +1,32 @@
+---
+title: Handle retries and idempotency
+description: Retry network attempts without duplicating paid business operations.
+icon: RefreshCcw
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+x402 already requires one protocol retry: unpaid request, then paid request.
+Application retries add another layer and must retain one business identity.
+
+## Rules
+
+- Generate an idempotency key before the first attempt and reuse it for every
+  retry of that operation.
+- Do not retry a paid `4xx` response automatically.
+- On timeout after signing, query task or application state before paying
+  again.
+- Bound attempts and use exponential backoff for transient `5xx` or network
+  failures.
+- Persist target-side idempotency records for at least as long as buyers may
+  retry.
+- Never use a random key per HTTP attempt.
+
+Lucid's HTTP extension owns target-side idempotency for canonical routes. The
+payments runtime binds authorization reservations to request attempts. Durable
+ports are required when process loss must not erase either protection.
+
+Treat `PAYMENT-RESPONSE` as settlement evidence and your output/task record as
+fulfillment evidence. Reconciliation needs both.

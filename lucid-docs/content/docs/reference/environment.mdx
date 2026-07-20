@@ -1,0 +1,25 @@
+---
+title: Environment variables
+description: Canonical server-side configuration names used by the SDK and generated projects.
+icon: FileKey
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+| Variable                       | Required when          | Meaning                             |
+| ------------------------------ | ---------------------- | ----------------------------------- |
+| `PAYMENTS_FACILITATOR_URL`     | Receiving x402         | Facilitator base URL                |
+| `PAYMENTS_FACILITATOR_AUTH`    | Provider requires auth | Server-side bearer token            |
+| `PAYMENTS_NETWORK`             | Receiving x402         | Network alias or CAIP-2 identifier  |
+| `PAYMENTS_RECEIVABLE_ADDRESS`  | Static destination     | Seller receiving address            |
+| `PAYMENTS_DESTINATION`         | Dynamic destination    | `static` or supported provider mode |
+| `STRIPE_SECRET_KEY`            | Stripe destination     | Server-side Stripe secret           |
+| `DEVELOPER_WALLET_PRIVATE_KEY` | Identity/contracts     | EVM signing key                     |
+| `AGENT_WALLET_PRIVATE_KEY`     | Local buyer wallet     | Server-side buyer signing key       |
+
+The runtime accepts some historical aliases for compatibility, but new docs and
+templates use prefixed names. There is no global default price environment
+variable in the current extension contract; attach an explicit USD decimal
+price to each commercial capability.

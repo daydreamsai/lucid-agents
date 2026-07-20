@@ -1,0 +1,19 @@
+---
+title: Deploy
+description: Choose an adapter without changing the runtime's payment and capability contracts.
+icon: CloudUpload
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+| Adapter        | Best fit                              | Server shape                                 |
+| -------------- | ------------------------------------- | -------------------------------------------- |
+| Hono           | Bun/Fetch-native service              | Bind `runtime.http.routes`                   |
+| Express        | Existing Node application             | Bridge Node request/response                 |
+| Next.js        | App Router application/storefront     | Generated route modules delegate to handlers |
+| TanStack Start | Full-stack storefront or headless API | Framework handlers wrap Fetch contracts      |
+
+All adapters expose the same health, discovery, invoke, stream, and task plan
+for the extensions installed. Do not add a framework-specific paywall.

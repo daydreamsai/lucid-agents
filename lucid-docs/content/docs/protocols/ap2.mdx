@@ -1,0 +1,24 @@
+---
+title: AP2 role metadata
+description: Add AP2 role descriptors to an Agent Card without implying mandate or payment execution.
+icon: ArrowLeftRight
+status: next
+verifiedVersion: 0.4.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The current `@lucid-agents/ap2` extension adds an AP2 extension descriptor and
+configured roles to the generated Agent Card.
+
+```ts
+const runtime = await createAgent(meta)
+  .use(ap2({ roles: ['merchant'] }))
+  .build();
+```
+
+This release does **not** implement AP2 mandates, payment authorization,
+credential exchange, checkout, or settlement. Those capabilities must not be
+inferred from the presence of role metadata.
+
+See the exact [package reference](/docs/packages/ap2).

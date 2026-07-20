@@ -1,0 +1,24 @@
+---
+title: Protocols
+description: Understand which wire, discovery, identity, and metadata contracts Lucid composes.
+icon: Waypoints
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Lucid is an application runtime above these protocols, not a replacement for
+them.
+
+| Protocol | Lucid role                                                          |
+| -------- | ------------------------------------------------------------------- |
+| x402     | HTTP payment challenge, verification, settlement, and buyer signing |
+| MPP      | Alternative `402` challenge and credential verification extension   |
+| SIWX     | Wallet proof and reusable entitlement extension around x402         |
+| A2A      | Agent Card discovery, invocation, streaming, and owned tasks        |
+| ERC-8004 | EVM identity and trust registries                                   |
+| AP2      | Agent Card role metadata only                                       |
+
+Install only the protocols required by the application. The extension system
+keeps their state and lifecycle out of the core runtime.

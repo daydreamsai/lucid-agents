@@ -1,0 +1,11 @@
+{
+  "title": "Start",
+  "pages": [
+    "index",
+    "install",
+    "sell-paid-api",
+    "budgeted-buyer",
+    "existing-app",
+    "coding-agent"
+  ]
+}

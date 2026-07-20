@@ -1,163 +1,64 @@
 ---
 title: Packages
-description: Reference documentation for all Lucid Agents packages.
+description: Reference map for the open-source Lucid runtime packages.
 icon: Package
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
-Lucid Agents is organized as a monorepo with packages across several categories:
+Lucid is a typed extension runtime with one canonical capability registry and
+one HTTP authorization transaction. Start with a task guide; use this section
+when you need the exact boundary of a package.
 
-## Platform Client
+<Callout type="warn">
+  This index describes the current repository. Package versions are independent,
+  and some Next packages are not published. Use the [release channel
+  table](/docs/reference/release-channels) for clean installs.
+</Callout>
 
-Interact with the Lucid Agents Runtime API:
+## Runtime layers
 
-<Cards>
-  <Card
-    title="@lucid-agents/api-sdk"
-    description="TypeScript client for the Runtime API - create agents, invoke entrypoints, analytics"
-    href="/docs/packages/api-sdk"
-  />
-</Cards>
+| Layer           | Packages                                                                                                              | Responsibility                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Contracts       | [`@lucid-agents/types`](/docs/packages/types)                                                                         | Canonical cross-package protocol and runtime types           |
+| Kernel          | [`@lucid-agents/core`](/docs/packages/core)                                                                           | Extension lifecycle and one capability registry              |
+| Transport       | [`@lucid-agents/http`](/docs/packages/http)                                                                           | Fetch handlers, route plan, SSE, authorization transaction   |
+| Commerce        | [`payments`](/docs/packages/payments), [`mpp`](/docs/packages/mpp), [`wallet`](/docs/packages/wallet)                 | Receive, buy, verify, enforce policy, and sign               |
+| Agent protocols | [`a2a`](/docs/packages/a2a), [`identity`](/docs/packages/identity), [`ap2`](/docs/packages/ap2)                       | Discovery, tasks, trust, and role metadata                   |
+| Operations      | [`analytics`](/docs/packages/analytics), [`scheduler`](/docs/packages/scheduler), [`catalog`](/docs/packages/catalog) | Reporting, recurring calls, and catalog-defined capabilities |
+| Adapters        | [`hono`](/docs/packages/hono), [`express`](/docs/packages/express), [`tanstack`](/docs/packages/tanstack)             | Bind the same route plan to a framework                      |
+| Tooling         | [`cli`](/docs/packages/cli)                                                                                           | Generate an adapter/template project                         |
 
-## Foundation
+## Dependency direction
 
-<Cards>
-  <Card
-    title="@lucid-agents/types"
-    description="Shared TypeScript type definitions"
-    href="/docs/packages/types"
-  />
-  <Card
-    title="@lucid-agents/core"
-    description="Protocol-agnostic agent runtime with extension system"
-    href="/docs/packages/core"
-  />
-</Cards>
-
-## Extensions
-
-Optional capabilities you can add to your agent:
-
-<Cards>
-  <Card
-    title="@lucid-agents/http"
-    description="HTTP request/response handling and SSE streaming"
-    href="/docs/packages/http"
-  />
-  <Card
-    title="@lucid-agents/payments"
-    description="x402 payment protocol for monetizing agents"
-    href="/docs/packages/payments"
-  />
-  <Card
-    title="@lucid-agents/mpp"
-    description="Machine Payments Protocol — multi-method payments via HTTP 402"
-    href="/docs/packages/mpp"
-  />
-  <Card
-    title="@lucid-agents/catalog"
-    description="YAML/CSV catalog-driven route generation for large product catalogs"
-    href="/docs/packages/catalog"
-  />
-  <Card
-    title="@lucid-agents/identity"
-    description="ERC-8004 on-chain identity and reputation"
-    href="/docs/packages/identity"
-  />
-  <Card
-    title="@lucid-agents/a2a"
-    description="Agent-to-Agent protocol for discovery and communication"
-    href="/docs/packages/a2a"
-  />
-  <Card
-    title="@lucid-agents/wallet"
-    description="Wallet connectors for agent operations"
-    href="/docs/packages/wallet"
-  />
-  <Card
-    title="@lucid-agents/ap2"
-    description="Agent Payments Protocol extension"
-    href="/docs/packages/ap2"
-  />
-</Cards>
-
-## Framework Adapters
-
-Integrate agents with your preferred web framework:
-
-<Cards>
-  <Card
-    title="@lucid-agents/hono"
-    description="Hono framework adapter"
-    href="/docs/packages/hono"
-  />
-  <Card
-    title="@lucid-agents/tanstack"
-    description="TanStack Start adapter"
-    href="/docs/packages/tanstack"
-  />
-  <Card
-    title="@lucid-agents/express"
-    description="Express framework adapter"
-    href="/docs/packages/express"
-  />
-</Cards>
-
-## Developer Tools
-
-<Cards>
-  <Card
-    title="@lucid-agents/cli"
-    description="CLI for scaffolding new agent projects"
-    href="/docs/packages/cli"
-  />
-</Cards>
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Platform Client                        │
-│                  @lucid-agents/api-sdk                   │
-│          (TypeScript client for Runtime API)             │
-└─────────────────────────────────────────────────────────┘
-                            │
-                    interacts with
-                            │
-                            ▼
-┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
-│               Lucid Runtime (hosted)                     │
-│        ┌─────────────────────────────────────┐          │
-│        │         Deployed Agents              │          │
-│        │    (built with packages below)       │          │
-│        └─────────────────────────────────────┘          │
-└ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
-                            ▲
-                     deployed to
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                    Developer Tools                       │
-│                      @lucid-agents/cli                   │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                   Framework Adapters                     │
-│         hono  │  tanstack  │  express  │  next          │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                      Extensions                          │
-│  http │ payments │ mpp │ catalog │ identity │ a2a │ wallet │ ap2  │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                         Core                             │
-│                    @lucid-agents/core                    │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                        Types                             │
-│                   @lucid-agents/types                    │
-└─────────────────────────────────────────────────────────┘
+```text
+@lucid-agents/types
+        ↓
+@lucid-agents/core + domain extensions
+        ↓
+@lucid-agents/http route and authorization contract
+        ↓
+Hono | Express | TanStack Start | generated Next.js modules
 ```
 
-The **api-sdk** is a client for the hosted Lucid Runtime. The packages below are for **building** agents that get deployed to the runtime. Dependencies flow downward; HTTP is provided as an extension.
+Adapters do not own paywalls, manifests, or a second registry. A domain package
+returns a complete runtime slice and core exposes it directly.
+
+## Which packages do I need?
+
+For a Hono x402 seller:
+
+```bash
+bun add @lucid-agents/core @lucid-agents/http \
+  @lucid-agents/payments @lucid-agents/hono zod
+```
+
+For exact Stable versions, use the pinned command in
+[Install Lucid](/docs/start/install). Add wallet/A2A/identity only when the
+application needs outbound signing, agent discovery/tasks, or on-chain trust.
+
+The generated Next.js adapter is not an npm package. The hosted Runtime API
+client is documented separately under [Hosted Products](/docs/products/hosted-platform)
+because it has a different lifecycle and support boundary.

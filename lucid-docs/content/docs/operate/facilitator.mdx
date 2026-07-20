@@ -1,0 +1,34 @@
+---
+title: Configure a facilitator
+description: Select and verify an external x402 verification and settlement provider.
+icon: Landmark
+status: stable
+verifiedVersion: 2.5.0
+verifiedAt: 2026-07-20
+product: provider
+---
+
+A facilitator verifies a buyer's x402 payload and submits settlement. It is
+external infrastructure, not a Lucid package.
+
+| Environment        | Example                        | Notes                                                        |
+| ------------------ | ------------------------------ | ------------------------------------------------------------ |
+| Testnet quickstart | `https://x402.org/facilitator` | Signup-free; Base Sepolia and Solana Devnet only             |
+| Production         | Provider or self-hosted URL    | Confirm networks, assets, auth, pricing, limits, and support |
+
+Configure the URL and optional bearer token:
+
+```dotenv
+PAYMENTS_FACILITATOR_URL=https://YOUR_FACILITATOR_URL
+PAYMENTS_FACILITATOR_AUTH=YOUR_SERVER_SIDE_TOKEN
+```
+
+Before deployment, query the provider's supported endpoint and verify the exact
+scheme/network combination Lucid will request. A facilitator supporting an
+upstream feature such as `upto` or Bazaar does not make that feature available
+through Lucid.
+
+The former Daydreams facilitator page was removed from package reference
+because `@daydreamsai/facilitator` is not a package in this monorepo. Add a
+provider-specific guide only when ownership, availability, and support are
+explicit.

@@ -1,0 +1,23 @@
+---
+title: A2A
+description: Advertise capabilities and run direct, streaming, or owned task interactions.
+icon: Users
+status: next
+verifiedVersion: 0.6.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The A2A extension contributes Agent Card capabilities, a remote client, and an
+owned task runtime. HTTP task routes exist only when `a2a()` is installed.
+
+Use direct invocation for bounded synchronous work, streaming for connected
+incremental output, and tasks for fulfillment that must survive the initiating
+connection. Task stores and leases are explicit durability ports.
+
+A2A discovery is not x402 Bazaar. The Agent Card can advertise payment
+requirements produced by Lucid extensions, but it does not publish the x402
+discovery extension.
+
+Apply payment authorization before reserving a task, and release reservations
+when task creation or fulfillment admission fails.

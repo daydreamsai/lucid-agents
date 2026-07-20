@@ -1,0 +1,28 @@
+---
+title: ERC-8004 identity
+description: Register EVM identity and trust independently from the service's payment network.
+icon: Fingerprint
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+`@lucid-agents/identity` initializes ERC-8004 identity, reputation, and
+validation registry clients and can register an agent identity.
+
+Identity registration is EVM-only and has on-chain side effects. Payment
+receiving is independent: an identity may be registered on Base while the
+service receives a supported Solana payment.
+
+```ts
+const identity = await createAgentIdentity({
+  runtime,
+  domain: 'service.example',
+  autoRegister: true,
+});
+```
+
+Use `autoRegister` only in an environment where the configured developer wallet
+is authorized and funded. Treat registry reputation as one trust signal, not a
+substitute for service policy or output validation.

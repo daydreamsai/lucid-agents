@@ -1,0 +1,32 @@
+---
+title: Use durable storage
+description: Preserve payment accounting, entitlements, idempotency, tasks, and schedules across processes.
+icon: Database
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+In-memory stores are safe defaults for tests and one-process demonstrations.
+They do not coordinate replicas and lose state on restart.
+
+| State                            | Why durability matters                                  |
+| -------------------------------- | ------------------------------------------------------- |
+| Payment records and reservations | Prevent overspend and support reconciliation            |
+| SIWX entitlements                | Reuse verified access without accepting forged sessions |
+| HTTP idempotency                 | Return the original result instead of fulfilling twice  |
+| A2A tasks and leases             | Preserve ownership and terminal state                   |
+| Scheduler occurrences            | Prevent duplicate recurring calls                       |
+
+Node deployments can use the package-specific SQLite or Postgres exports. Keep
+server-only drivers out of portable/edge bundles:
+
+```ts
+import { createPostgresPaymentStorage } from '@lucid-agents/payments/storage/postgres';
+import { createSQLitePaymentStorage } from '@lucid-agents/payments/storage/sqlite';
+```
+
+Create storage through the owning extension's factory/port and close it through
+`runtime.close()`. Test concurrent reservations and restart recovery against
+the same backend you use in production.

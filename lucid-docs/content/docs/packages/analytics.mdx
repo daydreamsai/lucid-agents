@@ -1,0 +1,34 @@
+---
+title: '@lucid-agents/analytics'
+description: Payment-tracker summaries, transaction views, and safe CSV/JSON exports.
+icon: ChartNoAxesCombined
+status: next
+verifiedVersion: 0.3.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+The analytics extension binds reporting operations to the payment tracker owned
+by `@lucid-agents/payments`.
+
+```bash
+bun add @lucid-agents/analytics @lucid-agents/payments
+```
+
+```ts
+const runtime = await createAgent(meta)
+  .use(payments({ config }))
+  .use(analytics())
+  .build();
+
+const summary = await runtime.analytics.getSummary(24 * 60 * 60 * 1_000);
+const csv = await runtime.analytics.exportCSV();
+```
+
+`analytics()` requires an enabled payments runtime with a payment tracker. It
+exposes summaries, transactions, combined data, and CSV/JSON exports. It does
+not query a facilitator or chain and is only as durable and complete as the
+configured payment storage.
+
+CSV output protects formula-like fields, but exported payment data may still be
+sensitive. Apply normal access and retention controls.

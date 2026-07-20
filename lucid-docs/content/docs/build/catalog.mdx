@@ -1,0 +1,23 @@
+---
+title: Publish a catalog
+description: Register many typed offerings from YAML or CSV on the Next SDK surface.
+icon: Library
+status: next
+verifiedVersion: 0.2.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+`@lucid-agents/catalog` turns a maintained YAML or CSV catalog into canonical
+entrypoint registrations. It is useful when many products share one fulfillment
+handler and differ mainly in schema, description, and price.
+
+The package is currently available from the repository, not the Stable npm
+channel. A Lucid catalog is application configuration; it does not publish to
+x402 Bazaar and should not be described as marketplace discovery.
+
+Use explicit validation at load time, reject duplicate keys, and keep the
+catalog under the same review process as code. A price change is a commercial
+API change even when it is only a YAML edit.
+
+See the [catalog package reference](/docs/packages/catalog).

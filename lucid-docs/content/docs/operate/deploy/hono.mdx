@@ -1,0 +1,18 @@
+---
+title: Deploy with Hono
+description: Bind the canonical route plan to a Fetch-native Hono service.
+icon: Server
+status: next
+verifiedVersion: 0.10.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+```ts
+const { app } = await createAgentApp(runtime);
+export default { port: Number(process.env.PORT ?? 3000), fetch: app.fetch };
+```
+
+Build the runtime before binding it. Configure secrets and durable stores in
+the server environment, expose `/health`, and verify the Agent Card and an
+unpaid paid route after deployment. See the [Hono reference](/docs/packages/hono).

@@ -1,0 +1,26 @@
+---
+title: Choose a payment model
+description: Match the charging contract to the workload without claiming upstream features Lucid does not implement.
+icon: Scale
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+| Workload | Use now | Why |
+| --- | --- | --- |
+| Deterministic request with a known price | x402 `exact` | The buyer knows the full charge before fulfillment |
+| Invoke and stream have different fixed prices | Per-mode Lucid price | Each operation advertises one exact amount |
+| Credential-backed charge or session | MPP | Use only after installing the Next-only MPP extension |
+| Unknown usage before completion | Design a bounded fixed tier | Lucid does not currently expose x402 `upto` settlement |
+| Many payments settled together | Not currently supported | x402 batch settlement is upstream capability, not Lucid support |
+
+Prices are USD decimal strings: `"0.01"` means one cent in the configured USDC
+asset. Atomic token amounts appear in protocol payloads and accounting, not in
+the entrypoint's human-readable price field.
+
+Do not model an unbounded workload as a cheap fixed call. Bound input size,
+runtime, tokens, or output, then price the bounded service. For long-running
+work, use an [asynchronous task](/docs/build/async-tasks) so payment admission
+and fulfillment state remain visible.

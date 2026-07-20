@@ -1,0 +1,32 @@
+---
+title: SIWX
+description: Verify wallet ownership and reuse a bounded entitlement around x402 challenges.
+icon: KeyRound
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Sign-In-With-X (SIWX) lets a buyer prove control of a wallet and lets a server
+reuse an entitlement according to the entrypoint's configuration.
+
+```ts
+runtime.entrypoints.add({
+  key: 'member-report',
+  price: '0.02',
+  paymentProtocol: 'x402',
+  siwx: { enabled: true },
+  input,
+  output,
+  handler,
+});
+```
+
+The server adds an SIWX declaration to the unpaid x402 challenge. A compatible
+client signs the message, retries, and receives/reuses the resulting access
+according to server policy.
+
+Use durable SIWX storage in production. Bind messages to the expected domain,
+URI, chain, nonce, issue time, and expiry. SIWX proves wallet control; it does
+not replace application authorization or spending policy.

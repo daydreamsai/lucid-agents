@@ -1,0 +1,12 @@
+{
+  "title": "Buy",
+  "pages": [
+    "index",
+    "wallet",
+    "call-paid-service",
+    "policies-budgets",
+    "retries-idempotency",
+    "discovery",
+    "schedule"
+  ]
+}

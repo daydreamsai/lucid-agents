@@ -1,0 +1,43 @@
+---
+title: Set policies and budgets
+description: Gate outgoing payments by recipient, endpoint, amount, rate, and durable totals.
+icon: ShieldCheck
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Policy groups are cumulative: every configured group must admit a payment.
+
+```ts
+const policyGroups = [
+  {
+    name: 'daily-research',
+    allowedRecipients: ['0xAPPROVED_SELLER'],
+    outgoingLimits: {
+      global: {
+        maxPaymentUsd: 0.05,
+        maxTotalUsd: 2,
+        windowMs: 24 * 60 * 60 * 1_000,
+      },
+      perEndpoint: {
+        'https://service.example/entrypoints/search/invoke': {
+          maxTotalUsd: 1,
+          windowMs: 24 * 60 * 60 * 1_000,
+        },
+      },
+    },
+    rateLimits: { maxPayments: 60, windowMs: 60 * 60 * 1_000 },
+  },
+];
+```
+
+The wrapper reserves total-limit capacity when it admits a challenge, commits
+that capacity after a successful paid response, and releases it on failure.
+Use SQLite or Postgres storage when restarts or multiple workers must share the
+same totals. In-memory storage is process-local and intended for tests.
+
+Recipient policy is evaluated from payment requirements. Sender policy on a
+seller must use the payer identity verified by the facilitator, not an
+untrusted address claimed in the request body.

@@ -1,0 +1,49 @@
+---
+title: Define a capability
+description: Describe one machine-callable service with schemas, fulfillment, pricing, and operation modes.
+icon: Braces
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+A **capability** is what a buyer understands: a description, input contract,
+output contract, price, and fulfillment behavior. `EntrypointDef` is the SDK
+object that represents it.
+
+```ts
+runtime.entrypoints.add({
+  key: 'classify',
+  description: 'Classify text into one supported category',
+  input: z.object({
+    text: z.string().min(1),
+    categories: z.array(z.string().min(1)).min(2),
+  }),
+  output: z.object({
+    category: z.string(),
+    confidence: z.number().min(0).max(1),
+  }),
+  price: '0.02',
+  handler: async ({ input, signal, runId }) => {
+    const result = await classify(input, { signal, runId });
+    return { output: result };
+  },
+});
+```
+
+## Contract rules
+
+- `key` is stable API identity. Changing it changes URLs, task targets, and
+  discovery metadata.
+- Validate both input and output. A paid response with the wrong shape is a
+  fulfillment failure.
+- Make cancellation observable through `signal`.
+- Use `runId` for logs; use an idempotency key for business deduplication.
+- Set `paymentProtocol` when both x402 and MPP are installed.
+- Keep framework objects out of the handler. Request headers belong in typed
+  metadata supplied by the HTTP extension.
+
+The adapter-level `addEntrypoint` helper remains a compatibility delegate. New
+runtime-oriented code should register through the canonical registry so the
+same definition serves every adapter.

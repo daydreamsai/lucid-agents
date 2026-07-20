@@ -1,0 +1,13 @@
+{
+  "title": "Build",
+  "pages": [
+    "index",
+    "define-capability",
+    "payment-model",
+    "receive-x402",
+    "stream-meter",
+    "async-tasks",
+    "storefront",
+    "catalog"
+  ]
+}

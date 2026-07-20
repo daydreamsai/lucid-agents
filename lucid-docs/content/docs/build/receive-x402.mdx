@@ -1,0 +1,48 @@
+---
+title: Receive x402 payments
+description: Configure payment admission, fulfillment, settlement, and recording as one runtime transaction.
+icon: CircleDollarSign
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Install `payments()` before building the runtime and give priced entrypoints an
+explicit x402 protocol when another payment extension is also active.
+
+```ts
+const runtime = await createAgent(meta)
+  .use(
+    payments({
+      config: {
+        facilitatorUrl: 'https://x402.org/facilitator',
+        network: 'eip155:84532',
+        payTo: '0xYOUR_EVM_RECEIVING_ADDRESS',
+      },
+    })
+  )
+  .use(http())
+  .build();
+```
+
+The HTTP extension executes one authorization transaction:
+
+```text
+challenge → verify → reserve policy capacity → fulfill → settle → record
+                                      └ failure → release reservation
+```
+
+The adapter does not own this transaction. Invoke, stream, and task routes all
+delegate to it.
+
+## Current limits
+
+- x402 v2 `exact` scheme
+- one accepted payment option per challenge
+- EVM and Solana mechanisms exposed by Lucid's configured networks
+- no Lucid Bazaar declaration, `upto`, batch settlement, signed offers, or
+  signed receipts
+
+See the maintained [x402 support matrix](/docs/protocols/x402) before choosing a
+facilitator based on features supported by the upstream protocol.

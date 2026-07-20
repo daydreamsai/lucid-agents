@@ -1,0 +1,27 @@
+---
+title: Secure keys and requests
+description: Protect signing authority and preserve the payment trust boundary.
+icon: LockKeyhole
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+- Keep buyer private keys, facilitator auth, Stripe secrets, and provider keys
+  server-side.
+- Give autonomous wallets small balances and explicit policy; do not reuse an
+  administrative deployer wallet.
+- Trust the payer returned by facilitator verification, not a request body or
+  unverified payment payload claim.
+- Validate the full target URL and payment recipient before signing.
+- Bound request size and execution time before costly fulfillment begins.
+- Redact payment signatures, auth tokens, and private keys from logs and error
+  reports.
+- Rotate credentials and revoke hosted wallet sessions after compromise.
+- Keep SIWX nonces and entitlements in a store with atomic consume/expiry
+  semantics.
+
+Payment proves authorization for the advertised requirement. It does not make
+input safe, establish application identity beyond the verified wallet, or
+remove the need for rate limiting and abuse controls.

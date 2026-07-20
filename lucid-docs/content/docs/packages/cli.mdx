@@ -1,288 +1,90 @@
 ---
-title: "@lucid-agents/cli"
-description: CLI tool for scaffolding new agent projects.
+title: '@lucid-agents/cli'
+description: Scaffold Lucid services for Hono, Express, TanStack Start, or Next.js.
 icon: Terminal
+status: next
+verifiedVersion: 3.0.0
+verifiedAt: 2026-07-20
+product: sdk
 ---
 
-The CLI tool scaffolds new agent projects with templates, adapters, and interactive configuration.
+The CLI copies a template, applies a framework adapter, writes wizard answers to
+the generated environment, and optionally installs dependencies. It is a project
+generator, not a runtime dependency.
 
-## Installation
-
-The CLI is typically run via `bunx` or `npx` without installation:
+## Usage
 
 ```bash
-bunx @lucid-agents/cli my-agent
+bunx @lucid-agents/cli my-service
 ```
 
-Or install globally:
+For a reproducible Next scaffold:
 
 ```bash
-bun add -g @lucid-agents/cli
-```
-
-## Basic usage
-
-### Interactive mode
-
-Run without arguments for the interactive wizard:
-
-```bash
-bunx @lucid-agents/cli my-agent
-```
-
-The wizard guides you through:
-
-1. **Adapter selection** - Choose your framework
-2. **Template selection** - Choose a starter template
-3. **Configuration** - Set agent name, description, API keys, etc.
-
-### Non-interactive mode
-
-Pass options directly for CI/CD or scripted setups:
-
-```bash
-bunx @lucid-agents/cli my-agent \
+bunx @lucid-agents/cli my-service \
   --adapter=hono \
-  --template=identity \
-  --AGENT_NAME="My AI Agent" \
-  --AGENT_DESCRIPTION="AI-powered assistant" \
-  --non-interactive
+  --template=blank \
+  --non-interactive \
+  --PAYMENTS_NETWORK=eip155:84532 \
+  --PAYMENTS_RECEIVABLE_ADDRESS=0xYOUR_ADDRESS \
+  --no-install
 ```
 
-## Command options
+Then inspect the generated dependency versions before running `bun install`.
+Repository templates track Next and are not a promise that the same package set
+has been published to npm.
 
-```bash
-bunx @lucid-agents/cli <project-name> [options]
-```
+## Options
 
-| Option | Description |
-|--------|-------------|
-| `--adapter=<id>` | Framework adapter to use |
-| `--template=<id>` | Starter template to use |
-| `--install` | Auto-install dependencies after scaffolding |
-| `--non-interactive` | Skip prompts, use provided options |
-| `--help` | Show help message |
+| Option                              | Meaning                                                                      |
+| ----------------------------------- | ---------------------------------------------------------------------------- |
+| `-t, --template <id>`               | `blank`, `identity`, `trading-data-agent`, or `trading-recommendation-agent` |
+| `-a, --adapter <id>`                | `hono`, `express`, `tanstack-ui`, `tanstack-headless`, or `next`             |
+| `-i, --install`                     | Run `bun install` after generation                                           |
+| `--no-install`                      | Leave dependency installation to the caller                                  |
+| `--wizard=no` / `--non-interactive` | Use supplied arguments and template defaults                                 |
+| `--network=<network>`               | Compatibility shorthand for `PAYMENTS_NETWORK`                               |
+| `--KEY=value`                       | Supply a template wizard value                                               |
+| `-h, --help`                        | Print the installed CLI's authoritative options                              |
 
-### Configuration variables
-
-Pass configuration as `--KEY=value`:
-
-```bash
-bunx @lucid-agents/cli my-agent \
-  --AGENT_NAME="My Agent" \
-  --AGENT_DESCRIPTION="Description" \
-  --PAYMENTS_RECEIVABLE_ADDRESS=0x... \
-  --NETWORK=ethereum \
-  --DEFAULT_PRICE=1000
-```
+Prefer explicit `PAYMENTS_NETWORK=<CAIP-2>` values in automation. The template
+wizard also accepts aliases, but canonical identifiers make logs and provider
+compatibility checks unambiguous.
 
 ## Adapters
 
-Choose how your agent will be deployed:
+| Adapter             | Generated integration                                                |
+| ------------------- | -------------------------------------------------------------------- |
+| `hono`              | Hono app bound with `@lucid-agents/hono`                             |
+| `express`           | Express app and Web Request bridge                                   |
+| `tanstack-ui`       | TanStack Start service storefront and route modules                  |
+| `tanstack-headless` | TanStack Start route modules without the storefront                  |
+| `next`              | Next.js App Router modules; there is no `@lucid-agents/next` package |
 
-| Adapter | Description | Use case |
-|---------|-------------|----------|
-| `hono` | Lightweight HTTP server | Edge deployments, simple APIs |
-| `tanstack-ui` | TanStack Start with dashboard | Full-stack apps with UI |
-| `tanstack-headless` | TanStack Start API-only | API-only deployments |
-| `express` | Express.js server | Traditional Node.js |
-| `next` | Next.js App Router | Next.js applications |
-
-### Hono adapter
-
-```bash
-bunx @lucid-agents/cli my-agent --adapter=hono
-```
-
-Generates:
-- `src/index.ts` - Hono app with agent configuration
-- `package.json` - Dependencies for Hono + Bun
-- `.env` - Environment variables
-
-### TanStack UI adapter
-
-```bash
-bunx @lucid-agents/cli my-agent --adapter=tanstack-ui
-```
-
-Generates:
-- Full TanStack Start project structure
-- Dashboard UI components
-- API routes for agent endpoints
-- `package.json` with React dependencies
-
-### TanStack headless adapter
-
-```bash
-bunx @lucid-agents/cli my-agent --adapter=tanstack-headless
-```
-
-Generates:
-- TanStack Start project without UI
-- API routes only
-- Minimal dependencies
-
-### Express adapter
-
-```bash
-bunx @lucid-agents/cli my-agent --adapter=express
-```
-
-Generates:
-- `src/index.ts` - Express app with agent configuration
-- `package.json` - Dependencies for Express + Node.js
-- `.env` - Environment variables
+The trading templates currently target Hono and Express. Blank and identity
+support every adapter listed above.
 
 ## Templates
 
-Choose a starting point for your agent:
+- `blank` provides the smallest runtime and echo capability.
+- `identity` adds wallets, ERC-8004 configuration, payments, and trust metadata.
+- `trading-data-agent` is a priced merchant example.
+- `trading-recommendation-agent` is a buyer example that calls a merchant.
 
-| Template | Description | Includes |
-|----------|-------------|----------|
-| `blank` | Minimal agent | Basic entrypoint |
-| `identity` | On-chain identity | ERC-8004 identity setup |
-| `trading-data-agent` | Merchant example | Data provider with pricing |
-| `trading-recommendation-agent` | Shopper example | Agent that calls other agents |
+Generated code follows the selected adapter's canonical binding. For example,
+Hono uses `createAgentApp(runtime)`, while TanStack uses
+`createTanStackRuntime(runtime)` and registers capabilities on its runtime.
 
-### Blank template
+## Stable installation path
 
-```bash
-bunx @lucid-agents/cli my-agent --template=blank
-```
+The current Stable quickstart deliberately pins the public CLI and runtime
+versions, then installs the direct x402 buyer dependencies needed by its tested
+transaction. Follow [Install Lucid](/docs/start/install), not a Next template,
+when reproducibility matters.
 
-Minimal agent with a single echo entrypoint:
-
-```typescript
-addEntrypoint({
-  key: 'echo',
-  input: z.object({ text: z.string() }),
-  async handler({ input }) {
-    return { output: { echoed: input.text } };
-  },
-});
-```
-
-### Identity template
-
-```bash
-bunx @lucid-agents/cli my-agent --template=identity
-```
-
-Agent with ERC-8004 on-chain identity:
+The programmatic surface is intentionally small:
 
 ```typescript
-const agent = await createAgent(meta)
-  .use(http())
-  .use(wallets({ config: walletsFromEnv() }))
-  .use(identity({ config: identityFromEnv() }))
-  .build();
-```
-
-### Trading data agent (merchant)
-
-```bash
-bunx @lucid-agents/cli my-agent --template=trading-data-agent
-```
-
-Example merchant agent that sells data:
-
-```typescript
-addEntrypoint({
-  key: 'get-market-data',
-  price: { invoke: '$0.001' },
-  async handler({ input }) {
-    return { output: { price: 100.50, volume: 1000000 } };
-  },
-});
-```
-
-### Trading recommendation agent (shopper)
-
-```bash
-bunx @lucid-agents/cli my-agent --template=trading-recommendation-agent
-```
-
-Example shopper agent that calls other agents:
-
-```typescript
-addEntrypoint({
-  key: 'get-recommendation',
-  async handler({ input }) {
-    // Fetch from merchant agent
-    const data = await agent.a2a.client.fetchAndInvoke(
-      process.env.DATA_AGENT_URL,
-      'get-market-data',
-      { symbol: input.symbol }
-    );
-
-    return { output: { recommendation: 'buy', data } };
-  },
-});
-```
-
-## Generated files
-
-A typical generated project includes:
-
-```
-my-agent/
-├── src/
-│   └── index.ts        # Agent definition
-├── .env                # Environment variables
-├── .env.example        # Example env file
-├── package.json        # Dependencies
-├── tsconfig.json       # TypeScript config
-└── README.md           # Project readme
-```
-
-### Environment file
-
-```bash
-# Agent metadata
-AGENT_NAME="My Agent"
-AGENT_DESCRIPTION="Description"
-
-# Payments (optional)
-PAYMENTS_RECEIVABLE_ADDRESS=
-NETWORK=ethereum
-DEFAULT_PRICE=
-
-# Identity (optional)
-AGENT_WALLET_PRIVATE_KEY=
-IDENTITY_REGISTRY_ADDRESS=
-```
-
-## After scaffolding
-
-```bash
-cd my-agent
-bun install
-bun run dev
-```
-
-Your agent will be running at `http://localhost:3000`.
-
-Test it:
-
-```bash
-# View manifest
-curl http://localhost:3000/.well-known/agent-card.json
-
-# List entrypoints
-curl http://localhost:3000/entrypoints
-
-# Invoke an entrypoint
-curl -X POST http://localhost:3000/entrypoints/echo/invoke \
-  -H "Content-Type: application/json" \
-  -d '{"input": {"text": "Hello"}}'
-```
-
-## Exports
-
-```typescript
-// CLI entry point (for programmatic use)
 export { runCli } from '@lucid-agents/cli';
-
-// Types (for custom CLI implementations)
 export type { PromptApi, RunLogger } from '@lucid-agents/cli';
 ```

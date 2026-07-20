@@ -1,0 +1,30 @@
+---
+title: Observe payments and fulfillment
+description: Correlate negotiation, policy, settlement, and application outcomes without logging credentials.
+icon: ChartNoAxesCombined
+status: next
+verifiedVersion: 0.3.3
+verifiedAt: 2026-07-20
+product: sdk
+---
+
+Correlate one commercial operation with:
+
+- run and idempotency identifiers
+- capability key and operation mode
+- payer/recipient, network, asset, and amount
+- policy group and reservation result
+- verification and settlement outcome
+- task identity or response status
+- fulfillment duration, usage, and error code
+
+`@lucid-agents/analytics` binds reporting operations to the payment tracker. It
+does not replace logs, traces, provider settlement reports, or business-level
+fulfillment records.
+
+Alert separately on challenge rate, policy rejection, facilitator verification
+errors, settlement errors, application failures after payment, reservation
+expiry, and task lease contention. A single aggregate “request error” metric
+cannot tell whether money movement or fulfillment is failing.
+
+Never record `PAYMENT-SIGNATURE`, private keys, or bearer tokens.
