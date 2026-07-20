@@ -7,7 +7,8 @@
     "dev": "vite dev",
     "build": "vite build",
     "start": "node .output/server/index.mjs",
-    "types:check": "fumadocs-mdx && tsc --noEmit",
+    "routes:generate": "tsr generate",
+    "types:check": "bun run routes:generate && fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.17.0",
     "@tailwindcss/vite": "^4.1.16",
+    "@tanstack/router-cli": "1.140.0",
     "@types/node": "^24.10.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
