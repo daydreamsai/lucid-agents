@@ -17,6 +17,7 @@ import {
 } from './manifest';
 import { PREVIEW_SAFETY_VARIABLES } from './preview-policy';
 import {
+  assertNoInheritedRemoteSecrets,
   registerProviderCredentialValues,
   uploadPreview,
   verifyAuthentication,
@@ -105,6 +106,7 @@ async function executeDeployment(context: CommandContext): Promise<void> {
   const providerToken = context.environment.CLOUDFLARE_API_TOKEN?.trim() ?? '';
   if (providerToken) context.sensitiveValues.add(providerToken);
   assertExecutionMode({
+    ci: Boolean(context.environment.CI),
     interactive: context.interactive,
     options,
     providerToken,
@@ -132,6 +134,11 @@ async function executeDeployment(context: CommandContext): Promise<void> {
   printUploadPlan(uploadEnvironment, context.log);
 
   await verifyAuthentication(paths.providerConfig, context);
+  await assertNoInheritedRemoteSecrets({
+    providerConfig: paths.providerConfig,
+    uploadedSecretNames: new Set(uploadEnvironment.secrets.keys()),
+    context,
+  });
   const previewUrl = await uploadPreview({
     context,
     paths,
@@ -193,11 +200,12 @@ function assertSupportedOperation(
 }
 
 function assertExecutionMode(params: {
+  ci: boolean;
   interactive: boolean;
   options: CliOptions;
   providerToken: string;
 }): void {
-  if (params.interactive) return;
+  if (params.interactive && !params.ci) return;
   if (!params.options.yes || params.providerToken.length === 0) {
     throw new Error(
       'Non-interactive deployment requires both --yes and CLOUDFLARE_API_TOKEN.'
@@ -239,7 +247,7 @@ async function confirmSensitiveDeployment(params: {
   );
   const mainnetKeys = Object.entries(params.manifest.mainnet)
     .filter(([name, mainnetValues]) => {
-      const selected = params.values.get(name)?.toLowerCase();
+      const selected = params.values.get(name)?.trim().toLowerCase();
       return Boolean(
         selected &&
         mainnetValues.some(value => value.toLowerCase() === selected)

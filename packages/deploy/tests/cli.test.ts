@@ -97,6 +97,11 @@ if (args[0] === 'whoami') {
   process.exit(0);
 }
 
+if (args[0] === 'secret' && args[1] === 'list') {
+  console.log(process.env.WRANGLER_FAKE_REMOTE_SECRETS ?? '[]');
+  process.exit(0);
+}
+
 if (args[0] === 'versions' && args[1] === 'upload') {
   const secretsIndex = args.indexOf('--secrets-file');
   const secrets = secretsIndex === -1
@@ -133,7 +138,8 @@ process.exit(9);
 async function runCli(
   projectDir: string,
   args: string[],
-  env: Record<string, string>
+  env: Record<string, string>,
+  interactive = false
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -144,7 +150,7 @@ async function runCli(
       ...process.env,
       ...env,
     },
-    interactive: false,
+    interactive,
     log: message => stdout.push(message),
     warn: message => stderr.push(message),
     error: message => stderr.push(message),
@@ -279,6 +285,31 @@ describe('lucid-deploy executable', () => {
     expect(result.stderr).not.toContain('provider-token-value');
   });
 
+  test('rejects inherited remote secrets before uploading a preview', async () => {
+    const projectDir = await createTempDir('lucid-deploy-project-');
+    const binDir = await createTempDir('lucid-deploy-bin-');
+    const capturePath = join(projectDir, 'provider-capture.json');
+    await writeProject(projectDir);
+    await writeFakeWrangler(binDir);
+
+    const result = await runCli(projectDir, ['--yes'], {
+      PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+      CLOUDFLARE_API_TOKEN: 'provider-token-value',
+      WRANGLER_FAKE_CAPTURE_PATH: capturePath,
+      WRANGLER_FAKE_REMOTE_SECRETS: JSON.stringify([
+        { name: 'UNLISTED_REMOTE_SECRET', type: 'secret_text' },
+      ]),
+      WRANGLER_FAKE_UPLOAD_FAILURE: 'true',
+      WRANGLER_FAKE_FAILURE_DETAIL: 'upload should not be attempted',
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      'Remote Worker secrets are not included in this upload: UNLISTED_REMOTE_SECRET'
+    );
+    await expect(readFile(capturePath, 'utf8')).rejects.toThrow();
+  });
+
   test('returns actionable Cloudflare authentication failures', async () => {
     const projectDir = await createTempDir('lucid-deploy-project-');
     const binDir = await createTempDir('lucid-deploy-bin-');
@@ -324,6 +355,30 @@ describe('lucid-deploy executable', () => {
       'requires both --yes and CLOUDFLARE_API_TOKEN'
     );
     expect(withoutYes.stderr).not.toContain('provider-token-value');
+  });
+
+  test('requires CI confirmation even when a pseudo-TTY is present', async () => {
+    const projectDir = await createTempDir('lucid-deploy-project-');
+    const binDir = await createTempDir('lucid-deploy-bin-');
+    await writeProject(projectDir);
+    await writeFakeWrangler(binDir);
+
+    const result = await runCli(
+      projectDir,
+      [],
+      {
+        PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+        CI: 'true',
+        WRANGLER_FAKE_AUTH_FAILURE: 'true',
+        WRANGLER_FAKE_FAILURE_DETAIL: 'authentication should not be attempted',
+      },
+      true
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      'requires both --yes and CLOUDFLARE_API_TOKEN'
+    );
   });
 
   test('rejects unsupported deployment manifest versions before provider access', async () => {
@@ -687,5 +742,42 @@ describe('lucid-deploy executable', () => {
     expect(result.stderr).toContain('mainnet configuration');
     expect(result.stderr).toContain('confirmed by --yes');
     expect(result.stderr).not.toContain('signing-secret-value');
+  });
+
+  test('requires confirmation for normalized mainnet values', async () => {
+    const projectDir = await createTempDir('lucid-deploy-project-');
+    const binDir = await createTempDir('lucid-deploy-bin-');
+    await writeProject(projectDir);
+    await writeFakeWrangler(binDir);
+    const manifestPath = join(projectDir, 'lucid.deploy.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      environment: { mainnet: Record<string, string[]> };
+    };
+    manifest.environment.mainnet.PAYMENTS_NETWORK?.push('solana-mainnet');
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const stderr: string[] = [];
+
+    const exitCode = await executeDeployCli({
+      args: [],
+      cwd: projectDir,
+      environment: {
+        ...process.env,
+        PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+        PAYMENTS_NETWORK: ' solana-mainnet ',
+        WRANGLER_FAKE_AUTH_FAILURE: 'true',
+        WRANGLER_FAKE_FAILURE_DETAIL: 'authentication should not be attempted',
+      },
+      interactive: true,
+      log: () => undefined,
+      warn: message => stderr.push(message),
+      error: message => stderr.push(message),
+      confirm: async () => false,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr.join('\n')).toContain('Deployment cancelled');
+    expect(stderr.join('\n')).not.toContain(
+      'authentication should not be attempted'
+    );
   });
 });

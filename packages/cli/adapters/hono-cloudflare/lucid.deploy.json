@@ -36,8 +36,12 @@
         "ethereum",
         "base",
         "solana",
+        "solana-mainnet",
+        "solana:mainnet",
         "eip155:1",
+        "eip155:137",
         "eip155:8453",
+        "eip155:43114",
         "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
       ]
     }

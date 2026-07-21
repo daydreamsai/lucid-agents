@@ -66,6 +66,36 @@ export async function verifyAuthentication(
   context.log('Cloudflare authentication confirmed.');
 }
 
+export async function assertNoInheritedRemoteSecrets(params: {
+  providerConfig: string;
+  uploadedSecretNames: ReadonlySet<string>;
+  context: ProviderContext;
+}): Promise<void> {
+  const result = await runProvider(
+    ['secret', 'list', '--config', params.providerConfig, '--format', 'json'],
+    params.context.environment
+  );
+  if (result.exitCode !== 0) {
+    const detail = redact(
+      combineCommandOutput(result),
+      params.context.sensitiveValues
+    );
+    throw new Error(
+      `Could not inspect existing Cloudflare secrets${detail ? `: ${detail}` : '.'}`
+    );
+  }
+
+  const remoteSecretNames = parseRemoteSecretNames(result.stdout);
+  const inherited = remoteSecretNames.filter(
+    name => !params.uploadedSecretNames.has(name)
+  );
+  if (inherited.length > 0) {
+    throw new Error(
+      `Remote Worker secrets are not included in this upload: ${inherited.sort().join(', ')}. Set them locally or remove them from Cloudflare before deploying.`
+    );
+  }
+}
+
 export async function uploadPreview(params: {
   context: ProviderContext;
   paths: {
@@ -141,6 +171,27 @@ async function writeSecretsFile(
     path,
     cleanup: () => rm(directory, { recursive: true, force: true }),
   };
+}
+
+function parseRemoteSecretNames(output: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output) as unknown;
+  } catch {
+    throw new Error('Cloudflare returned an invalid remote secret list.');
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(
+      entry =>
+        !entry ||
+        typeof entry !== 'object' ||
+        typeof (entry as { name?: unknown }).name !== 'string'
+    )
+  ) {
+    throw new Error('Cloudflare returned an invalid remote secret list.');
+  }
+  return parsed.map(entry => (entry as { name: string }).name);
 }
 
 async function runProvider(
