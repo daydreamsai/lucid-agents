@@ -1,5 +1,32 @@
 # @lucid-agents/wallet
 
+## 0.6.4
+
+### Patch Changes
+
+- 583dc87: Add durable, capability-protected A2A tasks with leases and fenced transitions;
+  propagate invocation idempotency through A2A and scheduler clients; and make MPP
+  use the standard Payment-Auth wire contract with native mppx Tempo/Stripe
+  verification, target-bound challenges, replay fencing, and same-key recovery
+  after irreversible settlement. A2A clients now treat cancelled tasks as
+  terminal while waiting, and recurring scheduler jobs derive a distinct remote
+  idempotency key for each interval occurrence.
+
+  Analytics is now a complete runtime bound to payment storage. Catalog file I/O
+  moves to `@lucid-agents/catalog/node`, while the portable root retains parsing
+  and generation. Catalog items can select `x402` or `mpp`, with item-level rail
+  selection overriding the extension default. Protocol manifests now compose
+  through the shared immutable manifest contract, and wallet connectors avoid
+  eager server-only globals.
+
+- 17fa5eb: Rebuild the SDK documentation around end-to-end x402 seller and buyer journeys,
+  with expanded protocol and package references, deployment and operations guides,
+  stable runnable examples, and automated checks for drift, snippets, and links.
+- Updated dependencies [583dc87]
+- Updated dependencies [c21990b]
+- Updated dependencies [17fa5eb]
+  - @lucid-agents/types@2.0.0
+
 ## 0.6.3
 
 ### Patch Changes
@@ -43,14 +70,12 @@
 - 23a7254: ERC-8004 Identity Registry updates and ABI alignment:
 
   **New Features**
-
   - Agent wallet management (`getAgentWallet`, `setAgentWallet`, `unsetAgentWallet`) with EIP-712 signing
   - `unsetAgentWallet(agentId)` now calls dedicated on-chain function directly (no signature required)
   - `isAuthorizedOrOwner(spender, agentId)` read function to check authorization
   - Optional validation request bodies that are hashed
 
   **API Changes**
-
   - Identity manifest renamed from "metadata" to "registration" and now includes registry identifier
   - Reputation feedback uses integer `value` + `valueDecimals` format
   - Validation request/response payloads and identifiers updated
@@ -58,7 +83,6 @@
   - `registryAddress` required when building trust config from identity records
 
   **Documentation**
-
   - Examples, guides, tests, and changelogs updated to registration-centric workflow
   - New reputation/validation formats documented
 
@@ -76,7 +100,6 @@
 ### Patch Changes
 
 - 0a8ad8f: Replace custom ViemWalletClient interface with viem's WalletClient type
-
   - Add viem as a peer dependency in @lucid-agents/types
   - Replace custom `ViemWalletClient` interface with `import type { WalletClient } from 'viem'`
   - Update `SignerWalletOptions` to use viem's official `WalletClient` type
@@ -137,7 +160,6 @@
 ### Minor Changes
 
 - 026ec23: ## Summary
-
   - Added thirdweb Engine wallet connector that integrates with thirdweb Engine server wallets. The connector lazily initializes the Engine account, converts it to a viem wallet client, and exposes it via the shared `WalletConnector` API.
   - Introduced shared wallet client abstraction with capability detection. All connectors now expose optional `getCapabilities()`, `getSigner()`, and `getWalletClient()` methods, enabling uniform access to signers and contract-ready wallet clients across connector types.
   - Enhanced local EOA connectors to automatically build viem wallet clients from signers. Configure `walletClient` (chain ID, RPC URL, chain name) on local wallet options to enable `getWalletClient()` support.
@@ -147,11 +169,9 @@
   - Updated documentation with unified wallet client usage patterns and environment variable configuration.
 
   ## Breaking Changes
-
   - **Environment variable configuration now requires `AGENT_WALLET_TYPE`**. The `walletsFromEnv()` helper will throw an error if `AGENT_WALLET_TYPE` is not set. Previously, the type could be inferred from available variables.
 
   ## Migration Notes
-
   - **Set `AGENT_WALLET_TYPE` explicitly**: Update your environment variables to include `AGENT_WALLET_TYPE=local`, `AGENT_WALLET_TYPE=thirdweb`, or `AGENT_WALLET_TYPE=lucid`.
   - **Use unified wallet client API**: All connectors now support `getWalletClient()` when configured. Check capabilities before calling:
     ```ts
@@ -238,7 +258,6 @@
   ### Type Exports
 
   Types reorganized into domain-specific sub-packages. Import directly from `@lucid-agents/types/{domain}`:
-
   - `@lucid-agents/types/core` - Core runtime types
   - `@lucid-agents/types/http` - HTTP-related types
   - `@lucid-agents/types/payments` - Payment configuration types
@@ -257,7 +276,6 @@
   ```
 
   ## Improvements
-
   - **New Examples Package (`@lucid-agents/examples`)**: Added comprehensive examples package that serves as critical infrastructure for maintaining developer experience quality
     - Provides continuous type checking to ensure developer-facing interfaces remain stable
     - Validates developer experience consistency when pushing SDK changes
@@ -272,7 +290,6 @@
   ## A2A Protocol Improvements
 
   ### Agent Discovery
-
   - **Multiple URL Fallback**: `fetchAgentCard()` now tries multiple well-known paths for better compatibility:
     - Base URL (if absolute)
     - `/.well-known/agent-card.json` (A2A spec recommended)
@@ -289,7 +306,6 @@
     - All discovery functions consolidated in `card.ts`
 
   ### Type Improvements
-
   - **Clear Separation**:
     - `fetchAgentCard()` returns `AgentCard` (capabilities only, no entrypoints)
     - `buildAgentCard()` returns `AgentCardWithEntrypoints` (for our own manifest)
@@ -298,7 +314,6 @@
     - They only need skill ID and URL, not entrypoint schemas
 
   ### A2A Spec Compliance
-
   - **Added Missing Fields**:
     - `protocolVersion` (default: "1.0")
     - `supportedInterfaces` (replaces deprecated `url` field)
@@ -311,7 +326,6 @@
   - **Updated `buildAgentCard()`**: Now includes `protocolVersion` and `supportedInterfaces`
 
   ### Example Updates
-
   - Updated A2A example to demonstrate real-world discovery flow:
     1. Fetch agent card from URL
     2. Check capabilities
@@ -319,7 +333,6 @@
     4. Find and call a skill
 
   ## Bug Fixes
-
   - Fixed incorrect `https://` protocol in Bun server log messages (changed to `http://`)
   - Fixed `facilitatorUrl` type mismatch in payments configuration (now uses proper `Resource` type with URL validation)
   - Fixed `RegistrationEntry` type in tests (added missing `agentAddress` field)
@@ -336,7 +349,6 @@
 - 2ce3a85: Refactor to protocol-agnostic extension-based architecture with HTTP as separate package
 
   **Breaking Changes:**
-
   - **Extension-based API**: Removed `createAgentRuntime()` and `createAgentHttpRuntime()` - replaced with extension-based API using `createAgent().use().build()`
   - **HTTP as separate package**: HTTP extension moved to separate `@lucid-agents/http` package
   - **Protocol-agnostic core**: `AgentCore` no longer has `invoke()`, `stream()`, or `resolveManifest()` methods - these are HTTP-specific and moved to `@lucid-agents/http`
@@ -383,7 +395,6 @@
   ```
 
   **Migration Guide:**
-
   1. **Replace app creation:**
      - Old: `createAgentRuntime(meta, options)`
      - New: `await createAgent(meta).use(extensions).build()`
@@ -401,7 +412,6 @@
      - Old: `agent.resolveManifest(origin, basePath)`
      - New: `agent.manifest.build(origin)`
   6. **Remove core invoke/stream calls:**
-
      - Old: `agent.invoke(key, input, ctx)`
      - New: Use HTTP handlers (via `runtime.handlers.invoke`) or import `invokeHandler` from `@lucid-agents/http` for direct calls:
 
@@ -454,7 +464,6 @@
   ## New Features
 
   ### Wallet Package (`@lucid-agents/wallet`)
-
   - New `@lucid-agents/wallet` package providing wallet connectors and signing infrastructure
   - **Local Wallet Connector** (`LocalEoaWalletConnector`) - Supports private key-based signing, message signing, typed data signing (EIP-712), and transaction signing for contract interactions
   - **Server Orchestrator Wallet Connector** (`ServerOrchestratorWalletConnector`) - Remote wallet signing via server orchestrator API with bearer token authentication
@@ -463,7 +472,6 @@
   - **Private Key Signer** (`createPrivateKeySigner`) - Wraps viem's `privateKeyToAccount` for consistent interface with full support for message, typed data, and transaction signing
 
   ### Type System Consolidation
-
   - Consolidated all shared types into `@lucid-agents/types` package
   - Organized types by domain: `core/`, `payments/`, `wallets/`, `identity/`
   - Moved types from individual packages (`core`, `wallet`, `payments`, `identity`) to shared types package
@@ -523,14 +531,12 @@
   ## Improvements
 
   ### Architecture & Build System
-
   - **Eliminated Circular Dependencies** - Moved all shared types to `@lucid-agents/types` package, removed runtime dependencies between `core`, `payments`, and `identity`
   - **Fixed Build Order** - Corrected topological sort: `types` → `wallet` → `payments` → `identity` → `core` → adapters
   - **Added Build Commands** - `build:clean` command and `just build-all-clean` for fresh builds
   - **AP2 Constants** - `AP2_EXTENSION_URI` kept in core (runtime constant), type uses string literal to avoid type-only import issues
 
   ### Code Quality
-
   - **Removed `stableJsonStringify`** - Completely removed complex stringification logic, simplified challenge message resolution
   - **Removed `ChallengeNormalizationOptions`** - Removed unused interface, simplified `normalizeChallenge()` signature
   - **Import/Export Cleanup** - Removed `.js` extensions from TypeScript source imports, removed unnecessary type re-exports
@@ -542,21 +548,18 @@
   ### Type System
 
   **Comprehensive Type Moves:**
-
   - **From `@lucid-agents/core` to `@lucid-agents/types/core`**: `AgentRuntime`, `AgentCard`, `AgentCardWithEntrypoints`, `Manifest`, `PaymentMethod`, `AgentCapabilities`, `AP2Config`, `AP2Role`, `AP2ExtensionDescriptor`, `AP2ExtensionParams`, `AgentMeta`, `AgentContext`, `Usage`, `EntrypointDef`, `AgentKitConfig`
   - **From `@lucid-agents/wallet` to `@lucid-agents/types/wallets`**: `WalletConnector`, `ChallengeSigner`, `WalletMetadata`, `LocalEoaSigner`, `TypedDataPayload`, `AgentChallenge`, `AgentChallengeResponse`, `AgentWalletHandle`, `AgentWalletKind`, `AgentWalletConfig`, `DeveloperWalletConfig`, `WalletsConfig`, `LocalWalletOptions`, and related types
   - **From `@lucid-agents/payments` to `@lucid-agents/types/payments`**: `PaymentRequirement`, `RuntimePaymentRequirement`, `PaymentsConfig`, `EntrypointPrice`, `SolanaAddress`, `PaymentsRuntime` (now includes `activate` method in public API)
   - **From `@lucid-agents/identity` to `@lucid-agents/types/identity`**: `TrustConfig`, `RegistrationEntry`, `TrustModel`
 
   **Type Alignment:**
-
   - `TypedDataPayload`: Changed `primary_type` → `primaryType`, `typed_data` → `typedData` (camelCase to match viem)
   - `ChallengeSigner`: Made `payload` and `scopes` optional to match `AgentChallenge`
   - `LocalEoaSigner`: Added `signTransaction` method for contract writes
   - `AP2ExtensionDescriptor`: Uses string literal instead of `typeof AP2_EXTENSION_URI`
 
   ## Bug Fixes
-
   - Fixed circular dependency between `core` and `payments`/`identity`
   - Fixed build order causing build failures
   - Fixed transaction signing for local wallets (enables identity registration)
@@ -570,7 +573,6 @@
   ## Migration Guide
 
   See PR description for detailed migration steps covering:
-
   1. Configuration shape changes (`wallet` → `wallets`)
   2. Type import updates (direct imports from `@lucid-agents/types`)
   3. TypedData API changes (snake_case → camelCase)

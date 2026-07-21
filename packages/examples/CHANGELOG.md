@@ -1,5 +1,31 @@
 # @lucid-agents/examples
 
+## 0.4.1
+
+### Patch Changes
+
+- 17fa5eb: Use USD decimal prices and canonical `PAYMENTS_*` configuration names in generated and repository examples.
+- Updated dependencies [583dc87]
+- Updated dependencies [c21990b]
+- Updated dependencies [583dc87]
+- Updated dependencies [17fa5eb]
+- Updated dependencies [583dc87]
+  - @lucid-agents/types@2.0.0
+  - @lucid-agents/core@4.0.0
+  - @lucid-agents/identity@4.0.0
+  - @lucid-agents/payments@4.0.0
+  - @lucid-agents/hono@1.0.0
+  - @lucid-agents/express@1.0.0
+  - @lucid-agents/tanstack@1.0.0
+  - @lucid-agents/http@2.0.0
+  - @lucid-agents/a2a@1.0.0
+  - @lucid-agents/mpp@1.0.0
+  - @lucid-agents/catalog@1.0.0
+  - @lucid-agents/analytics@1.0.0
+  - @lucid-agents/scheduler@0.3.0
+  - @lucid-agents/ap2@0.4.4
+  - @lucid-agents/wallet@0.6.4
+
 ## 0.4.0
 
 ### Minor Changes
@@ -107,26 +133,22 @@
   This release completes the migration to x402 v2.2.0 with scoped packages and fixes all payment adapters and tests.
 
   **Package Updates:**
-
   - Migrated from `x402` v1 to `@x402/core` v2.2.0
   - Migrated from `x402-fetch` to `@x402/fetch` v2.2.0
   - Added `@x402/evm`, `@x402/hono`, `@x402/express`, `@x402/next` v2.2.0
 
   **Breaking Changes:**
-
   - Network identifiers now use CAIP-2 format (e.g., `eip155:84532` instead of `base-sepolia`)
   - Import paths changed from `x402/types` to `@x402/core/server` and `@x402/core/types`
   - Old package names (`x402-hono`, `x402-express`, `x402-next`) replaced with scoped versions
 
   **Adapter Updates:**
-
   - **TanStack**: Updated paywall implementation for v2 API, removed all inline comments
   - **Hono**: Updated paywall middleware to use `@x402/hono`
   - **Express**: Updated paywall middleware to use `@x402/express`
   - **Next**: Updated CLI adapter to use `@x402/next`
 
   **Test Fixes:**
-
   - Added proper facilitator mocking for v2 protocol
   - Updated network identifiers in all test suites (base-sepolia → eip155:84532)
   - Fixed Solana payment tests with correct CAIP-2 format
@@ -134,24 +156,20 @@
   - Skipped server-side payment middleware tests that require complex scheme implementation mocking
 
   **Type Fixes:**
-
   - Fixed remaining `x402/types` imports that were missed in initial migration
   - Updated `Network` type imports to use `@x402/core/types`
   - Added proper type exports for `RouteConfig`, `RoutesConfig`, `Money`, etc.
 
   **Code Cleanup:**
-
   - Removed obsolete X402_NETWORK environment variable comment from firecrawl example
   - Removed inline comments from TanStack paywall modules
   - Cleaned up type definitions and imports across all packages
 
   **Examples:**
-
   - Updated firecrawl example to use new `@x402/fetch`, `@x402/evm` packages
   - Fixed network registration to use CAIP-2 format (Base, Base Sepolia, Ethereum)
 
   **Documentation:**
-
   - Added comprehensive x402 v2 migration guide in `/docs/migration-guides/x402-v2`
   - Documents all breaking changes from both migration phases
   - Includes step-by-step instructions for updating dependencies, networks, imports, and tests
@@ -267,7 +285,6 @@
 - 4bd3ac2: Switch default network from Base Sepolia to Ethereum Mainnet
 
   CHANGES:
-
   - Default payment network changed from `base-sepolia` to `ethereum` across all CLI templates and adapters
   - Added Ethereum Mainnet ERC-8004 contract addresses:
     - Identity Registry: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
@@ -426,7 +443,6 @@
   ### 1. Bi-directional Payment Tracking
 
   The payments system now tracks both directions of payments:
-
   - **Outgoing payments** - When your agent pays other agents or services
   - **Incoming payments** - When others pay your agent for services
 
@@ -435,7 +451,6 @@
   ### 2. Persistent Storage with Multiple Backends
 
   Choose the right storage for your deployment:
-
   - **SQLite (Default)** - Zero-config file-based storage, auto-creates `.data/payments.db`
   - **In-Memory** - Ephemeral storage for serverless without file access
   - **Postgres** - Remote database for serverless with persistence and multi-instance deployments
@@ -445,7 +460,6 @@
   ### 3. Payment Policy Groups
 
   Organize policies into named groups for flexible control:
-
   - **Multiple policy groups** - Apply different policies to different scenarios
   - **Group-based tracking** - Payments are tracked per policy group
   - **Scope-based limits** - Global, per-target, per-endpoint, per-sender scopes
@@ -453,7 +467,6 @@
   ### 4. Outgoing Payment Policies
 
   Control how much your agent can spend:
-
   - **Per-payment limits** - Maximum amount per individual payment
   - **Total limits** - Maximum total spending over time windows
   - **Time-windowed limits** - Daily, hourly, or custom time windows
@@ -465,7 +478,6 @@
   ### 5. Incoming Payment Policies (Receivables)
 
   Control which payments your agent accepts:
-
   - **Per-payment limits** - Maximum amount per incoming payment
   - **Total limits** - Maximum total incoming over time windows
   - **Time-windowed limits** - Daily, hourly, or custom time windows
@@ -474,14 +486,12 @@
   - **Sender allow/block lists** - Whitelist or blacklist specific domains or wallet addresses
 
   **Policy Enforcement Flow:**
-
   - Domain-based checks happen **before** payment (can block without receiving payment)
   - Wallet-based checks happen **after** payment (x402 protocol limitation - payment already received)
 
   ### 6. Analytics Package
 
   New `@lucid-agents/analytics` package provides comprehensive payment reporting:
-
   - **Summary statistics** - Outgoing/incoming totals, net amounts, transaction counts
   - **Time-windowed queries** - Filter by time periods (last 24 hours, last week, etc.)
   - **Transaction history** - Complete payment records with filtering
@@ -492,7 +502,6 @@
   - **JSON export** - Export data to JSON format for programmatic access
 
   **Use Cases:**
-
   - Financial reporting and reconciliation
   - Integration with accounting systems (QuickBooks, Xero, etc.)
   - Audit trails and compliance
@@ -502,7 +511,6 @@
   ### 7. Scheduler Package
 
   New `@lucid-agents/scheduler` package provides pull-style scheduling for hiring agents and invoking them on a schedule with bound wallets:
-
   - **Runtime** - Scheduler runtime with extension system integration
   - **Worker** - Background worker for executing scheduled hires
   - **In-Memory Store** - Default storage for scheduled hires (can be extended)
@@ -514,7 +522,6 @@
   ### 8. Agent Card Fetching API
 
   New API in `@lucid-agents/a2a` package to fetch agent cards with entrypoint details:
-
   - Fetch agent cards with full entrypoint information
   - Support for discovering agent capabilities before scheduling
   - Integration with scheduler for dynamic agent discovery
@@ -522,14 +529,12 @@
   ### 9. Automatic Payment Recording
 
   Payments are automatically tracked:
-
   - **Outgoing payments** - Recorded when using `fetchWithPayment` (policy enforcement happens before payment)
   - **Incoming payments** - Recorded after x402 validation succeeds (policy enforcement happens after payment for wallet-based checks)
 
   ### 10. Utility Functions
 
   New shared utility functions for paywall implementations:
-
   - `extractSenderDomain(origin?, referer?)` - Extract domain from request headers
   - `extractPayerAddress(paymentResponseHeader)` - Extract payer from x402 response header
   - `parsePriceAmount(price)` - Parse price string to bigint (USDC has 6 decimals)
@@ -537,7 +542,6 @@
   ## Breaking Changes
 
   ### Removed Types and Functions
-
   - **`SpendingTracker`** → Use `PaymentTracker` instead
   - **`createSpendingTracker()`** → Use `createPaymentTracker()` instead
   - **`evaluateSpendingLimits()`** → Use `evaluateOutgoingLimits()` instead
@@ -599,13 +603,11 @@
   ### Policy Evaluation Functions
 
   **Outgoing Payments:**
-
   - `evaluateOutgoingLimits()` - Check outgoing payment limits (async)
   - `evaluateRecipient()` - Check recipient allow/block lists (sync)
   - `evaluatePolicyGroups()` - Evaluate all outgoing policy groups (async)
 
   **Incoming Payments:**
-
   - `evaluateIncomingLimits()` - Check incoming payment limits (async)
   - `evaluateSender()` - Check sender allow/block lists (sync)
   - `evaluateIncomingPolicyGroups()` - Evaluate all incoming policy groups (async)
@@ -613,7 +615,6 @@
   ### Paywall Integration
 
   Both Hono and Express paywalls now support:
-
   1. **Domain-based sender checks** (before x402 middleware)
      - Extracts sender domain from `Origin` or `Referer` headers
      - Returns `403 Forbidden` if blocked
@@ -661,7 +662,6 @@
   ### Worker Execution
 
   The scheduler worker automatically executes scheduled hires:
-
   - Pulls pending hires from the store
   - Executes hires at their scheduled time
   - Handles errors and retries
@@ -672,7 +672,6 @@
   ### New Files
 
   **Payments Package:**
-
   - `packages/payments/src/payment-storage.ts` - Storage interface
   - `packages/payments/src/sqlite-payment-storage.ts` - SQLite implementation
   - `packages/payments/src/in-memory-payment-storage.ts` - In-memory implementation
@@ -681,7 +680,6 @@
   - `packages/payments/README.md` - Comprehensive documentation
 
   **Analytics Package:**
-
   - `packages/analytics/src/index.ts` - Main exports
   - `packages/analytics/src/extension.ts` - Analytics extension
   - `packages/analytics/src/api.ts` - Analytics API functions
@@ -689,7 +687,6 @@
   - `packages/analytics/src/__tests__/format-usdc.test.ts` - USDC formatting tests
 
   **Scheduler Package:**
-
   - `packages/scheduler/src/index.ts` - Main exports
   - `packages/scheduler/src/extension.ts` - Scheduler extension
   - `packages/scheduler/src/runtime.ts` - Scheduler runtime
@@ -702,11 +699,9 @@
   - `packages/scheduler/src/__tests__/store/memory.test.ts` - Store tests
 
   **A2A Package:**
-
   - `packages/a2a/src/agent-card.ts` - Agent card fetching with entrypoint details
 
   **Examples:**
-
   - `packages/examples/src/payments/receivables-policies/index.ts` - Incoming payment policy example
   - `packages/examples/src/payments/receivables-policies/env.example` - Environment variables
   - `packages/examples/src/analytics/index.ts` - Analytics usage example
@@ -718,7 +713,6 @@
   ### Modified Files
 
   **Payments Package:**
-
   - `packages/payments/src/payments.ts` - Updated to use PaymentTracker with storage
   - `packages/payments/src/policy.ts` - Added incoming policy evaluation functions
   - `packages/payments/src/policy-wrapper.ts` - Updated to use PaymentTracker
@@ -733,57 +727,47 @@
   - `packages/payments/package.json` - Added dependencies (`better-sqlite3`, `pg`)
 
   **Types Package:**
-
   - `packages/types/src/payments/index.ts` - Added new types, removed deprecated types
   - `packages/types/src/analytics/index.ts` - New analytics types domain
   - `packages/types/src/scheduler/index.ts` - Scheduler type definitions
 
   **Hono Adapter:**
-
   - `packages/hono/src/paywall.ts` - Added receivables policy checking and incoming payment recording
   - `packages/hono/src/app.ts` - Pass runtime to paywall
   - `packages/hono/src/__tests__/incoming-payments.test.ts` - New tests for incoming payment recording
 
   **Express Adapter:**
-
   - `packages/express/src/paywall.ts` - Added receivables policy checking and incoming payment recording
   - `packages/express/src/app.ts` - Pass runtime to paywall
   - `packages/express/src/__tests__/paywall.test.ts` - New tests for incoming payment recording
 
   **A2A Package:**
-
   - `packages/a2a/src/index.ts` - Export agent card fetching API
 
   **Core Package:**
-
   - `packages/core/README.md` - Updated payment section with bi-directional tracking info and link to payments README
 
   **Examples:**
-
   - `packages/examples/src/payments/policy-agent/index.ts` - Updated to use `outgoingLimits`
   - `packages/examples/src/payments/payment-policies.json` - Updated to use `outgoingLimits`
   - `packages/examples/src/payments/payment-policies.json.example` - Updated to use `outgoingLimits`
   - `packages/examples/package.json` - Added scheduler dependency
 
   ### Deleted Files
-
   - `packages/payments/src/spending-tracker.ts` - Replaced by PaymentTracker
 
   ## Dependencies Added
 
   **Payments Package:**
-
   - `better-sqlite3@^11.7.0` - SQLite database
   - `pg@^8.13.1` - PostgreSQL client
   - `@types/better-sqlite3@^7.6.13` - TypeScript types
   - `@types/pg@^8.11.10` - TypeScript types
 
   **Analytics Package:**
-
   - `viem@^2.41.2` - For USDC amount formatting (formatUnits)
 
   **Scheduler Package:**
-
   - `@lucid-agents/a2a` - For agent card fetching and invocations
   - `@lucid-agents/types` - For type definitions
 
@@ -794,7 +778,6 @@
   **Wallet-based sender checks and incoming limits can only be evaluated AFTER payment is received.**
 
   This is a fundamental limitation of the x402 protocol - the payer address is only available in the `X-PAYMENT-RESPONSE` header after payment validation. This means:
-
   - **Domain-based checks** can block before payment (using `Origin`/`Referer` headers)
   - **Wallet-based checks** can only block after payment (payment already received)
   - **Incoming limits** can only be checked after payment (payment already received)
@@ -864,7 +847,6 @@
   ## Use Cases
 
   **Payment Tracking & Analytics:**
-
   - Financial reporting and reconciliation
   - Integration with accounting systems (QuickBooks, Xero, etc.)
   - Audit trails and compliance
@@ -872,7 +854,6 @@
   - Revenue and cost analysis
 
   **Scheduler:**
-
   - Automated Data Processing - Schedule regular data processing tasks
   - Multi-Agent Workflows - Coordinate tasks across multiple agents
   - Scheduled Reports - Generate and send reports on a schedule
@@ -912,7 +893,6 @@
 ### Patch Changes
 
 - 026ec23: ## Summary
-
   - Added thirdweb Engine wallet connector that integrates with thirdweb Engine server wallets. The connector lazily initializes the Engine account, converts it to a viem wallet client, and exposes it via the shared `WalletConnector` API.
   - Introduced shared wallet client abstraction with capability detection. All connectors now expose optional `getCapabilities()`, `getSigner()`, and `getWalletClient()` methods, enabling uniform access to signers and contract-ready wallet clients across connector types.
   - Enhanced local EOA connectors to automatically build viem wallet clients from signers. Configure `walletClient` (chain ID, RPC URL, chain name) on local wallet options to enable `getWalletClient()` support.
@@ -922,11 +902,9 @@
   - Updated documentation with unified wallet client usage patterns and environment variable configuration.
 
   ## Breaking Changes
-
   - **Environment variable configuration now requires `AGENT_WALLET_TYPE`**. The `walletsFromEnv()` helper will throw an error if `AGENT_WALLET_TYPE` is not set. Previously, the type could be inferred from available variables.
 
   ## Migration Notes
-
   - **Set `AGENT_WALLET_TYPE` explicitly**: Update your environment variables to include `AGENT_WALLET_TYPE=local`, `AGENT_WALLET_TYPE=thirdweb`, or `AGENT_WALLET_TYPE=lucid`.
   - **Use unified wallet client API**: All connectors now support `getWalletClient()` when configured. Check capabilities before calling:
     ```ts

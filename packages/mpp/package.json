@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/mpp",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Machine Payments Protocol (MPP) integration for Lucid Agents - multi-method payments via HTTP 402",
   "repository": {
     "type": "git",

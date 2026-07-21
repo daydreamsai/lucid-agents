@@ -1,5 +1,44 @@
 # @lucid-agents/payments
 
+## 4.0.0
+
+### Major Changes
+
+- 583dc87: Replace the coupled app runtime with a protocol-neutral extension kernel and a
+  single shared HTTP authorization/route layer. Payments now own verification,
+  policy admission, settlement, SIWX, and storage lifecycle; adapters bind the
+  canonical HTTP route plan instead of implementing their own paywalls.
+
+  Breaking migrations include importing server-only payment storage and Stripe
+  support from their documented subpaths, using the runtime HTTP extension for
+  adapter payment handling, moving `runtime.handlers` to
+  `runtime.http.handlers`/`runtime.http.routes`, and consuming shared capability
+  contracts from `@lucid-agents/types`. The API SDK now publishes built ESM
+  entrypoints, and the CLI generates projects against the unified runtime surface.
+  Outgoing policies now evaluate canonical x402 v2 requirements, and generated
+  dashboards construct registered x402 clients before attempting payment.
+  Incoming and outgoing accounting is durably staged before irreversible
+  settlement so a later recording failure remains fail-closed beyond reservation
+  expiry.
+
+### Patch Changes
+
+- c21990b: Replace generated dashboards and the portable landing page with a shared agent
+  service storefront. Agent Cards now publish per-entrypoint payment protocol,
+  network, and SIWX requirements; HTTP exposes a canonical public service-page
+  model; and generated Next and TanStack applications share accessible invoke,
+  stream, payment, and A2A task interactions.
+- 17fa5eb: Rebuild the SDK documentation around end-to-end x402 seller and buyer journeys,
+  with expanded protocol and package references, deployment and operations guides,
+  stable runnable examples, and automated checks for drift, snippets, and links.
+- 583dc87: Add packed-project CI coverage for every generated adapter, make the landing page
+  hydrate safely, and keep the optional Stripe dependency compatible with framework
+  bundlers.
+- Updated dependencies [583dc87]
+- Updated dependencies [c21990b]
+- Updated dependencies [17fa5eb]
+  - @lucid-agents/types@2.0.0
+
 ## 3.0.0
 
 ### Major Changes
@@ -31,7 +70,6 @@
 ### Patch Changes
 
 - c1c53f9: Add facilitator bearer token support for x402 flows and scaffold it in generated agent env files.
-
   - Add `facilitatorAuth?: string` to `PaymentsConfig`.
   - Extend `paymentsFromEnv()` to read facilitator auth from:
     - `FACILITOR_AUTH`
@@ -56,26 +94,22 @@
   This release completes the migration to x402 v2.2.0 with scoped packages and fixes all payment adapters and tests.
 
   **Package Updates:**
-
   - Migrated from `x402` v1 to `@x402/core` v2.2.0
   - Migrated from `x402-fetch` to `@x402/fetch` v2.2.0
   - Added `@x402/evm`, `@x402/hono`, `@x402/express`, `@x402/next` v2.2.0
 
   **Breaking Changes:**
-
   - Network identifiers now use CAIP-2 format (e.g., `eip155:84532` instead of `base-sepolia`)
   - Import paths changed from `x402/types` to `@x402/core/server` and `@x402/core/types`
   - Old package names (`x402-hono`, `x402-express`, `x402-next`) replaced with scoped versions
 
   **Adapter Updates:**
-
   - **TanStack**: Updated paywall implementation for v2 API, removed all inline comments
   - **Hono**: Updated paywall middleware to use `@x402/hono`
   - **Express**: Updated paywall middleware to use `@x402/express`
   - **Next**: Updated CLI adapter to use `@x402/next`
 
   **Test Fixes:**
-
   - Added proper facilitator mocking for v2 protocol
   - Updated network identifiers in all test suites (base-sepolia → eip155:84532)
   - Fixed Solana payment tests with correct CAIP-2 format
@@ -83,24 +117,20 @@
   - Skipped server-side payment middleware tests that require complex scheme implementation mocking
 
   **Type Fixes:**
-
   - Fixed remaining `x402/types` imports that were missed in initial migration
   - Updated `Network` type imports to use `@x402/core/types`
   - Added proper type exports for `RouteConfig`, `RoutesConfig`, `Money`, etc.
 
   **Code Cleanup:**
-
   - Removed obsolete X402_NETWORK environment variable comment from firecrawl example
   - Removed inline comments from TanStack paywall modules
   - Cleaned up type definitions and imports across all packages
 
   **Examples:**
-
   - Updated firecrawl example to use new `@x402/fetch`, `@x402/evm` packages
   - Fixed network registration to use CAIP-2 format (Base, Base Sepolia, Ethereum)
 
   **Documentation:**
-
   - Added comprehensive x402 v2 migration guide in `/docs/migration-guides/x402-v2`
   - Documents all breaking changes from both migration phases
   - Includes step-by-step instructions for updating dependencies, networks, imports, and tests
@@ -124,24 +154,20 @@
   The following v1 backwards compatibility has been removed:
 
   **Request headers no longer supported:**
-
   - `X-Price` - Use `PAYMENT-REQUIRED` header instead
   - `X-Pay-To` - Use `PAYMENT-REQUIRED` header instead
   - `X-Network` - Use `PAYMENT-REQUIRED` header instead
   - `X-Facilitator` - Use `PAYMENT-REQUIRED` header instead
 
   **Response headers no longer supported:**
-
   - `X-PAYMENT-RESPONSE` - Use `PAYMENT-RESPONSE` header instead
 
   **Payment requirements format:**
-
   - `maxAmountRequired` field removed - Use `amount` instead
   - Network must use CAIP-2 format (e.g., `eip155:84532` not `base-sepolia`)
   - `extra.name` and `extra.version` required for EIP-712 signing
 
   ### Replaced legacy packages with @x402/\* packages
-
   - `@x402/core` - Core x402 protocol types
   - `@x402/fetch` - Payment-wrapped fetch with `wrapFetchWithPayment` and `x402Client`
   - `@x402/evm` - EVM signer support with `ExactEvmScheme` and `toClientEvmSigner`
@@ -195,7 +221,6 @@
   they now use the new packages internally.
 
   ## Supported Networks
-
   - `eip155:8453` - Base mainnet
   - `eip155:84532` - Base Sepolia
   - `eip155:1` - Ethereum mainnet
@@ -214,12 +239,10 @@
 - b66cb4d: Fix silent failure when using invalid price format
 
   Added runtime validation to detect and warn about invalid price formats:
-
   - `{ amount: 20000 }` - now logs warning and returns null (endpoint becomes free with clear warning)
   - `20000` (number) - now logs warning suggesting string format
 
   Valid formats remain:
-
   - String: `price: "20000"` (flat price)
   - Object: `price: { invoke: "20000", stream: "10000" }` (separate prices)
 
@@ -249,7 +272,6 @@
 - 4bd3ac2: Switch default network from Base Sepolia to Ethereum Mainnet
 
   CHANGES:
-
   - Default payment network changed from `base-sepolia` to `ethereum` across all CLI templates and adapters
   - Added Ethereum Mainnet ERC-8004 contract addresses:
     - Identity Registry: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
@@ -310,7 +332,6 @@
   ## New Features
 
   ### Postgres Storage Backend for Payments
-
   - Added `PostgresPaymentStorage` class for persistent payment storage
   - Supports connection pooling and automatic schema initialization
   - Ideal for serverless deployments and multi-instance setups
@@ -318,14 +339,12 @@
   - CI integration with Postgres test database
 
   ### Multi-Agent Support
-
   - Added optional `agentId` parameter to payments extension for multi-agent isolation
   - Multiple agents can now share the same Postgres database with complete payment isolation
   - Backward compatible - existing single-agent deployments continue to work unchanged
   - Database queries automatically filter by `agentId` when provided
 
   ### API Structure Refinements
-
   - Added `agentId` parameter to `payments()` extension factory
   - Added `storageFactory` parameter for custom storage implementations
   - Refined extension runtime types for stricter type safety:
@@ -353,7 +372,6 @@
 ### Patch Changes
 
 - 8b1afb7: Fix circular dependencies and inline type imports
-
   - **HTTP package**: Removed circular dependencies on `@lucid-agents/core` and `@lucid-agents/payments` by exposing `resolvePrice` on PaymentsRuntime instead of importing from payments package
   - **Payments package**: Added `resolvePrice` method to PaymentsRuntime for use by extensions
   - **Types package**: Fixed inline type imports within types package (payments, a2a) and added `resolvePrice` to PaymentsRuntime type
@@ -380,7 +398,6 @@
   ### 1. Bi-directional Payment Tracking
 
   The payments system now tracks both directions of payments:
-
   - **Outgoing payments** - When your agent pays other agents or services
   - **Incoming payments** - When others pay your agent for services
 
@@ -389,7 +406,6 @@
   ### 2. Persistent Storage with Multiple Backends
 
   Choose the right storage for your deployment:
-
   - **SQLite (Default)** - Zero-config file-based storage, auto-creates `.data/payments.db`
   - **In-Memory** - Ephemeral storage for serverless without file access
   - **Postgres** - Remote database for serverless with persistence and multi-instance deployments
@@ -399,7 +415,6 @@
   ### 3. Payment Policy Groups
 
   Organize policies into named groups for flexible control:
-
   - **Multiple policy groups** - Apply different policies to different scenarios
   - **Group-based tracking** - Payments are tracked per policy group
   - **Scope-based limits** - Global, per-target, per-endpoint, per-sender scopes
@@ -407,7 +422,6 @@
   ### 4. Outgoing Payment Policies
 
   Control how much your agent can spend:
-
   - **Per-payment limits** - Maximum amount per individual payment
   - **Total limits** - Maximum total spending over time windows
   - **Time-windowed limits** - Daily, hourly, or custom time windows
@@ -419,7 +433,6 @@
   ### 5. Incoming Payment Policies (Receivables)
 
   Control which payments your agent accepts:
-
   - **Per-payment limits** - Maximum amount per incoming payment
   - **Total limits** - Maximum total incoming over time windows
   - **Time-windowed limits** - Daily, hourly, or custom time windows
@@ -428,14 +441,12 @@
   - **Sender allow/block lists** - Whitelist or blacklist specific domains or wallet addresses
 
   **Policy Enforcement Flow:**
-
   - Domain-based checks happen **before** payment (can block without receiving payment)
   - Wallet-based checks happen **after** payment (x402 protocol limitation - payment already received)
 
   ### 6. Analytics Package
 
   New `@lucid-agents/analytics` package provides comprehensive payment reporting:
-
   - **Summary statistics** - Outgoing/incoming totals, net amounts, transaction counts
   - **Time-windowed queries** - Filter by time periods (last 24 hours, last week, etc.)
   - **Transaction history** - Complete payment records with filtering
@@ -446,7 +457,6 @@
   - **JSON export** - Export data to JSON format for programmatic access
 
   **Use Cases:**
-
   - Financial reporting and reconciliation
   - Integration with accounting systems (QuickBooks, Xero, etc.)
   - Audit trails and compliance
@@ -456,7 +466,6 @@
   ### 7. Scheduler Package
 
   New `@lucid-agents/scheduler` package provides pull-style scheduling for hiring agents and invoking them on a schedule with bound wallets:
-
   - **Runtime** - Scheduler runtime with extension system integration
   - **Worker** - Background worker for executing scheduled hires
   - **In-Memory Store** - Default storage for scheduled hires (can be extended)
@@ -468,7 +477,6 @@
   ### 8. Agent Card Fetching API
 
   New API in `@lucid-agents/a2a` package to fetch agent cards with entrypoint details:
-
   - Fetch agent cards with full entrypoint information
   - Support for discovering agent capabilities before scheduling
   - Integration with scheduler for dynamic agent discovery
@@ -476,14 +484,12 @@
   ### 9. Automatic Payment Recording
 
   Payments are automatically tracked:
-
   - **Outgoing payments** - Recorded when using `fetchWithPayment` (policy enforcement happens before payment)
   - **Incoming payments** - Recorded after x402 validation succeeds (policy enforcement happens after payment for wallet-based checks)
 
   ### 10. Utility Functions
 
   New shared utility functions for paywall implementations:
-
   - `extractSenderDomain(origin?, referer?)` - Extract domain from request headers
   - `extractPayerAddress(paymentResponseHeader)` - Extract payer from x402 response header
   - `parsePriceAmount(price)` - Parse price string to bigint (USDC has 6 decimals)
@@ -491,7 +497,6 @@
   ## Breaking Changes
 
   ### Removed Types and Functions
-
   - **`SpendingTracker`** → Use `PaymentTracker` instead
   - **`createSpendingTracker()`** → Use `createPaymentTracker()` instead
   - **`evaluateSpendingLimits()`** → Use `evaluateOutgoingLimits()` instead
@@ -553,13 +558,11 @@
   ### Policy Evaluation Functions
 
   **Outgoing Payments:**
-
   - `evaluateOutgoingLimits()` - Check outgoing payment limits (async)
   - `evaluateRecipient()` - Check recipient allow/block lists (sync)
   - `evaluatePolicyGroups()` - Evaluate all outgoing policy groups (async)
 
   **Incoming Payments:**
-
   - `evaluateIncomingLimits()` - Check incoming payment limits (async)
   - `evaluateSender()` - Check sender allow/block lists (sync)
   - `evaluateIncomingPolicyGroups()` - Evaluate all incoming policy groups (async)
@@ -567,7 +570,6 @@
   ### Paywall Integration
 
   Both Hono and Express paywalls now support:
-
   1. **Domain-based sender checks** (before x402 middleware)
      - Extracts sender domain from `Origin` or `Referer` headers
      - Returns `403 Forbidden` if blocked
@@ -615,7 +617,6 @@
   ### Worker Execution
 
   The scheduler worker automatically executes scheduled hires:
-
   - Pulls pending hires from the store
   - Executes hires at their scheduled time
   - Handles errors and retries
@@ -626,7 +627,6 @@
   ### New Files
 
   **Payments Package:**
-
   - `packages/payments/src/payment-storage.ts` - Storage interface
   - `packages/payments/src/sqlite-payment-storage.ts` - SQLite implementation
   - `packages/payments/src/in-memory-payment-storage.ts` - In-memory implementation
@@ -635,7 +635,6 @@
   - `packages/payments/README.md` - Comprehensive documentation
 
   **Analytics Package:**
-
   - `packages/analytics/src/index.ts` - Main exports
   - `packages/analytics/src/extension.ts` - Analytics extension
   - `packages/analytics/src/api.ts` - Analytics API functions
@@ -643,7 +642,6 @@
   - `packages/analytics/src/__tests__/format-usdc.test.ts` - USDC formatting tests
 
   **Scheduler Package:**
-
   - `packages/scheduler/src/index.ts` - Main exports
   - `packages/scheduler/src/extension.ts` - Scheduler extension
   - `packages/scheduler/src/runtime.ts` - Scheduler runtime
@@ -656,11 +654,9 @@
   - `packages/scheduler/src/__tests__/store/memory.test.ts` - Store tests
 
   **A2A Package:**
-
   - `packages/a2a/src/agent-card.ts` - Agent card fetching with entrypoint details
 
   **Examples:**
-
   - `packages/examples/src/payments/receivables-policies/index.ts` - Incoming payment policy example
   - `packages/examples/src/payments/receivables-policies/env.example` - Environment variables
   - `packages/examples/src/analytics/index.ts` - Analytics usage example
@@ -672,7 +668,6 @@
   ### Modified Files
 
   **Payments Package:**
-
   - `packages/payments/src/payments.ts` - Updated to use PaymentTracker with storage
   - `packages/payments/src/policy.ts` - Added incoming policy evaluation functions
   - `packages/payments/src/policy-wrapper.ts` - Updated to use PaymentTracker
@@ -687,57 +682,47 @@
   - `packages/payments/package.json` - Added dependencies (`better-sqlite3`, `pg`)
 
   **Types Package:**
-
   - `packages/types/src/payments/index.ts` - Added new types, removed deprecated types
   - `packages/types/src/analytics/index.ts` - New analytics types domain
   - `packages/types/src/scheduler/index.ts` - Scheduler type definitions
 
   **Hono Adapter:**
-
   - `packages/hono/src/paywall.ts` - Added receivables policy checking and incoming payment recording
   - `packages/hono/src/app.ts` - Pass runtime to paywall
   - `packages/hono/src/__tests__/incoming-payments.test.ts` - New tests for incoming payment recording
 
   **Express Adapter:**
-
   - `packages/express/src/paywall.ts` - Added receivables policy checking and incoming payment recording
   - `packages/express/src/app.ts` - Pass runtime to paywall
   - `packages/express/src/__tests__/paywall.test.ts` - New tests for incoming payment recording
 
   **A2A Package:**
-
   - `packages/a2a/src/index.ts` - Export agent card fetching API
 
   **Core Package:**
-
   - `packages/core/README.md` - Updated payment section with bi-directional tracking info and link to payments README
 
   **Examples:**
-
   - `packages/examples/src/payments/policy-agent/index.ts` - Updated to use `outgoingLimits`
   - `packages/examples/src/payments/payment-policies.json` - Updated to use `outgoingLimits`
   - `packages/examples/src/payments/payment-policies.json.example` - Updated to use `outgoingLimits`
   - `packages/examples/package.json` - Added scheduler dependency
 
   ### Deleted Files
-
   - `packages/payments/src/spending-tracker.ts` - Replaced by PaymentTracker
 
   ## Dependencies Added
 
   **Payments Package:**
-
   - `better-sqlite3@^11.7.0` - SQLite database
   - `pg@^8.13.1` - PostgreSQL client
   - `@types/better-sqlite3@^7.6.13` - TypeScript types
   - `@types/pg@^8.11.10` - TypeScript types
 
   **Analytics Package:**
-
   - `viem@^2.41.2` - For USDC amount formatting (formatUnits)
 
   **Scheduler Package:**
-
   - `@lucid-agents/a2a` - For agent card fetching and invocations
   - `@lucid-agents/types` - For type definitions
 
@@ -748,7 +733,6 @@
   **Wallet-based sender checks and incoming limits can only be evaluated AFTER payment is received.**
 
   This is a fundamental limitation of the x402 protocol - the payer address is only available in the `X-PAYMENT-RESPONSE` header after payment validation. This means:
-
   - **Domain-based checks** can block before payment (using `Origin`/`Referer` headers)
   - **Wallet-based checks** can only block after payment (payment already received)
   - **Incoming limits** can only be checked after payment (payment already received)
@@ -818,7 +802,6 @@
   ## Use Cases
 
   **Payment Tracking & Analytics:**
-
   - Financial reporting and reconciliation
   - Integration with accounting systems (QuickBooks, Xero, etc.)
   - Audit trails and compliance
@@ -826,7 +809,6 @@
   - Revenue and cost analysis
 
   **Scheduler:**
-
   - Automated Data Processing - Schedule regular data processing tasks
   - Multi-Agent Workflows - Coordinate tasks across multiple agents
   - Scheduled Reports - Generate and send reports on a schedule
@@ -849,7 +831,6 @@
   ### Payment Policy System
 
   The payment policy system provides:
-
   - **Config File-Based Policies**: Payment policies configured via JSON files (`payment-policies.json`)
     - Clean, version-controllable configuration
     - Easy to review and modify
@@ -927,13 +908,11 @@
   #### Spending Limits
 
   Control how much your agent can spend:
-
   - **Per-Request Limits** (`maxPaymentUsd`): Maximum amount per individual payment (stateless check)
   - **Total Spending Limits** (`maxTotalUsd`): Maximum total spending across all payments (stateful, tracked in-memory)
   - **Time Windows** (`windowMs`): Optional time window for total spending limits (e.g., 86400000ms = 24 hours)
 
   **Three Scopes:**
-
   - **`global`**: Applies to all payments
   - **`perTarget`**: Applies per agent URL/domain (intelligent matching)
   - **`perEndpoint`**: Applies per specific endpoint URL (most specific)
@@ -941,7 +920,6 @@
   #### Rate Limiting
 
   Control payment frequency:
-
   - **`maxPayments`**: Maximum number of payments allowed
   - **`windowMs`**: Time window in milliseconds
   - Scoped per policy group
@@ -950,14 +928,12 @@
   #### Recipient Controls
 
   Whitelist or blacklist specific recipients:
-
   - **`allowedRecipients`**: Array of allowed addresses or domains
   - **`blockedRecipients`**: Array of blocked addresses or domains (takes precedence over whitelist)
   - Supports both EVM addresses (0x...) and Solana addresses (base58)
   - Domain-based matching for flexible URL matching
 
   ### Policy Evaluation
-
   - **Multiple Policy Groups**: Support for multiple named policy groups, each with independent rules
   - **All Groups Must Pass**: Policies are evaluated in order - first violation blocks the payment
   - **Automatic Enforcement**: Policies automatically enforced when using `createRuntimePaymentContext()` for payment-enabled fetch
@@ -981,7 +957,6 @@
   ```
 
   ## Documentation
-
   - **New `docs/PAYMENTS.md`**: Comprehensive payment system documentation with:
     - Policy configuration guide
     - Policy file format with examples
@@ -996,14 +971,12 @@
   - **Example Policy File**: `packages/core/examples/payment-policies.json.example` shows all policy features
 
   ## Backward Compatibility
-
   - Policies are **optional** - existing agents without policies continue to work unchanged
   - Only agents that want to use policies need to add the `policies` option
   - Policy enforcement only occurs when making outbound payments via `createRuntimePaymentContext()`
   - Inbound payments (receiving payments) are not affected by policies
 
   ## Implementation Details
-
   - **Zod Schema Validation**: All policy configurations validated using Zod schemas (`PaymentPolicyGroupsSchema`)
   - **In-Memory Tracking**: Spending and rate limit tracking is in-memory (resets on agent restart)
   - **Fast Evaluation**: Policy checks happen before payment - minimal overhead
@@ -1011,7 +984,6 @@
   - **Error Messages**: Human-readable USDC amounts in error messages (e.g., "1.5 USDC" instead of "1500000")
 
   ## Notes
-
   - Policy files are loaded from the current working directory by default
   - Custom paths can be specified: `policies: 'config/custom-policies.json'`
   - Policy validation errors are thrown at startup with detailed messages
@@ -1062,7 +1034,6 @@
   ### Type Exports
 
   Types reorganized into domain-specific sub-packages. Import directly from `@lucid-agents/types/{domain}`:
-
   - `@lucid-agents/types/core` - Core runtime types
   - `@lucid-agents/types/http` - HTTP-related types
   - `@lucid-agents/types/payments` - Payment configuration types
@@ -1081,7 +1052,6 @@
   ```
 
   ## Improvements
-
   - **New Examples Package (`@lucid-agents/examples`)**: Added comprehensive examples package that serves as critical infrastructure for maintaining developer experience quality
     - Provides continuous type checking to ensure developer-facing interfaces remain stable
     - Validates developer experience consistency when pushing SDK changes
@@ -1096,7 +1066,6 @@
   ## A2A Protocol Improvements
 
   ### Agent Discovery
-
   - **Multiple URL Fallback**: `fetchAgentCard()` now tries multiple well-known paths for better compatibility:
     - Base URL (if absolute)
     - `/.well-known/agent-card.json` (A2A spec recommended)
@@ -1113,7 +1082,6 @@
     - All discovery functions consolidated in `card.ts`
 
   ### Type Improvements
-
   - **Clear Separation**:
     - `fetchAgentCard()` returns `AgentCard` (capabilities only, no entrypoints)
     - `buildAgentCard()` returns `AgentCardWithEntrypoints` (for our own manifest)
@@ -1122,7 +1090,6 @@
     - They only need skill ID and URL, not entrypoint schemas
 
   ### A2A Spec Compliance
-
   - **Added Missing Fields**:
     - `protocolVersion` (default: "1.0")
     - `supportedInterfaces` (replaces deprecated `url` field)
@@ -1135,7 +1102,6 @@
   - **Updated `buildAgentCard()`**: Now includes `protocolVersion` and `supportedInterfaces`
 
   ### Example Updates
-
   - Updated A2A example to demonstrate real-world discovery flow:
     1. Fetch agent card from URL
     2. Check capabilities
@@ -1143,7 +1109,6 @@
     4. Find and call a skill
 
   ## Bug Fixes
-
   - Fixed incorrect `https://` protocol in Bun server log messages (changed to `http://`)
   - Fixed `facilitatorUrl` type mismatch in payments configuration (now uses proper `Resource` type with URL validation)
   - Fixed `RegistrationEntry` type in tests (added missing `agentAddress` field)
@@ -1160,7 +1125,6 @@
 - 2ce3a85: Refactor to protocol-agnostic extension-based architecture with HTTP as separate package
 
   **Breaking Changes:**
-
   - **Extension-based API**: Removed `createAgentRuntime()` and `createAgentHttpRuntime()` - replaced with extension-based API using `createAgent().use().build()`
   - **HTTP as separate package**: HTTP extension moved to separate `@lucid-agents/http` package
   - **Protocol-agnostic core**: `AgentCore` no longer has `invoke()`, `stream()`, or `resolveManifest()` methods - these are HTTP-specific and moved to `@lucid-agents/http`
@@ -1207,7 +1171,6 @@
   ```
 
   **Migration Guide:**
-
   1. **Replace app creation:**
      - Old: `createAgentRuntime(meta, options)`
      - New: `await createAgent(meta).use(extensions).build()`
@@ -1225,7 +1188,6 @@
      - Old: `agent.resolveManifest(origin, basePath)`
      - New: `agent.manifest.build(origin)`
   6. **Remove core invoke/stream calls:**
-
      - Old: `agent.invoke(key, input, ctx)`
      - New: Use HTTP handlers (via `runtime.handlers.invoke`) or import `invokeHandler` from `@lucid-agents/http` for direct calls:
 
@@ -1275,7 +1237,6 @@
   Implements A2A Protocol task-based operations alongside existing direct invocation. Tasks enable long-running operations, status tracking, and multi-turn conversations.
 
   **New HTTP Endpoints:**
-
   - `POST /tasks` - Create task (returns `{ taskId, status: 'running' }` immediately)
   - `GET /tasks` - List tasks with filtering (contextId, status, pagination)
   - `GET /tasks/{taskId}` - Get task status and result
@@ -1283,7 +1244,6 @@
   - `GET /tasks/{taskId}/subscribe` - SSE stream for task updates
 
   **New A2A Client Methods:**
-
   - `sendMessage(card, skillId, input, fetch?, options?)` - Creates task and returns taskId immediately (supports contextId for multi-turn conversations)
   - `getTask(card, taskId)` - Retrieves task status and result
   - `listTasks(card, filters?)` - Lists tasks with optional filtering by contextId, status, and pagination
@@ -1293,7 +1253,6 @@
   - `waitForTask(client, card, taskId)` - Utility to poll for task completion
 
   **Task Lifecycle:**
-
   1. Client creates task via `POST /tasks` → receives `{ taskId, status: 'running' }`
   2. Task executes asynchronously (handler runs in background)
   3. Task status updates automatically: `running` → `completed`/`failed`/`cancelled`
@@ -1301,36 +1260,30 @@
   5. When complete, task contains `result: { output, usage, model }` or `error: { code, message }`
 
   **Multi-Turn Conversations:**
-
   - Tasks support `contextId` parameter for grouping related tasks in a conversation
   - Use `listTasks(card, { contextId })` to retrieve all tasks in a conversation
   - Enables building conversational agents that maintain context across multiple interactions
 
   **Task Management:**
-
   - `listTasks()` supports filtering by `contextId`, `status` (single or array), and pagination (`limit`, `offset`)
   - `cancelTask()` allows cancelling running tasks, updating status to `cancelled` and aborting handler execution
   - Tasks include `AbortController` for proper cancellation handling
 
   **Backward Compatible:**
-
   - Direct invocation (`/entrypoints/{key}/invoke`) remains fully supported
   - Existing code using `client.invoke()` continues to work
   - Both approaches can be used side-by-side
 
   **Task Storage:**
-
   - In-memory `Map<taskId, TaskEntry>` in core runtime (combines Task and AbortController)
   - Tasks persist for agent lifetime (no automatic expiration)
   - Each task entry includes task data and AbortController for cancellation support
 
   **Adapters:**
-
   - Hono: Task routes registered automatically
   - TanStack (headless & ui): Task route files created
 
   ### A2A Client Support (`@lucid-agents/a2a`)
-
   - **New `@lucid-agents/a2a` package** - Complete A2A protocol implementation
   - **Agent Card Building** - `buildAgentCard()` creates base A2A-compliant Agent Cards
   - **Agent Card Fetching** - `fetchAgentCard()` retrieves Agent Cards from `/.well-known/agent-card.json`
@@ -1340,37 +1293,31 @@
   - **Skill Discovery** - `findSkill()` and `parseAgentCard()` utilities for working with Agent Cards
 
   ### AP2 Extension Package (`@lucid-agents/ap2`)
-
   - **New `@lucid-agents/ap2` package** - Separated AP2 (Agent Payments Protocol) into its own extension
   - **AP2 Runtime** - `createAP2Runtime()` for managing AP2 configuration
   - **Agent Card Enhancement** - `createAgentCardWithAP2()` adds AP2 extension metadata to Agent Cards
   - **Auto-enablement** - Automatically enables merchant role when payments are configured
 
   ### Agent Card Immutable Composition
-
   - **Immutable Enhancement Functions** - `createAgentCardWithPayments()`, `createAgentCardWithIdentity()`, `createAgentCardWithAP2()`
   - **Composition Pattern** - Agent Cards are built by composing base A2A card with protocol-specific enhancements
   - **Separation of Concerns** - Each protocol (A2A, payments, identity, AP2) owns its Agent Card metadata
 
   ### Runtime Access in Handlers
-
   - **Runtime Context** - `AgentContext` now includes `runtime` property for accessing A2A client, payments, wallets, etc.
   - **A2A Client Access** - Handlers can call other agents via `ctx.runtime?.a2a?.client.invoke()`
 
   ### Trading Agent Templates (`@lucid-agents/cli`)
-
   - **New `trading-data-agent` template** - Merchant agent providing mock trading data
   - **New `trading-recommendation-agent` template** - Shopper agent that buys data and provides trading signals
   - **A2A Composition Example** - Demonstrates agent-to-agent communication with payments
 
   ### Type System Improvements (`@lucid-agents/types`)
-
   - **A2A Types** - New `@lucid-agents/types/a2a` sub-package with A2A-specific types
   - **AP2 Types** - New `@lucid-agents/types/ap2` sub-package with AP2-specific types
   - **Shared FetchFunction** - `FetchFunction` type moved to `@lucid-agents/types/core` for cross-package use
 
   ### Build System Standardization
-
   - **Standardized `tsconfig.build.json`** - All packages now use build-specific TypeScript configuration
   - **Fixed Build Order** - Added `@lucid-agents/a2a` and `@lucid-agents/ap2` to build sequence
   - **External Dependencies** - All workspace dependencies properly marked as external in tsup configs
@@ -1380,7 +1327,6 @@
   **New Example: `packages/a2a/examples/full-integration.ts`** demonstrates the **facilitating agent pattern**, a core A2A use case where an agent acts as both client and server.
 
   The example shows a three-agent composition:
-
   - **Agent 1 (Worker)**: Does the actual work (echo, process, stream)
   - **Agent 2 (Facilitator)**: Acts as both server and client
     - **Server**: Receives calls from Agent 3
@@ -1392,7 +1338,6 @@
   This demonstrates that agents can orchestrate other agents, enabling complex agent compositions and supply chains. The facilitating agent pattern is essential for building agent ecosystems where agents work together to accomplish tasks.
 
   The example demonstrates:
-
   - Task-based operations (sendMessage, waitForTask)
   - Multi-turn conversations with contextId tracking
   - Listing tasks filtered by contextId
@@ -1457,13 +1402,11 @@
   ### Removed Re-exports
 
   All re-exports have been removed from package `index.ts` files. Import directly from source packages:
-
   - A2A utilities: `@lucid-agents/a2a`
   - AP2 utilities: `@lucid-agents/ap2`
   - Types: `@lucid-agents/types/*`
 
   ## Migration Guide
-
   1. **Replace `buildManifest()` calls** - Use `runtime.manifest.build()` or compose enhancement functions
   2. **Update type imports** - Import A2A types from `@lucid-agents/types/a2a` instead of `@lucid-agents/core`
   3. **Use A2A client** - Access via `ctx.runtime?.a2a?.client` in handlers
@@ -1485,7 +1428,6 @@
   ## New Features
 
   ### Wallet Package (`@lucid-agents/wallet`)
-
   - New `@lucid-agents/wallet` package providing wallet connectors and signing infrastructure
   - **Local Wallet Connector** (`LocalEoaWalletConnector`) - Supports private key-based signing, message signing, typed data signing (EIP-712), and transaction signing for contract interactions
   - **Server Orchestrator Wallet Connector** (`ServerOrchestratorWalletConnector`) - Remote wallet signing via server orchestrator API with bearer token authentication
@@ -1494,7 +1436,6 @@
   - **Private Key Signer** (`createPrivateKeySigner`) - Wraps viem's `privateKeyToAccount` for consistent interface with full support for message, typed data, and transaction signing
 
   ### Type System Consolidation
-
   - Consolidated all shared types into `@lucid-agents/types` package
   - Organized types by domain: `core/`, `payments/`, `wallets/`, `identity/`
   - Moved types from individual packages (`core`, `wallet`, `payments`, `identity`) to shared types package
@@ -1554,14 +1495,12 @@
   ## Improvements
 
   ### Architecture & Build System
-
   - **Eliminated Circular Dependencies** - Moved all shared types to `@lucid-agents/types` package, removed runtime dependencies between `core`, `payments`, and `identity`
   - **Fixed Build Order** - Corrected topological sort: `types` → `wallet` → `payments` → `identity` → `core` → adapters
   - **Added Build Commands** - `build:clean` command and `just build-all-clean` for fresh builds
   - **AP2 Constants** - `AP2_EXTENSION_URI` kept in core (runtime constant), type uses string literal to avoid type-only import issues
 
   ### Code Quality
-
   - **Removed `stableJsonStringify`** - Completely removed complex stringification logic, simplified challenge message resolution
   - **Removed `ChallengeNormalizationOptions`** - Removed unused interface, simplified `normalizeChallenge()` signature
   - **Import/Export Cleanup** - Removed `.js` extensions from TypeScript source imports, removed unnecessary type re-exports
@@ -1573,21 +1512,18 @@
   ### Type System
 
   **Comprehensive Type Moves:**
-
   - **From `@lucid-agents/core` to `@lucid-agents/types/core`**: `AgentRuntime`, `AgentCard`, `AgentCardWithEntrypoints`, `Manifest`, `PaymentMethod`, `AgentCapabilities`, `AP2Config`, `AP2Role`, `AP2ExtensionDescriptor`, `AP2ExtensionParams`, `AgentMeta`, `AgentContext`, `Usage`, `EntrypointDef`, `AgentKitConfig`
   - **From `@lucid-agents/wallet` to `@lucid-agents/types/wallets`**: `WalletConnector`, `ChallengeSigner`, `WalletMetadata`, `LocalEoaSigner`, `TypedDataPayload`, `AgentChallenge`, `AgentChallengeResponse`, `AgentWalletHandle`, `AgentWalletKind`, `AgentWalletConfig`, `DeveloperWalletConfig`, `WalletsConfig`, `LocalWalletOptions`, and related types
   - **From `@lucid-agents/payments` to `@lucid-agents/types/payments`**: `PaymentRequirement`, `RuntimePaymentRequirement`, `PaymentsConfig`, `EntrypointPrice`, `SolanaAddress`, `PaymentsRuntime` (now includes `activate` method in public API)
   - **From `@lucid-agents/identity` to `@lucid-agents/types/identity`**: `TrustConfig`, `RegistrationEntry`, `TrustModel`
 
   **Type Alignment:**
-
   - `TypedDataPayload`: Changed `primary_type` → `primaryType`, `typed_data` → `typedData` (camelCase to match viem)
   - `ChallengeSigner`: Made `payload` and `scopes` optional to match `AgentChallenge`
   - `LocalEoaSigner`: Added `signTransaction` method for contract writes
   - `AP2ExtensionDescriptor`: Uses string literal instead of `typeof AP2_EXTENSION_URI`
 
   ## Bug Fixes
-
   - Fixed circular dependency between `core` and `payments`/`identity`
   - Fixed build order causing build failures
   - Fixed transaction signing for local wallets (enables identity registration)
@@ -1601,7 +1537,6 @@
   ## Migration Guide
 
   See PR description for detailed migration steps covering:
-
   1. Configuration shape changes (`wallet` → `wallets`)
   2. Type import updates (direct imports from `@lucid-agents/types`)
   3. TypedData API changes (snake_case → camelCase)
@@ -1621,7 +1556,6 @@
 - 2428d81: **BREAKING**: Remove `useConfigPayments` and `defaultPrice` - fully explicit payment configuration
 
   Two breaking changes for clearer, more explicit payment handling:
-
   1. **Removed `useConfigPayments` option** - No more automatic payment application
   2. **Removed `defaultPrice` from PaymentsConfig** - Each paid entrypoint must specify its own price
 
@@ -1671,7 +1605,6 @@
   ```
 
   **Benefits:**
-
   - **Fully explicit**: Every paid entrypoint has a visible price
   - **No magic defaults**: What you see is what you get
   - **Simpler types**: `PaymentsConfig` only has essential fields
@@ -1687,7 +1620,6 @@
 - 8a3ed70: Simplify package names and introduce types package
 
   **Package Renames:**
-
   - `@lucid-agents/agent-kit` → `@lucid-agents/core`
   - `@lucid-agents/agent-kit-identity` → `@lucid-agents/identity`
   - `@lucid-agents/agent-kit-payments` → `@lucid-agents/payments`
@@ -1696,11 +1628,9 @@
   - `@lucid-agents/create-agent-kit` → `@lucid-agents/cli`
 
   **New Package:**
-
   - `@lucid-agents/types` - Shared type definitions with zero circular dependencies
 
   **Architecture Improvements:**
-
   - Zero circular dependencies (pure DAG via types package)
   - Explicit type contracts - all shared types in @lucid-agents/types
   - Better IDE support and type inference
@@ -1740,7 +1670,6 @@
   **TypeScript Configuration:**
 
   All published packages now:
-
   - Extend a shared base TypeScript configuration for consistency
   - Include `type-check` script for CI validation
   - Use simplified type-check command (`tsc -p tsconfig.json --noEmit`)
@@ -1776,7 +1705,6 @@
   ## New Features
 
   ### Next.js Adapter
-
   - **Full-stack React framework** - Build agent applications with Next.js App Router
   - **Client dashboard** - Interactive UI for testing entrypoints with AppKit wallet integration
   - **x402 payment middleware** - Server-side paywall using `x402-next` middleware
@@ -1784,7 +1712,6 @@
   - **Multi-network wallet support** - EVM (Base, Ethereum) and Solana via AppKit/WalletConnect
 
   **Key files:**
-
   - `app/api/agent/*` - HTTP endpoints backed by agent runtime handlers
   - `proxy.ts` - x402 paywall middleware for payment enforcement
   - `components/dashboard.tsx` - Client dashboard for testing entrypoints
@@ -1798,7 +1725,6 @@
   ```
 
   **Features:**
-
   - Interactive entrypoint testing with form validation
   - Real-time SSE streaming support
   - Wallet connection with AppKit (EVM + Solana)
@@ -1809,14 +1735,12 @@
   ## Breaking Changes
 
   ### Dependency Structure Clarified
-
   - Extensions (`agent-kit-identity`, `agent-kit-payments`) are now independent of each other
   - `agent-kit` depends on both extensions
   - `agent-kit-payments` imports `EntrypointDef` from `agent-kit`
   - Build order: identity → payments → agent-kit → adapters
 
   ### Type Locations Changed
-
   - `EntrypointDef` moved to `agent-kit/src/http/types.ts` - co-located with HTTP types
   - Stream types moved to `http/types.ts` - co-located with HTTP/SSE functionality
   - Deleted `agent-kit/src/types.ts` - types now co-located with features
@@ -1846,7 +1770,6 @@
   ## Architectural Changes
 
   ### Files Deleted from agent-kit
-
   - `src/types.ts` - Central types file deleted; types now co-located with features
   - `src/http/payments.ts` - Payment requirement logic moved to agent-kit-payments
   - `src/runtime.ts` - Runtime payment context moved to agent-kit-payments
@@ -1855,7 +1778,6 @@
   ### Package Boundaries Clarified
 
   **agent-kit-payments** contains ALL x402 protocol code:
-
   - Payment configuration types
   - Payment requirement resolution
   - 402 response generation
@@ -1864,7 +1786,6 @@
   - AxLLM integration with x402
 
   **agent-kit** contains:
-
   - Core types (AgentMeta, AgentContext, Usage)
   - HTTP types (EntrypointDef, StreamEnvelope, etc.)
   - Core runtime (AgentCore, handlers)
@@ -1875,7 +1796,6 @@
   - Crypto utilities (sanitizeAddress)
 
   ### AxLLM Reorganization
-
   - Moved from `src/utils/axllm.ts` to `src/axllm/index.ts`
   - Rationale: Isolated for future extraction into separate package
   - Updated package.json exports: `./axllm` instead of `./utils/axllm`
@@ -1895,7 +1815,6 @@
   ```
 
   ### For Package Contributors
-
   - Types are now co-located with features (no central types file)
   - Payment logic belongs in `agent-kit-payments`
   - agent-kit-payments must build before agent-kit
