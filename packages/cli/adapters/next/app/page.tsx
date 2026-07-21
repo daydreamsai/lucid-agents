@@ -6,6 +6,7 @@ import {
 
 import { ServiceStorefront } from '@/components/service-storefront';
 import { handlers } from '@/lib/agent';
+import serviceUi from '@/service-ui.config';
 
 const BASE_PATH = '/api/agent';
 
@@ -51,5 +52,11 @@ async function loadPublicService(origin: string) {
 export default async function Page() {
   const origin = await getRequestOrigin();
   const { manifest, service } = await loadPublicService(origin);
-  return <ServiceStorefront service={service} manifest={manifest} />;
+  return (
+    <ServiceStorefront
+      service={service}
+      manifest={manifest}
+      serviceUi={serviceUi}
+    />
+  );
 }

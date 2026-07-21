@@ -89,6 +89,18 @@ describe('buildServicePageModel', () => {
         description: 'Answers research questions with cited evidence.',
         iconUrl: 'https://agent.example/icon.svg',
       },
+      protocol: {
+        interfaces: [
+          {
+            url: 'https://agent.example/api/agent/',
+            protocolBinding: 'HTTP+JSON',
+            preferred: true,
+          },
+        ],
+        defaultInputModes: [],
+        defaultOutputModes: [],
+      },
+      security: { schemes: [], requirements: [] },
       status: { state: 'online', label: 'Online' },
       trust: {
         registered: true,
@@ -101,6 +113,8 @@ describe('buildServicePageModel', () => {
       capabilities: {
         streaming: true,
         tasks: true,
+        pushNotifications: false,
+        authenticatedExtendedCard: false,
         extensions: [
           {
             name: 'Agent Payments Protocol',
@@ -117,9 +131,19 @@ describe('buildServicePageModel', () => {
         tasks: 'https://agent.example/api/agent/tasks',
       },
       payments: [
-        { method: 'x402', network: 'eip155:8453' },
-        { method: 'mpp', network: 'mpp', detail: 'stripe · usd' },
+        {
+          method: 'x402',
+          network: 'eip155:8453',
+          payee: '0x0000000000000000000000000000000000000001',
+        },
+        {
+          method: 'mpp',
+          network: 'mpp',
+          detail: 'stripe · usd',
+          extensions: { mpp: { method: 'stripe', currency: 'usd' } },
+        },
       ],
+      skills: [],
       offerings: [
         {
           key: 'research',
@@ -146,11 +170,13 @@ describe('buildServicePageModel', () => {
           },
           operations: {
             invoke: {
+              method: 'POST',
               path: '/api/agent/entrypoints/research/invoke',
               url: 'https://agent.example/api/agent/entrypoints/research/invoke',
               price: '$0.10',
             },
             stream: {
+              method: 'POST',
               path: '/api/agent/entrypoints/research/stream',
               url: 'https://agent.example/api/agent/entrypoints/research/stream',
               price: '$0.20',
@@ -168,6 +194,7 @@ describe('buildServicePageModel', () => {
           payment: { required: false },
           operations: {
             invoke: {
+              method: 'POST',
               path: '/api/agent/entrypoints/profile/invoke',
               url: 'https://agent.example/api/agent/entrypoints/profile/invoke',
             },
@@ -189,10 +216,176 @@ describe('buildServicePageModel', () => {
     expect(model.capabilities).toEqual({
       streaming: false,
       tasks: false,
+      pushNotifications: false,
+      authenticatedExtendedCard: false,
       extensions: [],
     });
     expect(model.endpoints.agentCard).toBe(
       'https://bare.example/service/.well-known/agent-card.json'
     );
+  });
+
+  it('preserves the complete public Agent Card contract for every renderer', () => {
+    const model = buildServicePageModel(
+      {
+        protocolVersion: '1.0',
+        name: 'Kitchen Sink Agent',
+        version: '3.0.0',
+        description: 'Publishes every supported service-page field.',
+        provider: {
+          organization: 'Lucid Research',
+          url: 'https://lucid.example/about',
+        },
+        documentationUrl: 'https://lucid.example/docs',
+        supportedInterfaces: [
+          {
+            url: 'https://agent.example/api/agent',
+            protocolBinding: 'HTTP+JSON',
+          },
+          {
+            url: 'https://agent.example/a2a',
+            protocolBinding: 'JSONRPC',
+          },
+        ],
+        defaultInputModes: ['application/json'],
+        defaultOutputModes: ['application/json', 'text/event-stream'],
+        securitySchemes: {
+          bearer: { type: 'http', scheme: 'bearer' },
+        },
+        security: [{ bearer: [] }],
+        capabilities: {
+          streaming: true,
+          pushNotifications: true,
+          stateTransitionHistory: true,
+        },
+        supportsAuthenticatedExtendedCard: true,
+        skills: [
+          {
+            id: 'research',
+            name: 'Evidence research',
+            description: 'Research with cited evidence.',
+            tags: ['research', 'citations'],
+            examples: ['Compare two primary sources'],
+            inputModes: ['application/json'],
+            outputModes: ['application/json', 'text/event-stream'],
+            security: [{ bearer: [] }],
+          },
+          {
+            id: 'discovery-only',
+            name: 'Discovery-only skill',
+            tags: ['catalog'],
+          },
+        ],
+        payments: [
+          {
+            method: 'x402',
+            network: 'eip155:8453',
+            payee: '0x0000000000000000000000000000000000000001',
+            endpoint: 'https://facilitator.example/settle',
+            priceModel: { default: '$0.05' },
+          },
+        ],
+        ValidationRequestsURI: 'https://agent.example/validation/requests',
+        ValidationResponsesURI: 'https://agent.example/validation/responses',
+        FeedbackDataURI: 'https://agent.example/feedback',
+        entrypoints: {
+          research: {
+            description: 'Research an exact question.',
+            streaming: true,
+            pricing: { invoke: '$0.10' },
+            payment_protocol: 'x402',
+          },
+        },
+      },
+      { health: { status: 'healthy' } }
+    );
+
+    expect(model).toMatchObject({
+      agent: {
+        provider: {
+          organization: 'Lucid Research',
+          url: 'https://lucid.example/about',
+        },
+        documentationUrl: 'https://lucid.example/docs',
+      },
+      protocol: {
+        version: '1.0',
+        interfaces: [
+          {
+            url: 'https://agent.example/api/agent',
+            protocolBinding: 'HTTP+JSON',
+            preferred: true,
+          },
+          {
+            url: 'https://agent.example/a2a',
+            protocolBinding: 'JSONRPC',
+            preferred: false,
+          },
+        ],
+        defaultInputModes: ['application/json'],
+        defaultOutputModes: ['application/json', 'text/event-stream'],
+      },
+      security: {
+        schemes: [
+          {
+            name: 'bearer',
+            definition: { type: 'http', scheme: 'bearer' },
+          },
+        ],
+        requirements: [{ bearer: [] }],
+      },
+      capabilities: {
+        streaming: true,
+        tasks: true,
+        pushNotifications: true,
+        authenticatedExtendedCard: true,
+      },
+      endpoints: {
+        validationRequests: 'https://agent.example/validation/requests',
+        validationResponses: 'https://agent.example/validation/responses',
+        feedback: 'https://agent.example/feedback',
+      },
+      payments: [
+        {
+          method: 'x402',
+          network: 'eip155:8453',
+          payee: '0x0000000000000000000000000000000000000001',
+          endpoint: 'https://facilitator.example/settle',
+          defaultPrice: '$0.05',
+        },
+      ],
+      skills: [
+        {
+          id: 'research',
+          name: 'Evidence research',
+          description: 'Research with cited evidence.',
+          tags: ['research', 'citations'],
+          examples: ['Compare two primary sources'],
+          inputModes: ['application/json'],
+          outputModes: ['application/json', 'text/event-stream'],
+          security: [{ bearer: [] }],
+        },
+        {
+          id: 'discovery-only',
+          name: 'Discovery-only skill',
+          tags: ['catalog'],
+        },
+      ],
+      offerings: [
+        {
+          key: 'research',
+          title: 'Evidence research',
+          tags: ['research', 'citations'],
+          examples: ['Compare two primary sources'],
+          inputModes: ['application/json'],
+          outputModes: ['application/json', 'text/event-stream'],
+          security: [{ bearer: [] }],
+          operations: {
+            invoke: { method: 'POST' },
+            stream: { method: 'POST' },
+          },
+        },
+      ],
+    });
   });
 });

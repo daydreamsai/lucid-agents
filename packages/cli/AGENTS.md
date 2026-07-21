@@ -17,6 +17,13 @@ framework-specific UI shell.
 - Keep only routing, request adaptation, document metadata, and providers in
   Next or TanStack overlays.
 - TanStack headless remains API-only and must not receive the shared UI layer.
+- `service-ui.config.ts` is the only generated user-editable visual config.
+  Keep preset resolution, token validation, and shared CSS in the browser-safe
+  `@lucid-agents/http/service-ui` subpath.
+- Hono and Express storefronts are static/read-only. Do not add browser scripts,
+  credential fields, or invoke controls to the portable renderer.
+- React interaction state belongs in `use-service-storefront.ts`; preset
+  components consume the same controller and `ServicePageModel`.
 
 ## Testing
 
@@ -26,7 +33,8 @@ When changing generated UI:
 bun test packages/cli/tests/cli.test.ts
 bun test packages/cli/tests/service-ui-state.test.ts
 bun test packages/cli/tests/service-ui-client.test.ts
-bun run scripts/test-generated-project.ts next tanstack-ui
+bun run scripts/test-generated-project.ts next all
+bun run scripts/test-generated-project.ts tanstack-ui console
 ```
 
 The generated-project script packs current workspace packages before install.

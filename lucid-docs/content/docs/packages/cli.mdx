@@ -27,6 +27,7 @@ For a reproducible Next scaffold:
 ```bash
 bun packages/cli/dist/index.js my-service \
   --adapter=hono \
+  --ui-preset=folio \
   --template=blank \
   --non-interactive \
   --PAYMENTS_NETWORK=eip155:84532 \
@@ -44,6 +45,7 @@ has been published to npm.
 | ----------------------------------- | ---------------------------------------------------------------------------- |
 | `-t, --template <id>`               | `blank`, `identity`, `trading-data-agent`, or `trading-recommendation-agent` |
 | `-a, --adapter <id>`                | `hono`, `express`, `tanstack-ui`, `tanstack-headless`, or `next`             |
+| `--ui-preset <id>`                  | `dossier`, `folio`, or `console` for every UI-capable adapter                |
 | `-i, --install`                     | Run `bun install` after generation                                           |
 | `--no-install`                      | Leave dependency installation to the caller                                  |
 | `--no-deploy`                       | Omit Cloudflare preview tooling from a blank Hono scaffold                   |
@@ -60,8 +62,8 @@ compatibility checks unambiguous.
 
 | Adapter             | Generated integration                                                      |
 | ------------------- | -------------------------------------------------------------------------- |
-| `hono`              | Hono app bound with `@lucid-agents/hono`                                   |
-| `express`           | Express app and Web Request bridge                                         |
+| `hono`              | Hono app plus a static, read-only storefront                               |
+| `express`           | Express app plus a static, read-only storefront                            |
 | `tanstack-ui`       | TanStack Start service storefront and route modules                        |
 | `tanstack-headless` | TanStack Start route modules without the storefront                        |
 | `next`              | Next.js App Router modules; there is no standalone Next.js adapter package |
@@ -83,6 +85,12 @@ migrated and tested. Blank and identity support every adapter listed above.
 Generated code follows the selected adapter's canonical binding. For example,
 Hono uses `createAgentApp(runtime)`, while TanStack uses
 `createTanStackRuntime(runtime)` and registers capabilities on its runtime.
+
+Every adapter except `tanstack-headless` writes one typed root
+`service-ui.config.ts`. `dossier` preserves the existing dark technical design,
+`folio` is a light editorial design, and `console` is a dense dark design.
+Users may edit the preset plus validated semantic color/font tokens. Hono and
+Express remain read-only; Next and TanStack UI retain browser invocation.
 
 ## Stable installation path
 

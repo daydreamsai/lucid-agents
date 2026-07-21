@@ -1,9 +1,10 @@
 # Generated Agent Service UI
 
-Lucid Agents generates a service storefront with an embedded invocation
-workspace. The interface exists to explain an agent's public offering, establish
-trust, and let a developer try or integrate a capability. It is not an
-operations dashboard and must not expose private runtime state.
+Lucid Agents generates a public service storefront in three selectable designs.
+The interface exists to explain an agent's public offering and establish trust.
+React adapters also provide an invocation workspace; portable server adapters
+remain read-only. It is not an operations dashboard and must not expose private
+runtime state.
 
 ## Product contract
 
@@ -60,11 +61,12 @@ capability descriptor.
 @lucid-agents/http
   service-page-model.ts      public model builder
   landing-page.ts            portable Hono/Express renderer
+  service-ui/index.ts        presets, validation, tokens, and shared CSS
 
 @lucid-agents/cli/adapters/ui
   src/components             shared React storefront
+  src/hooks                  shared browser invocation controller
   src/lib                    schema, protocol, stream, task, and state helpers
-  src/styles                 shared visual system
 
 Framework adapters
   Next                       routes, server loading, providers, metadata
@@ -74,32 +76,30 @@ Framework adapters
 Framework adapters may adapt request signatures and routing conventions. They
 must not fork service semantics or duplicate the storefront.
 
-## Visual system
+## Presets and design tokens
 
-The visual posture is a quiet technical dossier. The agent's identity is
-primary; Lucid attribution is a small footer signature.
+Every renderer consumes the same resolved semantic tokens and emits the same
+information regions. Presets change composition and visual tone, not service
+semantics:
 
-| Token      | Value     | Use                                       |
-| ---------- | --------- | ----------------------------------------- |
-| Canvas     | `#0B0D0C` | Page background                           |
-| Surface    | `#111512` | Readiness and result regions              |
-| Ink        | `#EDF2EB` | Primary content                           |
-| Muted      | `#8D978F` | Supporting content                        |
-| Rule       | `#29302B` | Structural separation                     |
-| Accent     | `#7EE2A8` | Readiness, success, primary action        |
-| Accent ink | `#07120C` | Text placed on the accent color           |
-| Warning    | `#E3B965` | Authorization and payment readiness       |
-| Error      | `#FF8B82` | Invalid, mismatch, and recoverable errors |
-| Code       | `#080A09` | Schemas, payloads, results, and snippets  |
+| Preset    | Posture                | Scheme | Layout character                              |
+| --------- | ---------------------- | ------ | --------------------------------------------- |
+| `dossier` | Quiet technical record | Dark   | Existing 320px offering rail and mono density |
+| `folio`   | Editorial field guide  | Light  | Large serif identity and card-like contracts  |
+| `console` | Dense operator console | Dark   | Compact grid and high-information scan lines  |
 
-All interface text uses IBM Plex Mono when available and a system monospace
-fallback. The identity heading is text-only: published agent icons and generated
-monograms are deliberately omitted to keep the hierarchy quiet. Controls use a
-four-pixel radius; overlays may use eight pixels. Shadows are reserved for
-overlays. Functional transitions last 120–180ms and are disabled when reduced
-motion is requested.
+The root `service-ui.config.ts` is the single user-owned configuration file.
+`defineServiceUi()` gives it contextual types; `resolveServiceUi()` validates it
+at runtime. Users may select a preset and override semantic colors or ordered
+font stacks. Layout CSS, arbitrary selectors, script injection, and unknown
+keys are not accepted. Colors must be six-digit hex values and pass the
+renderer contrast checks. Font stylesheets must use HTTPS or a same-origin
+path.
 
-The first release is dark-only. Generated pages do not include a theme toggle.
+The identity heading is text-only: published agent icons and generated
+monograms are deliberately omitted to keep the hierarchy quiet. Functional
+transitions are disabled when reduced motion is requested. There is no runtime
+theme toggle; changing the typed config creates a deterministic deployment.
 
 ## Interaction lifecycle
 
@@ -120,9 +120,10 @@ ready
 ```
 
 React renderers support SIWX, x402, MPP credential submission, SSE, A2A task
-creation, task polling, and cancellation. Portable HTML invokes and streams free
-operations directly. It explains protected operations and provides integration
-examples without requesting credentials.
+creation, task polling, and cancellation. Portable Hono and Express HTML is a
+static documentation surface: it includes schemas, examples, cURL snippets,
+prices, security, payments, trust, capabilities, skills, endpoints, and the raw
+Agent Card, but ships no client JavaScript and never submits an API request.
 
 Invocation input, output, task access, payment credentials, and errors remain
 in memory for the page session. Generated UI must not write them to browser
@@ -131,7 +132,8 @@ signature material.
 
 ## Responsive and accessible behavior
 
-- At 1200px and wider, offerings use a 320px rail beside the workspace.
+- Dossier uses a 320px desktop rail; Folio and Console use their own responsive
+  grid while preserving the same semantic reading order.
 - Between 768px and 1199px, the rail compacts and the workspace remains primary.
 - Below 768px, selecting an offering drills into its workspace.
 - Below 480px, code editors become edge-to-edge and the primary action remains
@@ -152,10 +154,13 @@ Renderer changes require:
 2. portable renderer behavior tests;
 3. shared client and lifecycle tests;
 4. CLI layering and generated-file tests;
-5. generated Next and TanStack type-check, production build, boot, and health;
-6. Hono, Express, and TanStack-headless generated-project verification;
-7. browser checks at desktop and mobile widths, including keyboard focus and
-   console errors;
+5. a generated-project matrix that enriches all three presets with the same
+   deterministic kitchen-sink Agent Card across Hono, Express, Next, and
+   TanStack UI, plus one TanStack-headless project;
+6. browser checks for the static kitchen-sink page and all three interactive
+   Next previews at desktop and mobile widths;
+7. credential-gated Cloudflare Worker preview uploads for all three presets,
+   followed by Playwright checks against each deployed URL;
 8. the repository type-check, build, test, coverage, portability, and E2E gates.
 
 Generated-project verification must use packed workspace artifacts. Installing

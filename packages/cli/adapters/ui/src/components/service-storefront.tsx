@@ -5,37 +5,26 @@ import {
   type ServicePageModel,
   type ServicePageOffering,
 } from '@lucid-agents/http';
-import type { TaskAccess } from '@lucid-agents/types/a2a';
-import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useWalletClient } from 'wagmi';
+import {
+  createServiceUiStyleSheet,
+  resolveServiceUi,
+} from '@lucid-agents/http/service-ui';
+import type { ServiceUiConfig } from '@lucid-agents/types/http';
+import { useMemo, useState } from 'react';
 
 import { WalletSummary } from '@/components/wallet-summary';
-import {
-  createInvocationState,
-  invocationReducer,
-  redactInvocationError,
-  type InvocationEvent,
-  type InvocationState,
-} from '@/lib/invocation-state';
-import {
-  cancelServiceTask,
-  createServiceTask,
-  getServiceTask,
-  invokeServiceOperation,
-  paymentNetworkMismatch,
-  streamServiceOperation,
-  type SolanaWalletLike,
-} from '@/lib/service-client';
+import { useServiceStorefront } from '@/hooks/use-service-storefront';
+import type { InvocationEvent, InvocationState } from '@/lib/invocation-state';
 import {
   formatServiceValue,
   integrationSnippet,
   offeringPriceLabel,
 } from '@/lib/service-utils';
 
-type ServiceStorefrontProps = {
+export type ServiceStorefrontProps = {
   service: ServicePageModel;
   manifest: unknown;
+  serviceUi?: ServiceUiConfig;
 };
 
 function phaseLabel(state: InvocationState): string {
@@ -55,16 +44,40 @@ function phaseLabel(state: InvocationState): string {
   return labels[state.phase];
 }
 
-function chunkText(chunk: unknown): string {
-  if (chunk && typeof chunk === 'object') {
-    const record = chunk as Record<string, unknown>;
-    if (record.kind === 'text') return String(record.text ?? '');
-    if (record.kind === 'delta') return String(record.delta ?? '');
-    if (record.kind === 'run-end' && record.output !== undefined) {
-      return formatServiceValue(record.output);
-    }
+function pretty(value: unknown): string {
+  return JSON.stringify(value, null, 2) ?? 'null';
+}
+
+function safePublicHref(value: string): string | undefined {
+  if (
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.includes('\\')
+  ) {
+    return value;
   }
-  return formatServiceValue(chunk);
+  try {
+    const url = new URL(value);
+    if (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      !url.username &&
+      !url.password
+    ) {
+      return url.toString();
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function PublicLink({ value, label }: { value: string; label?: string }) {
+  const href = safePublicHref(value);
+  return href ? (
+    <a href={href}>{label ?? value}</a>
+  ) : (
+    <code>{label ?? value}</code>
+  );
 }
 
 function AgentHeader({ service }: { service: ServicePageModel }) {
@@ -73,10 +86,14 @@ function AgentHeader({ service }: { service: ServicePageModel }) {
     service.trust.signed ? 'Signed Agent Card' : null,
     ...service.trust.models,
   ].filter((value): value is string => Boolean(value));
+  const provider = service.agent.provider;
   return (
-    <header className="service-header">
+    <header className="service-header" data-region="identity">
       <div className="service-kicker">
-        <span className={`status-dot status-${service.status.state}`} />
+        <span
+          className={`status-dot status-${service.status.state}`}
+          aria-hidden="true"
+        />
         {service.status.label}
         {service.agent.version ? ` · v${service.agent.version}` : ''}
       </div>
@@ -85,6 +102,27 @@ function AgentHeader({ service }: { service: ServicePageModel }) {
         {service.agent.description ??
           'This agent has not published a description yet.'}
       </p>
+      {provider || service.agent.documentationUrl ? (
+        <ul className="identity-meta" aria-label="Service ownership">
+          {provider?.organization ? (
+            <li>
+              {provider.url ? (
+                <PublicLink
+                  value={provider.url}
+                  label={provider.organization}
+                />
+              ) : (
+                provider.organization
+              )}
+            </li>
+          ) : null}
+          {service.agent.documentationUrl ? (
+            <li>
+              <PublicLink value={service.agent.documentationUrl} />
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
       {trustSignals.length > 0 ? (
         <ul className="trust-line" aria-label="Trust signals">
           {trustSignals.map(signal => (
@@ -106,40 +144,44 @@ function OfferingList({
   onSelect: (key: string) => void;
 }) {
   return (
-    <nav className="offering-rail" aria-label="Agent offerings">
-      <div className="section-label">Offerings</div>
+    <nav
+      className="offering-rail"
+      data-region="offerings"
+      aria-label="Agent offerings"
+    >
+      <div className="section-label">Agent offerings</div>
       {offerings.length === 0 ? (
         <div className="empty-state">
           <strong>No offerings published</strong>
-          <span>
-            Entrypoints will appear here when the service registers them.
-          </span>
+          <p>Entrypoints will appear here when the service registers them.</p>
         </div>
       ) : (
         <ul className="offering-list">
-          {offerings.map(offering => (
-            <li key={offering.key}>
-              <button
-                type="button"
-                className={offering.key === selectedKey ? 'is-selected' : ''}
-                aria-current={offering.key === selectedKey ? 'true' : undefined}
-                onClick={() => onSelect(offering.key)}
-              >
-                <span className="offering-title">{offering.title}</span>
-                <span className="offering-description">
-                  {offering.description}
-                </span>
-                <span className="offering-meta">
-                  {offeringPriceLabel(
-                    offering.operations.invoke.price,
-                    offering.operations.stream?.price
-                  )}
-                  {' · '}
-                  {offering.streaming ? 'Invoke or stream' : 'Invoke'}
-                </span>
-              </button>
-            </li>
-          ))}
+          {offerings.map(offering => {
+            const selected = offering.key === selectedKey;
+            return (
+              <li key={offering.key} className={selected ? 'is-selected' : ''}>
+                <button
+                  type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={() => onSelect(offering.key)}
+                >
+                  <span className="offering-title">{offering.title}</span>
+                  <span className="offering-description">
+                    {offering.description}
+                  </span>
+                  <span className="offering-meta">
+                    {offeringPriceLabel(
+                      offering.operations.invoke.price,
+                      offering.operations.stream?.price
+                    )}
+                    {' · '}
+                    {offering.streaming ? 'Invoke or stream' : 'Invoke'}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </nav>
@@ -155,75 +197,233 @@ function ServiceDetails({
 }) {
   const [copied, setCopied] = useState(false);
   const copyManifest = async () => {
-    await navigator.clipboard.writeText(JSON.stringify(manifest, null, 2));
+    await navigator.clipboard.writeText(pretty(manifest));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };
+  const endpoints = [
+    ['Agent Card', service.endpoints.agentCard],
+    ['Health', service.endpoints.health],
+    ['Entrypoints', service.endpoints.entrypoints],
+    ['A2A tasks', service.endpoints.tasks],
+    ['Validation requests', service.endpoints.validationRequests],
+    ['Validation responses', service.endpoints.validationResponses],
+    ['Feedback data', service.endpoints.feedback],
+  ] as const;
+  const capabilityRows = [
+    ['Streaming', service.capabilities.streaming],
+    ['A2A tasks', service.capabilities.tasks],
+    ['Push notifications', service.capabilities.pushNotifications],
+    [
+      'Authenticated extended card',
+      service.capabilities.authenticatedExtendedCard,
+    ],
+  ] as const;
+
   return (
-    <section
-      className="service-details"
-      aria-labelledby="service-details-title"
-    >
-      <div>
+    <>
+      <section
+        className="service-details"
+        data-region="service-details"
+        aria-labelledby="service-details-title"
+      >
         <div className="section-label" id="service-details-title">
-          Service details
+          Public service contract
         </div>
-        <dl className="detail-list">
-          <div>
-            <dt>Agent Card</dt>
-            <dd>
-              <a href={service.endpoints.agentCard}>Open JSON</a>
-            </dd>
-          </div>
-          <div>
-            <dt>Entrypoints</dt>
-            <dd>
-              <a href={service.endpoints.entrypoints}>Inspect endpoint</a>
-            </dd>
-          </div>
-          {service.endpoints.tasks ? (
+
+        <article className="detail-card">
+          <h3>Endpoints</h3>
+          <dl className="detail-list">
+            {endpoints.map(([label, value]) =>
+              value ? (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>
+                    <PublicLink value={value} label="Open" />
+                  </dd>
+                </div>
+              ) : null
+            )}
+          </dl>
+        </article>
+
+        <article className="detail-card">
+          <h3>Capabilities</h3>
+          <ul className="capability-list">
+            {capabilityRows.map(([label, supported]) => (
+              <li key={label}>
+                <strong>{label}</strong>
+                <span>{supported ? 'Supported' : 'Not supported'}</span>
+              </li>
+            ))}
+            {service.capabilities.extensions.map(extension => (
+              <li key={extension.uri ?? extension.name}>
+                <strong>{extension.name}</strong>
+                <span>{extension.required ? 'Required' : 'Supported'}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="detail-card">
+          <h3>Protocol and interfaces</h3>
+          <dl className="detail-list">
             <div>
-              <dt>A2A tasks</dt>
-              <dd>Available</dd>
+              <dt>Protocol version</dt>
+              <dd>{service.protocol.version ?? 'Not configured'}</dd>
             </div>
+            {service.protocol.interfaces.map(supportedInterface => (
+              <div
+                key={`${supportedInterface.protocolBinding}-${supportedInterface.url}`}
+              >
+                <dt>
+                  {supportedInterface.protocolBinding}
+                  {supportedInterface.preferred ? ' · preferred' : ''}
+                </dt>
+                <dd>
+                  <PublicLink value={supportedInterface.url} />
+                </dd>
+              </div>
+            ))}
+            <div>
+              <dt>Default input modes</dt>
+              <dd>
+                {service.protocol.defaultInputModes.join(', ') ||
+                  'Not configured'}
+              </dd>
+            </div>
+            <div>
+              <dt>Default output modes</dt>
+              <dd>
+                {service.protocol.defaultOutputModes.join(', ') ||
+                  'Not configured'}
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="detail-card">
+          <h3>Security</h3>
+          {service.security.schemes.length ? (
+            <ul className="capability-list">
+              {service.security.schemes.map(scheme => (
+                <li key={scheme.name}>
+                  <strong>{scheme.name}</strong>
+                  <span>
+                    <code>{pretty(scheme.definition)}</code>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty">No security schemes published.</p>
+          )}
+          {service.security.requirements.length ? (
+            <pre>{pretty(service.security.requirements)}</pre>
           ) : null}
-          <div>
-            <dt>Trust</dt>
-            <dd>
-              {service.trust.registered
-                ? `${service.trust.registrations.length} registration${service.trust.registrations.length === 1 ? '' : 's'}`
-                : 'No registration published'}
-            </dd>
-          </div>
-        </dl>
-      </div>
-      <div>
-        <div className="section-label">Public capabilities</div>
-        <ul className="capability-list">
-          {service.payments.map(payment => (
-            <li key={`${payment.method}-${payment.network}`}>
-              <strong>{payment.method}</strong>
-              <span>{payment.detail ?? payment.network}</span>
-            </li>
-          ))}
-          {service.capabilities.extensions.map(extension => (
-            <li key={extension.uri ?? extension.name}>
-              <strong>{extension.name}</strong>
-              <span>{extension.required ? 'Required' : 'Supported'}</span>
-            </li>
-          ))}
-          {service.payments.length === 0 &&
-          service.capabilities.extensions.length === 0 ? (
-            <li>
-              <span>No additional capabilities published.</span>
-            </li>
+        </article>
+
+        <article className="detail-card">
+          <h3>Payments</h3>
+          {service.payments.length ? (
+            <ul className="capability-list">
+              {service.payments.map(payment => (
+                <li key={`${payment.method}-${payment.network}`}>
+                  <strong>{payment.method}</strong>
+                  <span>
+                    {payment.network}
+                    {payment.detail ? ` · ${payment.detail}` : ''}
+                    {payment.defaultPrice ? ` · ${payment.defaultPrice}` : ''}
+                    {payment.payee ? (
+                      <>
+                        <br />
+                        <code>{payment.payee}</code>
+                      </>
+                    ) : null}
+                    {payment.endpoint ? (
+                      <>
+                        <br />
+                        <PublicLink value={payment.endpoint} />
+                      </>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty">No payment methods published.</p>
+          )}
+        </article>
+
+        <article className="detail-card">
+          <h3>Trust</h3>
+          <dl className="detail-list">
+            <div>
+              <dt>Registration</dt>
+              <dd>
+                {service.trust.registered
+                  ? `${service.trust.registrations.length} registration${service.trust.registrations.length === 1 ? '' : 's'}`
+                  : 'Not registered'}
+              </dd>
+            </div>
+            <div>
+              <dt>Agent Card signature</dt>
+              <dd>{service.trust.signed ? 'Signed' : 'Not signed'}</dd>
+            </div>
+            <div>
+              <dt>Trust models</dt>
+              <dd>{service.trust.models.join(', ') || 'Not configured'}</dd>
+            </div>
+          </dl>
+          {service.trust.registrations.length ? (
+            <pre>{pretty(service.trust.registrations)}</pre>
           ) : null}
-        </ul>
-        <button className="text-button" type="button" onClick={copyManifest}>
-          {copied ? 'Manifest copied' : 'Copy manifest'}
-        </button>
-      </div>
-    </section>
+        </article>
+
+        <article className="detail-card">
+          <h3>Published skills</h3>
+          {service.skills.length ? (
+            <ul className="capability-list">
+              {service.skills.map(skill => (
+                <li key={skill.id}>
+                  <strong>{skill.name ?? skill.id}</strong>
+                  <span>
+                    {skill.description ?? 'No description provided.'}
+                    {skill.tags?.length ? (
+                      <>
+                        <br />
+                        {skill.tags.join(', ')}
+                      </>
+                    ) : null}
+                    {skill.examples?.length ? (
+                      <>
+                        <br />
+                        {skill.examples.join(' · ')}
+                      </>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="empty">No A2A skills published.</p>
+          )}
+        </article>
+      </section>
+
+      <section className="raw-card" data-region="raw-card">
+        <div className="section-heading-row">
+          <div className="section-label">Public Agent Card JSON</div>
+          <button className="text-button" type="button" onClick={copyManifest}>
+            {copied ? 'Agent Card copied' : 'Copy Agent Card'}
+          </button>
+        </div>
+        <details>
+          <summary>View the complete public contract</summary>
+          <pre>{pretty(manifest)}</pre>
+        </details>
+      </section>
+    </>
   );
 }
 
@@ -268,7 +468,11 @@ function OfferingWorkspace({
   };
 
   return (
-    <article className="offering-workspace" aria-labelledby="offering-title">
+    <article
+      className="offering-workspace"
+      data-region="operation"
+      aria-labelledby="offering-title"
+    >
       <button type="button" className="mobile-back" onClick={onBack}>
         Back to offerings
       </button>
@@ -279,6 +483,13 @@ function OfferingWorkspace({
             {offering.title}
           </h2>
           <p>{offering.description}</p>
+          {offering.tags?.length ? (
+            <ul className="tag-list" aria-label="Offering tags">
+              {offering.tags.map(tag => (
+                <li key={tag}>{tag}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         <div className="operation-facts">
           <span>
@@ -440,17 +651,47 @@ function OfferingWorkspace({
         {showIntegration ? (
           <div className="integration-body">
             <div className="endpoint-line">
-              <span>POST</span>
+              <span>{offering.operations.invoke.method}</span>
               <code>{offering.operations.invoke.path}</code>
             </div>
             <pre>{snippet}</pre>
             <button className="text-button" type="button" onClick={copySnippet}>
               {copied ? 'Copied' : 'Copy cURL'}
             </button>
-            {offering.outputSchema ? (
+            <div className="schema-grid">
+              <details>
+                <summary>Input schema</summary>
+                <pre>{pretty(offering.inputSchema ?? { type: 'object' })}</pre>
+              </details>
               <details>
                 <summary>Output schema</summary>
-                <pre>{JSON.stringify(offering.outputSchema, null, 2)}</pre>
+                <pre>{pretty(offering.outputSchema ?? { type: 'object' })}</pre>
+              </details>
+            </div>
+            {offering.inputModes?.length || offering.outputModes?.length ? (
+              <ul className="mode-list" aria-label="Content modes">
+                {offering.inputModes?.map(mode => (
+                  <li key={`input-${mode}`}>In: {mode}</li>
+                ))}
+                {offering.outputModes?.map(mode => (
+                  <li key={`output-${mode}`}>Out: {mode}</li>
+                ))}
+              </ul>
+            ) : null}
+            {offering.examples?.length ? (
+              <details>
+                <summary>Published examples</summary>
+                <ul>
+                  {offering.examples.map(example => (
+                    <li key={example}>{example}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+            {offering.security?.length ? (
+              <details>
+                <summary>Skill security</summary>
+                <pre>{pretty(offering.security)}</pre>
               </details>
             ) : null}
           </div>
@@ -463,366 +704,66 @@ function OfferingWorkspace({
 export function ServiceStorefront({
   service,
   manifest,
+  serviceUi,
 }: ServiceStorefrontProps) {
-  const { data: walletClient } = useWalletClient();
-  const solanaAccount = useAppKitAccount({ namespace: 'solana' });
-  const { walletProvider: solanaProvider } =
-    useAppKitProvider<SolanaWalletLike['provider']>('solana');
-  const solanaNetwork = solanaAccount.caipAddress
-    ?.split(':')
-    .slice(0, 2)
-    .join(':');
-  const solanaWallet = useMemo<SolanaWalletLike>(
-    () => ({
-      address: solanaAccount.address,
-      network: solanaNetwork,
-      provider: solanaProvider,
-    }),
-    [solanaAccount.address, solanaNetwork, solanaProvider]
+  const controller = useServiceStorefront(service);
+  const resolvedUi = useMemo(() => resolveServiceUi(serviceUi), [serviceUi]);
+  const styleSheet = useMemo(
+    () => createServiceUiStyleSheet(resolvedUi),
+    [resolvedUi]
   );
-  const initialOffering = service.offerings[0];
-  const [selectedKey, setSelectedKey] = useState(initialOffering?.key);
-  const [showMobileList, setShowMobileList] = useState(false);
-  const [invocations, setInvocations] = useState<
-    Record<string, InvocationState>
-  >(() =>
-    Object.fromEntries(
-      service.offerings.map(offering => [
-        offering.key,
-        createInvocationState(
-          createServicePayloadExample(offering.inputSchema)
-        ),
-      ])
-    )
-  );
-  const [mppCredentials, setMppCredentials] = useState<Record<string, string>>(
-    {}
-  );
-  const streamCancelRef = useRef<(() => void) | null>(null);
-  const taskAccessRef = useRef<Record<string, TaskAccess>>({});
-  const taskPollRef = useRef<number | null>(null);
-
-  const selected = useMemo(
-    () => service.offerings.find(offering => offering.key === selectedKey),
-    [selectedKey, service.offerings]
-  );
-
-  useEffect(() => {
-    const key = new URLSearchParams(window.location.search).get('offering');
-    if (key && service.offerings.some(offering => offering.key === key)) {
-      setSelectedKey(key);
-      setShowMobileList(false);
-    } else if (window.matchMedia('(max-width: 767px)').matches) {
-      setShowMobileList(true);
-    }
-  }, [service.offerings]);
-
-  useEffect(() => {
-    return () => {
-      streamCancelRef.current?.();
-      if (taskPollRef.current !== null)
-        window.clearTimeout(taskPollRef.current);
-    };
-  }, []);
-
-  const selectOffering = useCallback((key: string) => {
-    setSelectedKey(key);
-    setShowMobileList(false);
-    const url = new URL(window.location.href);
-    url.searchParams.set('offering', key);
-    window.history.pushState({}, '', url);
-    window.setTimeout(
-      () => document.getElementById('offering-title')?.focus(),
-      0
-    );
-  }, []);
-
-  const dispatch = useCallback((key: string, event: InvocationEvent) => {
-    setInvocations(current => ({
-      ...current,
-      [key]: invocationReducer(current[key] ?? createInvocationState(), event),
-    }));
-  }, []);
-
-  const requestOptions = useCallback(
-    (offering: ServicePageOffering) => ({
-      walletClient,
-      solanaWallet,
-      network: offering.payment.network,
-      siwxNetwork: offering.authorization?.siwx.network,
-      useSIWx: offering.authorization?.siwx.enabled === true,
-      useX402: offering.payment.protocol === 'x402',
-      mppCredential: mppCredentials[offering.key],
-    }),
-    [mppCredentials, solanaWallet, walletClient]
-  );
-
-  const parsedPayload = useCallback(
-    (offering: ServicePageOffering): unknown | undefined => {
-      const state = invocations[offering.key];
-      try {
-        return JSON.parse(state?.payload ?? '{}');
-      } catch {
-        dispatch(offering.key, {
-          type: 'INVALID',
-          error: 'Payload must be valid JSON.',
-        });
-        return undefined;
-      }
-    },
-    [dispatch, invocations]
-  );
-
-  const prepare = useCallback(
-    (offering: ServicePageOffering): boolean => {
-      dispatch(offering.key, { type: 'PREPARE' });
-      if (offering.authorization?.siwx.enabled) {
-        const network = offering.authorization.siwx.network;
-        if (network?.startsWith('solana:')) {
-          dispatch(offering.key, {
-            type: 'NETWORK_MISMATCH',
-            error: `This storefront cannot sign SIWX challenges for ${network}.`,
-          });
-          return false;
-        }
-        if (!walletClient) {
-          dispatch(offering.key, { type: 'REQUIRE_AUTHORIZATION' });
-          return false;
-        }
-        const mismatch = paymentNetworkMismatch(network, {
-          evmChainId: walletClient.chain?.id,
-        });
-        if (mismatch) {
-          dispatch(offering.key, {
-            type: 'NETWORK_MISMATCH',
-            error: mismatch,
-          });
-          return false;
-        }
-      }
-      if (offering.payment.protocol === 'x402') {
-        const network = offering.payment.network;
-        const usesSolana = network?.startsWith('solana:') === true;
-        const hasRequiredWallet = usesSolana
-          ? Boolean(solanaWallet.address && solanaWallet.provider)
-          : Boolean(walletClient);
-        if (!hasRequiredWallet) {
-          dispatch(offering.key, { type: 'REQUIRE_PAYMENT' });
-          return false;
-        }
-        const mismatch = paymentNetworkMismatch(network, {
-          evmChainId: walletClient?.chain?.id,
-          solanaNetwork: solanaWallet.network,
-        });
-        if (mismatch) {
-          dispatch(offering.key, {
-            type: 'NETWORK_MISMATCH',
-            error: mismatch,
-          });
-          return false;
-        }
-      }
-      if (
-        offering.payment.protocol === 'mpp' &&
-        !mppCredentials[offering.key]?.trim()
-      ) {
-        dispatch(offering.key, { type: 'REQUIRE_PAYMENT' });
-        return false;
-      }
-      return true;
-    },
-    [dispatch, mppCredentials, solanaWallet, walletClient]
-  );
-
-  const runInvoke = useCallback(async () => {
-    if (!selected) return;
-    const payload = parsedPayload(selected);
-    if (payload === undefined || !prepare(selected)) return;
-    dispatch(selected.key, { type: 'START' });
-    try {
-      const result = await invokeServiceOperation({
-        url: selected.operations.invoke.path,
-        body: payload,
-        request: requestOptions(selected),
-      });
-      dispatch(selected.key, {
-        type: 'SUCCEED',
-        result,
-        paymentUsed: selected.payment.required,
-      });
-    } catch (error) {
-      dispatch(selected.key, {
-        type: 'FAIL',
-        error: redactInvocationError(error),
-      });
-    }
-  }, [dispatch, parsedPayload, prepare, requestOptions, selected]);
-
-  const runStream = useCallback(async () => {
-    if (!selected?.operations.stream) return;
-    const payload = parsedPayload(selected);
-    if (payload === undefined || !prepare(selected)) return;
-    streamCancelRef.current?.();
-    dispatch(selected.key, { type: 'START' });
-    try {
-      const stream = await streamServiceOperation({
-        url: selected.operations.stream.path,
-        body: payload,
-        request: requestOptions(selected),
-        onChunk: chunk =>
-          dispatch(selected.key, { type: 'CHUNK', chunk: chunkText(chunk) }),
-        onDone: () =>
-          dispatch(selected.key, {
-            type: 'SUCCEED',
-            result: 'Stream completed.',
-            paymentUsed: selected.payment.required,
-          }),
-        onError: error =>
-          dispatch(selected.key, { type: 'FAIL', error: error.message }),
-      });
-      streamCancelRef.current = stream.cancel;
-    } catch (error) {
-      dispatch(selected.key, {
-        type: 'FAIL',
-        error: redactInvocationError(error),
-      });
-    }
-  }, [dispatch, parsedPayload, prepare, requestOptions, selected]);
-
-  const runTask = useCallback(async () => {
-    if (!selected || !service.endpoints.tasks) return;
-    const payload = parsedPayload(selected);
-    if (payload === undefined || !prepare(selected)) return;
-    dispatch(selected.key, { type: 'START' });
-    try {
-      const task = await createServiceTask({
-        url: service.endpoints.tasks,
-        skillId: selected.key,
-        input:
-          payload && typeof payload === 'object' && 'input' in payload
-            ? (payload as { input: unknown }).input
-            : payload,
-        request: requestOptions(selected),
-      });
-      taskAccessRef.current[selected.key] = task;
-      dispatch(selected.key, {
-        type: 'TASK',
-        taskId: task.taskId,
-        status: task.status,
-      });
-      const poll = async () => {
-        const access = taskAccessRef.current[selected.key];
-        if (!access) return;
-        try {
-          const current = await getServiceTask({
-            tasksUrl: service.endpoints.tasks!,
-            ...access,
-          });
-          dispatch(selected.key, {
-            type: 'TASK',
-            taskId: current.taskId,
-            status: current.status,
-          });
-          if (current.status === 'completed') {
-            dispatch(selected.key, {
-              type: 'SUCCEED',
-              result: current.result,
-              paymentUsed: selected.payment.required,
-            });
-          } else if (current.status === 'failed') {
-            dispatch(selected.key, {
-              type: 'FAIL',
-              error: current.error?.message ?? 'The task failed.',
-            });
-          } else if (current.status === 'running') {
-            taskPollRef.current = window.setTimeout(poll, 1000);
-          }
-        } catch (error) {
-          dispatch(selected.key, {
-            type: 'FAIL',
-            error: redactInvocationError(error),
-          });
-        }
-      };
-      taskPollRef.current = window.setTimeout(poll, 500);
-    } catch (error) {
-      dispatch(selected.key, {
-        type: 'FAIL',
-        error: redactInvocationError(error),
-      });
-    }
-  }, [
-    dispatch,
-    parsedPayload,
-    prepare,
-    requestOptions,
-    selected,
-    service.endpoints.tasks,
-  ]);
-
-  const cancel = useCallback(async () => {
-    if (!selected) return;
-    streamCancelRef.current?.();
-    streamCancelRef.current = null;
-    if (taskPollRef.current !== null) window.clearTimeout(taskPollRef.current);
-    const access = taskAccessRef.current[selected.key];
-    if (access && service.endpoints.tasks) {
-      await cancelServiceTask({
-        tasksUrl: service.endpoints.tasks,
-        ...access,
-      }).catch(() => undefined);
-      delete taskAccessRef.current[selected.key];
-    }
-    dispatch(selected.key, { type: 'CANCEL' });
-  }, [dispatch, selected, service.endpoints.tasks]);
 
   return (
-    <main className="service-page">
-      <AgentHeader service={service} />
-      <div
-        className={`service-layout ${selected ? 'has-selection' : ''} ${showMobileList ? 'show-mobile-list' : ''}`}
-      >
-        <OfferingList
-          offerings={service.offerings}
-          selectedKey={selected?.key}
-          onSelect={selectOffering}
+    <>
+      {resolvedUi.tokens.fonts.stylesheetUrl ? (
+        <link
+          rel="stylesheet"
+          href={resolvedUi.tokens.fonts.stylesheetUrl}
+          data-service-ui-fonts
         />
-        {selected ? (
-          <OfferingWorkspace
-            key={selected.key}
-            offering={selected}
-            state={
-              invocations[selected.key] ??
-              createInvocationState(
-                createServicePayloadExample(selected.inputSchema)
-              )
-            }
-            dispatch={event => dispatch(selected.key, event)}
-            service={service}
-            mppCredential={mppCredentials[selected.key] ?? ''}
-            setMppCredential={value =>
-              setMppCredentials(current => ({
-                ...current,
-                [selected.key]: value,
-              }))
-            }
-            onInvoke={() => void runInvoke()}
-            onStream={() => void runStream()}
-            onTask={() => void runTask()}
-            onCancel={() => void cancel()}
-            onBack={() => setShowMobileList(true)}
+      ) : null}
+      <style data-service-ui-styles>{styleSheet}</style>
+      <main
+        className="service-page"
+        data-service-ui-preset={resolvedUi.preset}
+        data-service-ui-mode="interactive"
+      >
+        <AgentHeader service={service} />
+        <div
+          className={`service-layout ${controller.selected ? 'has-selection' : ''} ${controller.showMobileList ? 'show-mobile-list' : ''}`}
+        >
+          <OfferingList
+            offerings={service.offerings}
+            selectedKey={controller.selected?.key}
+            onSelect={controller.selectOffering}
           />
-        ) : (
-          <div className="workspace-empty">
-            Select an offering to inspect and run it.
-          </div>
-        )}
-      </div>
-      <ServiceDetails service={service} manifest={manifest} />
-      <footer className="service-footer">
-        <span>{service.agent.name}</span>
-        <span>Generated with Lucid Agents</span>
-      </footer>
-    </main>
+          {controller.selected && controller.state ? (
+            <OfferingWorkspace
+              key={controller.selected.key}
+              offering={controller.selected}
+              state={controller.state}
+              dispatch={controller.dispatch}
+              service={service}
+              mppCredential={controller.mppCredential}
+              setMppCredential={controller.setMppCredential}
+              onInvoke={() => void controller.invoke()}
+              onStream={() => void controller.stream()}
+              onTask={() => void controller.task()}
+              onCancel={() => void controller.cancel()}
+              onBack={controller.showOfferingList}
+            />
+          ) : (
+            <div className="workspace-empty">
+              Select an offering to inspect and run it.
+            </div>
+          )}
+        </div>
+        <ServiceDetails service={service} manifest={manifest} />
+        <footer className="service-footer">
+          <span>{service.agent.name}</span>
+          <span>Generated with Lucid Agents</span>
+        </footer>
+      </main>
+    </>
   );
 }

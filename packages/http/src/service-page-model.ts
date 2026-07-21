@@ -19,9 +19,22 @@ export type ServicePageStatus = {
 
 /** Public URL, path, and optional price for an offering operation. */
 export type ServicePageOperation = {
+  method: 'POST';
   path: string;
   url: string;
   price?: string;
+};
+
+/** Public A2A skill metadata, including discovery-only skills. */
+export type ServicePageSkill = {
+  id: string;
+  name?: string;
+  description?: string;
+  tags?: string[];
+  examples?: string[];
+  inputModes?: string[];
+  outputModes?: string[];
+  security?: unknown[];
 };
 
 /** Storefront-ready description of one invokable agent offering. */
@@ -30,6 +43,11 @@ export type ServicePageOffering = {
   title: string;
   description: string;
   streaming: boolean;
+  tags?: string[];
+  examples?: string[];
+  inputModes?: string[];
+  outputModes?: string[];
+  security?: unknown[];
   inputSchema?: unknown;
   outputSchema?: unknown;
   authorization?: {
@@ -58,6 +76,25 @@ export type ServicePageModel = {
     version?: string;
     description?: string;
     iconUrl?: string;
+    provider?: {
+      organization?: string;
+      url?: string;
+    };
+    documentationUrl?: string;
+  };
+  protocol: {
+    version?: string;
+    interfaces: Array<{
+      url: string;
+      protocolBinding: string;
+      preferred: boolean;
+    }>;
+    defaultInputModes: string[];
+    defaultOutputModes: string[];
+  };
+  security: {
+    schemes: Array<{ name: string; definition: unknown }>;
+    requirements: unknown[];
   };
   status: ServicePageStatus;
   trust: {
@@ -69,6 +106,8 @@ export type ServicePageModel = {
   capabilities: {
     streaming: boolean;
     tasks: boolean;
+    pushNotifications: boolean;
+    authenticatedExtendedCard: boolean;
     extensions: Array<{
       name: string;
       uri?: string;
@@ -80,12 +119,20 @@ export type ServicePageModel = {
     health: string;
     entrypoints: string;
     tasks?: string;
+    validationRequests?: string;
+    validationResponses?: string;
+    feedback?: string;
   };
   payments: Array<{
     method: string;
     network: string;
     detail?: string;
+    payee?: string;
+    endpoint?: string;
+    defaultPrice?: string;
+    extensions?: Record<string, unknown>;
   }>;
+  skills: ServicePageSkill[];
   offerings: ServicePageOffering[];
 };
 
@@ -221,6 +268,21 @@ function authorizationForOffering(
   };
 }
 
+function servicePageSkill(
+  skill: NonNullable<AgentCardWithEntrypoints['skills']>[number]
+): ServicePageSkill {
+  return {
+    id: skill.id,
+    ...(skill.name ? { name: skill.name } : {}),
+    ...(skill.description ? { description: skill.description } : {}),
+    ...(skill.tags ? { tags: [...skill.tags] } : {}),
+    ...(skill.examples ? { examples: [...skill.examples] } : {}),
+    ...(skill.inputModes ? { inputModes: [...skill.inputModes] } : {}),
+    ...(skill.outputModes ? { outputModes: [...skill.outputModes] } : {}),
+    ...(skill.security ? { security: [...skill.security] } : {}),
+  };
+}
+
 /**
  * Builds the framework-neutral view model used by every generated service UI.
  * Only public Agent Card and health data are accepted at this boundary.
@@ -231,6 +293,7 @@ export function buildServicePageModel(
 ): ServicePageModel {
   const baseUrl = publicBaseUrl(card, options.baseUrl);
   const methods = card.payments ?? [];
+  const skills = (card.skills ?? []).map(servicePageSkill);
   const supportsTasks = card.capabilities?.stateTransitionHistory === true;
   const offerings = Object.entries(card.entrypoints ?? {}).map(
     ([key, entrypoint]): ServicePageOffering => {
@@ -238,12 +301,18 @@ export function buildServicePageModel(
       const invokeSuffix = `/entrypoints/${encodedKey}/invoke`;
       const streamSuffix = `/entrypoints/${encodedKey}/stream`;
       const authorization = authorizationForOffering(entrypoint);
+      const skill = skills.find(candidate => candidate.id === key);
       return {
         key,
-        title: titleFromKey(key),
+        title: skill?.name ?? titleFromKey(key),
         description:
           entrypoint.description ?? 'No description has been provided.',
         streaming: entrypoint.streaming,
+        ...(skill?.tags ? { tags: skill.tags } : {}),
+        ...(skill?.examples ? { examples: skill.examples } : {}),
+        ...(skill?.inputModes ? { inputModes: skill.inputModes } : {}),
+        ...(skill?.outputModes ? { outputModes: skill.outputModes } : {}),
+        ...(skill?.security ? { security: skill.security } : {}),
         ...(entrypoint.input_schema !== undefined
           ? { inputSchema: entrypoint.input_schema }
           : {}),
@@ -254,6 +323,7 @@ export function buildServicePageModel(
         payment: paymentForOffering(entrypoint, methods),
         operations: {
           invoke: {
+            method: 'POST',
             path: endpointPath(baseUrl, invokeSuffix),
             url: endpointUrl(baseUrl, invokeSuffix),
             ...(entrypoint.pricing?.invoke
@@ -263,6 +333,7 @@ export function buildServicePageModel(
           ...(entrypoint.streaming
             ? {
                 stream: {
+                  method: 'POST',
                   path: endpointPath(baseUrl, streamSuffix),
                   url: endpointUrl(baseUrl, streamSuffix),
                   ...(entrypoint.pricing?.stream
@@ -282,6 +353,27 @@ export function buildServicePageModel(
       ...(card.version ? { version: card.version } : {}),
       ...(card.description ? { description: card.description } : {}),
       ...(card.iconUrl ? { iconUrl: card.iconUrl } : {}),
+      ...(card.provider ? { provider: { ...card.provider } } : {}),
+      ...(card.documentationUrl
+        ? { documentationUrl: card.documentationUrl }
+        : {}),
+    },
+    protocol: {
+      ...(card.protocolVersion ? { version: card.protocolVersion } : {}),
+      interfaces: (card.supportedInterfaces ?? []).map(
+        (supportedInterface, index) => ({
+          ...supportedInterface,
+          preferred: index === 0,
+        })
+      ),
+      defaultInputModes: [...(card.defaultInputModes ?? [])],
+      defaultOutputModes: [...(card.defaultOutputModes ?? [])],
+    },
+    security: {
+      schemes: Object.entries(card.securitySchemes ?? {}).map(
+        ([name, definition]) => ({ name, definition })
+      ),
+      requirements: [...(card.security ?? [])],
     },
     status: statusFromHealth(options.health),
     trust: {
@@ -295,6 +387,9 @@ export function buildServicePageModel(
         card.capabilities?.streaming === true ||
         offerings.some(offering => offering.streaming),
       tasks: supportsTasks,
+      pushNotifications: card.capabilities?.pushNotifications === true,
+      authenticatedExtendedCard:
+        card.supportsAuthenticatedExtendedCard === true,
       extensions: (card.capabilities?.extensions ?? [])
         .filter(isRecord)
         .map(extensionSummary),
@@ -304,6 +399,13 @@ export function buildServicePageModel(
       health: endpointUrl(baseUrl, '/health'),
       entrypoints: endpointUrl(baseUrl, '/entrypoints'),
       ...(supportsTasks ? { tasks: endpointUrl(baseUrl, '/tasks') } : {}),
+      ...(card.ValidationRequestsURI
+        ? { validationRequests: card.ValidationRequestsURI }
+        : {}),
+      ...(card.ValidationResponsesURI
+        ? { validationResponses: card.ValidationResponsesURI }
+        : {}),
+      ...(card.FeedbackDataURI ? { feedback: card.FeedbackDataURI } : {}),
     },
     payments: methods.map(method => {
       const detail = paymentDetail(method);
@@ -311,8 +413,15 @@ export function buildServicePageModel(
         method: method.method,
         network: method.network,
         ...(detail ? { detail } : {}),
+        ...(method.payee ? { payee: method.payee } : {}),
+        ...(method.endpoint ? { endpoint: method.endpoint } : {}),
+        ...(method.priceModel?.default
+          ? { defaultPrice: method.priceModel.default }
+          : {}),
+        ...(method.extensions ? { extensions: method.extensions } : {}),
       };
     }),
+    skills,
     offerings,
   };
 }

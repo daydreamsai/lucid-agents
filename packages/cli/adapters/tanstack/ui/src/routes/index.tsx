@@ -5,6 +5,7 @@ import {
 import { createFileRoute } from '@tanstack/react-router';
 
 import { ServiceStorefront } from '@/components/service-storefront';
+import serviceUi from '../../service-ui.config';
 
 async function loadPublicService() {
   'use server';
@@ -42,5 +43,11 @@ export const Route = createFileRoute('/')({
 
 function AgentServicePage() {
   const { manifest, service } = Route.useLoaderData();
-  return <ServiceStorefront service={service} manifest={manifest} />;
+  return (
+    <ServiceStorefront
+      service={service}
+      manifest={manifest}
+      serviceUi={serviceUi}
+    />
+  );
 }

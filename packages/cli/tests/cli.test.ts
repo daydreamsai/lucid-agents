@@ -489,14 +489,19 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
     );
-    const [, storefront, serviceStyles] = await Promise.all([
-      readFile(join(projectDir, 'src/lib/service-client.ts'), 'utf8'),
-      readFile(
-        join(projectDir, 'src/components/service-storefront.tsx'),
-        'utf8'
-      ),
-      readFile(join(projectDir, 'src/styles/service.css'), 'utf8'),
-    ]);
+    const [, storefront, storefrontController, serviceUiConfig] =
+      await Promise.all([
+        readFile(join(projectDir, 'src/lib/service-client.ts'), 'utf8'),
+        readFile(
+          join(projectDir, 'src/components/service-storefront.tsx'),
+          'utf8'
+        ),
+        readFile(
+          join(projectDir, 'src/hooks/use-service-storefront.ts'),
+          'utf8'
+        ),
+        readFile(join(projectDir, 'service-ui.config.ts'), 'utf8'),
+      ]);
     const startTypes = await readFile(
       join(projectDir, 'src/tanstack-start.d.ts'),
       'utf8'
@@ -525,8 +530,10 @@ describe('create-agent-kit CLI', () => {
     expect(dashboardRoute).toContain('handlers.manifest');
     expect(dashboardRoute).not.toContain('runtime.entrypoints');
     expect(dashboardRoute).not.toContain('runtime.agent.config.meta');
-    expect(serviceStyles).toContain('color-scheme: dark');
-    expect(serviceStyles).toContain('font-family: var(--service-mono)');
+    expect(serviceUiConfig).toContain('preset: "dossier"');
+    expect(storefront).toContain('createServiceUiStyleSheet');
+    expect(storefront).toContain('data-service-ui-mode="interactive"');
+    expect(storefrontController).toContain('useServiceStorefront');
     expect(storefront).not.toContain('service-monogram');
     expect(storefront).not.toContain('service-icon');
     expect(startTypes).toContain("import type {} from '@tanstack/react-start'");
@@ -551,6 +558,37 @@ describe('create-agent-kit CLI', () => {
     expect(Object.values(deps)).not.toContain('catalog:');
     expect(Object.values(deps)).not.toContain('workspace:*');
     expect(getAdapterDefinition('tanstack-ui').baseFilesDirs).toHaveLength(2);
+  });
+
+  it('generates one typed storefront config and wires the selected preset', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'folio-agent',
+        '--template=blank',
+        '--adapter=next',
+        '--ui-preset=folio',
+        '--wizard=no',
+      ],
+      { cwd, logger, templateRoot }
+    );
+
+    const projectDir = join(cwd, 'folio-agent');
+    const config = await readFile(
+      join(projectDir, 'service-ui.config.ts'),
+      'utf8'
+    );
+    const agent = await readFile(join(projectDir, 'lib/agent.ts'), 'utf8');
+    const page = await readFile(join(projectDir, 'app/page.tsx'), 'utf8');
+
+    expect(config).toContain('defineServiceUi');
+    expect(config).toContain('preset: "folio"');
+    expect(agent).toContain('import serviceUi from "../service-ui.config"');
+    expect(agent).toContain('servicePage: serviceUi');
+    expect(page).toContain('serviceUi={serviceUi}');
   });
 
   it('scaffolds projects with the Next.js adapter', async () => {
@@ -707,6 +745,10 @@ describe('create-agent-kit CLI', () => {
 
     const projectDir = join(cwd, 'headless-agent');
     const componentsDir = join(projectDir, 'src/components');
+    const agentSrc = await readFile(
+      join(projectDir, 'src/lib/agent.ts'),
+      'utf8'
+    );
     const indexRoute = await readFile(
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
@@ -721,6 +763,10 @@ describe('create-agent-kit CLI', () => {
     >;
 
     await expect(readdir(componentsDir)).rejects.toThrow();
+    await expect(
+      readFile(join(projectDir, 'service-ui.config.ts'), 'utf8')
+    ).rejects.toThrow();
+    expect(agentSrc).toContain('servicePage: false');
     expect(indexRoute).toContain('ApiDirectory');
     expect(indexRoute).toContain('handlers.manifest');
     expect(indexRoute).not.toContain('runtime.entrypoints');
@@ -728,6 +774,25 @@ describe('create-agent-kit CLI', () => {
     expect((pkg.scripts as Record<string, string>).start).toBe(
       'node --env-file=.env .output/server/index.mjs'
     );
+  });
+
+  it('rejects storefront presets for the API-only adapter', async () => {
+    const cwd = await createTempDir();
+    const templateRoot = await createTemplateRoot(['blank']);
+    const { logger } = createLogger();
+
+    await expect(
+      runCli(
+        [
+          'headless-themed',
+          '--template=blank',
+          '--adapter=tanstack-headless',
+          '--ui-preset=console',
+          '--wizard=no',
+        ],
+        { cwd, logger, templateRoot }
+      )
+    ).rejects.toThrow('is API-only and does not support --ui-preset');
   });
 
   it('prompts for a project name when not provided and prompt is available', async () => {

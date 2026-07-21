@@ -10,7 +10,7 @@ import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
 
 const agent = await createAgent({ name: 'echo', version: '1.0.0' })
-  .use(http({ basePath: '/api/agent', landingPage: true }))
+  .use(http({ basePath: '/api/agent', servicePage: { preset: 'dossier' } }))
   .addEntrypoint({
     key: 'echo',
     handler: async ({ input }) => ({ output: input }),
@@ -39,14 +39,41 @@ const service = buildServicePageModel(card, {
 });
 ```
 
-The model contains public identity, health, trust, offerings, schemas, prices,
-payment and SIWX requirements, task support, endpoints, and extension
+The model preserves public identity/provider metadata, protocol interfaces,
+health, trust, offerings, schemas, examples, modes, security, prices, payment
+and SIWX requirements, skills, task support, endpoints, and extension
 descriptors. It does not accept or expose private runtime configuration.
 
 The default Hono and Express landing page renders the same model as a portable
-service storefront. It supports free invoke and stream operations directly and
-provides an explicit integration handoff for protected operations. It never
-collects wallet or payment credentials.
+service storefront. It is deliberately read-only: the response contains no
+client JavaScript or invoke controls. Every operation includes a schema-derived
+request, cURL example, response contract, price, and protocol handoff so API
+clients can interact without turning the public page into a credential surface.
+
+## Service UI configuration
+
+Choose one of three built-in designs and optionally override bounded semantic
+tokens:
+
+```ts
+import { defineServiceUi } from '@lucid-agents/http/service-ui';
+
+export default defineServiceUi({
+  preset: 'folio', // dossier | folio | console
+  tokens: {
+    colors: { accent: '#1859C9' },
+    fonts: {
+      body: ['Source Sans 3', 'Segoe UI', 'sans-serif'],
+      stylesheetUrl: '/fonts/service-ui.css',
+    },
+  },
+});
+```
+
+Pass the config to `http({ servicePage })`. Use `servicePage: false` for an
+API-only runtime. `landingPage` remains as a deprecated compatibility switch.
+Unknown keys, unsafe fonts/URLs, invalid hex values, and inaccessible primary
+color combinations fail during runtime construction.
 
 Install domain extensions such as `payments()`, `mpp()`, `identity()`, and
 `a2a()` before HTTP when possible. The kernel also honors HTTP's ordering

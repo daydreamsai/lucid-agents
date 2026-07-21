@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from 'next';
+import { resolveServiceUi } from '@lucid-agents/http/service-ui';
 
 import { AppKitProvider } from '@/components/AppKitProvider';
+import serviceUi from '@/service-ui.config';
 import './globals.css';
 import { headers } from 'next/headers';
+
+const resolvedServiceUi = resolveServiceUi(serviceUi);
 
 export const metadata: Metadata = {
   title: 'Agent service',
@@ -10,8 +14,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: 'dark',
-  themeColor: '#0b0d0c',
+  colorScheme: resolvedServiceUi.colorScheme,
+  themeColor: resolvedServiceUi.tokens.colors.canvas,
 };
 
 export default async function RootLayout({

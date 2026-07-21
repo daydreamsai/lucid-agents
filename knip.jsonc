@@ -57,8 +57,8 @@
         "@lucid-agents/http",
         "@solana/kit",
         "@solana/web3.js",
-        "@x402/core"
-      ]
+        "@x402/core",
+      ],
     },
     "packages/cli/adapters/express": {
       "entry": ["src/**/*.ts"],
@@ -99,7 +99,11 @@
         "zod",
         "@types/react-dom",
       ],
-      "ignoreUnresolved": ["@/lib/agent", "@/components/service-storefront"],
+      "ignoreUnresolved": [
+        "@/lib/agent",
+        "@/components/service-storefront",
+        "@/service-ui.config",
+      ],
     },
     "packages/cli/adapters/tanstack/headless": {
       "entry": ["src/**/*.{ts,tsx}", "*.config.ts"],
@@ -169,6 +173,7 @@
         "@/components/schema-form",
         "@/components/service-storefront",
         "@/components/wallet-summary",
+        "../../service-ui.config",
       ],
       "vite": false,
     },

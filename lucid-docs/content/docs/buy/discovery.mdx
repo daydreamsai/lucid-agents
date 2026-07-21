@@ -14,16 +14,16 @@ identity, reputation, or capability should directly authorize a wallet.
 
 ## Discovery surfaces
 
-| Surface                    | Producer / authority                         | Contains                                                       | Freshness and authenticity                                               | Lucid support                  |
-| -------------------------- | -------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
-| Direct HTTPS URL           | Your application/config/operator             | Target only                                                    | As trusted/current as configuration ownership                            | Supported                      |
-| Agent Card-shaped document | Service at `/.well-known/agent-card.json`    | Name, skills, interfaces, capabilities, payment/trust metadata | Fetched live; signatures may be preserved but Lucid does not verify them | Partial Lucid profile          |
-| Lucid YAML/CSV catalog     | Your deployment repository/operator          | Local product/entrypoint definitions                           | Loaded at build; no remote signature/index/freshness protocol            | Supported Next package         |
-| Lucid storefront           | Service UI derived from card/entrypoints     | Human-readable capabilities, forms, wallet flow                | Same authority as deployed service; UI can become stale/misconfigured    | Generated Next UI              |
-| OASF record                | Service/identity extension                   | Structured skills/domains/modules/locators                     | Off-chain document; validate origin, schema, and locator                 | Generated with identity config |
-| ERC-8004 record            | EVM registry owner plus off-chain `agentURI` | On-chain identity/owner/URI and reputation evidence            | On-chain ownership, mutable/off-chain metadata, Draft semantics          | Identity/reputation subset     |
-| x402 Bazaar                | Bazaar-compatible publisher/index/provider   | x402 discovery declarations                                    | Provider/index-specific freshness and trust                              | Not published by Lucid         |
-| AP2 role descriptor        | Service Agent Card                           | Self-declared commerce role                                    | Metadata only; current Lucid URI is v0.1                                 | Role metadata only             |
+| Surface                    | Producer / authority                         | Contains                                                       | Freshness and authenticity                                               | Lucid support                       |
+| -------------------------- | -------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------- |
+| Direct HTTPS URL           | Your application/config/operator             | Target only                                                    | As trusted/current as configuration ownership                            | Supported                           |
+| Agent Card-shaped document | Service at `/.well-known/agent-card.json`    | Name, skills, interfaces, capabilities, payment/trust metadata | Fetched live; signatures may be preserved but Lucid does not verify them | Partial Lucid profile               |
+| Lucid YAML/CSV catalog     | Your deployment repository/operator          | Local product/entrypoint definitions                           | Loaded at build; no remote signature/index/freshness protocol            | Supported Next package              |
+| Lucid storefront           | Service UI derived from card/entrypoints     | Human-readable capabilities; forms/wallet flow in React        | Same authority as deployed service; UI can become stale/misconfigured    | Static server or generated React UI |
+| OASF record                | Service/identity extension                   | Structured skills/domains/modules/locators                     | Off-chain document; validate origin, schema, and locator                 | Generated with identity config      |
+| ERC-8004 record            | EVM registry owner plus off-chain `agentURI` | On-chain identity/owner/URI and reputation evidence            | On-chain ownership, mutable/off-chain metadata, Draft semantics          | Identity/reputation subset          |
+| x402 Bazaar                | Bazaar-compatible publisher/index/provider   | x402 discovery declarations                                    | Provider/index-specific freshness and trust                              | Not published by Lucid              |
+| AP2 role descriptor        | Service Agent Card                           | Self-declared commerce role                                    | Metadata only; current Lucid URI is v0.1                                 | Role metadata only                  |
 
 A service may appear in several surfaces. Agreement increases confidence but
 does not replace deterministic verification at payment time.

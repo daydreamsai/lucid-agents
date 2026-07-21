@@ -1,0 +1,286 @@
+import type {
+  AgentManifest,
+  EntrypointDef,
+  Extension,
+} from '@lucid-agents/types/core';
+import { z } from 'zod';
+
+type AddEntrypoint = <
+  TInput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+  TOutput extends z.ZodTypeAny | undefined = z.ZodTypeAny | undefined,
+>(
+  definition: EntrypointDef<TInput, TOutput>
+) => void;
+
+const skillDetails: Record<
+  string,
+  {
+    name: string;
+    tags: string[];
+    examples: string[];
+    inputModes?: string[];
+    outputModes?: string[];
+    security?: unknown[];
+  }
+> = {
+  echo: {
+    name: 'Echo payload',
+    tags: ['free', 'invoke'],
+    examples: ['Echo a release identifier'],
+  },
+  summarize: {
+    name: 'Paid summarization',
+    tags: ['x402', 'siwx', 'analysis'],
+    examples: ['Summarize a deployment report'],
+    security: [{ siwx: [] }],
+  },
+  attest: {
+    name: 'MPP attestation',
+    tags: ['mpp', 'verification'],
+    examples: ['Verify a machine-readable claim'],
+  },
+  stream: {
+    name: 'Streaming response',
+    tags: ['sse', 'stream'],
+    examples: ['Stream a short status message'],
+    outputModes: ['text/event-stream', 'application/json'],
+  },
+  analyze: {
+    name: 'Structured analysis',
+    tags: ['schema', 'structured-output'],
+    examples: ['Classify three observations by severity'],
+  },
+  profile: {
+    name: 'Authenticated profile',
+    tags: ['siwx', 'authentication'],
+    examples: ['Read a wallet-authenticated service profile'],
+    security: [{ siwx: [] }],
+  },
+};
+
+/** Adds rich, deterministic public metadata used by the three CI previews. */
+export function serviceUiKitchenSinkCard(): Extension {
+  return {
+    name: 'service-ui-kitchen-sink-card',
+    build: () => ({}),
+    onManifestBuild(card: AgentManifest): AgentManifest {
+      const skills = (card.skills ?? []).map(skill => {
+        const detail = skillDetails[skill.id];
+        if (!detail) return skill;
+        return {
+          ...skill,
+          name: detail.name,
+          tags: detail.tags,
+          examples: detail.examples,
+          inputModes: detail.inputModes ?? skill.inputModes,
+          outputModes: detail.outputModes ?? skill.outputModes,
+          ...(detail.security ? { security: detail.security } : {}),
+        };
+      });
+
+      return {
+        ...card,
+        provider: {
+          organization: 'Lucid Agents CI',
+          url: 'https://github.com/daydreamsai/lucid-agents',
+        },
+        documentationUrl: 'https://docs.lucid-agents.dev',
+        capabilities: {
+          ...card.capabilities,
+          pushNotifications: true,
+          extensions: [
+            ...(card.capabilities?.extensions ?? []),
+            {
+              uri: 'https://github.com/google-agentic-commerce/AP2',
+              description: 'AP2 merchant capability',
+              required: false,
+            },
+          ],
+        },
+        securitySchemes: {
+          bearer: { type: 'http', scheme: 'bearer' },
+          siwx: {
+            type: 'http',
+            scheme: 'SIWx',
+            description: 'Sign-in-with-X wallet authentication',
+          },
+        },
+        security: [{ bearer: [] }, { siwx: [] }],
+        defaultInputModes: ['application/json', 'text/plain'],
+        defaultOutputModes: [
+          'application/json',
+          'text/plain',
+          'text/event-stream',
+        ],
+        skills: [
+          ...skills,
+          {
+            id: 'discovery-only',
+            name: 'Discovery-only capability',
+            description: 'Published metadata without an invocation endpoint.',
+            tags: ['discovery'],
+            examples: ['Inspect the raw Agent Card'],
+            inputModes: ['application/json'],
+            outputModes: ['application/json'],
+          },
+        ],
+        supportsAuthenticatedExtendedCard: true,
+        signatures: [
+          {
+            protected: 'ci-kitchen-sink',
+            signature: 'ci-kitchen-sink-signature',
+            header: { kid: 'did:example:lucid-ci#agent-key' },
+          },
+        ],
+        registrations: [
+          {
+            agentId: '8004',
+            agentRegistry:
+              'eip155:84532:0x0000000000000000000000000000000000008004',
+          },
+        ],
+        trustModels: ['feedback', 'inference-validation'],
+        ValidationRequestsURI:
+          'https://validation.example.test/requests/{requestId}',
+        ValidationResponsesURI:
+          'https://validation.example.test/responses/{requestId}',
+        FeedbackDataURI: 'https://feedback.example.test/agents/8004',
+      };
+    },
+  };
+}
+
+/** Registers the interaction and schema matrix rendered by CI storefronts. */
+export function registerServiceUiKitchenSinkEntrypoints(
+  addEntrypoint: AddEntrypoint
+): void {
+  addEntrypoint({
+    key: 'summarize',
+    description: 'Summarize text behind an x402 payment and SIWX challenge.',
+    input: z.object({
+      text: z.string().min(1),
+      maxSentences: z.number().int().min(1).max(8).default(3),
+    }),
+    output: z.object({
+      summary: z.string(),
+      wordCount: z.number().int(),
+    }),
+    price: '0.001',
+    paymentProtocol: 'x402',
+    siwx: {
+      enabled: true,
+      statement: 'Authorize the Lucid CI summarization fixture.',
+    },
+    async handler({ input }) {
+      const words = input.text.trim().split(/\s+/u).filter(Boolean);
+      return {
+        output: {
+          summary: words.slice(0, input.maxSentences * 8).join(' '),
+          wordCount: words.length,
+        },
+      };
+    },
+  });
+
+  addEntrypoint({
+    key: 'attest',
+    description: 'Verify a claim through the deterministic MPP CI method.',
+    input: z.object({
+      claim: z.string().min(1),
+      evidence: z.array(z.string().url()).min(1),
+    }),
+    output: z.object({ accepted: z.boolean(), receipt: z.string() }),
+    price: '0.002',
+    paymentProtocol: 'mpp',
+    async handler({ input }) {
+      return {
+        output: {
+          accepted: input.evidence.length > 0,
+          receipt: `ci:${input.claim.length}:${input.evidence.length}`,
+        },
+      };
+    },
+  });
+
+  addEntrypoint({
+    key: 'stream',
+    description: 'Invoke normally or stream one text character at a time.',
+    input: z.object({ prompt: z.string().min(1).max(120) }),
+    output: z.object({ text: z.string(), characters: z.number().int() }),
+    async handler({ input }) {
+      return {
+        output: { text: input.prompt, characters: input.prompt.length },
+      };
+    },
+    async stream({ input }, emit) {
+      for (const character of input.prompt) {
+        await emit({ kind: 'delta', delta: character, mime: 'text/plain' });
+      }
+      return {
+        output: { text: input.prompt, characters: input.prompt.length },
+      };
+    },
+  });
+
+  addEntrypoint({
+    key: 'analyze',
+    description: 'Return structured findings from a nested input contract.',
+    input: z.object({
+      observations: z
+        .array(
+          z.object({
+            label: z.string().min(1),
+            severity: z.enum(['low', 'medium', 'high']),
+            score: z.number().min(0).max(1),
+          })
+        )
+        .min(1),
+      format: z.enum(['brief', 'detailed']).default('brief'),
+    }),
+    output: z.object({
+      total: z.number().int(),
+      highestSeverity: z.enum(['low', 'medium', 'high']),
+      labels: z.array(z.string()),
+    }),
+    async handler({ input }) {
+      const rank = { low: 0, medium: 1, high: 2 } as const;
+      const highest = input.observations.reduce(
+        (current, item) =>
+          rank[item.severity] > rank[current] ? item.severity : current,
+        'low' as 'low' | 'medium' | 'high'
+      );
+      return {
+        output: {
+          total: input.observations.length,
+          highestSeverity: highest,
+          labels: input.observations.map(item => item.label),
+        },
+      };
+    },
+  });
+
+  addEntrypoint({
+    key: 'profile',
+    description: 'Return a small profile after SIWX authentication.',
+    input: z.object({ includeCapabilities: z.boolean().default(true) }),
+    output: z.object({
+      authenticated: z.boolean(),
+      capabilities: z.array(z.string()),
+    }),
+    siwx: {
+      enabled: true,
+      authOnly: true,
+      statement: 'Authenticate to inspect the extended service profile.',
+    },
+    async handler({ input }) {
+      return {
+        output: {
+          authenticated: true,
+          capabilities: input.includeCapabilities
+            ? ['invoke', 'stream', 'tasks', 'x402', 'mpp']
+            : [],
+        },
+      };
+    },
+  });
+}

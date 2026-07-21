@@ -34,6 +34,13 @@ export type AdapterDefinition = {
   placeholderTargets?: string[];
   /** Public base path used by generated HTTP handlers. */
   httpBasePath?: string;
+  /** Storefront capability and config import relative to the generated agent. */
+  serviceUi?: {
+    mode: 'static' | 'interactive';
+    configImport: string;
+  };
+  /** Generate an API-only HTTP extension with no landing page. */
+  disableServicePage?: boolean;
   snippets: AdapterSnippets;
   deployment?: DeploymentDefinition;
   buildReplacements?: (params: {
@@ -48,6 +55,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
     displayName: 'Hono',
     filesDir: join(ADAPTER_FILES_ROOT, 'hono'),
     placeholderTargets: ['src/lib/agent.ts.template'],
+    serviceUi: { mode: 'static', configImport: '../../service-ui.config' },
     deployment: {
       templateIds: ['blank'],
       filesDir: join(ADAPTER_FILES_ROOT, 'hono-cloudflare'),
@@ -93,6 +101,7 @@ addEntrypoint({
     displayName: 'Express',
     filesDir: join(ADAPTER_FILES_ROOT, 'express'),
     placeholderTargets: ['src/lib/agent.ts.template'],
+    serviceUi: { mode: 'static', configImport: '../../service-ui.config' },
     snippets: {
       imports: `import { createAgentApp } from "@lucid-agents/express";`,
       preSetup: ``,
@@ -128,6 +137,10 @@ addEntrypoint({
     filesDir: join(ADAPTER_FILES_ROOT, 'tanstack', 'ui'),
     placeholderTargets: ['src/lib/agent.ts.template'],
     httpBasePath: '/api/agent',
+    serviceUi: {
+      mode: 'interactive',
+      configImport: '../../service-ui.config',
+    },
     snippets: {
       imports: `import { createTanStackRuntime } from "@lucid-agents/tanstack";`,
       preSetup: ``,
@@ -161,6 +174,7 @@ runtime.entrypoints.add({
     filesDir: join(ADAPTER_FILES_ROOT, 'tanstack', 'headless'),
     placeholderTargets: ['src/lib/agent.ts.template'],
     httpBasePath: '/api/agent',
+    disableServicePage: true,
     snippets: {
       imports: `import { createTanStackRuntime } from "@lucid-agents/tanstack";`,
       preSetup: ``,
@@ -195,6 +209,7 @@ runtime.entrypoints.add({
     filesDir: join(ADAPTER_FILES_ROOT, 'next'),
     placeholderTargets: ['lib/agent.ts.template'],
     httpBasePath: '/api/agent',
+    serviceUi: { mode: 'interactive', configImport: '../service-ui.config' },
     snippets: {
       imports: ``,
       preSetup: ``,

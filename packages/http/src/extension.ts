@@ -160,7 +160,12 @@ export function http(
 ): Extension<{ http: AgentHttpRuntime }, HttpDependencies> {
   let faviconSvg: string | undefined;
   let faviconDataUrl: string | undefined;
-  const landingEnabled = options?.landingPage !== false;
+  const landingEnabled =
+    options?.servicePage !== false && options?.landingPage !== false;
+  const serviceUi =
+    options?.servicePage && typeof options.servicePage === 'object'
+      ? options.servicePage
+      : undefined;
   const basePath = normalizeBasePath(options?.basePath);
   const idempotencyOptions = options?.idempotency;
   const configuredIdempotency =
@@ -306,6 +311,7 @@ export function http(
                 health: { ok: true, version: meta.version },
                 faviconDataUrl: faviconDataUrl!,
                 x402ClientExample,
+                serviceUi,
               });
               return new Response(String(html), {
                 headers: {

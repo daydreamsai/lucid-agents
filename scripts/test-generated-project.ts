@@ -13,6 +13,7 @@ import {
   allocatePort,
   startTestProcess,
 } from '../packages/examples/src/testing/process-harness';
+import { configureServiceUiKitchenSinkProject } from './configure-service-ui-kitchen-sink';
 
 const ADAPTERS = [
   'hono',
@@ -22,6 +23,15 @@ const ADAPTERS = [
   'next',
 ] as const;
 type Adapter = (typeof ADAPTERS)[number];
+const UI_ADAPTERS = ['hono', 'express', 'tanstack-ui', 'next'] as const;
+const PRESETS = ['dossier', 'folio', 'console'] as const;
+type UiAdapter = (typeof UI_ADAPTERS)[number];
+type Preset = (typeof PRESETS)[number];
+
+type VerificationCase = {
+  adapter: Adapter;
+  preset?: Preset;
+};
 
 const repoRoot = resolve(import.meta.dir, '..');
 const preserveGeneratedProjects = Bun.env.GENERATED_PROJECT_KEEP === 'true';
@@ -110,25 +120,40 @@ async function usePackedWorkspaces(
 }
 
 async function verifyAdapter(
-  adapter: Adapter,
+  verification: VerificationCase,
   root: string,
   packed: Map<string, string>
 ): Promise<void> {
-  const projectName = `generated-${adapter}`;
-  await run(
-    [
-      'bun',
-      join(repoRoot, 'packages/cli/dist/index.js'),
-      projectName,
-      `--adapter=${adapter}`,
-      '--template=blank',
-      '--non-interactive',
-      '--no-install',
-    ],
-    root
-  );
+  const { adapter, preset } = verification;
+  const projectName = `generated-${adapter}${preset ? `-${preset}` : ''}`;
+  const cliArguments = [
+    'bun',
+    join(repoRoot, 'packages/cli/dist/index.js'),
+    projectName,
+    `--adapter=${adapter}`,
+    '--template=blank',
+    '--non-interactive',
+    '--no-install',
+  ];
+  if (preset) cliArguments.push(`--ui-preset=${preset}`);
+  await run(cliArguments, root);
   const projectDir = join(root, projectName);
   try {
+    if (preset && isUiAdapter(adapter)) {
+      await configureServiceUiKitchenSinkProject(projectDir, adapter);
+    }
+    const serviceUiConfigPath = join(projectDir, 'service-ui.config.ts');
+    if (preset) {
+      const serviceUiConfig = await readFile(serviceUiConfigPath, 'utf8');
+      if (!serviceUiConfig.includes(`preset: \"${preset}\"`)) {
+        throw new Error(
+          `${adapter} config did not preserve the ${preset} preset`
+        );
+      }
+    } else if (await Bun.file(serviceUiConfigPath).exists()) {
+      throw new Error(`${adapter} unexpectedly generated service UI config`);
+    }
+
     await usePackedWorkspaces(projectDir, packed);
     await run(['bun', 'install', '--no-cache'], projectDir);
     await run(['bun', 'run', 'type-check'], projectDir);
@@ -187,11 +212,39 @@ async function verifyAdapter(
           `${adapter} Agent Card returned ${cardResponse.status}`
         );
       }
-      const card = (await cardResponse.json()) as { name?: string };
+      const card = (await cardResponse.json()) as {
+        name?: string;
+        provider?: { organization?: string };
+        capabilities?: { stateTransitionHistory?: boolean };
+        securitySchemes?: Record<string, unknown>;
+        payments?: Array<{ method?: string }>;
+        registrations?: unknown[];
+        skills?: unknown[];
+        entrypoints?: Record<string, unknown>;
+      };
       if (card.name !== projectName) {
         throw new Error(
           `${adapter} Agent Card identity was ${card.name ?? 'missing'}, expected ${projectName}`
         );
+      }
+      if (preset) {
+        const paymentMethods = new Set(
+          (card.payments ?? []).map(payment => payment.method)
+        );
+        if (
+          card.provider?.organization !== 'Lucid Agents CI' ||
+          card.capabilities?.stateTransitionHistory !== true ||
+          !card.securitySchemes?.siwx ||
+          !paymentMethods.has('x402') ||
+          !paymentMethods.has('mpp') ||
+          (card.registrations?.length ?? 0) < 1 ||
+          (card.skills?.length ?? 0) < 7 ||
+          Object.keys(card.entrypoints ?? {}).length < 6
+        ) {
+          throw new Error(
+            `${adapter} ${preset} Agent Card did not preserve the kitchen-sink contract`
+          );
+        }
       }
 
       const home = await fetch(process.origin);
@@ -207,6 +260,37 @@ async function verifyAdapter(
           `${adapter} service page did not render the public agent identity`
         );
       }
+      if (preset) {
+        if (!html.includes(`data-service-ui-preset=\"${preset}\"`)) {
+          throw new Error(
+            `${adapter} service page did not render the ${preset} preset marker`
+          );
+        }
+        const expectedMode =
+          adapter === 'hono' || adapter === 'express'
+            ? 'static'
+            : 'interactive';
+        if (!html.includes(`data-service-ui-mode=\"${expectedMode}\"`)) {
+          throw new Error(
+            `${adapter} service page did not render in ${expectedMode} mode`
+          );
+        }
+        if (expectedMode === 'static' && /<script(?:\s|>)/iu.test(html)) {
+          throw new Error(`${adapter} static service page included JavaScript`);
+        }
+        if (
+          !html.includes('Lucid Agents CI') ||
+          !html.includes('summarize') ||
+          !html.includes('attest') ||
+          !html.includes('data-region="raw-card"')
+        ) {
+          throw new Error(
+            `${adapter} ${preset} storefront omitted kitchen-sink information`
+          );
+        }
+      } else if (html.includes('data-service-ui-preset=')) {
+        throw new Error(`${adapter} headless page rendered a storefront`);
+      }
     } finally {
       await process.stop();
     }
@@ -217,17 +301,44 @@ async function verifyAdapter(
   }
 }
 
-function requestedAdapters(): Adapter[] {
+function isUiAdapter(adapter: Adapter): adapter is UiAdapter {
+  return UI_ADAPTERS.includes(adapter as UiAdapter);
+}
+
+function requestedCases(): VerificationCase[] {
   const requested = process.argv.slice(2);
-  if (requested.length === 0 || requested.includes('all')) return [...ADAPTERS];
-  for (const value of requested) {
-    if (!ADAPTERS.includes(value as Adapter)) {
-      throw new Error(
-        `Unknown adapter ${value}. Expected ${ADAPTERS.join(', ')}`
-      );
-    }
+  if (requested.length === 0 || requested[0] === 'all') {
+    return [
+      ...UI_ADAPTERS.flatMap(adapter =>
+        PRESETS.map(preset => ({ adapter, preset }))
+      ),
+      { adapter: 'tanstack-headless' },
+    ];
   }
-  return requested as Adapter[];
+
+  const adapter = requested[0] as Adapter;
+  if (!ADAPTERS.includes(adapter)) {
+    throw new Error(
+      `Unknown adapter ${requested[0]}. Expected ${ADAPTERS.join(', ')}`
+    );
+  }
+  if (!isUiAdapter(adapter)) {
+    if (requested[1] && requested[1] !== 'none') {
+      throw new Error(`${adapter} is headless and does not accept a preset`);
+    }
+    return [{ adapter }];
+  }
+
+  const requestedPreset = requested[1] ?? 'dossier';
+  if (requestedPreset === 'all') {
+    return PRESETS.map(preset => ({ adapter, preset }));
+  }
+  if (!PRESETS.includes(requestedPreset as Preset)) {
+    throw new Error(
+      `Unknown preset ${requestedPreset}. Expected ${PRESETS.join(', ')}`
+    );
+  }
+  return [{ adapter, preset: requestedPreset as Preset }];
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'lucid-generated-e2e-'));
@@ -238,9 +349,11 @@ try {
   if (!packed.has('@lucid-agents/core')) {
     throw new Error('Packed workspace set did not include @lucid-agents/core');
   }
-  for (const adapter of requestedAdapters()) {
-    await verifyAdapter(adapter, temporaryRoot, packed);
-    console.log(`verified generated ${adapter} project from packed workspaces`);
+  for (const verification of requestedCases()) {
+    await verifyAdapter(verification, temporaryRoot, packed);
+    console.log(
+      `verified generated ${verification.adapter}${verification.preset ? ` ${verification.preset}` : ''} project from packed workspaces`
+    );
   }
 } finally {
   if (preserveGeneratedProjects) {

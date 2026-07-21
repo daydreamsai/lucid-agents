@@ -121,7 +121,7 @@ runtime.addEntrypoint({
 
 | Surface                           | Current default                         | Production implication                                                             |
 | --------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- |
-| HTTP landing page                 | Enabled                                 | Disable or protect it if public discovery is not intended.                         |
+| HTTP service page                 | Dossier preset, static on Hono/Express  | Set `servicePage: false` if public discovery is not intended.                      |
 | HTTP base path                    | Empty                                   | Set it before publishing cards or reverse-proxy routes.                            |
 | HTTP invoke idempotency           | Enabled, bounded in-memory store        | Inject a durable atomic store for multiple replicas.                               |
 | HTTP in-progress claim            | 15 minutes                              | Size it above the longest supported invoke or claims can expire mid-run.           |

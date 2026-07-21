@@ -88,13 +88,26 @@ jobs:
       - run: bun run test:e2e
 
   generated_projects:
-    name: Generated ${{ matrix.adapter }} project
+    name: Generated ${{ matrix.adapter }} / ${{ matrix.preset }} project
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        adapter: [hono, express, tanstack-ui, tanstack-headless, next]
+        include:
+          - { adapter: hono, preset: dossier }
+          - { adapter: hono, preset: folio }
+          - { adapter: hono, preset: console }
+          - { adapter: express, preset: dossier }
+          - { adapter: express, preset: folio }
+          - { adapter: express, preset: console }
+          - { adapter: tanstack-ui, preset: dossier }
+          - { adapter: tanstack-ui, preset: folio }
+          - { adapter: tanstack-ui, preset: console }
+          - { adapter: next, preset: dossier }
+          - { adapter: next, preset: folio }
+          - { adapter: next, preset: console }
+          - { adapter: tanstack-headless, preset: none }
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -106,7 +119,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build:packages
       - run: bun run --cwd packages/cli build
-      - run: bun run scripts/test-generated-project.ts ${{ matrix.adapter }}
+      - run: bun run scripts/test-generated-project.ts ${{ matrix.adapter }} ${{ matrix.preset }}
 
   browser_smoke:
     name: Chromium landing-page smoke

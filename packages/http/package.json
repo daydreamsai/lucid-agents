@@ -20,6 +20,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./service-ui": {
+      "types": "./dist/service-ui/index.d.ts",
+      "import": "./dist/service-ui/index.js",
+      "default": "./dist/service-ui/index.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,

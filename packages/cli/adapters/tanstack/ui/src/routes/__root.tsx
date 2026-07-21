@@ -1,7 +1,11 @@
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
+import { resolveServiceUi } from '@lucid-agents/http/service-ui';
 
 import { AppKitProvider } from '../components/AppkitProvider';
 import appCss from '../styles/global.css?url';
+import serviceUi from '../../service-ui.config';
+
+const resolvedServiceUi = resolveServiceUi(serviceUi);
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,7 +19,11 @@ export const Route = createRootRoute({
       },
       {
         name: 'theme-color',
-        content: '#0b0d0c',
+        content: resolvedServiceUi.tokens.colors.canvas,
+      },
+      {
+        name: 'color-scheme',
+        content: resolvedServiceUi.colorScheme,
       },
       {
         title: 'Agent service',

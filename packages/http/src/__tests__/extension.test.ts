@@ -135,6 +135,20 @@ describe('http extension discovery handlers', () => {
     expect(runtime.routes.map(route => route.id)).not.toContain('landing');
   });
 
+  it('uses the typed service page config and supports the canonical headless flag', async () => {
+    const themed = buildHttp({ servicePage: { preset: 'folio' } }).runtime;
+    const request = new Request('https://agent.example.com/');
+    const page = await themed.handlers.landing!(request).then(response =>
+      response.text()
+    );
+
+    expect(page).toContain('data-service-ui-preset="folio"');
+
+    const headless = buildHttp({ servicePage: false }).runtime;
+    expect(headless.handlers.landing).toBeUndefined();
+    expect(headless.routes.map(route => route.id)).not.toContain('landing');
+  });
+
   it('validates idempotency durations', () => {
     expect(() => http({ idempotency: { inProgressTtlMs: 0 } })).toThrow(
       'inProgressTtlMs must be a positive number'

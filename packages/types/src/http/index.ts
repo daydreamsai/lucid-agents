@@ -7,12 +7,70 @@ export type FetchFunction = (
   init?: RequestInit
 ) => Promise<Response>;
 
+/** Built-in public storefront designs. */
+export type ServiceUiPreset = 'dossier' | 'folio' | 'console';
+
+/** Six-digit hexadecimal color accepted by the storefront token API. */
+export type ServiceUiHexColor = `#${string}`;
+
+/** Ordered CSS font-family fallbacks. */
+export type ServiceUiFontStack = readonly [string, ...string[]];
+
+/** Semantic colors shared by every public storefront renderer. */
+export type ServiceUiColors = {
+  canvas: ServiceUiHexColor;
+  surface: ServiceUiHexColor;
+  surfaceRaised: ServiceUiHexColor;
+  text: ServiceUiHexColor;
+  textMuted: ServiceUiHexColor;
+  border: ServiceUiHexColor;
+  accent: ServiceUiHexColor;
+  accentText: ServiceUiHexColor;
+  success: ServiceUiHexColor;
+  warning: ServiceUiHexColor;
+  danger: ServiceUiHexColor;
+  code: ServiceUiHexColor;
+};
+
+/** Typography tokens shared by every public storefront renderer. */
+export type ServiceUiFonts = {
+  display: ServiceUiFontStack;
+  body: ServiceUiFontStack;
+  mono: ServiceUiFontStack;
+  stylesheetUrl?: `https://${string}` | `/${string}`;
+};
+
+/** Typed, intentionally bounded storefront customization. */
+export type ServiceUiConfig = {
+  preset: ServiceUiPreset;
+  tokens?: {
+    colors?: Partial<ServiceUiColors>;
+    fonts?: Partial<ServiceUiFonts>;
+  };
+};
+
+/** Fully resolved storefront configuration used by renderers. */
+export type ResolvedServiceUi = {
+  preset: ServiceUiPreset;
+  colorScheme: 'dark' | 'light';
+  tokens: {
+    colors: ServiceUiColors;
+    fonts: ServiceUiFonts;
+  };
+};
+
 /**
  * HTTP extension options.
  */
 export type HttpExtensionOptions = {
   /**
+   * Typed public storefront configuration, or `false` for an API-only runtime.
+   * @default { preset: 'dossier' }
+   */
+  servicePage?: ServiceUiConfig | false;
+  /**
    * Whether to enable the landing page route.
+   * @deprecated Use `servicePage: false` for an API-only runtime.
    * @default true
    */
   landingPage?: boolean;

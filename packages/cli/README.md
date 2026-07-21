@@ -24,6 +24,7 @@ Current repository (Next):
 bun run build:packages
 bun packages/cli/dist/index.js my-service \
   --adapter=hono \
+  --ui-preset=folio \
   --template=blank \
   --no-install
 ```
@@ -52,16 +53,22 @@ official A2A v1 transport or task model.
 
 | Adapter             | Generated shape                                                                                       |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |
-| `hono`              | Hono application bound to the canonical HTTP route plan                                               |
-| `express`           | Express application with a Node/Web Request bridge                                                    |
+| `hono`              | Hono application plus a static, read-only public storefront                                           |
+| `express`           | Express application plus a static, read-only public storefront                                        |
 | `tanstack-ui`       | TanStack Start routes plus a public service storefront                                                |
 | `tanstack-headless` | TanStack Start routes without the storefront                                                          |
 | `next`              | Next.js App Router modules plus the shared storefront; there is no standalone Next.js adapter package |
 
-The generated UI is a public service storefront. It presents Agent Card,
-health, schemas, operation URLs, prices, and available public trust signals. It
-is not an operations dashboard and must not expose payment records, secrets,
-private task state, or wallet credentials.
+The generated UI is a public service storefront with complete Agent Card
+information parity. Hono and Express emit static documentation with no browser
+runtime. Next and TanStack UI preserve invocation, stream, task, SIWX, x402,
+and MPP interactions. TanStack headless deliberately generates neither the
+storefront nor its config.
+
+Every UI-capable adapter writes one editable `service-ui.config.ts`. Choose
+`dossier` (the existing dark technical layout), `folio` (light editorial), or
+`console` (dense dark). The file supports only validated semantic color and
+font tokens, keeping all layouts on the shared renderer contract.
 
 ## Options
 
@@ -76,6 +83,7 @@ Usage: bunx @lucid-agents/cli <app-name> [options]
   --wizard=no           Use template defaults
   --no-wizard           Alias for --wizard=no
   --non-interactive     Alias for --wizard=no
+  --ui-preset <id>      Select dossier, folio, or console
   --network=<network>   Map a payment-network value to PAYMENTS_NETWORK
   --KEY=value           Supply a template wizard value in non-interactive mode
   -h, --help            Show installed CLI help
@@ -129,9 +137,11 @@ such as `AGENT_WALLET_PRIVATE_KEY` and `DEVELOPER_WALLET_PRIVATE_KEY`; a generic
    `template.json`.
 4. Conditional prompts are included only when their `when` rule matches.
 5. Stripe destination mode forces the generated payment network to Base.
-6. Adapter files and template sections are composed into the project.
-7. `.env` and `.env.example` are generated; template metadata is removed.
-8. Dependencies are installed only with `--install`.
+6. UI-capable adapters select a storefront preset and write the typed root
+   `service-ui.config.ts` file.
+7. Adapter files and template sections are composed into the project.
+8. `.env` and `.env.example` are generated; template metadata is removed.
+9. Dependencies are installed only with `--install`.
 
 The target directory must be empty. If no project name is supplied, the CLI
 derives one from the selected template.
@@ -192,9 +202,12 @@ bun run --cwd packages/cli build
 bun test packages/cli/tests
 ```
 
-Generate every compatible adapter with `--no-install`, inspect the transformed
-files, then install/type-check at least the changed combinations. Update the
-template schema, `AGENTS.md`, and README when adding wizard keys or public
+Generate every compatible adapter/preset pair with `--no-install`, inspect the
+transformed files, then install/type-check the changed combinations. The CI
+matrix covers 12 UI combinations plus one headless project. UI cases receive a
+deterministic kitchen-sink Agent Card after scaffolding so schemas, streaming,
+tasks, SIWX, x402, MPP, AP2, trust, and security stay portable together. Update
+the template schema, `AGENTS.md`, and README when adding wizard keys or public
 behavior.
 
 ## Programmatic API

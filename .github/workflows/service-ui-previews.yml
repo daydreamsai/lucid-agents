@@ -1,0 +1,120 @@
+name: Service UI previews
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUN_VERSION: 1.3.10
+
+jobs:
+  cloudflare_preview:
+    name: Cloudflare / ${{ matrix.preset }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: service-ui-preview-${{ github.event.pull_request.number || github.ref }}-${{ matrix.preset }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [dossier, folio, console]
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check preview credentials
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare preview skipped: add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build packages and generated preview
+        run: |
+          bun install --frozen-lockfile
+          bun run build:packages
+          GENERATED_PROJECT_KEEP=true \
+          GENERATED_PROJECT_ROOT_FILE="$RUNNER_TEMP/service-ui-root.txt" \
+            bun run scripts/test-generated-project.ts next "${{ matrix.preset }}"
+
+      - name: Configure OpenNext for Cloudflare Workers
+        env:
+          PRESET: ${{ matrix.preset }}
+        run: |
+          PROJECT_ROOT="$(tr -d '\n' < "$RUNNER_TEMP/service-ui-root.txt")/generated-next-$PRESET"
+          echo "PROJECT_ROOT=$PROJECT_ROOT" >> "$GITHUB_ENV"
+          cd "$PROJECT_ROOT"
+          bun add --dev @opennextjs/cloudflare@1.20.2 wrangler@4.113.0
+          bun run "$GITHUB_WORKSPACE/scripts/configure-service-ui-cloudflare.ts" \
+            "$PROJECT_ROOT" "$PRESET"
+
+      - name: Build for the Cloudflare workerd runtime
+        run: |
+          cd "$PROJECT_ROOT"
+          bunx opennextjs-cloudflare build
+
+      - name: Upload versioned Cloudflare preview
+        if: steps.credentials.outputs.enabled == 'true'
+        env:
+          PRESET: ${{ matrix.preset }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.run_number }}
+        run: |
+          cd "$PROJECT_ROOT"
+          bunx opennextjs-cloudflare upload \
+            --preview-alias "pr-$PR_NUMBER" | tee "$RUNNER_TEMP/cloudflare-$PRESET.log"
+          PREVIEW_URL="$(grep -Eo 'https://[a-zA-Z0-9.-]+\.workers\.dev[^[:space:]]*' "$RUNNER_TEMP/cloudflare-$PRESET.log" | tail -1 | sed 's/[),]$//')"
+          if [[ -z "$PREVIEW_URL" ]]; then
+            echo "Cloudflare did not report a preview URL." >&2
+            exit 1
+          fi
+          echo "PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
+          printf '### %s preview\n\n%s\n' "$PRESET" "$PREVIEW_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify deployed preview
+        if: steps.credentials.outputs.enabled == 'true'
+        run: |
+          for _ in $(seq 1 30); do
+            if curl --fail --silent "$PREVIEW_URL/api/agent/health" >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent "$PREVIEW_URL/api/agent/health" | grep '"ok":true'
+          curl --fail --silent "$PREVIEW_URL" | grep "data-service-ui-preset=\"${{ matrix.preset }}\""
+
+      - name: Install Chromium for deployed preview QA
+        if: steps.credentials.outputs.enabled == 'true'
+        run: npx --yes --package @playwright/cli@0.1.17 playwright-cli install-browser chromium
+
+      - name: Test deployed kitchen-sink preview with Playwright
+        if: steps.credentials.outputs.enabled == 'true'
+        run: bash scripts/test-service-ui-preview.sh "$PREVIEW_URL" "${{ matrix.preset }}"
+
+      - name: Upload Cloudflare diagnostics
+        if: always() && steps.credentials.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-service-ui-${{ matrix.preset }}
+          path: |
+            ${{ runner.temp }}/cloudflare-${{ matrix.preset }}.log
+            output/playwright/cloudflare-${{ matrix.preset }}
+          if-no-files-found: warn

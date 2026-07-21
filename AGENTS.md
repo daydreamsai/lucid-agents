@@ -74,6 +74,14 @@ The framework supports multiple runtime adapters:
 
 Templates are adapter-agnostic and work with any compatible adapter.
 
+UI-capable generated projects own one typed root `service-ui.config.ts` with
+the `dossier`, `folio`, or `console` preset and bounded semantic color/font
+tokens. `@lucid-agents/http/service-ui` owns preset validation and shared CSS;
+the HTTP package's model owns all public Agent Card normalization. Hono and
+Express render that model as static read-only HTML, Next and TanStack UI add the
+shared React interaction controller, and TanStack headless sets
+`servicePage: false` without generating UI config.
+
 ### Data Flow
 
 ```

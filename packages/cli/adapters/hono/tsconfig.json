@@ -10,6 +10,5 @@
     "resolveJsonModule": true,
     "types": ["bun-types"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "service-ui.config.ts"]
 }
-

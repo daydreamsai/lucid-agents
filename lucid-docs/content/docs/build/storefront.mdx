@@ -8,10 +8,11 @@ verifiedAt: 2026-07-21
 product: sdk
 ---
 
-The generated Next.js and TanStack UI adapters render a public **service
+Hono, Express, Next.js, and TanStack UI projects render a public **service
 storefront**. It helps a human inspect what a service offers; it is not an
 operations dashboard, marketplace listing, wallet custodian, or substitute for
-a protocol-aware buyer.
+a protocol-aware buyer. Hono and Express are static/read-only; Next and
+TanStack UI add browser invocation.
 
 ## Generate the Next workspace surface
 
@@ -22,7 +23,7 @@ uses the same Next contracts as these docs:
 bun run build:packages
 bun packages/cli/dist/index.js my-service --adapter=tanstack-ui
 # or
-bun packages/cli/dist/index.js my-service --adapter=next
+bun packages/cli/dist/index.js my-service --adapter=next --ui-preset=folio
 ```
 
 The public npm CLI is the Stable channel. Do not use an unpinned public CLI to
@@ -34,23 +35,60 @@ reproduce this Next page; see [Release channels](/docs/reference/release-channel
 canonical entrypoint registry
   → Agent Card + health handlers
     → buildServicePageModel(card, { health, baseUrl })
-      → generated React storefront
+      → shared ServicePageModel
+        → static Hono/Express HTML
+        → interactive Next/TanStack React
 ```
 
 `buildServicePageModel()` from `@lucid-agents/http` accepts only public Agent
-Card and health data. It derives:
+Card and health data. It preserves or derives:
 
-- agent name, version, description, and icon;
+- agent name, version, description, provider, and documentation URL;
 - online/degraded/offline/unknown status;
 - registration/signature trust indicators;
 - streaming, task, and extension capability summaries;
 - public card, health, entrypoint, and task endpoints;
-- payment method/network summaries; and
-- per-offering schemas, SIWX requirements, prices, and invoke/stream URLs.
+- interfaces, modes, security schemes/requirements, skills, and all public
+  endpoint URIs;
+- payment method/network/payee/endpoint summaries; and
+- per-offering schemas, examples, modes, security, SIWX requirements, prices,
+  and invoke/stream URLs.
 
 Storefront code must not inspect private runtime config, payment trackers,
 wallet connectors, secrets, internal task records, or adapter-local registries.
 That boundary keeps the UI truthful across frameworks.
+
+## Choose and customize a design
+
+The wizard offers three distinct presets:
+
+| Preset | Design |
+| --- | --- |
+| `dossier` | Existing dark technical dossier with a stable offering rail. |
+| `folio` | Light editorial field guide with expressive display type. |
+| `console` | Dense dark console optimized for scanning contracts. |
+
+The generated `service-ui.config.ts` is the only visual configuration surface:
+
+```typescript
+import { defineServiceUi } from '@lucid-agents/http/service-ui';
+
+export default defineServiceUi({
+  preset: 'folio',
+  tokens: {
+    colors: { accent: '#1859C9' },
+    fonts: {
+      display: ['Instrument Serif', 'Georgia', 'serif'],
+      stylesheetUrl: 'https://fonts.example.com/service.css',
+    },
+  },
+});
+```
+
+The API intentionally excludes arbitrary layout and CSS overrides. Unknown
+keys, unsafe URLs/font names, invalid hex colors, and inaccessible primary
+color combinations fail validation. This keeps custom brands on the same
+semantic markup, responsive rules, and public information contract.
 
 ## Configure the public origin
 
@@ -71,8 +109,9 @@ base-path prefix, and return the same schema/price advertised by the card.
 
 ## Protected operations
 
-The storefront can explain that an offering uses x402, MPP, or SIWX and can
-support generated wallet flows where the adapter implements them. It must not:
+The storefront can explain that an offering uses x402, MPP, or SIWX. React
+adapters can support generated wallet flows; portable server pages instead
+provide schemas and cURL handoffs with no client JavaScript. It must not:
 
 - expose a server wallet key or facilitator credential to the browser;
 - imply that an unauthenticated `fetch()` can complete a protected operation;
@@ -88,13 +127,16 @@ output as untrusted content.
 
 1. Add one free and one priced capability with input/output schemas.
 2. Load the storefront on desktop and mobile.
-3. Confirm the free invoke works and the protected invoke shows the correct
-   protocol/price rather than silently failing.
+3. In Next/TanStack, confirm free invoke works and protected invoke shows the
+   correct protocol/price rather than silently failing. In Hono/Express,
+   confirm there are no invoke controls or scripts.
 4. Change a capability price and verify the UI updates from the card without a
    second hard-coded catalog.
 5. Disable the Lucid task runtime and verify task controls disappear.
 6. Break health deliberately and confirm the status becomes degraded/offline
    without hiding the public contract.
+7. Run the generated matrix for all three presets and verify the three
+   Cloudflare previews when repository credentials are configured.
 
 ## Production boundary
 

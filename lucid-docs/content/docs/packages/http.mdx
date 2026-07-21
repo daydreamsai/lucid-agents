@@ -46,29 +46,34 @@ Install domain extensions such as `payments()`, `mpp()`, `identity()`, and `a2a(
 
 ```typescript
 type HttpExtensionOptions = {
+  servicePage?: ServiceUiConfig | false;
+  /** @deprecated Use servicePage: false. */
   landingPage?: boolean;
   basePath?: string;
-  idempotency?: false | {
-    store?: HttpIdempotencyStore;
-    inProgressTtlMs?: number;
-    retentionMs?: number;
-    maxEntries?: number;
-  };
+  idempotency?:
+    | false
+    | {
+        store?: HttpIdempotencyStore;
+        inProgressTtlMs?: number;
+        retentionMs?: number;
+        maxEntries?: number;
+      };
 };
 ```
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `landingPage` | `true` | Include the landing-page handler and route. |
-| `basePath` | `''` | Normalize and prefix every canonical route. The prefix is also advertised in the Agent Card's HTTP interface. |
-| `idempotency` | bounded in-memory store | Configure target-side invoke deduplication, inject a durable store, or explicitly disable it. |
+| Option        | Default                 | Description                                                                                                   |
+| ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `servicePage` | `{ preset: 'dossier' }` | Select/configure the public storefront, or use `false` for API-only.                                          |
+| `landingPage` | `true`                  | Deprecated compatibility switch for the landing route.                                                        |
+| `basePath`    | `''`                    | Normalize and prefix every canonical route. The prefix is also advertised in the Agent Card's HTTP interface. |
+| `idempotency` | bounded in-memory store | Configure target-side invoke deduplication, inject a durable store, or explicitly disable it.                 |
 
 ```typescript
 const agent = await createAgent(meta)
   .use(
     http({
       basePath: '/api/agent',
-      landingPage: false,
+      servicePage: false,
       idempotency: {
         store: durableIdempotencyStore,
         inProgressTtlMs: 15 * 60_000,
@@ -81,20 +86,44 @@ const agent = await createAgent(meta)
 
 The default idempotency store is bounded and process-local. Multi-instance deployments should inject an atomic durable `HttpIdempotencyStore`.
 
+## Public storefront
+
+Hono and Express render the public Agent Card as static, read-only HTML. The
+page contains identity/provider metadata, interfaces, capabilities, endpoints,
+skills, schemas, examples, security, prices, payments, trust, and the raw card.
+It contains no client JavaScript and never invokes an operation from the
+browser.
+
+UI-capable CLI projects generate a root `service-ui.config.ts`:
+
+```typescript
+import { defineServiceUi } from '@lucid-agents/http/service-ui';
+
+export default defineServiceUi({
+  preset: 'console', // dossier | folio | console
+  tokens: {
+    colors: { accent: '#39D6E7' },
+    fonts: { body: ['DM Sans', 'Segoe UI', 'sans-serif'] },
+  },
+});
+```
+
+Only bounded semantic color/font tokens are supported. Runtime validation
+rejects unknown keys, non-hex colors, unsafe font values/URLs, and primary
+contrast failures. Next and TanStack UI consume the same preset resolver and
+public model while adding their browser interaction controller.
+
 ## Fetch-native handlers
 
 Handlers accept a standard Web `Request` and return a `Promise<Response>`:
 
 ```typescript
 const response = await agent.http.handlers.invoke(
-  new Request(
-    'https://agent.example/api/agent/entrypoints/echo/invoke',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: { value: 1 } }),
-    }
-  ),
+  new Request('https://agent.example/api/agent/entrypoints/echo/invoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ input: { value: 1 } }),
+  }),
   { key: 'echo' }
 );
 ```
@@ -109,27 +138,27 @@ The manifest handler builds by request origin. Compatibility routes should deleg
 
 With an empty base path, the plan includes:
 
-| Method | Route | Capability |
-| --- | --- | --- |
-| `GET` | `/` | Landing page, unless disabled. |
-| `GET` | `/health` | Health status. |
-| `GET` | `/entrypoints` | Entrypoint discovery. |
-| `POST` | `/entrypoints/:key/invoke` | Invoke. |
-| `POST` | `/entrypoints/:key/stream` | SSE stream. |
-| `GET` | `/.well-known/agent-card.json` | Canonical Agent Card. |
-| `GET` | `/.well-known/agent.json` | Legacy card alias. |
-| `GET` | `/.well-known/oasf-record.json` | OASF record or `404`. |
-| `GET` | `/favicon.svg` | SVG favicon. |
+| Method | Route                           | Capability                     |
+| ------ | ------------------------------- | ------------------------------ |
+| `GET`  | `/`                             | Landing page, unless disabled. |
+| `GET`  | `/health`                       | Health status.                 |
+| `GET`  | `/entrypoints`                  | Entrypoint discovery.          |
+| `POST` | `/entrypoints/:key/invoke`      | Invoke.                        |
+| `POST` | `/entrypoints/:key/stream`      | SSE stream.                    |
+| `GET`  | `/.well-known/agent-card.json`  | Canonical Agent Card.          |
+| `GET`  | `/.well-known/agent.json`       | Legacy card alias.             |
+| `GET`  | `/.well-known/oasf-record.json` | OASF record or `404`.          |
+| `GET`  | `/favicon.svg`                  | SVG favicon.                   |
 
 Task routes are added only when `a2a()` is installed:
 
-| Method | Route | Capability |
-| --- | --- | --- |
-| `POST` | `/tasks` | Create and start a task. |
-| `GET` | `/tasks` | List tasks owned by the access token. |
-| `GET` | `/tasks/:taskId` | Read an owned task. |
-| `POST` | `/tasks/:taskId/cancel` | Cancel an owned task. |
-| `GET` | `/tasks/:taskId/subscribe` | Subscribe to owned task updates. |
+| Method | Route                      | Capability                            |
+| ------ | -------------------------- | ------------------------------------- |
+| `POST` | `/tasks`                   | Create and start a task.              |
+| `GET`  | `/tasks`                   | List tasks owned by the access token. |
+| `GET`  | `/tasks/:taskId`           | Read an owned task.                   |
+| `POST` | `/tasks/:taskId/cancel`    | Cancel an owned task.                 |
+| `GET`  | `/tasks/:taskId/subscribe` | Subscribe to owned task updates.      |
 
 `basePath` prefixes every route in the plan. Task ownership and the `Task-Access-Token` contract are documented in the [A2A package](/docs/packages/a2a).
 

@@ -20,6 +20,7 @@ export type {
   ServicePageModel,
   ServicePageOffering,
   ServicePageOperation,
+  ServicePageSkill,
   ServicePageStatus,
 } from './service-page-model';
 
