@@ -19,6 +19,9 @@ is intended to be a map for maintainers, not a catalogue of every public API.
    live behind explicit package subpaths or injected ports.
 7. A task is an owned capability. Its opaque access token is returned once and
    only a SHA-256 hash is persisted.
+8. Deployment tooling owns provider mutations. Generated Worker or server
+   entries import the same completed runtime; they do not fork route,
+   authorization, or manifest ownership.
 
 ## Package map
 
@@ -45,6 +48,7 @@ types                         shared contracts
   │    └─ tanstack
   │
   ├─ api-sdk                 generated Runtime API client
+  ├─ deploy                  provider deployment executable + manifest schema
   └─ cli                     project/template generator (no runtime dependency)
 ```
 
@@ -141,6 +145,30 @@ The route plan contains:
 
 The agent-card compatibility routes generated at a framework root call the
 runtime manifest handler; they never keep a second manifest cache.
+
+## Deployment boundary
+
+`@lucid-agents/deploy` is a tooling-only executable package with no public
+JavaScript API. It reads a versioned `lucid.deploy.json`; the manifest names the
+adapter, provider, deployment entry/config paths, and the exact environment
+allowlist. Provider credentials and Worker secrets stay outside the runtime
+package graph.
+
+The initial Hono/Cloudflare path preserves two entrypoints around one app:
+
+```text
+src/index.ts  → Bun local server ┐
+                               ├─ src/lib/agent.ts → canonical HTTP routes
+src/worker.ts → Worker fetch    ┘
+```
+
+Preview uses `wrangler versions upload` with a preview alias, so production is
+not modified. The deployer passes only allowlisted values, sends classified
+secrets through a temporary mode-0600 provider file, rejects provider-configured
+Worker variables, forces both identity auto-registration switches off, and
+verifies `/`, `/health`, and the canonical Agent Card at the returned origin.
+Production and preview deletion remain hard errors until their lifecycle
+implementation is added.
 
 Invoke idempotency is target-side and enabled by default. The HTTP runtime binds
 a 20–256 character `Idempotency-Key` to an entrypoint, request fingerprint,

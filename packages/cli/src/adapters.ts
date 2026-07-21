@@ -13,6 +13,18 @@ type AdapterSnippets = {
   exports: string;
 };
 
+type DeploymentDefinition = {
+  templateIds: string[];
+  filesDir: string;
+  readmePath: string;
+  replacementTargets: string[];
+  package: {
+    scripts?: Record<string, string>;
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+};
+
 export type AdapterDefinition = {
   id: string;
   displayName: string;
@@ -23,6 +35,7 @@ export type AdapterDefinition = {
   /** Public base path used by generated HTTP handlers. */
   httpBasePath?: string;
   snippets: AdapterSnippets;
+  deployment?: DeploymentDefinition;
   buildReplacements?: (params: {
     answers: Map<string, string | boolean>;
     templateId?: string;
@@ -35,6 +48,21 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
     displayName: 'Hono',
     filesDir: join(ADAPTER_FILES_ROOT, 'hono'),
     placeholderTargets: ['src/lib/agent.ts.template'],
+    deployment: {
+      templateIds: ['blank'],
+      filesDir: join(ADAPTER_FILES_ROOT, 'hono-cloudflare'),
+      readmePath: join(ADAPTER_FILES_ROOT, 'hono-cloudflare', 'README.md'),
+      replacementTargets: ['lucid.deploy.json', 'wrangler.jsonc'],
+      package: {
+        scripts: {
+          deploy: 'lucid-deploy',
+        },
+        devDependencies: {
+          '@lucid-agents/deploy': 'latest',
+          wrangler: '4.113.0',
+        },
+      },
+    },
     snippets: {
       imports: `import { createAgentApp } from "@lucid-agents/hono";`,
       preSetup: ``,

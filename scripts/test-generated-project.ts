@@ -133,6 +133,30 @@ async function verifyAdapter(
     await run(['bun', 'install', '--no-cache'], projectDir);
     await run(['bun', 'run', 'type-check'], projectDir);
     await run(['bun', 'run', 'build'], projectDir);
+    if (adapter === 'hono') {
+      await run(['bun', 'run', 'deploy', '--', '--help'], projectDir);
+      await run(
+        [
+          'bunx',
+          'wrangler',
+          'versions',
+          'upload',
+          '--dry-run',
+          '--config',
+          'wrangler.jsonc',
+          '--preview-alias',
+          'preview',
+          '--strict',
+          '--keep-vars=false',
+          '--var',
+          'IDENTITY_AUTO_REGISTER:false',
+          '--var',
+          'REGISTER_IDENTITY:false',
+        ],
+        projectDir,
+        { CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'false' }
+      );
+    }
 
     const port = await allocatePort();
     const healthPath =

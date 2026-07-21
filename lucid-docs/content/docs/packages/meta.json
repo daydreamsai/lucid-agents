@@ -21,6 +21,7 @@
     "tanstack",
     "express",
     "---Tools---",
-    "cli"
+    "cli",
+    "deploy"
   ]
 }

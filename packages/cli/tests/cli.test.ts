@@ -87,6 +87,11 @@ const readJson = async (path: string) => {
   return JSON.parse(raw) as Record<string, unknown>;
 };
 
+const readJsonc = async (path: string) => {
+  const raw = await readFile(path, 'utf8');
+  return Bun.JSONC.parse(raw) as Record<string, unknown>;
+};
+
 const setAdaptersForTemplates = async (
   root: string,
   templateIds: string[],
@@ -124,6 +129,126 @@ const updateTemplateMetadata = async (
 };
 
 describe('create-agent-kit CLI', () => {
+  it('makes blank Hono projects deployment-ready by default', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    await runCli(
+      ['deployable-agent', '--template=blank', '--adapter=hono', '--wizard=no'],
+      { cwd, logger }
+    );
+
+    const projectDir = join(cwd, 'deployable-agent');
+    const pkg = await readJson(join(projectDir, 'package.json'));
+    const manifest = await readJson(join(projectDir, 'lucid.deploy.json'));
+    const wrangler = await readJsonc(join(projectDir, 'wrangler.jsonc'));
+    const worker = await readFile(join(projectDir, 'src/worker.ts'), 'utf8');
+    const readme = await readFile(join(projectDir, 'README.md'), 'utf8');
+
+    expect((pkg.scripts as Record<string, string>).deploy).toBe('lucid-deploy');
+    expect(
+      (pkg.devDependencies as Record<string, string>)['@lucid-agents/deploy']
+    ).toBe('latest');
+    expect((pkg.devDependencies as Record<string, string>).wrangler).toBe(
+      '4.113.0'
+    );
+    expect(manifest).toEqual({
+      $schema: './node_modules/@lucid-agents/deploy/lucid.deploy.schema.json',
+      version: 1,
+      adapter: 'hono',
+      provider: 'cloudflare',
+      paths: {
+        entrypoint: 'src/worker.ts',
+        providerConfig: 'wrangler.jsonc',
+        environmentFile: '.env',
+      },
+      environment: {
+        allowlist: [
+          'AGENT_NAME',
+          'AGENT_VERSION',
+          'AGENT_DESCRIPTION',
+          'IDENTITY_AUTO_REGISTER',
+          'REGISTER_IDENTITY',
+          'PAYMENTS_FACILITATOR_URL',
+          'PAYMENTS_FACILITATOR_AUTH',
+          'PAYMENTS_NETWORK',
+          'PAYMENTS_DESTINATION',
+          'PAYMENTS_RECEIVABLE_ADDRESS',
+          'STRIPE_SECRET_KEY',
+          'DEVELOPER_WALLET_PRIVATE_KEY',
+          'OPENAI_API_KEY',
+        ],
+        secrets: [
+          'PAYMENTS_FACILITATOR_AUTH',
+          'STRIPE_SECRET_KEY',
+          'DEVELOPER_WALLET_PRIVATE_KEY',
+          'OPENAI_API_KEY',
+        ],
+        signingKeys: ['DEVELOPER_WALLET_PRIVATE_KEY'],
+        mainnet: {
+          PAYMENTS_NETWORK: [
+            'ethereum',
+            'base',
+            'solana',
+            'eip155:1',
+            'eip155:8453',
+            'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
+          ],
+        },
+      },
+    });
+    expect(wrangler.name).toBe('deployable-agent');
+    expect(wrangler.main).toBe('src/worker.ts');
+    expect(wrangler.workers_dev).toBe(true);
+    expect(wrangler.preview_urls).toBe(true);
+    expect(worker).toContain("import { app } from './lib/agent'");
+    expect(worker).toContain('fetch: app.fetch');
+    expect(readme).toContain('## Deploy to Cloudflare');
+    expect(readme).toContain('bunx wrangler login');
+    expect(readme).toContain('bun run deploy');
+    expect(readme).toContain('CLOUDFLARE_API_TOKEN');
+    expect(readme).toContain('bun run deploy -- --yes');
+    expect(readme).toContain('IDENTITY_AUTO_REGISTER=false');
+    expect(readme).toContain('REGISTER_IDENTITY=false');
+    expect(readme).toContain('/.well-known/agent-card.json');
+    expect(readme).toContain('--no-deploy');
+  });
+
+  it('omits every deployment artifact when --no-deploy is passed', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    await runCli(
+      [
+        'local-only-agent',
+        '--template=blank',
+        '--adapter=hono',
+        '--wizard=no',
+        '--no-deploy',
+      ],
+      { cwd, logger }
+    );
+
+    const projectDir = join(cwd, 'local-only-agent');
+    const pkg = await readJson(join(projectDir, 'package.json'));
+    const devDependencies = pkg.devDependencies as Record<string, string>;
+    const readme = await readFile(join(projectDir, 'README.md'), 'utf8');
+
+    expect((pkg.scripts as Record<string, string>).deploy).toBeUndefined();
+    expect(devDependencies['@lucid-agents/deploy']).toBeUndefined();
+    expect(devDependencies.wrangler).toBeUndefined();
+    await expect(
+      readFile(join(projectDir, 'lucid.deploy.json'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(projectDir, 'wrangler.jsonc'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(join(projectDir, 'src/worker.ts'), 'utf8')
+    ).rejects.toThrow();
+    expect(readme).not.toContain('## Deploy to Cloudflare');
+  });
+
   it('scaffolds a new project with wizard defaults', async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
@@ -660,6 +785,7 @@ describe('create-agent-kit CLI', () => {
     expect(messages.join('\n')).toContain(
       'Usage: bunx @lucid-agents/cli <app-name>'
     );
+    expect(messages.join('\n')).toContain('--no-deploy');
     const entries = await readdir(cwd);
     expect(entries.length).toBe(0);
   });

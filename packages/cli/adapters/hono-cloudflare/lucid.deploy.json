@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@lucid-agents/deploy/lucid.deploy.schema.json",
+  "version": 1,
+  "adapter": "hono",
+  "provider": "cloudflare",
+  "paths": {
+    "entrypoint": "src/worker.ts",
+    "providerConfig": "wrangler.jsonc",
+    "environmentFile": ".env"
+  },
+  "environment": {
+    "allowlist": [
+      "AGENT_NAME",
+      "AGENT_VERSION",
+      "AGENT_DESCRIPTION",
+      "IDENTITY_AUTO_REGISTER",
+      "REGISTER_IDENTITY",
+      "PAYMENTS_FACILITATOR_URL",
+      "PAYMENTS_FACILITATOR_AUTH",
+      "PAYMENTS_NETWORK",
+      "PAYMENTS_DESTINATION",
+      "PAYMENTS_RECEIVABLE_ADDRESS",
+      "STRIPE_SECRET_KEY",
+      "DEVELOPER_WALLET_PRIVATE_KEY",
+      "OPENAI_API_KEY"
+    ],
+    "secrets": [
+      "PAYMENTS_FACILITATOR_AUTH",
+      "STRIPE_SECRET_KEY",
+      "DEVELOPER_WALLET_PRIVATE_KEY",
+      "OPENAI_API_KEY"
+    ],
+    "signingKeys": ["DEVELOPER_WALLET_PRIVATE_KEY"],
+    "mainnet": {
+      "PAYMENTS_NETWORK": [
+        "ethereum",
+        "base",
+        "solana",
+        "eip155:1",
+        "eip155:8453",
+        "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+      ]
+    }
+  }
+}

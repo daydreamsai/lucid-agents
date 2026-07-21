@@ -1,0 +1,53 @@
+---
+title: '@lucid-agents/deploy'
+description: Upload and verify guarded Cloudflare previews for generated Hono agents.
+icon: CloudUpload
+status: next
+verifiedVersion: 0.1.0
+verifiedAt: 2026-07-22
+product: sdk
+---
+
+`@lucid-agents/deploy` is a tooling-only package used by newly generated blank
+Hono projects. It exposes the `lucid-deploy` executable and a versioned
+`lucid.deploy.json` schema; it deliberately has no JavaScript import API.
+
+## Preview deployment
+
+Authenticate Wrangler interactively, then run the generated project command:
+
+```bash
+bunx wrangler login
+bun run deploy
+```
+
+The command uploads a new Worker version with a preview alias. It does not
+change the production deployment. After Wrangler returns the public preview
+origin, the command verifies the homepage, `/health`, and the root Agent Card
+before reporting success.
+
+For non-interactive automation, both an API token and the explicit safety flag
+are required:
+
+```bash
+CLOUDFLARE_API_TOKEN='scoped-token' bun run deploy -- --yes
+```
+
+## Environment boundary
+
+The manifest is the upload allowlist. The deployer reads only named entries
+from the project environment, sends secret-classified values through Wrangler's
+secret file input, and prints variable names with redacted values. Wrangler
+configuration cannot add its own Worker variables or unsafe value bindings.
+Preview uploads force both identity auto-registration environment switches off,
+even when the local `.env` enables them.
+
+Private signing material and configured mainnet networks require explicit
+confirmation. Provider commands run from an empty temporary directory with a
+restricted process environment, which prevents implicit `.env` or `.dev.vars`
+loading. Custom domains, DNS, account creation, ERC-8004 registration,
+production deployment, and preview deletion are outside this first release.
+
+See the [CLI package](/docs/packages/cli) for scaffold options. Pass
+`--no-deploy` while generating a project to omit the Worker entry, manifest,
+Wrangler configuration, and deployment dependencies.

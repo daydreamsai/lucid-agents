@@ -22,6 +22,7 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - **@lucid-agents/tanstack** - TanStack Start adapter
 - **@lucid-agents/api-sdk** - Generated Runtime API client
 - **@lucid-agents/cli** - CLI for scaffolding new agent projects
+- **@lucid-agents/deploy** - Guarded provider deployment executable and manifest schema
 
 **Tech Stack:**
 
@@ -43,6 +44,7 @@ types (shared contracts)
   └─ hono, express, tanstack (route/handler adapters)
 
 cli scaffolds projects that compose the packages above.
+deploy owns provider commands and deployment safeguards; it is not a runtime extension.
 api-sdk is generated independently from the Runtime API schema.
 ```
 
@@ -98,6 +100,7 @@ Response (JSON or SSE)
 6. **x402 for payments** - HTTP-native payment protocol supporting both EVM and Solana networks
 7. **One route and authorization contract** - Adapters do not own paywalls or duplicate registries
 8. **Bounded state with durable ports** - Portable in-memory defaults; explicit SQLite/Postgres/task stores
+9. **Provider-owned deployment tooling** - Deployment commands consume a versioned allowlist manifest and reuse canonical adapter handlers
 
 ### Supported Payment Networks
 
@@ -329,6 +332,7 @@ type PaymentsRuntime = {
 │   ├── express/            # Express/Web Request bridge and route binder
 │   ├── tanstack/           # TanStack wrapper over runtime.http.handlers
 │   ├── api-sdk/            # Generated Runtime API client
+│   ├── deploy/             # Provider deployment executable + manifest schema
 │   ├── examples/           # Cross-package smoke/integration examples
 │   └── cli/                # CLI and Hono/Express/TanStack/Next templates
 │
@@ -1031,6 +1035,11 @@ Registry client implementations for Identity, Reputation, and Validation registr
 ### packages/cli/src/index.ts
 
 CLI implementation. Handles argument parsing, wizard prompts, template copying, file transformation.
+
+### packages/deploy/src/
+
+Tooling-only deployment executable and its private manifest, environment,
+provider, redaction, and deployed-origin verification modules.
 
 ## Additional Resources
 

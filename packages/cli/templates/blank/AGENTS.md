@@ -123,3 +123,15 @@ bun test
 Exercise health, agent-card discovery, invoke, and any priced or streaming route
 before deployment. Call `agent.close()` during graceful shutdown when the
 adapter exposes a long-lived server process.
+
+## Generated deployment overlay
+
+When `lucid.deploy.json` exists, treat it as the complete provider upload
+allowlist. Do not add an environment name merely because it appears in `.env`;
+classify secrets and signing keys explicitly and keep preview identity
+auto-registration disabled. `src/worker.ts` is a Cloudflare entry around the
+same Hono app used by `src/index.ts`, not a second runtime or route registry.
+
+Use `bun run deploy` for the isolated preview. CI also requires
+`CLOUDFLARE_API_TOKEN` and `--yes`. This initial overlay intentionally rejects
+production and preview-cleanup flags until those lifecycles are implemented.

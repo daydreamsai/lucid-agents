@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "adapter": {
+      "type": "string",
+      "const": "hono"
+    },
+    "provider": {
+      "type": "string",
+      "const": "cloudflare"
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerConfig": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environmentFile": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["entrypoint", "providerConfig", "environmentFile"],
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "allowlist": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "signingKeys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          }
+        },
+        "mainnet": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$"
+          },
+          "additionalProperties": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": ["allowlist", "secrets", "signingKeys", "mainnet"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["version", "adapter", "provider", "paths", "environment"],
+  "additionalProperties": false,
+  "title": "Lucid deployment manifest",
+  "$id": "https://lucid-agents.dev/schemas/lucid.deploy.v1.json"
+}

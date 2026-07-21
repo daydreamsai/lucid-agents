@@ -18,6 +18,7 @@ import {
 
 type CliOptions = {
   install: boolean;
+  deploy: boolean;
   templateId?: string;
   adapterId?: string;
   skipWizard?: boolean;
@@ -217,7 +218,16 @@ export async function runCli(
     adapter: adapterDefinition,
     templateId: template.id,
   });
-  await copyTemplate(template.path, targetDir, adapterDefinition);
+  const includeDeployment = Boolean(
+    parsed.options.deploy &&
+    adapterDefinition.deployment?.templateIds.includes(template.id)
+  );
+  await copyTemplate(
+    template.path,
+    targetDir,
+    adapterDefinition,
+    includeDeployment
+  );
 
   // Read template.json metadata
   const templateJsonPath = join(template.path, 'template.json');
@@ -230,6 +240,7 @@ export async function runCli(
     adapter: adapterDefinition,
     templateRoot: template.path,
     templateMeta,
+    includeDeployment,
   });
 
   await setupEnvironment({
@@ -266,6 +277,7 @@ export type { PromptApi, RunLogger };
 function parseArgs(args: string[]): ParsedArgs {
   const options: CliOptions = {
     install: false,
+    deploy: true,
     skipWizard: false,
     templateArgs: new Map(),
   };
@@ -279,6 +291,8 @@ function parseArgs(args: string[]): ParsedArgs {
       options.install = true;
     } else if (arg === '--no-install') {
       options.install = false;
+    } else if (arg === '--no-deploy') {
+      options.deploy = false;
     } else if (arg === '--help' || arg === '-h') {
       showHelp = true;
     } else if (arg === '--wizard=no' || arg === '--no-wizard') {
@@ -337,6 +351,9 @@ function printHelp(logger: RunLogger) {
   );
   logger.log('  -i, --install         Run bun install after scaffolding');
   logger.log('  --no-install          Skip bun install');
+  logger.log(
+    '  --no-deploy           Omit deployment tooling and configuration'
+  );
   logger.log('  --wizard=no           Skip wizard, use template defaults');
   logger.log('  --non-interactive     Same as --wizard=no');
   logger.log(
@@ -895,6 +912,7 @@ class TemplateError extends Error {
 type PackageJson = {
   name?: string;
   version?: string;
+  scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   [key: string]: unknown;
@@ -1025,6 +1043,30 @@ function mergePackageJson(
   };
 }
 
+function addDeploymentPackageJson(
+  packageJson: PackageJson,
+  adapter: AdapterDefinition
+): PackageJson {
+  const deployment = adapter.deployment;
+  if (!deployment) return packageJson;
+
+  return {
+    ...packageJson,
+    scripts: {
+      ...packageJson.scripts,
+      ...deployment.package.scripts,
+    },
+    dependencies: {
+      ...packageJson.dependencies,
+      ...deployment.package.dependencies,
+    },
+    devDependencies: {
+      ...packageJson.devDependencies,
+      ...deployment.package.devDependencies,
+    },
+  };
+}
+
 function validateAdapterCompatibility(
   templateMeta: TemplateDescriptor,
   adapterId: string
@@ -1083,6 +1125,7 @@ function buildTemplateReplacements(params: {
     AGENT_NAME: projectDirName,
     APP_NAME: projectDirName,
     PACKAGE_NAME: packageName,
+    DEPLOYMENT_NAME: toDeploymentName(packageName),
     ADAPTER_ID: adapter.id,
     ADAPTER_DISPLAY_NAME: adapter.displayName,
     TEMPLATE_IMPORTS: snippets.imports,
@@ -1098,6 +1141,16 @@ function buildTemplateReplacements(params: {
         })
       : {}),
   };
+}
+
+function toDeploymentName(packageName: string): string {
+  const normalized = packageName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  const withFallback = normalized || 'lucid-agent';
+  return withFallback.slice(0, 55).replace(/-$/g, '') || 'lucid-agent';
 }
 
 async function assertTemplatePresent(templatePath: string) {
@@ -1128,13 +1181,17 @@ async function assertTargetDirectory(targetDir: string) {
 async function copyTemplate(
   templateRoot: string,
   targetDir: string,
-  adapter: AdapterDefinition
+  adapter: AdapterDefinition,
+  includeDeployment: boolean
 ) {
   // Copy adapter files
   for (const baseFilesDir of adapter.baseFilesDirs ?? []) {
     await copyAdapterLayer(baseFilesDir, targetDir);
   }
   await copyAdapterLayer(adapter.filesDir, targetDir);
+  if (includeDeployment) {
+    await copyAdapterLayer(adapter.deployment?.filesDir, targetDir);
+  }
 
   const entries = await fs.readdir(templateRoot, { withFileTypes: true });
   for (const entry of entries) {
@@ -1179,12 +1236,16 @@ async function applyTemplateTransforms(
     adapter: AdapterDefinition;
     templateRoot: string;
     templateMeta: TemplateMetadata;
+    includeDeployment: boolean;
   }
 ) {
   const packageJsonPath = join(targetDir, 'package.json');
   const adapterPkgRaw = await fs.readFile(packageJsonPath, 'utf8');
   const adapterPkg = JSON.parse(adapterPkgRaw) as PackageJson;
-  const mergedPkg = mergePackageJson(adapterPkg, params.templateMeta);
+  const templatePkg = mergePackageJson(adapterPkg, params.templateMeta);
+  const mergedPkg = params.includeDeployment
+    ? addDeploymentPackageJson(templatePkg, params.adapter)
+    : templatePkg;
   mergedPkg.name = params.packageName;
   await fs.writeFile(
     packageJsonPath,
@@ -1218,6 +1279,24 @@ async function applyTemplateTransforms(
     join(targetDir, 'README.md'),
     params.replacements
   );
+  if (params.includeDeployment) {
+    for (const replacementTarget of params.adapter.deployment
+      ?.replacementTargets ?? []) {
+      await replaceTemplatePlaceholders(
+        join(targetDir, replacementTarget),
+        params.replacements
+      );
+    }
+    const deploymentReadmePath = params.adapter.deployment?.readmePath;
+    if (deploymentReadmePath) {
+      const deploymentReadme = await fs.readFile(deploymentReadmePath, 'utf8');
+      await fs.appendFile(
+        join(targetDir, 'README.md'),
+        `\n${applyReplacements(deploymentReadme, params.replacements).trim()}\n`,
+        'utf8'
+      );
+    }
+  }
 
   await removeTemplateArtifacts(targetDir);
 }
@@ -1228,10 +1307,7 @@ async function replaceTemplatePlaceholders(
 ) {
   try {
     const raw = await fs.readFile(filePath, 'utf8');
-    let replaced = raw;
-    for (const [key, value] of Object.entries(replacements)) {
-      replaced = replaced.replaceAll(`{{${key}}}`, value);
-    }
+    const replaced = applyReplacements(raw, replacements);
     if (replaced === raw) {
       return;
     }
@@ -1241,6 +1317,17 @@ async function replaceTemplatePlaceholders(
       throw error;
     }
   }
+}
+
+function applyReplacements(
+  source: string,
+  replacements: Record<string, string>
+): string {
+  let replaced = source;
+  for (const [key, value] of Object.entries(replacements)) {
+    replaced = replaced.replaceAll(`{{${key}}}`, value);
+  }
+  return replaced;
 }
 
 async function removeTemplateArtifacts(targetDir: string) {

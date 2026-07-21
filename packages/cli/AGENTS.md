@@ -34,3 +34,16 @@ Do not replace this with a test that resolves `latest` from npm.
 
 Avoid tests tied to component internals. Assert the generated public contract,
 user-visible states, accessible markup, and real generated application builds.
+
+## Deployment overlays
+
+Deployment assets are adapter/template overlays, not runtime-adapter behavior.
+The first overlay applies only to `blank` + `hono` unless `--no-deploy` is
+passed. It contributes `src/worker.ts`, `wrangler.jsonc`,
+`lucid.deploy.json`, package scripts/dependencies, and an appended README
+section while leaving `src/index.ts` unchanged.
+
+Keep provider execution, environment allowlisting, redaction, confirmation,
+and public-origin verification in `@lucid-agents/deploy`. Generated adapters
+must continue delegating requests to the canonical HTTP runtime and must not
+grow provider-specific paywalls or route registries.

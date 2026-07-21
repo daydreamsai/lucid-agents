@@ -1,0 +1,54 @@
+{
+  "name": "@lucid-agents/deploy",
+  "version": "0.0.0",
+  "description": "Secure deployment CLI for Lucid agent projects",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/deploy"
+  },
+  "type": "module",
+  "lucidAgents": {
+    "runtime": "tooling"
+  },
+  "bin": {
+    "lucid-deploy": "dist/cli.js"
+  },
+  "exports": {
+    "./lucid.deploy.schema.json": "./lucid.deploy.schema.json"
+  },
+  "files": [
+    "dist",
+    "lucid.deploy.schema.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun run generate:schema && tsup",
+    "clean": "rm -rf dist",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "generate:schema": "bun run scripts/generate-schema.ts",
+    "lint": "eslint src tests scripts --ext .ts",
+    "lint:fix": "eslint src tests scripts --ext .ts --fix",
+    "test": "bun test",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@types/node": "^24.3.1",
+    "bun-types": "^1.3.0",
+    "prettier": "^3.0.0",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

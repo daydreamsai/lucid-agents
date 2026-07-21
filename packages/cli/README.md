@@ -72,6 +72,7 @@ Usage: bunx @lucid-agents/cli <app-name> [options]
   -a, --adapter <id>    Select an adapter
   -i, --install         Run bun install after scaffolding
   --no-install          Skip installation (default)
+  --no-deploy           Omit deployment tooling and configuration
   --wizard=no           Use template defaults
   --no-wizard           Alias for --wizard=no
   --non-interactive     Alias for --wizard=no
@@ -156,6 +157,30 @@ curl -i http://localhost:3000/.well-known/agent-card.json
 
 For a priced route, verify the unpaid request returns x402 `402` before funding
 a buyer. Use the repository's Stable quickstart for the complete paid loop.
+
+## Deployment-ready blank Hono projects
+
+The current repository scaffold makes the `blank` + `hono` combination
+Cloudflare-ready by default. It adds a separate fetch-native Worker entry,
+`wrangler.jsonc`, a versioned `lucid.deploy.json`, and the `bun run deploy`
+command while preserving the normal Bun server for local development.
+
+```bash
+bunx wrangler login
+bun run deploy
+```
+
+The default command uploads a Worker version with a preview alias and never
+deploys production. `@lucid-agents/deploy` uploads only manifest-allowlisted
+environment values, uses Worker secrets for secret-classified values, forces
+preview identity auto-registration off, prints a redacted plan, and verifies
+the landing page, health endpoint, and canonical Agent Card at the returned
+URL. CI requires both `CLOUDFLARE_API_TOKEN` and `--yes`.
+
+Pass `--no-deploy` while scaffolding to omit the deploy package, Wrangler,
+Worker entry, manifest, provider configuration, command, and deployment README
+section. Other template/adapter combinations remain unchanged until their
+provider drivers are added.
 
 ## Template development
 

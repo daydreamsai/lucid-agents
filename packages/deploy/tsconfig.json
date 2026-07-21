@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "outDir": "dist",
+    "composite": true,
+    "emitDeclarationOnly": false,
+    "resolveJsonModule": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "sourceMap": true,
+    "types": ["bun-types", "node"]
+  },
+  "include": ["src", "tests", "scripts"]
+}

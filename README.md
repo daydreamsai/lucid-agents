@@ -229,6 +229,7 @@ The resolved result is exposed as `agent.identity.result`.
 | `@lucid-agents/tanstack`                                  | TanStack Start handler adapter                 |
 | [`@lucid-agents/api-sdk`](packages/api-sdk/README.md)     | Hosted Runtime API client; separate lifecycle  |
 | [`@lucid-agents/cli`](packages/cli/README.md)             | Project and template generator                 |
+| [`@lucid-agents/deploy`](packages/deploy/README.md)       | Guarded provider deployment executable         |
 
 ## Monetized agent example
 

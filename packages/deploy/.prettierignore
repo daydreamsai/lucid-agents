@@ -1,0 +1,16 @@
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Config files
+tsconfig.json
+tsconfig.*.json
+tsup.config.ts
+.eslintrc.cjs
+
+# Documentation maintained by Changesets
+CHANGELOG.md
