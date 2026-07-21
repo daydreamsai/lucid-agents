@@ -762,6 +762,7 @@ describe('lucid-deploy executable', () => {
       cwd: projectDir,
       environment: {
         ...process.env,
+        CI: undefined,
         PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
         PAYMENTS_NETWORK: ' solana-mainnet ',
         WRANGLER_FAKE_AUTH_FAILURE: 'true',
