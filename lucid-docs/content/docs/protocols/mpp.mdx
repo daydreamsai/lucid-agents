@@ -14,7 +14,7 @@ an active **individual Internet-Draft**. It is not an IETF standard or an IETF
 endorsement. Implementations can be operational while the protocol still
 changes.
 
-`@lucid-agents/mpp` is a Next-only integration built on `mppx` 0.1. It protects
+`@lucid-agents/mpp` is a Next-only integration built on `mppx` 0.4.11. It protects
 Lucid invoke, stream, and task admission with Payment-Auth credentials.
 
 ## Support matrix
@@ -24,7 +24,7 @@ Lucid invoke, stream, and task admission with Payment-Auth credentials.
 | HTTP `402` + `WWW-Authenticate: Payment`   | Supported                        | Standard challenge emitted through `mppx`                                         |
 | `Authorization: Payment`                   | Supported                        | Credential decoded and verified before admission                                  |
 | `Payment-Receipt`                          | Supported                        | Added after successful authorization/response                                     |
-| Tempo                                      | Supported                        | Native `mppx` charge/session method materialization                               |
+| Tempo                                      | Charge supported                 | Native `mppx` charge; session requires a custom verifier                          |
 | Stripe                                     | Supported                        | Native `mppx` method with Business Network ID                                     |
 | Custom method                              | Supported with verifier          | Application owns signature, amount, recipient, settlement, and payer verification |
 | Lightning descriptor                       | Descriptor only without verifier | Fails closed without an application verifier                                      |
@@ -74,8 +74,7 @@ external settlement.
 - a custom method without a verifier fails closed;
 - method/intent mismatch is a configuration error and does not execute the
   entrypoint;
-- native session-management responses can bypass the application handler while
-  retaining their protocol receipt;
+- custom session methods require application-owned verification and settlement;
 - unknown external settlement outcomes require provider reconciliation before
   a retry.
 

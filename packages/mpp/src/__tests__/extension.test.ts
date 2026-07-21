@@ -11,10 +11,10 @@ import type {
   MppRuntime,
 } from '@lucid-agents/types/mpp';
 import { describe, expect, it } from 'bun:test';
-import { Challenge, Credential, Intent, MethodIntent, z } from 'mppx';
+import { Challenge, Credential, Method, z } from 'mppx';
 
 import { mpp } from '../extension';
-import { stripe } from '../methods';
+import { stripe, tempo } from '../methods';
 
 const paidEntrypoint: EntrypointDef = {
   key: 'paid',
@@ -87,6 +87,22 @@ function authorizedRequest(
       ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
   });
+}
+
+async function expectNativeCredentialRejection(
+  runtime: MppRuntime,
+  requirement: Extract<MppPaymentRequirement, { required: true }>,
+  response: Response
+): Promise<void> {
+  const verification = await runtime.authorize(
+    authorizedRequest(response, {}),
+    paidEntrypoint,
+    'invoke',
+    requirement
+  );
+  expect(verification.authorized).toBe(false);
+  if (verification.authorized) throw new Error('Expected native rejection');
+  expect(verification.response.status).toBe(402);
 }
 
 describe('mpp extension configuration', () => {
@@ -442,7 +458,7 @@ describe('mpp extension configuration', () => {
     expect(verifierCalls).toBe(2);
   });
 
-  it('emits native Stripe challenges with base-unit amounts', async () => {
+  it('emits native Stripe challenges and rejects invalid credentials', async () => {
     const extension = mpp({
       config: {
         methods: [
@@ -459,7 +475,8 @@ describe('mpp extension configuration', () => {
     if (!slice.mpp) throw new Error('Expected MPP runtime');
     slice.mpp.activate(paidEntrypoint);
 
-    const response = await challenge(slice.mpp, required(slice.mpp));
+    const requirement = required(slice.mpp);
+    const response = await challenge(slice.mpp, requirement);
     const paymentChallenge = Challenge.fromResponse(response);
 
     expect(paymentChallenge.method).toBe('stripe');
@@ -468,6 +485,34 @@ describe('mpp extension configuration', () => {
       networkId: 'profile_test',
       paymentMethodTypes: ['card'],
     });
+    await expectNativeCredentialRejection(slice.mpp, requirement, response);
+  });
+
+  it('handles native Tempo charge without initializing a session rail', async () => {
+    const extension = mpp({
+      config: {
+        methods: [
+          tempo.server({
+            currency: '0x20c0000000000000000000000000000000000000',
+            recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+          }),
+        ],
+        currency: 'usd',
+        defaultIntent: 'charge',
+        secretKey: 'challenge-secret',
+      },
+    });
+    const slice = await extension.build(buildContext);
+    if (!slice.mpp) throw new Error('Expected MPP runtime');
+    slice.mpp.activate(paidEntrypoint);
+
+    const requirement = required(slice.mpp);
+    const response = await challenge(slice.mpp, requirement);
+    const paymentChallenge = Challenge.fromResponse(response);
+
+    expect(paymentChallenge.method).toBe('tempo');
+    expect(paymentChallenge.intent).toBe('charge');
+    await expectNativeCredentialRejection(slice.mpp, requirement, response);
   });
 
   it('completes a standard mppx client-to-runtime payment round trip', async () => {
@@ -480,13 +525,19 @@ describe('mpp extension configuration', () => {
     });
     runtime.activate(paidEntrypoint);
     const requirement = required(runtime);
-    const intent = MethodIntent.fromIntent(Intent.charge, {
-      method: 'test',
+    const method = Method.from({
+      name: 'test',
+      intent: 'charge',
       schema: {
         credential: { payload: z.object({ proof: z.string() }) },
+        request: z.object({
+          amount: z.string(),
+          currency: z.string(),
+          expires: z.optional(z.string()),
+        }),
       },
     });
-    const clientMethod = MethodIntent.toClient(intent, {
+    const clientMethod = Method.toClient(method, {
       async createCredential({ challenge: paymentChallenge }) {
         return Credential.serialize({
           challenge: paymentChallenge,

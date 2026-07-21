@@ -15,8 +15,7 @@ import type {
   StripeServerConfig,
   TempoServerConfig,
 } from '@lucid-agents/types/mpp';
-import { Challenge } from 'mppx';
-import type { MethodIntent } from 'mppx';
+import { Challenge, type Method } from 'mppx';
 
 import {
   buildChallengeSet,
@@ -30,7 +29,7 @@ import { decodeMppCredential } from './middleware';
 const MAX_OUTSTANDING_CHALLENGES = 10_000;
 const CONTENT_RESPONSE_MARKER = 'x-lucid-mpp-content-response';
 
-type NativeServerIntent = MethodIntent.AnyServer;
+type NativeServerIntent = Method.AnyServer;
 type RuntimeRail = {
   descriptor: MppServerMethod;
   native?: NativeServerIntent;
@@ -113,10 +112,13 @@ async function materializeRails(config: MppConfig): Promise<{
         decimals: value.decimals ?? 6,
         ...(value.testnet !== undefined ? { testnet: value.testnet } : {}),
       };
-      const nativeMethods = server.tempo(
-        parameters as Parameters<typeof server.tempo>[0]
+      // mppx 0.4 sessions require a signing account that TempoServerConfig does
+      // not expose. Materialize charge explicitly so an unused session rail
+      // cannot make a charge-only merchant fail during startup.
+      const native = server.tempo.charge(
+        parameters as Parameters<typeof server.tempo.charge>[0]
       );
-      for (const native of nativeMethods) rails.push({ descriptor, native });
+      rails.push({ descriptor, native });
       continue;
     }
 
@@ -314,7 +316,7 @@ async function createMppRuntime(
     rails.filter(
       rail =>
         requirement.methods.includes(rail.descriptor.name) &&
-        (!rail.native || rail.native.name === requirement.intent)
+        (!rail.native || rail.native.intent === requirement.intent)
     );
 
   const challengeWithCustomVerifier = (
@@ -349,9 +351,13 @@ async function createMppRuntime(
       realm,
       secretKey,
     });
-    const factory = (payment as unknown as Record<string, unknown>)[
-      requirement.intent
-    ];
+    const paymentMethods = payment as unknown as Record<string, unknown>;
+    const methodHandlers = paymentMethods[rail.descriptor.name];
+    const factory =
+      paymentMethods[requirement.intent] ??
+      (methodHandlers && typeof methodHandlers === 'object'
+        ? (methodHandlers as Record<string, unknown>)[requirement.intent]
+        : undefined);
     if (typeof factory !== 'function') {
       throw new Error(
         `MPP method ${rail.descriptor.name} does not support ${requirement.intent}`
@@ -366,9 +372,6 @@ async function createMppRuntime(
       ).toISOString(),
       ...(requirement.description
         ? { description: requirement.description }
-        : {}),
-      ...(requirement.intent === 'session' && config.session
-        ? config.session
         : {}),
       ...(descriptorConfig.chainId !== undefined
         ? { chainId: descriptorConfig.chainId }
@@ -412,13 +415,13 @@ async function createMppRuntime(
     const entrypointConfig = resolveEntrypointMppConfig(entrypoint);
     const intent = entrypointConfig?.intent ?? config.defaultIntent ?? 'charge';
     const configured = rails
-      .filter(rail => !rail.native || rail.native.name === intent)
+      .filter(rail => !rail.native || rail.native.intent === intent)
       .map(rail => rail.descriptor.name);
     const methods = [...new Set(entrypointConfig?.methods ?? configured)];
     const firstRail = rails.find(
       rail =>
         methods.includes(rail.descriptor.name) &&
-        (!rail.native || rail.native.name === intent)
+        (!rail.native || rail.native.intent === intent)
     );
     const methodCurrency = (
       firstRail?.descriptor.config as { currency?: unknown } | undefined
@@ -479,7 +482,8 @@ async function createMppRuntime(
         ? available.find(
             rail =>
               rail.descriptor.name === credential.challenge.method &&
-              (!rail.native || rail.native.name === credential.challenge.intent)
+              (!rail.native ||
+                rail.native.intent === credential.challenge.intent)
           )
         : available[0];
 

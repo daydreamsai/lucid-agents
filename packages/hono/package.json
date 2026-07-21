@@ -45,7 +45,7 @@
     "@lucid-agents/http": "workspace:*",
     "@lucid-agents/mpp": "workspace:*",
     "@lucid-agents/payments": "workspace:*",
-    "mppx": "^0.1.0",
+    "mppx": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"

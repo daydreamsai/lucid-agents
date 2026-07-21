@@ -7,7 +7,7 @@ authorization gate.
 
 MPP is currently the individual Internet-Draft
 `draft-ryan-httpauth-payment-01`, not an IETF standard. This package uses
-`mppx` 0.1 and implements a Lucid HTTP subset; it does not provide every MPP
+`mppx` 0.4.11 and implements a Lucid HTTP subset; it does not provide every MPP
 transport, discovery mechanism, rail, subscription, or session feature.
 
 ## Built-in payment methods
@@ -41,10 +41,12 @@ const agent = await createAgent({ name: 'merchant', version: '1.0.0' })
   .build();
 ```
 
-`tempo.server()` and `stripe.server()` are materialized as native mppx server
+`tempo.server()` and `stripe.server()` are materialized as native mppx charge
 methods. They validate the echoed HMAC challenge, credential schema, payment,
-and settlement before Lucid runs the entrypoint. Stripe also requires its
-Business Network profile:
+and settlement before Lucid runs the entrypoint. Native Tempo sessions in mppx
+0.4 require a server signing account that Lucid's current `TempoServerConfig`
+does not expose; use a custom method and verifier for session intents. Stripe
+also requires its Business Network profile:
 
 ```ts
 stripe.server({
@@ -130,13 +132,16 @@ for authorization.
   metadata: {
     mpp: {
       intent: 'session',
-      methods: ['tempo'],
+      methods: ['acme-session'],
       description: 'Metered research session',
     },
   },
   handler: async () => ({ output: {} }),
 })
 ```
+
+The `acme-session` descriptor in this example must be configured through
+`custom.server()` with an application verifier as described above.
 
 If x402 and MPP are both installed, every priced entrypoint must select
 `paymentProtocol: 'x402' | 'mpp'`.

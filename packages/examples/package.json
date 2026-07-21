@@ -35,7 +35,7 @@
     "@lucid-agents/wallet": "workspace:*",
     "@lucid-dreams/agent-auth": "^0.2.24",
     "thirdweb": "^5.113.0",
-    "mppx": "^0.1.0",
+    "mppx": "catalog:",
     "viem": "catalog:",
     "zod": "catalog:"
   },

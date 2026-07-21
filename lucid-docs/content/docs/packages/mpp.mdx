@@ -15,7 +15,7 @@ same authorization gate.
 <Callout type="warn">
   MPP is currently the individual Internet-Draft
   `draft-ryan-httpauth-payment-01`, not an IETF standard. This package uses
-  `mppx` 0.1 and implements the documented Tempo, Stripe, and custom-verifier
+  `mppx` 0.4.11 and implements the documented Tempo, Stripe, and custom-verifier
   subset over Lucid HTTP routes; it is not the complete MPP transport,
   discovery, rail, session, or subscription surface.
 </Callout>
@@ -32,7 +32,7 @@ bun add @lucid-agents/mpp @lucid-agents/core @lucid-agents/http
   clean-room Stable npm set. Do not add it to a Stable lockfile yet.
 </Callout>
 
-The package includes mppx. Tempo requires Viem `>=2.44.4`, declared as a peer dependency.
+The package includes mppx. Tempo requires Viem `>=2.47.5`, declared as a peer dependency.
 
 ## Tempo setup
 
@@ -70,7 +70,7 @@ const agent = await createAgent({
   .build();
 ```
 
-`tempo.server()` is materialized as native mppx charge and session methods. mppx verifies the echoed HMAC challenge, credential schema, transaction, amount, recipient, and settlement before Lucid admits the request.
+`tempo.server()` is materialized as a native mppx charge method. mppx verifies the echoed HMAC challenge, credential schema, transaction, amount, recipient, and settlement before Lucid admits the request. Native mppx sessions require a server signing account that Lucid's current `TempoServerConfig` does not expose; use a custom method and verifier for session intents.
 
 Set a stable, high-entropy `MPP_SECRET_KEY` in production. When it is omitted, Lucid generates a new key for each process. Lucid's outstanding-challenge and replay registry is also process-local, so paid retries require sticky routing and do not survive a restart even when the key is configured.
 
@@ -159,7 +159,7 @@ Authorization: Payment <base64url-credential>
 
 Challenge IDs are bounded, expire, bind to the full challenge plus entrypoint and invoke/stream mode, and are consumed before asynchronous verification. Concurrent replay therefore cannot race the verifier. Malformed, unknown, expired, wrong-target, replayed, and rejected credentials fail closed.
 
-A successful application response includes `Payment-Receipt`. Native mppx session management responses, such as channel open or close, bypass the entrypoint handler while retaining their receipt.
+A successful application response includes `Payment-Receipt`.
 
 `decodeMppCredential()` is decode-only. Never treat successful decoding as authorization.
 
@@ -176,7 +176,7 @@ A successful application response includes `Payment-Receipt`. Native mppx sessio
   metadata: {
     mpp: {
       intent: 'session',
-      methods: ['tempo'],
+      methods: ['acme-session'],
       description: 'Metered research session',
     },
   },
@@ -193,6 +193,10 @@ A successful application response includes `Payment-Receipt`. Native mppx sessio
   },
 })
 ```
+
+The `acme-session` descriptor must be configured through `custom.server()` with
+an application verifier. Lucid does not materialize a native Tempo session
+without the server signing account required by mppx 0.4.
 
 Entrypoint metadata may override `intent`, `amount`, `currency`, `methods`, and `description`. The selected method must support the chosen intent; otherwise authorization returns a configuration error without executing the entrypoint.
 

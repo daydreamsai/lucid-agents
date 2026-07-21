@@ -36,13 +36,13 @@
   },
   "dependencies": {
     "@lucid-agents/types": "workspace:*",
-    "mppx": "^0.1.0"
+    "mppx": "catalog:"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "viem": ">=2.44.4"
+    "viem": ">=2.47.5"
   }
 }
