@@ -33,6 +33,16 @@ describe('workspace package build ordering', () => {
     ).toBeDefined();
   });
 
+  it('builds shared types before the CLI in the real workspace graph', () => {
+    const ordered = orderPackagesForBuild(collectPackages()).map(
+      item => item.name
+    );
+
+    expect(ordered.indexOf('@lucid-agents/types')).toBeLessThan(
+      ordered.indexOf('@lucid-agents/cli')
+    );
+  });
+
   it('places runtime dependencies before their consumers', () => {
     const ordered = orderPackagesForBuild([
       pkg('adapter', { core: 'workspace:*' }),
