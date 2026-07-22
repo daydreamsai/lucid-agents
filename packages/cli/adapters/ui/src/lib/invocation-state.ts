@@ -68,7 +68,7 @@ export function invocationReducer(
       return { ...state, payload: event.payload };
     case 'INVALID':
       return {
-        ...state,
+        ...createInvocationState(state.payload),
         phase: 'invalid',
         error: redactInvocationError(event.error),
       };
