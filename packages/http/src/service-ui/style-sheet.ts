@@ -983,5 +983,54 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   [data-service-ui-preset="console"] .contract-output {
     grid-column: 1;
   }
+}
+
+@media (max-width: 767px) {
+  [data-service-ui-preset="console"] .service-page {
+    padding-inline: 14px;
+  }
+
+  [data-service-ui-preset="console"] .offering-rail {
+    padding: 16px 0 24px;
+    border-bottom: 0;
+  }
+
+  [data-service-ui-preset="console"] .offering-rail > .section-label {
+    margin-bottom: 8px;
+  }
+
+  [data-service-ui-preset="console"] .offering-list,
+  [data-service-ui-preset="console"] .offering-rail ul {
+    display: grid;
+    gap: 0;
+    overflow-x: visible;
+  }
+
+  [data-service-ui-preset="console"] .offering-list li,
+  [data-service-ui-preset="console"] .offering-rail li,
+  [data-service-ui-preset="console"] .offering-list li:last-child,
+  [data-service-ui-preset="console"] .offering-rail li:last-child {
+    flex: none;
+    border-top: 1px solid var(--service-border);
+  }
+
+  [data-service-ui-preset="console"] .offering-list li:last-child,
+  [data-service-ui-preset="console"] .offering-rail li:last-child {
+    border-bottom: 1px solid var(--service-border);
+  }
+
+  [data-service-ui-preset="console"] .offering-list button,
+  [data-service-ui-preset="console"] .offering-rail a {
+    min-height: 88px;
+    padding: 14px 12px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-service-ui-preset="console"] .offering-list .is-selected button,
+  [data-service-ui-preset="console"] .offering-rail a[aria-current='page'] {
+    box-shadow: inset 3px 0 0 var(--service-accent);
+  }
 }`,
 };
