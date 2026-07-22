@@ -76,11 +76,6 @@
       "type": "string",
       "description": "Optional application-owned OpenAI API key; Lucid itself does not require a model provider.",
       "default": ""
-    },
-    "NEXT_PUBLIC_PROJECT_ID": {
-      "type": "string",
-      "description": "Optional WalletConnect project ID for application UI code. Values with NEXT_PUBLIC_ prefixes are browser-visible.",
-      "default": ""
     }
   },
   "required": ["AGENT_NAME", "AGENT_DESCRIPTION", "AGENT_VERSION"]

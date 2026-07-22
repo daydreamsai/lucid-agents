@@ -14,14 +14,10 @@ entrypoint execution or payment verification into a loader/component.
 
 ## Choose a variant
 
-| Variant             | Includes                                                              | Use when                                                   |
-| ------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `tanstack-ui`       | SSR storefront, schema forms, wallet connection, public service model | Humans need to inspect/test/buy capabilities through a UI  |
-| `tanstack-headless` | API routes and minimal directory page                                 | The service is machine-facing and UI is deployed elsewhere |
-
-The UI wallet belongs to the connected buyer. Seller secrets, database
-credentials, facilitator auth, and server signing authority must remain in
-server-only modules.
+| Variant             | Includes                                                     | Use when                                                   |
+| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `tanstack-ui`       | SSR endpoint table derived from the public service model     | Humans need a quick directory of endpoints and prices      |
+| `tanstack-headless` | API routes and minimal directory page                        | The service is machine-facing and UI is deployed elsewhere |
 
 ## Generate from the Next workspace
 
@@ -88,18 +84,15 @@ assuming portability from the Fetch handler interface.
 
 ## Storefront production checks
 
-The UI renders public Agent Card/service data and can initiate wallet payment.
-Before publishing it:
+The UI renders a read-only subset of public Agent Card/service data. Before
+publishing it:
 
 - validate public origin and `/api/agent` URLs behind the production proxy;
-- show the exact recipient, network, asset, and maximum amount before wallet
-  approval;
-- prevent arbitrary discovered URLs from becoming server-side fetch targets;
-- handle wallet rejection, wrong network, expired challenge, and missing
-  settlement evidence without claiming success;
-- validate output before rendering and encode untrusted content;
-- keep connected-wallet/account data out of analytics by default;
-- make unsupported Solana buyer or protocol combinations visibly unavailable.
+- verify each invoke and stream row uses the canonical external base path;
+- confirm payment method, network, and per-operation price match discovery;
+- check long endpoint paths and descriptions on narrow screens; and
+- confirm the page contains no schemas, raw Agent Card JSON, credentials, or
+  invoke controls.
 
 The storefront is not an AP2 mandate/checkout implementation and the Agent Card
 is not x402 Bazaar publication.

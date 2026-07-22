@@ -489,19 +489,13 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'src/routes/index.tsx'),
       'utf8'
     );
-    const [, storefront, storefrontController, serviceUiConfig] =
-      await Promise.all([
-        readFile(join(projectDir, 'src/lib/service-client.ts'), 'utf8'),
-        readFile(
-          join(projectDir, 'src/components/service-storefront.tsx'),
-          'utf8'
-        ),
-        readFile(
-          join(projectDir, 'src/hooks/use-service-storefront.ts'),
-          'utf8'
-        ),
-        readFile(join(projectDir, 'service-ui.config.ts'), 'utf8'),
-      ]);
+    const [storefront, serviceUiConfig] = await Promise.all([
+      readFile(
+        join(projectDir, 'src/components/service-storefront.tsx'),
+        'utf8'
+      ),
+      readFile(join(projectDir, 'service-ui.config.ts'), 'utf8'),
+    ]);
     const startTypes = await readFile(
       join(projectDir, 'src/tanstack-start.d.ts'),
       'utf8'
@@ -532,10 +526,11 @@ describe('create-agent-kit CLI', () => {
     expect(dashboardRoute).not.toContain('runtime.agent.config.meta');
     expect(serviceUiConfig).toContain('preset: "dossier"');
     expect(storefront).toContain('createServiceUiStyleSheet');
-    expect(storefront).toContain('data-service-ui-mode="interactive"');
-    expect(storefrontController).toContain('useServiceStorefront');
-    expect(storefront).not.toContain('service-monogram');
-    expect(storefront).not.toContain('service-icon');
+    expect(storefront).toContain('data-service-ui-mode="directory"');
+    expect(storefront).toContain('className="endpoint-table"');
+    expect(storefront).toContain('Payment method');
+    expect(storefront).not.toContain('JSON input');
+    expect(storefront).not.toContain('Public Agent Card JSON');
     expect(startTypes).toContain("import type {} from '@tanstack/react-start'");
     await expect(
       readFile(join(projectDir, 'src/routes/about.tsx'), 'utf8')
@@ -546,9 +541,9 @@ describe('create-agent-kit CLI', () => {
     expect(
       Object.prototype.hasOwnProperty.call(deps, '@lucid-agents/tanstack')
     ).toBe(true);
-    expect(deps['@wagmi/connectors']).toBe('6.2.0');
-    expect(deps['@wagmi/core']).toBe('2.22.1');
-    expect(deps['@x402/svm']).toBe('2.2.0');
+    expect(deps['@reown/appkit']).toBeUndefined();
+    expect(deps['wagmi']).toBeUndefined();
+    expect(deps['@x402/fetch']).toBeUndefined();
     expect(deps['@lucid-agents/types']).toBe('latest');
     expect(deps['@tailwindcss/vite']).toBeUndefined();
     expect(devDeps['@tailwindcss/vite']).toBe('^4.1.16');
@@ -685,12 +680,8 @@ describe('create-agent-kit CLI', () => {
       join(projectDir, 'app/api/agent/favicon.svg/route.ts'),
       'utf8'
     );
-    const [, storefront] = await Promise.all([
-      readFile(join(projectDir, 'lib/service-client.ts'), 'utf8'),
-      readFile(join(projectDir, 'components/service-storefront.tsx'), 'utf8'),
-    ]);
-    const appKitProviderSrc = await readFile(
-      join(projectDir, 'components/AppKitProvider.tsx'),
+    const storefront = await readFile(
+      join(projectDir, 'components/service-storefront.tsx'),
       'utf8'
     );
     const pageSrc = await readFile(join(projectDir, 'app/page.tsx'), 'utf8');
@@ -714,15 +705,12 @@ describe('create-agent-kit CLI', () => {
     expect(canonicalOasfRouteSrc).toContain('handlers.oasf(request)');
     expect(landingRouteSrc).toContain('handlers.landing?.(request)');
     expect(faviconRouteSrc).toContain('handlers.favicon(request)');
-    expect(appKitProviderSrc).toContain("projectId: projectId ?? ''");
-    expect(appKitProviderSrc).not.toContain(
-      'NEXT_PUBLIC_PROJECT_ID or NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID is required'
-    );
     expect(pageSrc).toContain('buildServicePageModel');
     expect(pageSrc).toContain('handlers.manifest');
     expect(pageSrc).not.toContain('runtime.manifest');
-    expect(storefront).not.toContain('service-monogram');
-    expect(storefront).not.toContain('service-icon');
+    expect(storefront).toContain('className="endpoint-table"');
+    expect(storefront).toContain('Payment method');
+    expect(storefront).not.toContain('JSON input');
     await expect(
       readFile(join(projectDir, 'proxy.ts'), 'utf8')
     ).rejects.toThrow();
@@ -730,15 +718,15 @@ describe('create-agent-kit CLI', () => {
       readFile(join(projectDir, 'lib/paywall.ts'), 'utf8')
     ).rejects.toThrow();
     expect(pkg.dependencies?.next).toBeDefined();
-    expect(pkg.dependencies?.['@wagmi/connectors']).toBe('6.2.0');
-    expect(pkg.dependencies?.['@wagmi/core']).toBe('2.22.1');
-    expect(pkg.dependencies?.['@x402/svm']).toBe('2.2.0');
+    expect(pkg.dependencies?.['@reown/appkit']).toBeUndefined();
+    expect(pkg.dependencies?.wagmi).toBeUndefined();
+    expect(pkg.dependencies?.['@x402/fetch']).toBeUndefined();
     expect(pkg.dependencies?.['@lucid-agents/types']).toBe('latest');
     expect(pkg.dependencies?.['@x402/next']).toBeUndefined();
     expect(Object.values(pkg.dependencies ?? {})).not.toContain('catalog:');
     expect(Object.values(pkg.dependencies ?? {})).not.toContain('workspace:*');
     expect(envFile).toContain('OPENAI_API_KEY=');
-    expect(envFile).toContain('NEXT_PUBLIC_PROJECT_ID=');
+    expect(envFile).not.toContain('NEXT_PUBLIC_PROJECT_ID=');
   });
 
   it('generates tanstack projects without leftover template tokens', async () => {

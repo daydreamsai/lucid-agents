@@ -41,7 +41,7 @@ async function loadPublicService(origin: string) {
       manifest as Parameters<typeof buildServicePageModel>[0],
       { baseUrl, health: health as ServicePageHealthInput }
     );
-    return { manifest, service: ensureSerializable(service) };
+    return ensureSerializable(service);
   } catch (error) {
     throw new Error(
       `Unable to load the public agent service: ${error instanceof Error ? error.message : String(error)}`
@@ -51,12 +51,6 @@ async function loadPublicService(origin: string) {
 
 export default async function Page() {
   const origin = await getRequestOrigin();
-  const { manifest, service } = await loadPublicService(origin);
-  return (
-    <ServiceStorefront
-      service={service}
-      manifest={manifest}
-      serviceUi={serviceUi}
-    />
-  );
+  const service = await loadPublicService(origin);
+  return <ServiceStorefront service={service} serviceUi={serviceUi} />;
 }

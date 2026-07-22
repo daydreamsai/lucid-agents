@@ -175,7 +175,8 @@ describe('service UI configuration', () => {
     expect(css).toContain(
       '--service-display: "Instrument Serif", "Iowan Old Style", "Georgia", serif;'
     );
-    expect(css).toContain('[data-service-ui-preset="folio"] .service-layout');
+    expect(css).toContain('[data-service-ui-preset="folio"] h1');
+    expect(css).toContain('.endpoint-table');
     expect(css).not.toContain('[data-service-ui-preset="console"]');
     expect(css).not.toContain('gradient(');
   });

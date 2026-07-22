@@ -44,11 +44,10 @@ health, trust, offerings, schemas, examples, modes, security, prices, payment
 and SIWX requirements, skills, task support, endpoints, and extension
 descriptors. It does not accept or expose private runtime configuration.
 
-The default Hono and Express landing page renders the same model as a portable
-service storefront. It is deliberately read-only: the response contains no
-client JavaScript or invoke controls. Every operation includes a schema-derived
-request, cURL example, response contract, price, and protocol handoff so API
-clients can interact without turning the public page into a credential surface.
+The default Hono and Express landing page renders the same model as a minimal,
+portable endpoint directory. It contains no client JavaScript, invoke controls,
+schemas, or raw Agent Card JSON. Every invoke and stream operation appears once
+with its HTTP path, payment method, and price.
 
 ## Service UI configuration
 

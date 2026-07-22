@@ -271,26 +271,27 @@ async function verifyAdapter(
             `${adapter} service page did not render the ${preset} preset marker`
           );
         }
-        const expectedMode =
-          adapter === 'hono' || adapter === 'express'
-            ? 'static'
-            : 'interactive';
+        const expectedMode = 'directory';
         if (!html.includes(`data-service-ui-mode=\"${expectedMode}\"`)) {
           throw new Error(
             `${adapter} service page did not render in ${expectedMode} mode`
           );
         }
-        if (expectedMode === 'static' && /<script(?:\s|>)/iu.test(html)) {
+        if (
+          (adapter === 'hono' || adapter === 'express') &&
+          /<script(?:\s|>)/iu.test(html)
+        ) {
           throw new Error(`${adapter} static service page included JavaScript`);
         }
         if (
-          !html.includes('Lucid Agents CI') ||
           !html.includes('summarize') ||
           !html.includes('attest') ||
-          !html.includes('data-region="raw-card"')
+          !html.includes('Payment method') ||
+          !html.includes('data-region="endpoints"') ||
+          html.includes('Public Agent Card JSON')
         ) {
           throw new Error(
-            `${adapter} ${preset} storefront omitted kitchen-sink information`
+            `${adapter} ${preset} endpoint directory did not match the minimal UI contract`
           );
         }
       } else if (html.includes('data-service-ui-preset=')) {

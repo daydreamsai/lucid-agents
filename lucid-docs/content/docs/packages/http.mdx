@@ -88,11 +88,10 @@ The default idempotency store is bounded and process-local. Multi-instance deplo
 
 ## Public storefront
 
-Hono and Express render the public Agent Card as static, read-only HTML. The
-page contains identity/provider metadata, interfaces, capabilities, endpoints,
-skills, schemas, examples, security, prices, payments, trust, and the raw card.
-It contains no client JavaScript and never invokes an operation from the
-browser.
+Hono and Express render a minimal endpoint directory as static, read-only HTML.
+Each invoke and stream operation appears with its HTTP path, payment method,
+network, and price. The page contains no schemas, raw Agent Card JSON, client
+JavaScript, or browser invocation controls.
 
 UI-capable CLI projects generate a root `service-ui.config.ts`:
 
@@ -111,7 +110,7 @@ export default defineServiceUi({
 Only bounded semantic color/font tokens are supported. Runtime validation
 rejects unknown keys, non-hex colors, unsafe font values/URLs, and primary
 contrast failures. Next and TanStack UI consume the same preset resolver and
-public model while adding their browser interaction controller.
+public model and render the same read-only table.
 
 ## Fetch-native handlers
 

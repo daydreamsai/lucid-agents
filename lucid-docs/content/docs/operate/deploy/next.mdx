@@ -36,7 +36,7 @@ The generated application includes:
 - the main Lucid API under `/api/agent`;
 - thin invoke, stream, task, health, manifest, and landing modules;
 - one server-only runtime/handler module;
-- an optional service storefront and browser wallet UI.
+- an optional read-only endpoint directory.
 
 Do not hand-copy only one route: the set evolves with the runtime contract.
 
@@ -100,11 +100,8 @@ DATABASE_URL=...
 ```
 
 Never prefix signing keys, database credentials, facilitator tokens, or Stripe
-secrets with `NEXT_PUBLIC_`. Only public network/display configuration belongs
-in the browser bundle.
-
-The storefront's connected browser wallet is a buyer/user authority. It must
-not become the seller's server signer or expose server provider credentials.
+secrets with `NEXT_PUBLIC_`. The generated endpoint directory needs no browser
+wallet or payment credentials.
 
 ## Public origin and base paths
 

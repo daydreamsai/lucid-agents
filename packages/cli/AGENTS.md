@@ -12,8 +12,7 @@ framework-specific UI shell.
 - Load the Agent Card and health through public HTTP handler contracts.
 - Do not inspect `runtime.entrypoints`, `runtime.payments`, or
   `runtime.agent.config` from generated pages.
-- Keep reusable components, invocation state, schema helpers, SSE parsing, and
-  task clients in `adapters/ui`.
+- Keep the shared endpoint-table component in `adapters/ui`.
 - Keep only routing, request adaptation, document metadata, and providers in
   Next or TanStack overlays.
 - TanStack headless remains API-only and must not receive the shared UI layer.
@@ -22,8 +21,9 @@ framework-specific UI shell.
   `@lucid-agents/http/service-ui` subpath.
 - Hono and Express storefronts are static/read-only. Do not add browser scripts,
   credential fields, or invoke controls to the portable renderer.
-- React interaction state belongs in `use-service-storefront.ts`; preset
-  components consume the same controller and `ServicePageModel`.
+- Every renderer is read-only and consumes the same `ServicePageModel`. Do not
+  add JSON editors, raw Agent Card dumps, wallet controls, or invoke clients to
+  the generated public page.
 
 ## Testing
 
@@ -31,8 +31,6 @@ When changing generated UI:
 
 ```bash
 bun test packages/cli/tests/cli.test.ts
-bun test packages/cli/tests/service-ui-state.test.ts
-bun test packages/cli/tests/service-ui-client.test.ts
 bun run scripts/test-generated-project.ts next all
 bun run scripts/test-generated-project.ts tanstack-ui console
 ```

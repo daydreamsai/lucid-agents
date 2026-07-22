@@ -24,16 +24,13 @@ async function loadPublicService() {
   if (!manifestResponse.ok) throw new Error('Agent Card unavailable');
   const manifest = await manifestResponse.json();
   const health = healthResponse.ok ? await healthResponse.json() : null;
-  return {
-    manifest,
-    service: buildServicePageModel(
-      manifest as Parameters<typeof buildServicePageModel>[0],
-      {
-        baseUrl,
-        health: health as ServicePageHealthInput,
-      }
-    ),
-  };
+  return buildServicePageModel(
+    manifest as Parameters<typeof buildServicePageModel>[0],
+    {
+      baseUrl,
+      health: health as ServicePageHealthInput,
+    }
+  );
 }
 
 export const Route = createFileRoute('/')({
@@ -42,12 +39,6 @@ export const Route = createFileRoute('/')({
 });
 
 function AgentServicePage() {
-  const { manifest, service } = Route.useLoaderData();
-  return (
-    <ServiceStorefront
-      service={service}
-      manifest={manifest}
-      serviceUi={serviceUi}
-    />
-  );
+  const service = Route.useLoaderData();
+  return <ServiceStorefront service={service} serviceUi={serviceUi} />;
 }

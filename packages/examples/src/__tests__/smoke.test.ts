@@ -85,7 +85,7 @@ describe('Example Smoke Tests', () => {
   });
 
   describe('http/configurable service storefront', () => {
-    it('serves the typed preset as a complete static public surface', async () => {
+    it('serves the typed preset as a minimal endpoint directory', async () => {
       const servicePage = defineServiceUi({ preset: 'folio' });
       const resolved = resolveServiceUi(servicePage);
       expect(resolved.preset).toBe('folio');
@@ -115,11 +115,16 @@ describe('Example Smoke Tests', () => {
       const html = await response.text();
       expect(response.status).toBe(200);
       expect(html).toContain('data-service-ui-preset="folio"');
-      expect(html).toContain('data-service-ui-mode="static"');
+      expect(html).toContain('data-service-ui-mode="directory"');
       expect(html).toContain('Typed configurable storefront smoke test');
       expect(html).toContain('Inspect a public payload');
-      expect(html).toContain('Public service contract');
-      expect(html).toContain('Public Agent Card JSON');
+      expect(html).toContain('class="endpoint-table"');
+      expect(html).toContain('/entrypoints/inspect/invoke');
+      expect(html).toContain('Payment method');
+      expect(html).toContain('Free');
+      expect(html).not.toContain('Public Agent Card JSON');
+      expect(html).not.toContain('Input schema');
+      expect(html).not.toContain('<pre');
       expect(html).not.toContain('<script');
       expect(html).not.toContain('data-action=');
     });

@@ -59,16 +59,16 @@ official A2A v1 transport or task model.
 | `tanstack-headless` | TanStack Start routes without the storefront                                                          |
 | `next`              | Next.js App Router modules plus the shared storefront; there is no standalone Next.js adapter package |
 
-The generated UI is a public service storefront with complete Agent Card
-information parity. Hono and Express emit static documentation with no browser
-runtime. Next and TanStack UI preserve invocation, stream, task, SIWX, x402,
-and MPP interactions. TanStack headless deliberately generates neither the
-storefront nor its config.
+The generated UI is a minimal, read-only endpoint directory. Every invoke and
+stream operation appears in a table with its HTTP path, payment method, and
+price. Detailed schemas and the complete Agent Card remain available from the
+public API rather than being repeated as JSON in the page. TanStack headless
+deliberately generates neither the directory nor its config.
 
 Every UI-capable adapter writes one editable `service-ui.config.ts`. Choose
-`dossier` (the existing dark technical layout), `folio` (light editorial), or
-`console` (dense dark). The file supports only validated semantic color and
-font tokens, keeping all layouts on the shared renderer contract.
+`dossier` (dark mono), `folio` (light editorial), or `console` (compact dark).
+The file supports only validated semantic color and font tokens; all presets
+keep the same endpoint-table layout.
 
 ## Options
 

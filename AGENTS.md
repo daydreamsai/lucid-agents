@@ -69,7 +69,7 @@ The framework supports multiple runtime adapters:
 
 - **Hono** (`@lucid-agents/hono`) - Traditional HTTP server
 - **Express** (`@lucid-agents/express`) - Node.js/Express bridge for the canonical route plan
-- **TanStack Start** (`@lucid-agents/tanstack`) - Full-stack React with dashboard (UI) or API-only (headless)
+- **TanStack Start** (`@lucid-agents/tanstack`) - Full-stack React endpoint directory (UI) or API-only (headless)
 - **Next.js** (CLI adapter template) - App Router modules over the same HTTP handlers
 
 Templates are adapter-agnostic and work with any compatible adapter.
@@ -78,9 +78,10 @@ UI-capable generated projects own one typed root `service-ui.config.ts` with
 the `dossier`, `folio`, or `console` preset and bounded semantic color/font
 tokens. `@lucid-agents/http/service-ui` owns preset validation and shared CSS;
 the HTTP package's model owns all public Agent Card normalization. Hono and
-Express render that model as static read-only HTML, Next and TanStack UI add the
-shared React interaction controller, and TanStack headless sets
-`servicePage: false` without generating UI config.
+Express, Next, and TanStack UI render that model as the same minimal, read-only
+endpoint table with payment method and per-operation price. TanStack headless
+sets `servicePage: false` without generating UI config; richer Agent Card data
+remains available from discovery.
 
 ### Data Flow
 

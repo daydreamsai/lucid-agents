@@ -87,10 +87,10 @@ Hono uses `createAgentApp(runtime)`, while TanStack uses
 `createTanStackRuntime(runtime)` and registers capabilities on its runtime.
 
 Every adapter except `tanstack-headless` writes one typed root
-`service-ui.config.ts`. `dossier` preserves the existing dark technical design,
-`folio` is a light editorial design, and `console` is a dense dark design.
-Users may edit the preset plus validated semantic color/font tokens. Hono and
-Express remain read-only; Next and TanStack UI retain browser invocation.
+`service-ui.config.ts`. `dossier` is dark and monospaced, `folio` is light and
+editorial, and `console` is compact and dark. Users may edit the preset plus
+validated semantic color/font tokens. Every UI-capable adapter renders the same
+read-only endpoint, payment-method, and price table.
 
 ## Stable installation path
 

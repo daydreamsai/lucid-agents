@@ -9,10 +9,10 @@ product: sdk
 ---
 
 Hono, Express, Next.js, and TanStack UI projects render a public **service
-storefront**. It helps a human inspect what a service offers; it is not an
-operations dashboard, marketplace listing, wallet custodian, or substitute for
-a protocol-aware buyer. Hono and Express are static/read-only; Next and
-TanStack UI add browser invocation.
+storefront**. It is a minimal, read-only directory of invoke and stream
+endpoints with payment method and price. It is not an operations dashboard,
+marketplace listing, wallet custodian, API console, or substitute for a
+protocol-aware buyer.
 
 ## Generate the Next workspace surface
 
@@ -36,23 +36,22 @@ canonical entrypoint registry
   → Agent Card + health handlers
     → buildServicePageModel(card, { health, baseUrl })
       → shared ServicePageModel
-        → static Hono/Express HTML
-        → interactive Next/TanStack React
+        → Hono/Express HTML endpoint table
+        → Next/TanStack React endpoint table
 ```
 
 `buildServicePageModel()` from `@lucid-agents/http` accepts only public Agent
-Card and health data. It preserves or derives:
+Card and health data. The model preserves the full public contract, while the
+page deliberately displays only:
 
-- agent name, version, description, provider, and documentation URL;
-- online/degraded/offline/unknown status;
-- registration/signature trust indicators;
-- streaming, task, and extension capability summaries;
-- public card, health, entrypoint, and task endpoints;
-- interfaces, modes, security schemes/requirements, skills, and all public
-  endpoint URIs;
-- payment method/network/payee/endpoint summaries; and
-- per-offering schemas, examples, modes, security, SIWX requirements, prices,
-  and invoke/stream URLs.
+- agent name, version, description, and status;
+- each invoke and stream HTTP path;
+- each operation's payment method and network; and
+- each operation's price, including free operations.
+
+Schemas, examples, trust metadata, capabilities, and the complete Agent Card
+remain available from the public discovery and entrypoint APIs. The page does
+not repeat those documents as raw JSON.
 
 Storefront code must not inspect private runtime config, payment trackers,
 wallet connectors, secrets, internal task records, or adapter-local registries.
@@ -64,9 +63,9 @@ The wizard offers three distinct presets:
 
 | Preset | Design |
 | --- | --- |
-| `dossier` | Existing dark technical dossier with a stable offering rail. |
-| `folio` | Light editorial field guide with expressive display type. |
-| `console` | Dense dark console optimized for scanning contracts. |
+| `dossier` | Dark monospaced endpoint table. |
+| `folio` | Light editorial endpoint table. |
+| `console` | Compact dark endpoint table. |
 
 The generated `service-ui.config.ts` is the only visual configuration surface:
 
@@ -109,9 +108,9 @@ base-path prefix, and return the same schema/price advertised by the card.
 
 ## Protected operations
 
-The storefront can explain that an offering uses x402, MPP, or SIWX. React
-adapters can support generated wallet flows; portable server pages instead
-provide schemas and cURL handoffs with no client JavaScript. It must not:
+The directory can state that an operation uses x402 or MPP and show the
+advertised network and price. Payment and authorization happen through a
+protocol-aware client outside the public page. The page must not:
 
 - expose a server wallet key or facilitator credential to the browser;
 - imply that an unauthenticated `fetch()` can complete a protected operation;
@@ -119,23 +118,20 @@ provide schemas and cURL handoffs with no client JavaScript. It must not:
 - promise usage metering when the operation has a fixed price; or
 - display a registration as proof that an output will be correct.
 
-Browser input, output, task access tokens, and payment credentials should stay
-out of local storage. Apply a strict content-security policy and render model
-output as untrusted content.
+Because the directory has no input or credential controls, it does not retain
+buyer data or task access tokens.
 
 ## Verify the page
 
-1. Add one free and one priced capability with input/output schemas.
-2. Load the storefront on desktop and mobile.
-3. In Next/TanStack, confirm free invoke works and protected invoke shows the
-   correct protocol/price rather than silently failing. In Hono/Express,
-   confirm there are no invoke controls or scripts.
-4. Change a capability price and verify the UI updates from the card without a
+1. Add one free and one priced capability, including a streaming operation.
+2. Load the endpoint directory on desktop and mobile.
+3. Confirm every operation has one row with the correct path, payment method,
+   and price. Confirm there are no invoke controls, schemas, or raw JSON dumps.
+4. Change a capability price and verify the table updates from the card without a
    second hard-coded catalog.
-5. Disable the Lucid task runtime and verify task controls disappear.
-6. Break health deliberately and confirm the status becomes degraded/offline
-   without hiding the public contract.
-7. Run the generated matrix for all three presets and verify the three
+5. Break health deliberately and confirm the status becomes degraded/offline
+   without hiding the endpoint rows.
+6. Run the generated matrix for all three presets and verify the three
    Cloudflare previews when repository credentials are configured.
 
 ## Production boundary

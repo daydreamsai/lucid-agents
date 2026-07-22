@@ -17,7 +17,7 @@ Both adapters expose `createAgentApp(runtimeOrBuilder)` in current stable lines.
 
 ## TanStack Start
 
-Use `createTanStackRuntime(runtimeOrBuilder)`. Generated routes delegate to its handlers. TanStack UI includes the shared interaction controller; headless mode disables the service page.
+Use `createTanStackRuntime(runtimeOrBuilder)`. Generated routes delegate to its handlers. TanStack UI includes the shared read-only endpoint directory; headless mode disables the service page.
 
 ## Next.js
 

@@ -11,9 +11,7 @@ Full-stack React application with:
 - TanStack Router (file-based routing)
 - TanStack Query (data fetching)
 - Tailwind CSS styling
-- Reown AppKit wallet integration
-- Shared agent service storefront
-- Schema forms for testing entrypoints
+- shared read-only endpoint directory
 
 ### Headless Variant (`tanstack/headless/`)
 

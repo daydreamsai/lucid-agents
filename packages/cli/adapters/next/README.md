@@ -5,8 +5,7 @@ contains:
 
 - App Router API modules under `/api/agent`;
 - root A2A/OASF discovery aliases under `/.well-known`;
-- Reown AppKit with Wagmi and Solana adapters;
-- a dashboard for discovery, health, invoke, and stream operations.
+- a minimal endpoint directory derived from public discovery and health data.
 
 ## One runtime contract
 
@@ -25,17 +24,9 @@ same manifest/OASF handlers with the incoming request origin:
 Task modules under `/api/agent/tasks` are usable when the generated agent
 installs `a2a()`.
 
-## Client payments
-
-`lib/api.ts` wraps browser Fetch with SIWX and x402 clients when wallet signers
-are available. That client behavior answers a server challenge; it is not the
-server authorization boundary. Never expose a facilitator secret, Stripe secret,
-or server private key through `NEXT_PUBLIC_*` configuration.
-
 Configure the generated app's server environment, for example:
 
 ```bash
-NEXT_PUBLIC_PROJECT_ID=your_wallet_connect_project_id
 PAYMENTS_RECEIVABLE_ADDRESS=0x...
 NETWORK=base-sepolia
 FACILITATOR_URL=https://facilitator.example
@@ -53,6 +44,5 @@ bun run dev
 - `lib/agent.ts` — generated agent, runtime, and entrypoints
 - `app/api/agent/*` — thin route modules over HTTP handlers
 - `app/.well-known/*` — root discovery compatibility routes
-- `components/dashboard.tsx` — client dashboard using the manifest's entrypoint
-  record and per-operation pricing
-- `lib/api.ts` — browser invoke/stream and wallet wrapper helpers
+- `components/service-storefront.tsx` — read-only endpoint table using the
+  manifest's entrypoint record and per-operation pricing

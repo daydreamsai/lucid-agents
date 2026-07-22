@@ -1,7 +1,6 @@
 import { createRootRoute, HeadContent, Scripts } from '@tanstack/react-router';
 import { resolveServiceUi } from '@lucid-agents/http/service-ui';
 
-import { AppKitProvider } from '../components/AppkitProvider';
 import appCss from '../styles/global.css?url';
 import serviceUi from '../../service-ui.config';
 
@@ -47,7 +46,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AppKitProvider>{children}</AppKitProvider>
+        {children}
         <Scripts />
       </body>
     </html>
