@@ -181,11 +181,14 @@ for index in "${!THEMES[@]}"; do
   fi
 
   "${PWCLI[@]}" --raw eval "() => document.querySelectorAll('.offering-list button')[1]?.click()" >/dev/null
-  URL_AFTER_SELECTION="$("${PWCLI[@]}" --raw eval "() => new URL(location.href).searchParams.get('offering')")"
-  if [[ "$URL_AFTER_SELECTION" != "summarize" ]]; then
-    echo "$THEME offering selection was not written to the URL" >&2
-    exit 1
-  fi
+  URL_AFTER_SELECTION="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ offering: new URL(location.href).searchParams.get('offering') })")"
+  printf '%s\n' "$URL_AFTER_SELECTION" >"react-$THEME-selection.json"
+  THEME="$THEME" bun -e '
+    const theme = Bun.env.THEME;
+    let state = JSON.parse(await Bun.file(`react-${theme}-selection.json`).text());
+    if (typeof state === "string") state = JSON.parse(state);
+    if (state.offering !== "summarize") throw new Error(`${theme} offering selection was not written to the URL`);
+  '
   "${PWCLI[@]}" --raw eval "() => history.back()" >/dev/null
   HISTORY_STATE=""
   for _ in $(seq 1 30); do
