@@ -21,6 +21,22 @@ Use Lucid when a service needs several typed capabilities or shared behavior
 across frameworks. For a single paid route, the upstream payment middleware may
 be the smaller dependency.
 
+## Start with your coding agent
+
+The primary way to work with Lucid is through a coding agent that understands
+the runtime, packages, release channels, and adapter boundaries. Run this from
+your project root before giving the agent its first Lucid task:
+
+```bash
+curl -fsSL https://docs.daydreams.systems/skills/lucid-agents/install.sh | sh
+```
+
+Reload your agent, ask it to use the `lucid-agents` skill, and let it inspect the
+project before editing. The installer verifies the versioned skill archive and
+does not install npm packages or modify application source; see the
+[skill installation guide](https://docs.daydreams.systems/docs/start/agent-skill)
+for the manual checksum flow and removal instructions.
+
 ## Quick start
 
 Requires Bun 1.3+. Runtime packages also support Node.js 20.9+.

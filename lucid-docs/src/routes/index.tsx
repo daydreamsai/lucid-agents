@@ -5,6 +5,9 @@ import paidServiceExample from '../../examples/paid-service.ts?raw';
 import { baseOptions } from '@/lib/layout.shared';
 import { trackDocsEvent } from '@/lib/docs-telemetry';
 
+const skillInstallCommand =
+  'curl -fsSL https://docs.daydreams.systems/skills/lucid-agents/install.sh | sh';
+
 export const Route = createFileRoute('/')({
   component: Home,
 });
@@ -50,6 +53,40 @@ function Home() {
             from the web framework you already use. Qualified Next pages cover
             the newer MPP surface.
           </p>
+          <div className="mx-auto mb-9 max-w-4xl border border-fd-border bg-fd-card text-left">
+            <div className="border-b border-fd-border px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                Start with your coding agent
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(skillInstallCommand);
+                trackDocsEvent({
+                  name: 'skill_install_command_copied',
+                  path: '/',
+                  stage: 'install',
+                });
+              }}
+              className="block w-full cursor-pointer overflow-x-auto px-4 py-4 text-left font-mono text-sm whitespace-nowrap transition-colors hover:bg-fd-accent"
+              title="Copy the Lucid Agents skill installer"
+            >
+              $ {skillInstallCommand}
+            </button>
+            <div className="border-t border-fd-border px-4 py-3 text-sm text-fd-muted-foreground">
+              Run this from your project root, reload your agent, then ask it to
+              use the{' '}
+              <Link
+                to="/docs/$"
+                params={{ _splat: 'start/agent-skill' }}
+                className="underline underline-offset-4 hover:text-fd-foreground"
+              >
+                Lucid Agents skill
+              </Link>
+              .
+            </div>
+          </div>
           <div className="flex flex-col justify-center sm:flex-row">
             <Link
               to="/docs/$"
@@ -73,23 +110,6 @@ function Home() {
               Choose another path
             </Link>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(
-                'bunx @lucid-agents/cli@2.5.0 my-service --adapter=hono'
-              );
-              trackDocsEvent({
-                name: 'scaffold_command_copied',
-                path: '/',
-                stage: 'install',
-              });
-            }}
-            className="mt-7 cursor-pointer font-mono text-sm text-fd-muted-foreground transition-colors hover:text-fd-foreground"
-            title="Copy scaffold command"
-          >
-            $ bunx @lucid-agents/cli@2.5.0 my-service --adapter=hono
-          </button>
         </section>
 
         <section className="grid border-b border-fd-border md:grid-cols-3">

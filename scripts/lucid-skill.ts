@@ -466,6 +466,77 @@ async function copyCurrentAliases(
   );
 }
 
+export function renderSkillInstaller(version: string): string {
+  if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+    throw new Error(`Invalid Lucid skill version: ${version}`);
+  }
+
+  return [
+    '#!/bin/sh',
+    'set -eu',
+    '',
+    `lucid_skill_version='${version}'`,
+    `lucid_skill_base='https://docs.daydreams.systems/skills/lucid-agents/${version}'`,
+    "lucid_skill_stage=''",
+    "lucid_skill_backup=''",
+    'lucid_skill_cleanup() {',
+    '  lucid_skill_status=$?',
+    '  trap - EXIT HUP INT TERM',
+    '  if [ -n "$lucid_skill_backup" ] && [ -e "$lucid_skill_backup" ] && [ ! -e .agents/skills/lucid-agents ]; then',
+    '    mv "$lucid_skill_backup" .agents/skills/lucid-agents',
+    '  fi',
+    '  if [ -n "$lucid_skill_stage" ]; then',
+    '    rm -rf "$lucid_skill_stage"',
+    '  fi',
+    '  exit "$lucid_skill_status"',
+    '}',
+    'trap lucid_skill_cleanup EXIT',
+    "trap 'exit 129' HUP",
+    "trap 'exit 130' INT",
+    "trap 'exit 143' TERM",
+    '',
+    'for lucid_skill_command in curl tar node mktemp; do',
+    '  if ! command -v "$lucid_skill_command" >/dev/null 2>&1; then',
+    '    printf \'Lucid Agents skill installer requires %s.\\n\' "$lucid_skill_command" >&2',
+    '    exit 1',
+    '  fi',
+    'done',
+    'if [ ! -f package.json ]; then',
+    "  printf 'Run the Lucid Agents skill installer from a project root containing package.json.\\n' >&2",
+    '  exit 1',
+    'fi',
+    '',
+    'mkdir -p .agents/skills',
+    'lucid_skill_stage="$(mktemp -d .agents/skills/.lucid-agents-install.XXXXXX)"',
+    'lucid_skill_backup=".agents/skills/.lucid-agents-backup.$$"',
+    'test ! -e "$lucid_skill_backup"',
+    'curl -fsSLo "$lucid_skill_stage/lucid-agents.tar.gz" "$lucid_skill_base/lucid-agents.tar.gz"',
+    'curl -fsSLo "$lucid_skill_stage/lucid-agents.tar.gz.sha256" "$lucid_skill_base/lucid-agents.tar.gz.sha256"',
+    'if command -v shasum >/dev/null 2>&1; then',
+    '  (cd "$lucid_skill_stage" && shasum -a 256 -c lucid-agents.tar.gz.sha256)',
+    'elif command -v sha256sum >/dev/null 2>&1; then',
+    '  (cd "$lucid_skill_stage" && sha256sum -c lucid-agents.tar.gz.sha256)',
+    'else',
+    "  printf 'Lucid Agents skill installer requires shasum or sha256sum.\\n' >&2",
+    '  exit 1',
+    'fi',
+    'mkdir "$lucid_skill_stage/extracted"',
+    'tar -xzf "$lucid_skill_stage/lucid-agents.tar.gz" -C "$lucid_skill_stage/extracted"',
+    'test "$(cat "$lucid_skill_stage/extracted/lucid-agents/VERSION")" = "$lucid_skill_version"',
+    'node "$lucid_skill_stage/extracted/lucid-agents/scripts/inspect-project.mjs" .',
+    'if [ -e .agents/skills/lucid-agents ]; then',
+    '  mv .agents/skills/lucid-agents "$lucid_skill_backup"',
+    'fi',
+    'mv "$lucid_skill_stage/extracted/lucid-agents" .agents/skills/lucid-agents',
+    'rm -rf "$lucid_skill_backup"',
+    'rm -rf "$lucid_skill_stage"',
+    "lucid_skill_stage=''",
+    'trap - EXIT HUP INT TERM',
+    'printf \'Installed Lucid Agents skill %s in .agents/skills/lucid-agents.\\n\' "$lucid_skill_version"',
+    '',
+  ].join('\n');
+}
+
 export async function buildSkillAssets(options: {
   releasesRoot: string;
   outputRoot: string;
@@ -505,6 +576,7 @@ export async function buildSkillAssets(options: {
     }
     const archive = gzipSync(createTar(files), { level: 9, mtime: 0 } as never);
     const archiveHash = sha256(archive);
+    const installer = renderSkillInstaller(version);
     const versionRoot = join(outputRoot, version);
     await mkdir(versionRoot, { recursive: true });
     const manifest = {
@@ -535,6 +607,7 @@ export async function buildSkillAssets(options: {
         join(versionRoot, 'manifest.json'),
         `${JSON.stringify(manifest, null, 2)}\n`
       ),
+      writeFile(join(versionRoot, 'install.sh'), installer),
       ...files.map(async file => {
         const target = join(versionRoot, file.path);
         await mkdir(dirname(target), { recursive: true });
@@ -549,6 +622,7 @@ export async function buildSkillAssets(options: {
     'lucid-agents.tar.gz.sha256',
     'manifest.json',
     'SKILL.md',
+    'install.sh',
   ]);
   const currentFiles = await collectSkillFiles(
     join(releasesRoot, releaseIndex.current)

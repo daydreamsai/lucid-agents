@@ -196,6 +196,8 @@ jobs:
           diff -qr "skill-releases/lucid-agents/$skill_version" "$skill_extract/lucid-agents"
           cmp "$skill_assets/lucid-agents.tar.gz" "$skill_assets/$skill_version/lucid-agents.tar.gz"
           cmp "$skill_assets/manifest.json" "$skill_assets/$skill_version/manifest.json"
+          cmp "$skill_assets/install.sh" "$skill_assets/$skill_version/install.sh"
+          sh -n "$skill_assets/install.sh"
           grep -F "/skills/lucid-agents/$skill_version/*" lucid-docs/public/_headers
       - name: Upload generated skill distribution
         uses: actions/upload-artifact@v4

@@ -9,6 +9,13 @@ describe('documentation telemetry', () => {
     ).toBe(true);
     expect(
       isDocsEvent({
+        name: 'skill_install_command_copied',
+        path: '/',
+        stage: 'install',
+      })
+    ).toBe(true);
+    expect(
+      isDocsEvent({
         name: 'page_view',
         path: '/',
         wallet: '0xsecret',

@@ -159,10 +159,17 @@ describe('Lucid skill distribution', () => {
   });
 
   it('publishes a documented, cache-safe curl installation contract', async () => {
+    const installCommand =
+      'curl -fsSL https://docs.daydreams.systems/skills/lucid-agents/install.sh | sh';
     const page = await readFile(
       join(repoRoot, 'lucid-docs/content/docs/start/agent-skill.mdx'),
       'utf8'
     );
+    const homepage = await readFile(
+      join(repoRoot, 'lucid-docs/src/routes/index.tsx'),
+      'utf8'
+    );
+    const readme = await readFile(join(repoRoot, 'README.md'), 'utf8');
     const navigation = JSON.parse(
       await readFile(
         join(repoRoot, 'lucid-docs/content/docs/start/meta.json'),
@@ -178,6 +185,9 @@ describe('Lucid skill distribution', () => {
     expect(page).toContain(
       'https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz'
     );
+    expect(page).toContain(installCommand);
+    expect(homepage).toContain(installCommand);
+    expect(readme).toContain(installCommand);
     expect(page).toContain('shasum -a 256 -c lucid-agents.tar.gz.sha256');
     expect(page).toContain('set -eu');
     expect(page).toContain('.agents/skills/.lucid-agents-backup.$$');
@@ -248,6 +258,25 @@ describe('Lucid skill distribution', () => {
       expect(await readFile(join(outputA, 'SKILL.md'), 'utf8')).toBe(
         await readFile(join(outputA, '1.0.1', 'SKILL.md'), 'utf8')
       );
+      const installer = await readFile(
+        join(outputA, '1.0.1', 'install.sh'),
+        'utf8'
+      );
+      expect(installer).toBe(
+        await readFile(join(outputB, '1.0.1', 'install.sh'), 'utf8')
+      );
+      expect(installer).toBe(
+        await readFile(join(outputA, 'install.sh'), 'utf8')
+      );
+      expect(installer).toContain(
+        "lucid_skill_base='https://docs.daydreams.systems/skills/lucid-agents/1.0.1'"
+      );
+      expect(installer).toContain('shasum -a 256 -c');
+      expect(installer).toContain('sha256sum -c');
+      const installerSyntax = Bun.spawnSync({
+        cmd: ['sh', '-n', join(outputA, '1.0.1', 'install.sh')],
+      });
+      expect(installerSyntax.exitCode).toBe(0);
 
       const listing = Bun.spawnSync({
         cmd: ['tar', '-tzf', join(outputA, '1.0.1', archiveName)],

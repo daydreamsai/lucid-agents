@@ -2,6 +2,7 @@ const docsEventNames = [
   'page_view',
   'path_selected',
   'scaffold_command_copied',
+  'skill_install_command_copied',
 ] as const;
 
 type DocsEventName = (typeof docsEventNames)[number];
@@ -33,7 +34,9 @@ export function isDocsEvent(value: unknown): value is DocsEvent {
         ? ['seller', 'buyer', 'application'].includes(String(event.stage))
         : event.name === 'scaffold_command_copied'
           ? event.stage === 'install'
-          : false;
+          : event.name === 'skill_install_command_copied'
+            ? event.stage === 'install'
+            : false;
   return (
     typeof event.name === 'string' &&
     docsEventNames.includes(event.name as DocsEventName) &&

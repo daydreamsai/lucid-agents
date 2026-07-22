@@ -4,7 +4,7 @@ description: Give coding agents a versioned, inspectable guide to the Lucid SDK 
 icon: Bot
 status: stable
 verifiedVersion: 1.0.1
-verifiedAt: 2026-07-22
+verifiedAt: 2026-07-23
 product: sdk
 ---
 
@@ -15,9 +15,20 @@ or contact a Lucid service.
 
 ## Install in a project
 
-Run these commands from the project root. They download the current signed-off
-skill archive, verify its SHA-256 digest, and extract it into the portable
-`.agents/skills` directory.
+Run the installer from your project root:
+
+```bash
+curl -fsSL https://docs.daydreams.systems/skills/lucid-agents/install.sh | sh
+```
+
+The installer is pinned to the current signed-off release. It downloads the
+skill archive, verifies its SHA-256 digest, runs the read-only project inspector,
+and atomically installs the skill into the portable `.agents/skills` directory.
+
+## Verify and install manually
+
+Use these expanded commands when your environment prohibits piping a reviewed
+installer into `sh`:
 
 ```bash
 (
