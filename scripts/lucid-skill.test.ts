@@ -25,6 +25,7 @@ import {
 } from './lucid-skill-eval-results';
 
 const repoRoot = resolve(import.meta.dir, '..');
+const nodeInspectorTestTimeout = 15_000;
 
 async function temporaryDirectory(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), prefix));
@@ -42,92 +43,62 @@ async function writePackageJson(
 }
 
 describe('Lucid skill project inspector', () => {
-  it('classifies registry packages and detects the adapter', async () => {
-    const root = await temporaryDirectory('lucid-skill-stable-');
-    try {
-      await writePackageJson(root, {
-        '@lucid-agents/core': '4.1.0',
-        '@lucid-agents/hono': '^1.0.1',
-        '@lucid-agents/http': '3.0.0',
-      });
-
-      const inspection = await inspectLucidProject(root);
-
-      expect(inspection.channel).toBe('stable');
-      expect(inspection.adapters).toEqual(['hono']);
-      expect(inspection.packages).toEqual([
-        { name: '@lucid-agents/core', source: 'registry', version: '4.1.0' },
-        { name: '@lucid-agents/hono', source: 'registry', version: '^1.0.1' },
-        { name: '@lucid-agents/http', source: 'registry', version: '3.0.0' },
-      ]);
-      expect(inspection.blockingWarnings).toEqual([]);
-
-      const bundled = Bun.spawnSync({
-        cmd: [
-          'node',
-          join(
-            repoRoot,
-            '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
-          ),
-          root,
-        ],
-      });
-      expect(bundled.exitCode).toBe(0);
-      expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
-  });
-
-  it('blocks projects that mix local and registry Lucid packages', async () => {
-    const root = await temporaryDirectory('lucid-skill-mixed-');
-    try {
-      await writePackageJson(root, {
-        '@lucid-agents/core': 'workspace:*',
-        '@lucid-agents/http': '3.0.0',
-      });
-
-      const inspection = await inspectLucidProject(root);
-
-      expect(inspection.channel).toBe('mixed');
-      expect(inspection.blockingWarnings).toEqual([
-        'Lucid dependencies mix local/workspace and registry sources. Select one release channel before editing.',
-      ]);
-
-      const bundled = Bun.spawnSync({
-        cmd: [
-          'node',
-          join(
-            repoRoot,
-            '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
-          ),
-          root,
-        ],
-      });
-      expect(bundled.exitCode).toBe(0);
-      expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
-    } finally {
-      await rm(root, { force: true, recursive: true });
-    }
-  });
-
-  it('blocks ambiguous Git, tag, and npm alias dependency sources', async () => {
-    for (const version of [
-      'github:daydreamsai/lucid-agents',
-      'latest',
-      'npm:@lucid-agents/core@4.1.0',
-    ]) {
-      const root = await temporaryDirectory('lucid-skill-ambiguous-');
+  it(
+    'classifies registry packages and detects the adapter',
+    async () => {
+      const root = await temporaryDirectory('lucid-skill-stable-');
       try {
         await writePackageJson(root, {
           '@lucid-agents/core': '4.1.0',
-          '@lucid-agents/http': version,
+          '@lucid-agents/hono': '^1.0.1',
+          '@lucid-agents/http': '3.0.0',
         });
 
         const inspection = await inspectLucidProject(root);
-        expect(inspection.channel).toBe('unknown');
+
+        expect(inspection.channel).toBe('stable');
+        expect(inspection.adapters).toEqual(['hono']);
+        expect(inspection.packages).toEqual([
+          { name: '@lucid-agents/core', source: 'registry', version: '4.1.0' },
+          { name: '@lucid-agents/hono', source: 'registry', version: '^1.0.1' },
+          { name: '@lucid-agents/http', source: 'registry', version: '3.0.0' },
+        ]);
+        expect(inspection.blockingWarnings).toEqual([]);
+
+        const bundled = Bun.spawnSync({
+          cmd: [
+            'node',
+            join(
+              repoRoot,
+              '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
+            ),
+            root,
+          ],
+        });
+        expect(bundled.exitCode).toBe(0);
+        expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    },
+    nodeInspectorTestTimeout
+  );
+
+  it(
+    'blocks projects that mix local and registry Lucid packages',
+    async () => {
+      const root = await temporaryDirectory('lucid-skill-mixed-');
+      try {
+        await writePackageJson(root, {
+          '@lucid-agents/core': 'workspace:*',
+          '@lucid-agents/http': '3.0.0',
+        });
+
+        const inspection = await inspectLucidProject(root);
+
+        expect(inspection.channel).toBe('mixed');
         expect(inspection.blockingWarnings).toEqual([
-          'Lucid dependencies include unsupported or ambiguous sources. Pin registry versions or use one local/workspace channel before editing.',
+          'Lucid dependencies mix local/workspace and registry sources. Select one release channel before editing.',
         ]);
 
         const bundled = Bun.spawnSync({
@@ -145,8 +116,50 @@ describe('Lucid skill project inspector', () => {
       } finally {
         await rm(root, { force: true, recursive: true });
       }
-    }
-  });
+    },
+    nodeInspectorTestTimeout
+  );
+
+  it(
+    'blocks ambiguous Git, tag, and npm alias dependency sources',
+    async () => {
+      for (const version of [
+        'github:daydreamsai/lucid-agents',
+        'latest',
+        'npm:@lucid-agents/core@4.1.0',
+      ]) {
+        const root = await temporaryDirectory('lucid-skill-ambiguous-');
+        try {
+          await writePackageJson(root, {
+            '@lucid-agents/core': '4.1.0',
+            '@lucid-agents/http': version,
+          });
+
+          const inspection = await inspectLucidProject(root);
+          expect(inspection.channel).toBe('unknown');
+          expect(inspection.blockingWarnings).toEqual([
+            'Lucid dependencies include unsupported or ambiguous sources. Pin registry versions or use one local/workspace channel before editing.',
+          ]);
+
+          const bundled = Bun.spawnSync({
+            cmd: [
+              'node',
+              join(
+                repoRoot,
+                '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
+              ),
+              root,
+            ],
+          });
+          expect(bundled.exitCode).toBe(0);
+          expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
+        } finally {
+          await rm(root, { force: true, recursive: true });
+        }
+      }
+    },
+    nodeInspectorTestTimeout
+  );
 });
 
 describe('Lucid skill distribution', () => {
