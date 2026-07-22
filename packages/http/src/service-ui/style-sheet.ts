@@ -80,7 +80,7 @@ summary:focus-visible {
 }
 
 .service-header {
-  padding: 48px 0 36px;
+  padding: 32px 0 24px;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -129,8 +129,8 @@ h3 {
 
 h1 {
   max-width: 920px;
-  margin-top: 12px;
-  font-size: clamp(30px, 4vw, 50px);
+  margin-top: 8px;
+  font-size: clamp(30px, 3.2vw, 44px);
   line-height: 1.05;
   letter-spacing: -0.045em;
 }
@@ -149,9 +149,9 @@ h3 {
 .service-purpose,
 .purpose {
   max-width: 760px;
-  margin: 18px 0 0;
+  margin: 12px 0 0;
   color: var(--service-text-muted);
-  font-size: clamp(15px, 1.5vw, 18px);
+  font-size: clamp(16px, 1.2vw, 17px);
 }
 
 .identity-meta,
@@ -170,6 +170,8 @@ h3 {
 
 .identity-meta,
 .trust-line {
+  gap: 6px 16px;
+  margin-top: 14px;
   color: var(--service-text-muted);
   font: 550 12px/1.4 var(--service-mono);
 }
@@ -769,14 +771,14 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 }
 
 [data-service-ui-preset="folio"] .service-header {
-  padding-block: 72px 48px;
+  padding-block: 40px 28px;
 }
 
 [data-service-ui-preset="folio"] h1 {
   max-width: 1050px;
-  font-size: clamp(44px, 7vw, 86px);
+  font-size: clamp(40px, 5.5vw, 70px);
   font-weight: 500;
-  line-height: 0.96;
+  line-height: 1;
   letter-spacing: -0.04em;
 }
 
@@ -852,7 +854,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px 28px;
-  padding-block: 28px 22px;
+  padding-block: 24px 18px;
 }
 
 [data-service-ui-preset="console"] .service-header h1,
