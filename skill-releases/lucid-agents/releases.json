@@ -1,0 +1,9 @@
+{
+  "current": "1.0.0",
+  "releases": {
+    "1.0.0": {
+      "releasedAt": "2026-07-22",
+      "sourceCommit": "d5d7fc2a96554d42b321b451bb84893f30c3cd90"
+    }
+  }
+}

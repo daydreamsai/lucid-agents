@@ -47,12 +47,17 @@
     "test:e2e": "bun test packages/examples/src/__tests__ packages/examples/src/kitchen-sink/__tests__",
     "test:browser": "bash scripts/test-browser-smoke.sh",
     "test:generated": "bun run scripts/test-generated-project.ts all",
-    "test:docs": "bun test scripts/docs-content.test.ts scripts/docs-drift.test.ts scripts/docs-maintenance.test.ts scripts/docs-snippets.test.ts lucid-docs/src/lib/docs-telemetry.test.ts lucid-docs/examples/paid-service.test.ts && bun run scripts/check-docs-content.ts && bun run docs:drift",
+    "test:docs": "bun test scripts/docs-content.test.ts scripts/docs-drift.test.ts scripts/docs-maintenance.test.ts scripts/docs-snippets.test.ts scripts/lucid-skill.test.ts lucid-docs/src/lib/docs-telemetry.test.ts lucid-docs/examples/paid-service.test.ts && bun run scripts/check-docs-content.ts && bun run docs:drift && bun run skill:validate",
     "test:docs-stable": "bun run scripts/test-docs-stable-quickstart.ts",
     "docs:drift": "bun run scripts/check-docs-drift.ts",
     "docs:links": "bun run scripts/check-docs-external-links.ts",
     "docs:freshness": "bun run scripts/report-docs-freshness.ts",
     "test:portability": "bun run scripts/check-runtime-portability.ts",
+    "skill:assets": "bun run scripts/build-lucid-skill-assets.ts",
+    "skill:eval:prepare": "bun run scripts/prepare-lucid-skill-evals.ts",
+    "skill:release": "bun run scripts/release-lucid-skill.ts",
+    "skill:test": "bun test scripts/lucid-skill.test.ts",
+    "skill:validate": "bun run scripts/validate-lucid-skill.ts",
     "prepare": "husky"
   },
   "dependencies": {

@@ -1,0 +1,91 @@
+---
+title: Install the Lucid Agents skill
+description: Give coding agents a versioned, inspectable guide to the Lucid SDK with one verified curl download.
+icon: Bot
+status: stable
+verifiedVersion: 1.0.0
+verifiedAt: 2026-07-22
+product: sdk
+---
+
+Install the open Lucid Agents skill to give compatible coding agents an
+SDK-specific workflow, focused package references, and a read-only project
+inspector. The skill does not install npm packages, change your project, deploy,
+or contact a Lucid service.
+
+## Install in a project
+
+Run these commands from the project root. They download the current signed-off
+skill archive, verify its SHA-256 digest, and extract it into the portable
+`.agents/skills` directory.
+
+```bash
+mkdir -p .agents/skills
+lucid_skill_tmp="$(mktemp -d)"
+curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz" \
+  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz
+curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz.sha256" \
+  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz.sha256
+(cd "$lucid_skill_tmp" && shasum -a 256 -c lucid-agents.tar.gz.sha256)
+tar -xzf "$lucid_skill_tmp/lucid-agents.tar.gz" -C .agents/skills
+node .agents/skills/lucid-agents/scripts/inspect-project.mjs .
+```
+
+The final command prints JSON only and reads `package.json` plus an optional
+root `service-ui.config.ts`. It classifies registry dependencies as `stable`,
+local or workspace dependencies as `next`, and a mixture as `mixed`. Resolve a
+`mixed` result before asking an agent to modify Lucid code.
+
+Restart or reload your coding agent after installation. Then ask it explicitly:
+
+```text
+Use the lucid-agents skill. Inspect this project first, preserve its installed
+release channel and adapter, implement the requested entrypoint, and report the
+exact checks you ran.
+```
+
+## Pin a skill release
+
+Automation should use the immutable versioned URL:
+
+```bash
+curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.0/lucid-agents.tar.gz
+curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.0/lucid-agents.tar.gz.sha256
+shasum -a 256 -c lucid-agents.tar.gz.sha256
+```
+
+Versioned assets are immutable. The unversioned URLs move only when a reviewed
+skill release becomes current. The machine-readable
+[release manifest](/skills/lucid-agents/manifest.json) records the skill
+version, source commit, archive digest, and digest of every bundled file.
+
+## Inspect before installing
+
+Read the current instruction file without extracting the archive:
+
+```bash
+curl -fsSL https://docs.daydreams.systems/skills/lucid-agents/SKILL.md
+```
+
+The complete source also lives in the Lucid Agents repository under
+`.agents/skills/lucid-agents`. The archive includes its MIT license, version,
+client metadata, project inspector, and focused references. It contains no
+executable install hook; the only bundled script is invoked explicitly with
+Node.js 20 or newer.
+
+## Update or remove
+
+To update, inspect the new manifest and checksum, then repeat the project install
+commands. Commit the `.agents/skills/lucid-agents` directory when teammates and
+CI should use the same skill version.
+
+To remove the skill, delete only `.agents/skills/lucid-agents`. This does not
+alter Lucid dependencies or generated service files.
+
+If your client uses a private global skill directory, extract the same archive
+there according to that client's documentation. Prefer a project-local install
+for reproducibility and reviewability.
+
+Continue with [Build with a coding agent](/docs/start/coding-agent) for a good
+task prompt, or read [Release channels](/docs/reference/release-channels) before
+combining public packages with a local checkout.

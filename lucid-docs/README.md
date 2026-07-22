@@ -238,3 +238,23 @@ The site accepts a bounded first-party documentation event contract. It never
 accepts arbitrary payload fields, wallet addresses, payment credentials, or
 raw search text. Read [Documentation telemetry](./content/docs/reference/docs-telemetry.mdx)
 before changing event collection or retention behavior.
+
+## Public Agent Skill
+
+The canonical Lucid Agents skill lives at `.agents/skills/lucid-agents` in the
+repository root. Immutable source snapshots live under
+`skill-releases/lucid-agents`; generated archives, checksums, manifests, and raw
+files are written to `public/skills/lucid-agents` before every docs build and
+are intentionally gitignored.
+
+Validate the canonical source and snapshot drift with `bun run skill:validate`.
+After changing the skill, increment its `VERSION` and run
+`bun run skill:release`; existing version directories are immutable. Run
+`bun run skill:assets` to preview the exact files the documentation site will
+serve.
+
+Provider-neutral behavioral cases live under `skill-evals/lucid-agents`. Run
+`bun run skill:eval:prepare` to emit one JSONL packet per case, then send those
+packets through each target model and a structured rubric judge. This keeps
+cross-model evaluation reproducible without placing model credentials in the
+repository or coupling the skill release to one provider.

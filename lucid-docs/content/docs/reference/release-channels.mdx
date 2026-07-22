@@ -3,8 +3,8 @@ title: Release channels
 description: Match documentation to public npm packages, this repository, or a separately operated product.
 icon: GitBranch
 status: stable
-verifiedVersion: 2.5.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.1.0
+verifiedAt: 2026-07-22
 product: sdk
 ---
 
@@ -28,28 +28,28 @@ source and manifest in this checkout.
 
 ## Package release table
 
-Registry versions were read from npm on 21 July 2026. “Not published” means the
-package name did not resolve in the public registry on that date.
+Registry versions were read from npm on 22 July 2026.
 
-| Package                   |    Public npm | This repository | How to read its docs                                                   |
-| ------------------------- | ------------: | --------------: | ---------------------------------------------------------------------- |
-| `@lucid-agents/a2a`       |       `0.6.2` |         `0.6.3` | Package page is Next; protocol coverage is partial and version-scoped. |
-| `@lucid-agents/analytics` |       `0.3.2` |         `0.3.3` | Package page is Next.                                                  |
-| `@lucid-agents/ap2`       |       `0.4.2` |         `0.4.3` | Package page is Next; role metadata only.                              |
-| `@lucid-agents/api-sdk`   |       `2.5.0` |         `3.0.0` | Client for the separately operated Hosted Lucid Platform.              |
-| `@lucid-agents/catalog`   | Not published |         `0.2.0` | Repository-only Next package.                                          |
-| `@lucid-agents/cli`       |       `2.5.0` |         `3.0.0` | Stable quickstarts pin `2.5.0`; package page is Next.                  |
-| `@lucid-agents/core`      |       `2.5.0` |         `3.0.0` | Stable quickstarts pin `2.5.0`; package page is Next.                  |
-| `@lucid-agents/express`   |       `0.5.6` |         `0.6.0` | Package page is Next.                                                  |
-| `@lucid-agents/hono`      |       `0.9.6` |        `0.10.0` | Stable quickstart pins `0.9.6`; package page is Next.                  |
-| `@lucid-agents/http`      |      `1.10.2` |        `1.11.0` | Stable quickstart pins `1.10.2`; package page is Next.                 |
-| `@lucid-agents/identity`  |       `2.5.0` |         `3.0.0` | Package page is Next.                                                  |
-| `@lucid-agents/mpp`       | Not published |         `0.2.0` | Repository-only Next package.                                          |
-| `@lucid-agents/payments`  |       `2.5.0` |         `3.0.0` | Stable quickstart pins `2.5.0`; package page is Next.                  |
-| `@lucid-agents/scheduler` |       `0.2.2` |         `0.2.3` | Package page is Next.                                                  |
-| `@lucid-agents/tanstack`  |       `0.7.4` |         `0.8.0` | Package page is Next.                                                  |
-| `@lucid-agents/types`     |       `1.7.0` |         `1.8.0` | Package page is Next.                                                  |
-| `@lucid-agents/wallet`    |       `0.6.2` |         `0.6.3` | Package page is Next.                                                  |
+| Package                   | Public npm | This repository | How to read its docs                                                       |
+| ------------------------- | ---------: | --------------: | -------------------------------------------------------------------------- |
+| `@lucid-agents/a2a`       |    `1.0.1` |         `1.0.1` | Protocol coverage remains version-scoped.                                  |
+| `@lucid-agents/analytics` |    `1.0.1` |         `1.0.1` | Bound analytics over payment tracking.                                     |
+| `@lucid-agents/ap2`       |    `0.4.5` |         `0.4.5` | AP2 extension; check its role and protocol boundaries.                     |
+| `@lucid-agents/api-sdk`   |    `4.1.0` |         `4.1.0` | Client for the separately operated Hosted Lucid Platform.                  |
+| `@lucid-agents/catalog`   |    `1.0.1` |         `1.0.1` | YAML/CSV catalog-driven entrypoints.                                       |
+| `@lucid-agents/cli`       |    `4.1.0` |         `4.1.0` | Current public scaffolder; older tutorials may remain deliberately pinned. |
+| `@lucid-agents/core`      |    `4.1.0` |         `4.1.0` | Typed extension kernel and entrypoint registry.                            |
+| `@lucid-agents/deploy`    |    `0.1.0` |         `0.1.0` | Guarded provider deployment tooling, not a runtime extension.              |
+| `@lucid-agents/express`   |    `1.0.1` |         `1.0.1` | Express adapter for the canonical route plan.                              |
+| `@lucid-agents/hono`      |    `1.0.1` |         `1.0.1` | Hono adapter for the canonical route plan.                                 |
+| `@lucid-agents/http`      |    `3.0.0` |         `3.0.0` | HTTP handlers, authorization, discovery, streaming, and service UI.        |
+| `@lucid-agents/identity`  |    `4.1.0` |         `4.1.0` | ERC-8004 identity and trust.                                               |
+| `@lucid-agents/mpp`       |    `2.0.0` |         `2.0.0` | MPP challenge and credential verification runtime.                         |
+| `@lucid-agents/payments`  |    `4.1.0` |         `4.1.0` | x402, SIWX, policy, settlement, and payment storage.                       |
+| `@lucid-agents/scheduler` |    `0.3.1` |         `0.3.1` | Leased, idempotent scheduled A2A calls.                                    |
+| `@lucid-agents/tanstack`  |    `1.0.1` |         `1.0.1` | TanStack Start runtime and handler adapter.                                |
+| `@lucid-agents/types`     |    `2.1.0` |         `2.1.0` | Canonical shared protocol contracts.                                       |
+| `@lucid-agents/wallet`    |    `0.6.5` |         `0.6.5` | Wallet connectors and runtime.                                             |
 
 The installable Stable seller loop is narrower than the full table. It pins
 CLI, core, HTTP, payments, Hono, and direct x402 buyer dependencies in

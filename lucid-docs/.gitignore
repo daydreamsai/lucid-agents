@@ -9,6 +9,7 @@ node_modules
 /api/
 /server/build
 /public/build
+/public/skills/
 /test-results/
 /playwright-report/
 /blob-report/

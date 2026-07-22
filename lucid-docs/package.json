@@ -4,8 +4,8 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "dev": "bun run ../scripts/build-lucid-skill-assets.ts && vite dev",
+    "build": "bun run ../scripts/build-lucid-skill-assets.ts && vite build",
     "start": "node .output/server/index.mjs",
     "routes:generate": "tsr generate",
     "content:check": "bun run ../scripts/check-docs-content.ts",
