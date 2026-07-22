@@ -248,13 +248,22 @@ files are written to `public/skills/lucid-agents` before every docs build and
 are intentionally gitignored.
 
 Validate the canonical source and snapshot drift with `bun run skill:validate`.
-After changing the skill, increment its `VERSION` and run
-`bun run skill:release`; existing version directories are immutable. Run
-`bun run skill:assets` to preview the exact files the documentation site will
-serve.
+After changing the skill, increment its `VERSION`, commit the canonical skill,
+complete the cross-model evaluation gate, and then run
+`bun run skill:release -- /absolute/path/to/results.json`; the release command
+rejects missing or failing eval results, dirty canonical source, and existing
+version directories. Run `bun run skill:assets` to preview the exact files the
+documentation site will serve.
 
 Provider-neutral behavioral cases live under `skill-evals/lucid-agents`. Run
 `bun run skill:eval:prepare` to emit one JSONL packet per case, then send those
-packets through each target model and a structured rubric judge. This keeps
-cross-model evaluation reproducible without placing model credentials in the
-repository or coupling the skill release to one provider.
+packets through each target model and a structured rubric judge. Store at least
+two models' baseline and skill-assisted scores in one result file, then run
+`bun run skill:eval:validate -- /absolute/path/to/results.json`. The gate
+requires complete case coverage, no critical failures, a 3.0 skill-assisted
+average, no rubric item below 2, and improvement over each non-perfect baseline.
+This keeps cross-model evaluation reproducible without placing model credentials
+in the repository or coupling the skill release to one provider.
+The provider-neutral result shape is documented by
+`skill-evals/lucid-agents/results.schema.json`; rubric cardinality and thresholds
+are enforced by the validator because they depend on each eval case.

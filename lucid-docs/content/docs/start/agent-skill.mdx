@@ -3,7 +3,7 @@ title: Install the Lucid Agents skill
 description: Give coding agents a versioned, inspectable guide to the Lucid SDK with one verified curl download.
 icon: Bot
 status: stable
-verifiedVersion: 1.0.0
+verifiedVersion: 1.0.1
 verifiedAt: 2026-07-22
 product: sdk
 ---
@@ -22,13 +22,27 @@ skill archive, verify its SHA-256 digest, and extract it into the portable
 ```bash
 mkdir -p .agents/skills
 lucid_skill_tmp="$(mktemp -d)"
+trap 'rm -rf "$lucid_skill_tmp"' EXIT
 curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz" \
   https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz
 curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz.sha256" \
   https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz.sha256
 (cd "$lucid_skill_tmp" && shasum -a 256 -c lucid-agents.tar.gz.sha256)
-tar -xzf "$lucid_skill_tmp/lucid-agents.tar.gz" -C .agents/skills
-node .agents/skills/lucid-agents/scripts/inspect-project.mjs .
+mkdir "$lucid_skill_tmp/extracted"
+tar -xzf "$lucid_skill_tmp/lucid-agents.tar.gz" -C "$lucid_skill_tmp/extracted"
+test "$(cat "$lucid_skill_tmp/extracted/lucid-agents/VERSION")" = "1.0.1"
+node "$lucid_skill_tmp/extracted/lucid-agents/scripts/inspect-project.mjs" .
+if [ -e .agents/skills/lucid-agents ]; then
+  mv .agents/skills/lucid-agents "$lucid_skill_tmp/previous"
+fi
+if ! mv "$lucid_skill_tmp/extracted/lucid-agents" .agents/skills/lucid-agents; then
+  if [ -e "$lucid_skill_tmp/previous" ]; then
+    mv "$lucid_skill_tmp/previous" .agents/skills/lucid-agents
+  fi
+  exit 1
+fi
+trap - EXIT
+rm -rf "$lucid_skill_tmp"
 ```
 
 The final command prints JSON only and reads `package.json` plus an optional
@@ -49,8 +63,8 @@ exact checks you ran.
 Automation should use the immutable versioned URL:
 
 ```bash
-curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.0/lucid-agents.tar.gz
-curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.0/lucid-agents.tar.gz.sha256
+curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.1/lucid-agents.tar.gz
+curl -fsSLO https://docs.daydreams.systems/skills/lucid-agents/1.0.1/lucid-agents.tar.gz.sha256
 shasum -a 256 -c lucid-agents.tar.gz.sha256
 ```
 
@@ -76,8 +90,10 @@ Node.js 20 or newer.
 ## Update or remove
 
 To update, inspect the new manifest and checksum, then repeat the project install
-commands. Commit the `.agents/skills/lucid-agents` directory when teammates and
-CI should use the same skill version.
+commands. The temporary extraction and backup prevent removed files from an old
+release surviving the update; a failed final move restores the previous skill.
+Commit the `.agents/skills/lucid-agents` directory when teammates and CI should
+use the same skill version.
 
 To remove the skill, delete only `.agents/skills/lucid-agents`. This does not
 alter Lucid dependencies or generated service files.

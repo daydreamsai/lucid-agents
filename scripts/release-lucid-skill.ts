@@ -3,7 +3,16 @@
 import { cp, lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { validateSkillDirectory } from './lucid-skill';
+import {
+  assertCleanSkillSource,
+  computeSkillTreeDigest,
+  validateSkillDirectory,
+} from './lucid-skill';
+import {
+  type LucidSkillEvalResults,
+  validateLucidSkillEvalResults,
+} from './lucid-skill-eval-results';
+import { prepareLucidSkillEvalPackets } from './prepare-lucid-skill-evals';
 
 const repoRoot = resolve(import.meta.dir, '..');
 const canonicalRoot = resolve(repoRoot, '.agents/skills/lucid-agents');
@@ -18,10 +27,29 @@ const errors = await validateSkillDirectory(canonicalRoot);
 if (errors.length > 0) {
   throw new Error(`Canonical skill is invalid:\n${errors.join('\n')}`);
 }
+const evalResultsPath = process.argv[2];
+if (!evalResultsPath) {
+  throw new Error(
+    'A cross-model result file is required: bun run skill:release -- /absolute/path/to/results.json'
+  );
+}
+const evalPackets = await prepareLucidSkillEvalPackets(repoRoot);
+const evalResults = JSON.parse(
+  await readFile(resolve(evalResultsPath), 'utf8')
+) as LucidSkillEvalResults;
+const evalErrors = validateLucidSkillEvalResults(evalPackets, evalResults);
+if (evalErrors.length > 0) {
+  throw new Error(
+    `Cross-model evaluation gate failed:\n${evalErrors.join('\n')}`
+  );
+}
 
 let index: {
   current: string;
-  releases: Record<string, { releasedAt: string; sourceCommit: string }>;
+  releases: Record<
+    string,
+    { releasedAt: string; sourceCommit: string; treeSha256: string }
+  >;
 };
 try {
   index = JSON.parse(
@@ -32,6 +60,25 @@ try {
 }
 if (index.releases[version]) {
   throw new Error(`Skill release ${version} already exists and is immutable.`);
+}
+const sourceStatus = Bun.spawnSync({
+  cmd: ['git', 'status', '--porcelain', '--', '.agents/skills/lucid-agents'],
+  cwd: repoRoot,
+});
+if (sourceStatus.exitCode !== 0) {
+  throw new Error('Unable to verify the canonical skill Git status.');
+}
+assertCleanSkillSource(sourceStatus.stdout.toString());
+const sourceCommit = Bun.spawnSync({
+  cmd: ['git', 'rev-parse', 'HEAD'],
+  cwd: repoRoot,
+})
+  .stdout.toString()
+  .trim();
+if (!/^[a-f0-9]{40}$/u.test(sourceCommit)) {
+  throw new Error(
+    'Unable to resolve the source commit for this skill release.'
+  );
 }
 try {
   await lstat(target);
@@ -49,15 +96,11 @@ await cp(canonicalRoot, target, {
   recursive: true,
 });
 index.current = version;
-const sourceCommit = Bun.spawnSync({ cmd: ['git', 'rev-parse', 'HEAD'] })
-  .stdout.toString()
-  .trim();
-if (!/^[a-f0-9]{40}$/u.test(sourceCommit)) {
-  throw new Error(
-    'Unable to resolve the source commit for this skill release.'
-  );
-}
-index.releases[version] = { releasedAt, sourceCommit };
+index.releases[version] = {
+  releasedAt,
+  sourceCommit,
+  treeSha256: await computeSkillTreeDigest(target),
+};
 await writeFile(
   resolve(releasesRoot, 'releases.json'),
   `${JSON.stringify(index, null, 2)}\n`,

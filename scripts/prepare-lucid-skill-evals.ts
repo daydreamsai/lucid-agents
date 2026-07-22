@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, readdir } from 'node:fs/promises';
+import { join, relative, resolve, sep } from 'node:path';
 
 type EvalCase = {
   id: string;
@@ -18,6 +18,7 @@ export type LucidSkillEvalPacket = {
     name: 'lucid-agents';
     version: string;
     instructions: string;
+    resources: Record<string, string>;
   };
   case: EvalCase;
   evaluator: {
@@ -38,13 +39,21 @@ export async function prepareLucidSkillEvalPackets(
     skillVersion: string;
     cases: EvalCase[];
   };
-  const instructions = await readFile(
-    resolve(root, '.agents/skills/lucid-agents/SKILL.md'),
-    'utf8'
-  );
-  const version = (
-    await readFile(resolve(root, '.agents/skills/lucid-agents/VERSION'), 'utf8')
-  ).trim();
+  const skillRoot = resolve(root, '.agents/skills/lucid-agents');
+  const resources: Record<string, string> = {};
+  async function loadResources(directory: string): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await loadResources(path);
+      else if (entry.isFile()) {
+        resources[relative(skillRoot, path).split(sep).join('/')] =
+          await readFile(path, 'utf8');
+      }
+    }
+  }
+  await loadResources(skillRoot);
+  const instructions = resources['SKILL.md'];
+  const version = resources.VERSION.trim();
   if (
     evals.schemaVersion !== 1 ||
     evals.skill !== 'lucid-agents' ||
@@ -69,7 +78,7 @@ export async function prepareLucidSkillEvalPackets(
   }
   return evals.cases.map(evalCase => ({
     schemaVersion: 1,
-    skill: { name: 'lucid-agents', version, instructions },
+    skill: { name: 'lucid-agents', version, instructions, resources },
     case: evalCase,
     evaluator: {
       scale: [0, 4],

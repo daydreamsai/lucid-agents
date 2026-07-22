@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  cp,
   mkdtemp,
   mkdir,
   readFile,
@@ -11,11 +12,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import {
+  assertCleanSkillSource,
   buildSkillAssets,
   inspectLucidProject,
   validateSkillDirectory,
+  validateSkillReleaseState,
 } from './lucid-skill';
 import { prepareLucidSkillEvalPackets } from './prepare-lucid-skill-evals';
+import {
+  type LucidSkillEvalResults,
+  validateLucidSkillEvalResults,
+} from './lucid-skill-eval-results';
 
 const repoRoot = resolve(import.meta.dir, '..');
 
@@ -54,6 +61,19 @@ describe('Lucid skill project inspector', () => {
         { name: '@lucid-agents/http', source: 'registry', version: '3.0.0' },
       ]);
       expect(inspection.blockingWarnings).toEqual([]);
+
+      const bundled = Bun.spawnSync({
+        cmd: [
+          'node',
+          join(
+            repoRoot,
+            '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
+          ),
+          root,
+        ],
+      });
+      expect(bundled.exitCode).toBe(0);
+      expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -77,12 +97,49 @@ describe('Lucid skill project inspector', () => {
       await rm(root, { force: true, recursive: true });
     }
   });
+
+  it('blocks ambiguous Git, tag, and npm alias dependency sources', async () => {
+    for (const version of [
+      'github:daydreamsai/lucid-agents',
+      'latest',
+      'npm:@lucid-agents/core@4.1.0',
+    ]) {
+      const root = await temporaryDirectory('lucid-skill-ambiguous-');
+      try {
+        await writePackageJson(root, {
+          '@lucid-agents/core': '4.1.0',
+          '@lucid-agents/http': version,
+        });
+
+        const inspection = await inspectLucidProject(root);
+        expect(inspection.channel).toBe('unknown');
+        expect(inspection.blockingWarnings).toEqual([
+          'Lucid dependencies include unsupported or ambiguous sources. Pin registry versions or use one local/workspace channel before editing.',
+        ]);
+
+        const bundled = Bun.spawnSync({
+          cmd: [
+            'node',
+            join(
+              repoRoot,
+              '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
+            ),
+            root,
+          ],
+        });
+        expect(bundled.exitCode).toBe(0);
+        expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
+      } finally {
+        await rm(root, { force: true, recursive: true });
+      }
+    }
+  });
 });
 
 describe('Lucid skill distribution', () => {
   it('validates the canonical skill and every released snapshot', async () => {
     const canonical = join(repoRoot, '.agents/skills/lucid-agents');
-    const released = join(repoRoot, 'skill-releases/lucid-agents/1.0.0');
+    const released = join(repoRoot, 'skill-releases/lucid-agents/1.0.1');
 
     expect(await validateSkillDirectory(canonical)).toEqual([]);
     expect(await validateSkillDirectory(released)).toEqual([]);
@@ -109,6 +166,7 @@ describe('Lucid skill distribution', () => {
       'https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz'
     );
     expect(page).toContain('shasum -a 256 -c lucid-agents.tar.gz.sha256');
+    expect(page).toContain('lucid_skill_tmp/previous');
     expect(headers).toContain('Access-Control-Allow-Origin: *');
     expect(headers).toContain(
       'Cache-Control: public, max-age=31536000, immutable'
@@ -127,12 +185,12 @@ describe('Lucid skill distribution', () => {
       await buildSkillAssets({ ...options, outputRoot: outputB });
 
       const archiveName = 'lucid-agents.tar.gz';
-      const archiveA = await readFile(join(outputA, '1.0.0', archiveName));
-      const archiveB = await readFile(join(outputB, '1.0.0', archiveName));
+      const archiveA = await readFile(join(outputA, '1.0.1', archiveName));
+      const archiveB = await readFile(join(outputB, '1.0.1', archiveName));
       expect(archiveA.equals(archiveB)).toBe(true);
 
       const manifest = JSON.parse(
-        await readFile(join(outputA, '1.0.0', 'manifest.json'), 'utf8')
+        await readFile(join(outputA, '1.0.1', 'manifest.json'), 'utf8')
       ) as {
         name: string;
         version: string;
@@ -141,7 +199,7 @@ describe('Lucid skill distribution', () => {
         files: Array<{ path: string }>;
       };
       expect(manifest.name).toBe('lucid-agents');
-      expect(manifest.version).toBe('1.0.0');
+      expect(manifest.version).toBe('1.0.1');
       expect(manifest.sourceCommit).toBe(options.sourceCommit);
       expect(manifest.archive.sha256).toMatch(/^[a-f0-9]{64}$/u);
       expect(manifest.files.map(file => file.path)).toContain('SKILL.md');
@@ -150,11 +208,11 @@ describe('Lucid skill distribution', () => {
         await readFile(join(outputA, archiveName + '.sha256'), 'utf8')
       ).toBe(`${manifest.archive.sha256}  ${archiveName}\n`);
       expect(await readFile(join(outputA, 'SKILL.md'), 'utf8')).toBe(
-        await readFile(join(outputA, '1.0.0', 'SKILL.md'), 'utf8')
+        await readFile(join(outputA, '1.0.1', 'SKILL.md'), 'utf8')
       );
 
       const listing = Bun.spawnSync({
-        cmd: ['tar', '-tzf', join(outputA, '1.0.0', archiveName)],
+        cmd: ['tar', '-tzf', join(outputA, '1.0.1', archiveName)],
         stderr: 'pipe',
         stdout: 'pipe',
       });
@@ -167,6 +225,37 @@ describe('Lucid skill distribution', () => {
         rm(outputB, { force: true, recursive: true }),
       ]);
     }
+  });
+
+  it('detects mutation of a historical immutable snapshot', async () => {
+    const releasesRoot = await temporaryDirectory('lucid-skill-history-');
+    try {
+      await cp(join(repoRoot, 'skill-releases/lucid-agents'), releasesRoot, {
+        recursive: true,
+      });
+      await writeFile(
+        join(releasesRoot, '1.0.0', 'references', 'mpp.md'),
+        '\nmutated\n',
+        { flag: 'a' }
+      );
+
+      const errors = await validateSkillReleaseState({
+        canonicalRoot: join(repoRoot, '.agents/skills/lucid-agents'),
+        releasesRoot,
+      });
+      expect(errors).toContain(
+        '1.0.0: immutable snapshot does not match treeSha256.'
+      );
+    } finally {
+      await rm(releasesRoot, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects release provenance from a dirty canonical source', () => {
+    expect(() =>
+      assertCleanSkillSource(' M .agents/skills/lucid-agents/SKILL.md')
+    ).toThrow('Commit canonical Lucid skill changes before cutting a release');
+    expect(() => assertCleanSkillSource('')).not.toThrow();
   });
 
   it('rejects symbolic links in release snapshots', async () => {
@@ -214,11 +303,44 @@ describe('Lucid skill distribution', () => {
         'deployment',
       ])
     );
-    expect(packets.every(packet => packet.skill.version === '1.0.0')).toBe(
+    expect(packets.every(packet => packet.skill.version === '1.0.1')).toBe(
       true
     );
     expect(
       packets.every(packet => packet.skill.instructions.includes('mixed'))
     ).toBe(true);
+    expect(
+      packets.every(
+        packet =>
+          packet.skill.resources['references/mpp.md']?.includes('MPP') &&
+          packet.skill.resources['scripts/inspect-project.mjs']?.includes(
+            'inspectProject'
+          )
+      )
+    ).toBe(true);
+
+    const results: LucidSkillEvalResults = {
+      schemaVersion: 1,
+      skillVersion: '1.0.1',
+      runs: ['model-a', 'model-b'].flatMap(model =>
+        packets.map(packet => ({
+          caseId: packet.case.id,
+          model,
+          baseline: {
+            itemScores: packet.case.rubric.map(() => 2),
+            criticalFailures: [],
+          },
+          withSkill: {
+            itemScores: packet.case.rubric.map(() => 3),
+            criticalFailures: [],
+          },
+        }))
+      ),
+    };
+    expect(validateLucidSkillEvalResults(packets, results)).toEqual([]);
+    results.runs[0].withSkill.criticalFailures.push('unsafe side effect');
+    expect(validateLucidSkillEvalResults(packets, results)).toContain(
+      'model-a/stable-hono-paid-entrypoint: skill run contains a critical failure.'
+    );
   });
 });

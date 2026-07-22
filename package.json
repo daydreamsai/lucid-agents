@@ -55,6 +55,7 @@
     "test:portability": "bun run scripts/check-runtime-portability.ts",
     "skill:assets": "bun run scripts/build-lucid-skill-assets.ts",
     "skill:eval:prepare": "bun run scripts/prepare-lucid-skill-evals.ts",
+    "skill:eval:validate": "bun run scripts/validate-lucid-skill-eval-results.ts",
     "skill:release": "bun run scripts/release-lucid-skill.ts",
     "skill:test": "bun test scripts/lucid-skill.test.ts",
     "skill:validate": "bun run scripts/validate-lucid-skill.ts",

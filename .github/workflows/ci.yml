@@ -165,6 +165,47 @@ jobs:
       - run: bun run build:packages
       - run: bun run test:portability
 
+  skill_integrity:
+    name: Agent Skill integrity and drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Validate canonical, immutable snapshots, and source commits
+        run: bun run skill:validate
+      - name: Test inspector, packaging, install contract, and eval harness
+        run: bun run skill:test
+      - name: Prepare provider-neutral behavioral eval packets
+        run: |
+          mkdir -p reports
+          bun run skill:eval:prepare > reports/lucid-skill-evals.jsonl
+          test "$(wc -l < reports/lucid-skill-evals.jsonl | tr -d ' ')" = "8"
+      - name: Build and verify public skill assets
+        run: |
+          bun run skill:assets
+          skill_version="$(tr -d '\n' < .agents/skills/lucid-agents/VERSION)"
+          skill_assets="lucid-docs/public/skills/lucid-agents"
+          skill_extract="$(mktemp -d)"
+          (cd "$skill_assets/$skill_version" && sha256sum -c lucid-agents.tar.gz.sha256)
+          tar -xzf "$skill_assets/$skill_version/lucid-agents.tar.gz" -C "$skill_extract"
+          diff -qr "skill-releases/lucid-agents/$skill_version" "$skill_extract/lucid-agents"
+          cmp "$skill_assets/lucid-agents.tar.gz" "$skill_assets/$skill_version/lucid-agents.tar.gz"
+          cmp "$skill_assets/manifest.json" "$skill_assets/$skill_version/manifest.json"
+          grep -F "/skills/lucid-agents/$skill_version/*" lucid-docs/public/_headers
+      - name: Upload generated skill distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: lucid-agents-skill-distribution
+          path: |
+            lucid-docs/public/skills/lucid-agents
+            reports/lucid-skill-evals.jsonl
+          if-no-files-found: error
+
   docs:
     name: Documentation contracts and build
     runs-on: ubuntu-latest

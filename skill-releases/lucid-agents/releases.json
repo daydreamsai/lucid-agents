@@ -1,9 +1,15 @@
 {
-  "current": "1.0.0",
+  "current": "1.0.1",
   "releases": {
     "1.0.0": {
       "releasedAt": "2026-07-22",
-      "sourceCommit": "d5d7fc2a96554d42b321b451bb84893f30c3cd90"
+      "sourceCommit": "d5d7fc2a96554d42b321b451bb84893f30c3cd90",
+      "treeSha256": "3eb30203c81ef481481ee9414715a435a66c11a80a70937e4ef123f553126fb2"
+    },
+    "1.0.1": {
+      "releasedAt": "2026-07-22",
+      "sourceCommit": "f9a0e4405cb3b76b9111c46efb5a62753e9c64db",
+      "treeSha256": "140687b11c313b5753e54bf9cd1347d749ea8cb58961602e17c5a30c1f3b62ec"
     }
   }
 }

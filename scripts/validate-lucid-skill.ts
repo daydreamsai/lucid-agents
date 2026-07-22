@@ -8,6 +8,7 @@ const repoRoot = resolve(import.meta.dir, '..');
 const errors = await validateSkillReleaseState({
   canonicalRoot: resolve(repoRoot, '.agents/skills/lucid-agents'),
   releasesRoot: resolve(repoRoot, 'skill-releases/lucid-agents'),
+  repoRoot,
 });
 
 if (errors.length > 0) {

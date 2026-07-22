@@ -33,7 +33,10 @@ export type LucidProjectInspection = {
 
 type ReleaseIndex = {
   current: string;
-  releases: Record<string, { releasedAt: string; sourceCommit?: string }>;
+  releases: Record<
+    string,
+    { releasedAt: string; sourceCommit?: string; treeSha256?: string }
+  >;
 };
 
 type SkillFile = {
@@ -101,18 +104,24 @@ export async function inspectLucidProject(
   const hasLocal = packages.some(item =>
     ['workspace', 'link', 'file'].includes(item.source)
   );
+  const hasAmbiguous = packages.some(item => item.source === 'other');
   const channel =
     packages.length === 0
       ? 'unknown'
-      : hasRegistry && hasLocal
-        ? 'mixed'
-        : hasLocal
-          ? 'next'
-          : hasRegistry
-            ? 'stable'
-            : 'unknown';
-  const blockingWarnings =
-    channel === 'mixed'
+      : hasAmbiguous
+        ? 'unknown'
+        : hasRegistry && hasLocal
+          ? 'mixed'
+          : hasLocal
+            ? 'next'
+            : hasRegistry
+              ? 'stable'
+              : 'unknown';
+  const blockingWarnings = hasAmbiguous
+    ? [
+        'Lucid dependencies include unsupported or ambiguous sources. Pin registry versions or use one local/workspace channel before editing.',
+      ]
+    : channel === 'mixed'
       ? [
           'Lucid dependencies mix local/workspace and registry sources. Select one release channel before editing.',
         ]
@@ -240,9 +249,74 @@ function comparableFiles(files: SkillFile[]): Array<{
   return files.map(file => ({ path: file.path, sha256: sha256(file.bytes) }));
 }
 
+function treeDigest(files: SkillFile[]): string {
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(file.path);
+    hash.update('\0');
+    hash.update(sha256(file.bytes));
+    hash.update('\n');
+  }
+  return hash.digest('hex');
+}
+
+export async function computeSkillTreeDigest(root: string): Promise<string> {
+  return treeDigest(await collectSkillFiles(resolve(root)));
+}
+
+async function computeCommittedSkillTreeDigest(
+  repoRoot: string,
+  sourceCommit: string
+): Promise<string> {
+  const prefix = '.agents/skills/lucid-agents/';
+  const listing = Bun.spawnSync({
+    cmd: [
+      'git',
+      'ls-tree',
+      '-r',
+      '--name-only',
+      sourceCommit,
+      '--',
+      '.agents/skills/lucid-agents',
+    ],
+    cwd: repoRoot,
+  });
+  if (listing.exitCode !== 0) {
+    throw new Error(`Unable to read skill source commit ${sourceCommit}.`);
+  }
+  const paths = listing.stdout.toString().trim().split('\n').filter(Boolean);
+  const files: SkillFile[] = [];
+  for (const gitPath of paths) {
+    const content = Bun.spawnSync({
+      cmd: ['git', 'show', `${sourceCommit}:${gitPath}`],
+      cwd: repoRoot,
+    });
+    if (content.exitCode !== 0 || !gitPath.startsWith(prefix)) {
+      throw new Error(
+        `Unable to read ${gitPath} from skill source commit ${sourceCommit}.`
+      );
+    }
+    files.push({
+      absolutePath: gitPath,
+      path: gitPath.slice(prefix.length),
+      bytes: Buffer.from(content.stdout),
+    });
+  }
+  return treeDigest(files.sort((a, b) => a.path.localeCompare(b.path)));
+}
+
+export function assertCleanSkillSource(statusOutput: string): void {
+  if (statusOutput.trim()) {
+    throw new Error(
+      'Commit canonical Lucid skill changes before cutting a release so sourceCommit contains the released bytes.'
+    );
+  }
+}
+
 export async function validateSkillReleaseState(options: {
   canonicalRoot: string;
   releasesRoot: string;
+  repoRoot?: string;
 }): Promise<string[]> {
   const errors = await validateSkillDirectory(options.canonicalRoot);
   const index = JSON.parse(
@@ -265,10 +339,32 @@ export async function validateSkillReleaseState(options: {
     if (!/^[a-f0-9]{40}$/u.test(index.releases[release].sourceCommit ?? '')) {
       errors.push(`${release}: sourceCommit must be a full lowercase Git SHA.`);
     }
+    const releaseRoot = join(options.releasesRoot, release);
+    const expectedTree = index.releases[release].treeSha256;
+    if (!/^[a-f0-9]{64}$/u.test(expectedTree ?? '')) {
+      errors.push(`${release}: treeSha256 must be a lowercase SHA-256 digest.`);
+    } else if ((await computeSkillTreeDigest(releaseRoot)) !== expectedTree) {
+      errors.push(`${release}: immutable snapshot does not match treeSha256.`);
+    }
+    if (options.repoRoot && index.releases[release].sourceCommit) {
+      try {
+        const committedTree = await computeCommittedSkillTreeDigest(
+          options.repoRoot,
+          index.releases[release].sourceCommit
+        );
+        if (committedTree !== expectedTree) {
+          errors.push(
+            `${release}: sourceCommit does not contain the recorded immutable snapshot.`
+          );
+        }
+      } catch (error) {
+        errors.push(`${release}: ${(error as Error).message}`);
+      }
+    }
     errors.push(
-      ...(
-        await validateSkillDirectory(join(options.releasesRoot, release))
-      ).map(error => `${release}: ${error}`)
+      ...(await validateSkillDirectory(releaseRoot)).map(
+        error => `${release}: ${error}`
+      )
     );
   }
   if (index.releases[index.current]) {
@@ -375,6 +471,11 @@ export async function buildSkillAssets(options: {
     }
     const skillRoot = join(releasesRoot, version);
     const files = await collectSkillFiles(skillRoot);
+    if (treeDigest(files) !== releaseIndex.releases[version].treeSha256) {
+      throw new Error(
+        `Immutable Lucid skill release ${version} does not match its recorded treeSha256.`
+      );
+    }
     const validationErrors = await validateSkillDirectory(skillRoot);
     if (validationErrors.length > 0) {
       throw new Error(
