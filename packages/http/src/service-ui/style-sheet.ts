@@ -57,8 +57,12 @@ a:focus-visible,
 textarea:focus-visible,
 input:focus-visible,
 summary:focus-visible {
-  outline: 3px solid var(--service-accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--service-accent);
+  outline-offset: 2px;
+}
+
+[tabindex='-1']:focus-visible {
+  outline: none;
 }
 
 .service-page {
@@ -93,6 +97,12 @@ summary:focus-visible {
   text-transform: uppercase;
 }
 
+.code-caption {
+  margin: 16px 0 0;
+  color: var(--service-text-muted);
+  font: 550 12px/1.4 var(--service-mono);
+}
+
 .status-dot {
   display: inline-block;
   width: 8px;
@@ -109,14 +119,33 @@ summary:focus-visible {
 }
 
 .status-degraded,
-.state-payment .state-indicator {
+.state-payment .state-indicator,
+.state-authorization .state-indicator,
+.state-network-mismatch .state-indicator {
   background: var(--service-warning);
 }
 
 .status-offline,
-.state-error .state-indicator,
+.state-recoverable-error .state-indicator,
 .state-invalid .state-indicator {
   background: var(--service-danger);
+}
+
+.state-running .state-indicator,
+.state-preparing .state-indicator {
+  background: var(--service-accent);
+}
+
+.state-running .state-indicator,
+.state-preparing .state-indicator,
+.state-partial .state-indicator {
+  animation: service-pulse 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes service-pulse {
+  to {
+    opacity: 0.35;
+  }
 }
 
 h1,
@@ -162,7 +191,7 @@ h3 {
 .mode-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 18px;
+  gap: 8px 16px;
   margin: 20px 0 0;
   padding: 0;
   list-style: none;
@@ -170,8 +199,8 @@ h3 {
 
 .identity-meta,
 .trust-line {
-  gap: 6px 16px;
-  margin-top: 14px;
+  gap: 8px 16px;
+  margin-top: 16px;
   color: var(--service-text-muted);
   font: 550 12px/1.4 var(--service-mono);
 }
@@ -223,8 +252,7 @@ h3 {
 .offering-rail a {
   display: grid;
   width: 100%;
-  min-height: 92px;
-  gap: 7px;
+  gap: 8px;
   padding: 16px 12px;
   border: 0;
   background: transparent;
@@ -232,6 +260,10 @@ h3 {
   cursor: pointer;
   text-align: left;
   text-decoration: none;
+}
+
+.offering-list button:active {
+  background: var(--service-surface-raised);
 }
 
 .offering-list .is-selected button,
@@ -263,13 +295,13 @@ h3 {
 }
 
 .workspaces {
-  padding: 32px 0 52px 38px;
+  padding: 32px 0 52px 40px;
 }
 
 .workspace,
 .offering-workspace {
   min-width: 0;
-  padding-bottom: 50px;
+  padding-bottom: 48px;
   scroll-margin-top: 28px;
 }
 
@@ -278,36 +310,28 @@ h3 {
   border-top: 1px solid var(--service-border);
 }
 
-.workspace-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 28px;
-}
-
 .workspace-header h2 {
-  margin-top: 7px;
+  margin-top: 8px;
 }
 
 .workspace-header p {
   max-width: 660px;
-  margin: 10px 0 0;
+  margin: 12px 0 0;
   color: var(--service-text-muted);
 }
 
 .operation-facts,
 .facts {
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 7px;
-  margin-top: 0;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .operation-facts span,
 .facts span,
 .tag-list li,
 .mode-list li {
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--service-border);
   border-radius: 4px;
   font: 600 12px/1.2 var(--service-mono);
@@ -319,7 +343,7 @@ h3 {
 .run-state,
 .integration-section,
 .contract-block {
-  margin-top: 26px;
+  margin-top: 24px;
 }
 
 .section-heading-row,
@@ -345,8 +369,8 @@ pre,
 }
 
 textarea {
-  min-height: 190px;
-  margin-top: 11px;
+  min-height: 192px;
+  margin-top: 12px;
   padding: 16px;
   resize: vertical;
 }
@@ -356,21 +380,16 @@ pre,
   margin: 12px 0 0;
   padding: 16px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 code {
   font-family: var(--service-mono);
   overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 a {
   overflow-wrap: anywhere;
-}
-
-a:visited {
-  color: var(--service-text);
 }
 
 .service-header a,
@@ -388,7 +407,7 @@ a:visited {
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 .protected-note,
@@ -397,14 +416,14 @@ a:visited {
 .detail-card,
 .empty-state,
 .empty {
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--service-border);
   border-radius: 4px;
   background: var(--service-surface);
 }
 
 .protected-note {
-  margin-top: 18px;
+  margin-top: 16px;
 }
 
 .protected-note p,
@@ -412,8 +431,18 @@ a:visited {
 .run-placeholder,
 .empty-state,
 .empty {
-  margin-block: 5px 0;
+  margin-block: 4px 0;
   color: var(--service-text-muted);
+}
+
+.example-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--service-text-muted);
+  font: 13px/1.5 var(--service-mono);
 }
 
 .credential-field {
@@ -424,7 +453,7 @@ a:visited {
 
 .credential-field input {
   min-height: 44px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--service-border);
   border-radius: 4px;
   background: var(--service-code);
@@ -434,7 +463,7 @@ a:visited {
 .run-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   margin: 20px 0;
 }
 
@@ -450,8 +479,13 @@ a:visited {
 
 .primary-button,
 .secondary-button {
-  padding: 10px 18px;
+  padding: 8px 16px;
   border-radius: 4px;
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    filter 140ms ease,
+    background-color 140ms ease,
+    opacity 140ms ease;
 }
 
 .primary-button {
@@ -461,9 +495,20 @@ a:visited {
 }
 
 .secondary-button {
-  border: 1px solid var(--service-text);
+  border: 1px solid var(--service-border);
   background: transparent;
   color: var(--service-text);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .text-button,
@@ -473,6 +518,12 @@ a:visited {
   border: 0;
   background: transparent;
   color: var(--service-accent);
+}
+
+.text-button:active,
+.mobile-back:active,
+.integration-toggle:active {
+  opacity: 0.7;
 }
 
 .integration-toggle {
@@ -512,13 +563,13 @@ a:visited {
 }
 
 details {
-  margin-top: 18px;
+  margin-top: 16px;
   border-top: 1px solid var(--service-border);
 }
 
 summary {
   min-height: 48px;
-  padding-top: 14px;
+  padding-top: 16px;
   cursor: pointer;
   font-weight: 750;
 }
@@ -539,7 +590,7 @@ summary {
 
 .detail-card h3 {
   margin-bottom: 0;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -574,7 +625,7 @@ summary {
   justify-content: space-between;
   align-items: flex-start;
   min-height: 52px;
-  gap: 18px;
+  gap: 16px;
   padding: 4px 0;
   border-bottom: 1px solid var(--service-border);
 }
@@ -591,12 +642,18 @@ summary {
   overflow-wrap: anywhere;
 }
 
+.detail-list dd a,
+.detail-list dd code {
+  font-family: var(--service-mono);
+  font-size: 13px;
+}
+
 .capability-list > li > span {
   min-width: 0;
 }
 
 .raw-card {
-  padding: 42px 0;
+  padding: 40px 0;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -616,50 +673,34 @@ footer {
     background: var(--service-surface-raised);
   }
 
-  .primary-button:hover,
-  .secondary-button:hover {
-    transform: translateY(-1px);
+  .primary-button:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .secondary-button:hover:not(:disabled) {
+    background: var(--service-surface-raised);
   }
 }
 
 @media (max-width: 767px) {
   .service-page {
-    padding-inline: 22px;
+    padding-inline: 16px;
   }
 
-  .service-layout,
   .service-details,
   .schema-grid,
   .contract-grid,
   .detail-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .offering-rail {
-    position: static !important;
     padding-right: 0;
-    border-right: 0 !important;
     border-bottom: 1px solid var(--service-border);
   }
 
   .workspaces {
     padding-left: 0;
-  }
-
-  .workspace-header {
-    display: block;
-  }
-
-  .operation-facts,
-  .facts {
-    justify-content: flex-start;
-    margin-top: 16px;
-  }
-}
-
-@media (max-width: 767px) {
-  .service-page {
-    padding-inline: 18px;
   }
 
   [data-service-ui-mode='interactive'] .service-layout.show-mobile-list .offering-workspace,
@@ -677,13 +718,6 @@ footer {
     margin-bottom: 20px;
   }
 
-  .service-details,
-  .schema-grid,
-  .contract-grid,
-  .detail-grid {
-    display: grid;
-  }
-
   .service-details > .detail-card:last-child .capability-list {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -695,16 +729,12 @@ footer {
 }
 
 @media (max-width: 480px) {
-  .service-page {
-    padding-inline: 14px;
-  }
-
   .run-actions {
     position: sticky;
     z-index: 3;
     bottom: 0;
-    margin-inline: -14px;
-    padding: 12px 14px;
+    margin-inline: -16px;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     border-block: 1px solid var(--service-border);
     background: var(--service-canvas);
   }
@@ -714,8 +744,8 @@ footer {
   }
 
   textarea {
-    margin-inline: -14px;
-    width: calc(100% + 28px);
+    margin-inline: -16px;
+    width: calc(100% + 32px);
     border-inline: 0;
     border-radius: 0;
   }
@@ -727,6 +757,7 @@ footer {
   *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }`;
@@ -736,15 +767,22 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   font-family: var(--service-mono);
 }
 
-[data-service-ui-preset="dossier"] .service-layout {
-  grid-template-columns: 320px minmax(0, 1fr);
+[data-service-ui-preset="dossier"] h1,
+[data-service-ui-preset="dossier"] h2 {
+  letter-spacing: -0.01em;
 }
 
-[data-service-ui-preset="dossier"] .offering-rail {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  border-right: 1px solid var(--service-border);
+@media (min-width: 768px) {
+  [data-service-ui-preset="dossier"] .service-layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  [data-service-ui-preset="dossier"] .offering-rail {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    border-right: 1px solid var(--service-border);
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
@@ -782,17 +820,22 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   letter-spacing: -0.04em;
 }
 
-[data-service-ui-preset="folio"] .service-layout {
-  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.7fr);
-  gap: 28px;
-  padding-block: 28px;
+[data-service-ui-preset="folio"] .offering-rail {
+  padding: 0;
 }
 
-[data-service-ui-preset="folio"] .offering-rail {
-  position: sticky;
-  top: 24px;
-  align-self: start;
-  padding: 0;
+@media (min-width: 768px) {
+  [data-service-ui-preset="folio"] .service-layout {
+    grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.7fr);
+    gap: 28px;
+    padding-block: 28px;
+  }
+
+  [data-service-ui-preset="folio"] .offering-rail {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+  }
 }
 
 [data-service-ui-preset="folio"] .offering-list,
@@ -830,7 +873,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="folio"] .workspace,
 [data-service-ui-preset="folio"] .offering-workspace {
-  padding: 0 0 42px 28px;
+  padding: 0 0 40px 28px;
   border: 0;
   border-left: 1px solid var(--service-border);
   border-radius: 0;
@@ -846,7 +889,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 @media (min-width: 768px) and (max-width: 1199px) {
   [data-service-ui-preset="folio"] .service-layout {
     grid-template-columns: minmax(220px, 0.62fr) minmax(0, 1.7fr);
-    gap: 22px;
+    gap: 24px;
   }
 }
 
@@ -868,17 +911,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 }
 
 [data-service-ui-preset="console"] .service-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 28px;
-  padding-block: 24px 18px;
-}
-
-[data-service-ui-preset="console"] .service-header h1,
-[data-service-ui-preset="console"] .service-header .service-purpose,
-[data-service-ui-preset="console"] .service-header .purpose,
-[data-service-ui-preset="console"] .service-header .trust-line {
-  grid-column: 1;
+  padding-block: 24px 16px;
 }
 
 [data-service-ui-preset="console"] .service-layout {
@@ -889,13 +922,13 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   position: sticky;
   z-index: 4;
   top: 0;
-  padding: 14px 0;
+  padding: 16px 0;
   border-bottom: 1px solid var(--service-border);
   background: var(--service-canvas);
 }
 
 [data-service-ui-preset="console"] .offering-rail > .section-label {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 [data-service-ui-preset="console"] .offering-list,
@@ -915,7 +948,8 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="console"] .offering-list button,
 [data-service-ui-preset="console"] .offering-rail a {
-  min-height: 74px;
+  height: 100%;
+  grid-template-rows: auto 1fr auto;
   border: 1px solid var(--service-border);
   border-radius: 4px;
   background: var(--service-surface);
@@ -949,9 +983,8 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   [data-service-ui-preset="console"] .offering-list button,
   [data-service-ui-preset="console"] .offering-rail a {
     height: 100%;
-    min-height: 124px;
-    gap: 5px;
-    padding: 12px 10px;
+    gap: 4px;
+    padding: 12px;
     border: 0;
     border-block: 1px solid var(--service-border);
     border-radius: 0;
@@ -966,15 +999,15 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 }
 
 [data-service-ui-preset="console"] .workspaces {
-  padding: 26px 0 44px;
+  padding: 24px 0 44px;
 }
 
-[data-service-ui-preset="console"] .workspace,
-[data-service-ui-preset="console"] .offering-workspace {
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .workspace,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .offering-workspace {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 0 22px;
+  gap: 0 24px;
 }
 
 [data-service-ui-preset="console"] textarea {
@@ -989,44 +1022,43 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   min-height: 132px;
 }
 
-[data-service-ui-preset="console"] .workspace-header,
-[data-service-ui-preset="console"] .mobile-back,
-[data-service-ui-preset="console"] .readiness-panel,
-[data-service-ui-preset="console"] .integration-section,
-[data-service-ui-preset="console"] .protected-note,
-[data-service-ui-preset="console"] .tag-list {
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .workspace-header,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .mobile-back,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .readiness-panel,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .integration-section,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .protected-note,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .tag-list {
   grid-column: 1 / -1;
 }
 
-[data-service-ui-preset="console"] .input-section,
-[data-service-ui-preset="console"] .run-actions,
-[data-service-ui-preset="console"] .request-contract {
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .input-section,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .run-actions,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .request-contract {
   grid-column: 1;
 }
 
-[data-service-ui-preset="console"] .run-state,
-[data-service-ui-preset="console"] .contract-output {
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .run-state,
+[data-service-ui-preset="console"][data-service-ui-mode="interactive"] .contract-output {
   grid-column: 2;
 }
 
 @media (max-width: 900px) {
-  [data-service-ui-preset="console"] .service-header,
-  [data-service-ui-preset="console"] .workspace,
-  [data-service-ui-preset="console"] .offering-workspace {
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .workspace,
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .offering-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  [data-service-ui-preset="console"] .input-section,
-  [data-service-ui-preset="console"] .request-contract,
-  [data-service-ui-preset="console"] .run-state,
-  [data-service-ui-preset="console"] .contract-output {
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .input-section,
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .request-contract,
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .run-state,
+  [data-service-ui-preset="console"][data-service-ui-mode="interactive"] .contract-output {
     grid-column: 1;
   }
 }
 
 @media (max-width: 767px) {
   [data-service-ui-preset="console"] .service-page {
-    padding-inline: 14px;
+    padding-inline: 16px;
   }
 
   [data-service-ui-preset="console"] .offering-rail {
@@ -1060,8 +1092,8 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
   [data-service-ui-preset="console"] .offering-list button,
   [data-service-ui-preset="console"] .offering-rail a {
-    min-height: 88px;
-    padding: 14px 12px;
+    height: auto;
+    padding: 16px 12px;
     border: 0;
     border-radius: 0;
     background: transparent;

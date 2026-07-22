@@ -19,6 +19,29 @@ export function offeringPriceLabel(
   return invokePrice ?? streamPrice ?? 'Free';
 }
 
+export function endpointPathLabel(value: string): string {
+  if (value.startsWith('/')) return value;
+  try {
+    const url = new URL(value);
+    return `${url.pathname}${url.search}` || value;
+  } catch {
+    return value;
+  }
+}
+
+const FACT_TAGS = new Set(['free', 'paid', 'invoke', 'stream']);
+
+export function visibleOfferingTags(
+  tags: string[] | undefined,
+  protocol?: string,
+  network?: string
+): string[] {
+  const facts = new Set(FACT_TAGS);
+  if (protocol) facts.add(protocol.toLowerCase());
+  if (network) facts.add(network.toLowerCase());
+  return (tags ?? []).filter(tag => !facts.has(tag.trim().toLowerCase()));
+}
+
 export function integrationSnippet(
   url: string,
   payload: string,

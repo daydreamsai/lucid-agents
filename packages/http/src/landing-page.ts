@@ -35,6 +35,31 @@ function priceLabel(offering: ServicePageOffering): string {
   return invoke ?? stream ?? 'Free';
 }
 
+function endpointPathLabel(value: string): string {
+  if (value.startsWith('/')) return value;
+  try {
+    const url = new URL(value);
+    return `${url.pathname}${url.search}` || value;
+  } catch {
+    return value;
+  }
+}
+
+const FACT_TAGS = new Set(['free', 'paid', 'invoke', 'stream']);
+
+function visibleTags(offering: ServicePageOffering): string[] {
+  const facts = new Set(FACT_TAGS);
+  if (offering.payment.protocol) {
+    facts.add(offering.payment.protocol.toLowerCase());
+  }
+  if (offering.payment.network) {
+    facts.add(offering.payment.network.toLowerCase());
+  }
+  return (offering.tags ?? []).filter(
+    tag => !facts.has(tag.trim().toLowerCase())
+  );
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/gu, `'"'"'`)}'`;
 }
@@ -100,7 +125,7 @@ function endpointRows(
       ([key, value]) =>
         html`<div>
           <dt>${labels[key] ?? key}</dt>
-          <dd>${linkOrText(value, 'Open')}</dd>
+          <dd>${linkOrText(value, endpointPathLabel(value))}</dd>
         </div>`
     );
 }
@@ -143,6 +168,7 @@ function offeringArticle(
 ): HtmlTemplate {
   const protectedOperation =
     offering.payment.required || offering.authorization?.siwx.enabled === true;
+  const tags = visibleTags(offering);
   return html`<article
     class="workspace offering-workspace"
     id="offering-${offering.key}"
@@ -153,9 +179,9 @@ function offeringArticle(
         <div class="section-label">Offering ${index + 1}</div>
         <h2>${offering.title}</h2>
         <p>${offering.description}</p>
-        ${offering.tags?.length
+        ${tags.length
           ? html`<ul class="tag-list" aria-label="Offering tags">
-              ${offering.tags.map(tag => html`<li>${tag}</li>`)}
+              ${tags.map(tag => html`<li>${tag}</li>`)}
             </ul>`
           : ''}
       </div>
@@ -193,9 +219,9 @@ function offeringArticle(
           >
         </p>
         <pre>${examplePayload(offering)}</pre>
-        <div class="section-label">cURL</div>
+        <div class="code-caption">cURL</div>
         <pre>${curlSnippet(offering)}</pre>
-        <div class="section-label">Input schema</div>
+        <div class="code-caption">Input schema</div>
         <pre>${pretty(offering.inputSchema ?? { type: 'object' })}</pre>
       </section>
 
@@ -211,7 +237,7 @@ function offeringArticle(
             </p>`
           : ''}
         ${offering.inputModes?.length || offering.outputModes?.length
-          ? html`<div class="section-label">Content modes</div>
+          ? html`<div class="code-caption">Content modes</div>
               <ul class="mode-list">
                 ${offering.inputModes?.map(mode => html`<li>In: ${mode}</li>`)}
                 ${offering.outputModes?.map(
@@ -220,13 +246,13 @@ function offeringArticle(
               </ul>`
           : ''}
         ${offering.examples?.length
-          ? html`<div class="section-label">Examples</div>
-              <ul>
+          ? html`<div class="code-caption">Examples</div>
+              <ul class="example-list">
                 ${offering.examples.map(example => html`<li>${example}</li>`)}
               </ul>`
           : ''}
         ${offering.security?.length
-          ? html`<div class="section-label">Skill security</div>
+          ? html`<div class="code-caption">Skill security</div>
               <pre>${pretty(offering.security)}</pre>`
           : ''}
       </section>
@@ -379,64 +405,76 @@ export async function renderLandingPage({
               </ul>
             </article>
 
-            <article class="detail-card">
-              <h3>Protocol and interfaces</h3>
-              <dl class="detail-list">
-                <div>
-                  <dt>Protocol version</dt>
-                  <dd>${service.protocol.version ?? 'Not configured'}</dd>
-                </div>
-                ${service.protocol.interfaces.map(
-                  supportedInterface =>
-                    html`<div>
-                      <dt>
-                        ${supportedInterface.protocolBinding}${supportedInterface.preferred
-                          ? ' · preferred'
-                          : ''}
-                      </dt>
-                      <dd>${linkOrText(supportedInterface.url)}</dd>
-                    </div>`
-                )}
-                <div>
-                  <dt>Default input modes</dt>
-                  <dd>
-                    ${service.protocol.defaultInputModes.join(', ') ||
-                    'Not configured'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Default output modes</dt>
-                  <dd>
-                    ${service.protocol.defaultOutputModes.join(', ') ||
-                    'Not configured'}
-                  </dd>
-                </div>
-              </dl>
-            </article>
-
-            <article class="detail-card">
-              <h3>Security</h3>
-              ${service.security.schemes.length
-                ? html`<ul class="capability-list">
-                    ${service.security.schemes.map(
-                      scheme =>
-                        html`<li>
-                          <strong>${scheme.name}</strong>
-                          <span><code>${pretty(scheme.definition)}</code></span>
-                        </li>`
+            ${service.protocol.version ||
+            service.protocol.interfaces.length ||
+            service.protocol.defaultInputModes.length ||
+            service.protocol.defaultOutputModes.length
+              ? html`<article class="detail-card">
+                  <h3>Protocol and interfaces</h3>
+                  <dl class="detail-list">
+                    ${service.protocol.version
+                      ? html`<div>
+                          <dt>Protocol version</dt>
+                          <dd>${service.protocol.version}</dd>
+                        </div>`
+                      : ''}
+                    ${service.protocol.interfaces.map(
+                      supportedInterface =>
+                        html`<div>
+                          <dt>
+                            ${supportedInterface.protocolBinding}${supportedInterface.preferred
+                              ? ' · preferred'
+                              : ''}
+                          </dt>
+                          <dd>${linkOrText(supportedInterface.url)}</dd>
+                        </div>`
                     )}
-                  </ul>`
-                : html`<p class="empty">No security schemes published.</p>`}
-              ${service.security.requirements.length
-                ? html`<div class="section-label">Requirements</div>
-                    <pre>${pretty(service.security.requirements)}</pre>`
-                : ''}
-            </article>
-
-            <article class="detail-card">
-              <h3>Payments</h3>
-              ${service.payments.length
-                ? html`<ul class="capability-list">
+                    ${service.protocol.defaultInputModes.length
+                      ? html`<div>
+                          <dt>Default input modes</dt>
+                          <dd>
+                            ${service.protocol.defaultInputModes.join(', ')}
+                          </dd>
+                        </div>`
+                      : ''}
+                    ${service.protocol.defaultOutputModes.length
+                      ? html`<div>
+                          <dt>Default output modes</dt>
+                          <dd>
+                            ${service.protocol.defaultOutputModes.join(', ')}
+                          </dd>
+                        </div>`
+                      : ''}
+                  </dl>
+                </article>`
+              : ''}
+            ${service.security.schemes.length ||
+            service.security.requirements.length
+              ? html`<article class="detail-card">
+                  <h3>Security</h3>
+                  ${service.security.schemes.length
+                    ? html`<ul class="capability-list">
+                        ${service.security.schemes.map(
+                          scheme =>
+                            html`<li>
+                              <strong>${scheme.name}</strong>
+                              <span>
+                                <code>${pretty(scheme.definition)}</code>
+                              </span>
+                            </li>`
+                        )}
+                      </ul>`
+                    : ''}
+                  ${service.security.requirements.length
+                    ? html`<div class="code-caption">Requirements</div>
+                        <pre>${pretty(service.security.requirements)}</pre>`
+                    : ''}
+                </article>`
+              : ''}
+            ${service.payments.length
+              ? html`<article class="detail-card">
+                  <h3>Payments</h3>
+                  <ul class="capability-list">
                     ${service.payments.map(
                       payment =>
                         html`<li>
@@ -456,15 +494,15 @@ export async function renderLandingPage({
                           </span>
                         </li>`
                     )}
-                  </ul>`
-                : html`<p class="empty">No payment methods published.</p>`}
-              ${service.payments.some(payment => payment.method === 'x402')
-                ? html`<details>
-                    <summary>x402 client example</summary>
-                    <pre>${x402ClientExample}</pre>
-                  </details>`
-                : ''}
-            </article>
+                  </ul>
+                  ${service.payments.some(payment => payment.method === 'x402')
+                    ? html`<details>
+                        <summary>x402 client example</summary>
+                        <pre>${x402ClientExample}</pre>
+                      </details>`
+                    : ''}
+                </article>`
+              : ''}
 
             <article class="detail-card">
               <h3>Trust</h3>
@@ -481,28 +519,28 @@ export async function renderLandingPage({
                   <dt>Agent Card signature</dt>
                   <dd>${service.trust.signed ? 'Signed' : 'Not signed'}</dd>
                 </div>
-                <div>
-                  <dt>Trust models</dt>
-                  <dd>
-                    ${service.trust.models.join(', ') || 'Not configured'}
-                  </dd>
-                </div>
+                ${service.trust.models.length
+                  ? html`<div>
+                      <dt>Trust models</dt>
+                      <dd>${service.trust.models.join(', ')}</dd>
+                    </div>`
+                  : ''}
               </dl>
               ${service.trust.registrations.length
                 ? html`<pre>${pretty(service.trust.registrations)}</pre>`
                 : ''}
             </article>
 
-            <article class="detail-card">
-              <h3>Published skills</h3>
-              ${service.skills.length
-                ? html`<ul class="capability-list">
+            ${service.skills.length
+              ? html`<article class="detail-card">
+                  <h3>Published skills</h3>
+                  <ul class="capability-list">
                     ${service.skills.map(
                       skill =>
                         html`<li>
                           <strong>${skill.name ?? skill.id}</strong>
                           <span>
-                            ${skill.description ?? 'No description provided.'}
+                            ${skill.description ?? ''}
                             ${skill.tags?.length
                               ? html`<br />${skill.tags.join(', ')}`
                               : ''}
@@ -512,9 +550,9 @@ export async function renderLandingPage({
                           </span>
                         </li>`
                     )}
-                  </ul>`
-                : html`<p class="empty">No A2A skills published.</p>`}
-            </article>
+                  </ul>
+                </article>`
+              : ''}
           </section>
 
           <section class="raw-card" data-region="raw-card">

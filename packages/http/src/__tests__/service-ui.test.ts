@@ -22,9 +22,30 @@ describe('service UI configuration', () => {
           accent: '#7EE2A8',
         },
         fonts: {
-          display: ['IBM Plex Mono', 'SFMono-Regular', 'monospace'],
-          body: ['IBM Plex Mono', 'SFMono-Regular', 'monospace'],
-          mono: ['IBM Plex Mono', 'SFMono-Regular', 'monospace'],
+          display: [
+            'IBM Plex Mono',
+            'ui-monospace',
+            'SFMono-Regular',
+            'Menlo',
+            'Consolas',
+            'monospace',
+          ],
+          body: [
+            'IBM Plex Mono',
+            'ui-monospace',
+            'SFMono-Regular',
+            'Menlo',
+            'Consolas',
+            'monospace',
+          ],
+          mono: [
+            'IBM Plex Mono',
+            'ui-monospace',
+            'SFMono-Regular',
+            'Menlo',
+            'Consolas',
+            'monospace',
+          ],
         },
       },
     });
@@ -46,7 +67,14 @@ describe('service UI configuration', () => {
         },
         fonts: {
           display: ['Instrument Serif', 'Iowan Old Style', 'Georgia', 'serif'],
-          body: ['Source Sans 3', 'Avenir Next', 'Segoe UI', 'sans-serif'],
+          body: [
+            'Source Sans 3',
+            'Avenir Next',
+            'Segoe UI',
+            'Helvetica Neue',
+            'Arial',
+            'sans-serif',
+          ],
         },
       },
     });
@@ -61,8 +89,22 @@ describe('service UI configuration', () => {
           accent: '#39D6E7',
         },
         fonts: {
-          display: ['DM Sans', 'Aptos', 'Segoe UI', 'sans-serif'],
-          mono: ['JetBrains Mono', 'SFMono-Regular', 'monospace'],
+          display: [
+            'DM Sans',
+            'Aptos',
+            'Segoe UI',
+            'Helvetica Neue',
+            'Arial',
+            'sans-serif',
+          ],
+          mono: [
+            'JetBrains Mono',
+            'ui-monospace',
+            'SFMono-Regular',
+            'Menlo',
+            'Consolas',
+            'monospace',
+          ],
         },
       },
     });

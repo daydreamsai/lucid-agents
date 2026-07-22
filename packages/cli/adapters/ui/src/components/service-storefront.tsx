@@ -16,9 +16,11 @@ import { WalletSummary } from '@/components/wallet-summary';
 import { useServiceStorefront } from '@/hooks/use-service-storefront';
 import type { InvocationEvent, InvocationState } from '@/lib/invocation-state';
 import {
+  endpointPathLabel,
   formatServiceValue,
   integrationSnippet,
   offeringPriceLabel,
+  visibleOfferingTags,
 } from '@/lib/service-utils';
 
 export type ServiceStorefrontProps = {
@@ -239,7 +241,10 @@ function ServiceDetails({
                 <div key={label}>
                   <dt>{label}</dt>
                   <dd>
-                    <PublicLink value={value} label="Open" />
+                    <PublicLink
+                      value={value}
+                      label={endpointPathLabel(value)}
+                    />
                   </dd>
                 </div>
               ) : null
@@ -273,67 +278,76 @@ function ServiceDetails({
           </ul>
         </article>
 
-        <article className="detail-card">
-          <h3>Protocol and interfaces</h3>
-          <dl className="detail-list">
-            <div>
-              <dt>Protocol version</dt>
-              <dd>{service.protocol.version ?? 'Not configured'}</dd>
-            </div>
-            {service.protocol.interfaces.map(supportedInterface => (
-              <div
-                key={`${supportedInterface.protocolBinding}-${supportedInterface.url}`}
-              >
-                <dt>
-                  {supportedInterface.protocolBinding}
-                  {supportedInterface.preferred ? ' · preferred' : ''}
-                </dt>
-                <dd>
-                  <PublicLink value={supportedInterface.url} />
-                </dd>
-              </div>
-            ))}
-            <div>
-              <dt>Default input modes</dt>
-              <dd>
-                {service.protocol.defaultInputModes.join(', ') ||
-                  'Not configured'}
-              </dd>
-            </div>
-            <div>
-              <dt>Default output modes</dt>
-              <dd>
-                {service.protocol.defaultOutputModes.join(', ') ||
-                  'Not configured'}
-              </dd>
-            </div>
-          </dl>
-        </article>
-
-        <article className="detail-card">
-          <h3>Security</h3>
-          {service.security.schemes.length ? (
-            <ul className="capability-list">
-              {service.security.schemes.map(scheme => (
-                <li key={scheme.name}>
-                  <strong>{scheme.name}</strong>
-                  <span>
-                    <code>{pretty(scheme.definition)}</code>
-                  </span>
-                </li>
+        {service.protocol.version ||
+        service.protocol.interfaces.length ||
+        service.protocol.defaultInputModes.length ||
+        service.protocol.defaultOutputModes.length ? (
+          <article className="detail-card">
+            <h3>Protocol and interfaces</h3>
+            <dl className="detail-list">
+              {service.protocol.version ? (
+                <div>
+                  <dt>Protocol version</dt>
+                  <dd>{service.protocol.version}</dd>
+                </div>
+              ) : null}
+              {service.protocol.interfaces.map(supportedInterface => (
+                <div
+                  key={`${supportedInterface.protocolBinding}-${supportedInterface.url}`}
+                >
+                  <dt>
+                    {supportedInterface.protocolBinding}
+                    {supportedInterface.preferred ? ' · preferred' : ''}
+                  </dt>
+                  <dd>
+                    <PublicLink value={supportedInterface.url} />
+                  </dd>
+                </div>
               ))}
-            </ul>
-          ) : (
-            <p className="empty">No security schemes published.</p>
-          )}
-          {service.security.requirements.length ? (
-            <pre>{pretty(service.security.requirements)}</pre>
-          ) : null}
-        </article>
+              {service.protocol.defaultInputModes.length ? (
+                <div>
+                  <dt>Default input modes</dt>
+                  <dd>{service.protocol.defaultInputModes.join(', ')}</dd>
+                </div>
+              ) : null}
+              {service.protocol.defaultOutputModes.length ? (
+                <div>
+                  <dt>Default output modes</dt>
+                  <dd>{service.protocol.defaultOutputModes.join(', ')}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </article>
+        ) : null}
 
-        <article className="detail-card">
-          <h3>Payments</h3>
-          {service.payments.length ? (
+        {service.security.schemes.length ||
+        service.security.requirements.length ? (
+          <article className="detail-card">
+            <h3>Security</h3>
+            {service.security.schemes.length ? (
+              <ul className="capability-list">
+                {service.security.schemes.map(scheme => (
+                  <li key={scheme.name}>
+                    <strong>{scheme.name}</strong>
+                    <span>
+                      <code>{pretty(scheme.definition)}</code>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {service.security.requirements.length ? (
+              <>
+                <div className="code-caption">Requirements</div>
+                <pre>{pretty(service.security.requirements)}</pre>
+              </>
+            ) : null}
+          </article>
+        ) : null}
+
+        {service.payments.length ? (
+          <article className="detail-card">
+            <h3>Payments</h3>
             <ul className="capability-list">
               {service.payments.map(payment => (
                 <li key={`${payment.method}-${payment.network}`}>
@@ -358,10 +372,8 @@ function ServiceDetails({
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="empty">No payment methods published.</p>
-          )}
-        </article>
+          </article>
+        ) : null}
 
         <article className="detail-card">
           <h3>Trust</h3>
@@ -378,25 +390,27 @@ function ServiceDetails({
               <dt>Agent Card signature</dt>
               <dd>{service.trust.signed ? 'Signed' : 'Not signed'}</dd>
             </div>
-            <div>
-              <dt>Trust models</dt>
-              <dd>{service.trust.models.join(', ') || 'Not configured'}</dd>
-            </div>
+            {service.trust.models.length ? (
+              <div>
+                <dt>Trust models</dt>
+                <dd>{service.trust.models.join(', ')}</dd>
+              </div>
+            ) : null}
           </dl>
           {service.trust.registrations.length ? (
             <pre>{pretty(service.trust.registrations)}</pre>
           ) : null}
         </article>
 
-        <article className="detail-card">
-          <h3>Published skills</h3>
-          {service.skills.length ? (
+        {service.skills.length ? (
+          <article className="detail-card">
+            <h3>Published skills</h3>
             <ul className="capability-list">
               {service.skills.map(skill => (
                 <li key={skill.id}>
                   <strong>{skill.name ?? skill.id}</strong>
                   <span>
-                    {skill.description ?? 'No description provided.'}
+                    {skill.description ?? ''}
                     {skill.tags?.length ? (
                       <>
                         <br />
@@ -413,10 +427,8 @@ function ServiceDetails({
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="empty">No A2A skills published.</p>
-          )}
-        </article>
+          </article>
+        ) : null}
       </section>
 
       <section className="raw-card" data-region="raw-card">
@@ -465,6 +477,11 @@ function OfferingWorkspace({
   const protectedOperation =
     offering.payment.required || offering.authorization?.siwx.enabled;
   const busy = state.phase === 'running' || state.phase === 'partial';
+  const tags = visibleOfferingTags(
+    offering.tags,
+    offering.payment.protocol,
+    offering.payment.network
+  );
   const snippet = integrationSnippet(
     offering.operations.invoke.url,
     state.payload
@@ -491,9 +508,9 @@ function OfferingWorkspace({
             {offering.title}
           </h2>
           <p>{offering.description}</p>
-          {offering.tags?.length ? (
+          {tags.length ? (
             <ul className="tag-list" aria-label="Offering tags">
-              {offering.tags.map(tag => (
+              {tags.map(tag => (
                 <li key={tag}>{tag}</li>
               ))}
             </ul>
@@ -665,7 +682,7 @@ function OfferingWorkspace({
             </div>
             <pre>{snippet}</pre>
             <button className="text-button" type="button" onClick={copySnippet}>
-              {copied ? 'Copied' : 'Copy cURL'}
+              {copied ? 'cURL copied' : 'Copy cURL'}
             </button>
             <div className="schema-grid">
               <details>
@@ -690,7 +707,7 @@ function OfferingWorkspace({
             {offering.examples?.length ? (
               <details>
                 <summary>Published examples</summary>
-                <ul>
+                <ul className="example-list">
                   {offering.examples.map(example => (
                     <li key={example}>{example}</li>
                   ))}

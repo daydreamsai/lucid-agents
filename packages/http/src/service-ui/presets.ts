@@ -6,7 +6,10 @@ import type {
 
 const MONO_STACK: ServiceUiFonts['mono'] = [
   'IBM Plex Mono',
+  'ui-monospace',
   'SFMono-Regular',
+  'Menlo',
+  'Consolas',
   'monospace',
 ];
 
@@ -23,7 +26,7 @@ const DOSSIER: ResolvedServiceUi = {
       border: '#29302B',
       accent: '#7EE2A8',
       accentText: '#07110B',
-      success: '#7EE2A8',
+      success: '#55BE85',
       warning: '#E3B965',
       danger: '#FF8B82',
       code: '#080A09',
@@ -56,7 +59,14 @@ const FOLIO: ResolvedServiceUi = {
     },
     fonts: {
       display: ['Instrument Serif', 'Iowan Old Style', 'Georgia', 'serif'],
-      body: ['Source Sans 3', 'Avenir Next', 'Segoe UI', 'sans-serif'],
+      body: [
+        'Source Sans 3',
+        'Avenir Next',
+        'Segoe UI',
+        'Helvetica Neue',
+        'Arial',
+        'sans-serif',
+      ],
       mono: MONO_STACK,
     },
   },
@@ -81,9 +91,30 @@ const CONSOLE: ResolvedServiceUi = {
       code: '#03090E',
     },
     fonts: {
-      display: ['DM Sans', 'Aptos', 'Segoe UI', 'sans-serif'],
-      body: ['DM Sans', 'Aptos', 'Segoe UI', 'sans-serif'],
-      mono: ['JetBrains Mono', 'SFMono-Regular', 'monospace'],
+      display: [
+        'DM Sans',
+        'Aptos',
+        'Segoe UI',
+        'Helvetica Neue',
+        'Arial',
+        'sans-serif',
+      ],
+      body: [
+        'DM Sans',
+        'Aptos',
+        'Segoe UI',
+        'Helvetica Neue',
+        'Arial',
+        'sans-serif',
+      ],
+      mono: [
+        'JetBrains Mono',
+        'ui-monospace',
+        'SFMono-Regular',
+        'Menlo',
+        'Consolas',
+        'monospace',
+      ],
     },
   },
 };
