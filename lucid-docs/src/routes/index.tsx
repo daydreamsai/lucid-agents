@@ -62,12 +62,21 @@ function Home() {
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard.writeText(skillInstallCommand);
-                trackDocsEvent({
-                  name: 'skill_install_command_copied',
-                  path: '/',
-                  stage: 'install',
-                });
+                void navigator.clipboard
+                  .writeText(skillInstallCommand)
+                  .then(() => {
+                    trackDocsEvent({
+                      name: 'skill_install_command_copied',
+                      path: '/',
+                      stage: 'install',
+                    });
+                  })
+                  .catch(error => {
+                    console.error(
+                      'Failed to copy the Lucid Agents skill installer.',
+                      error
+                    );
+                  });
               }}
               className="block w-full cursor-pointer overflow-x-auto px-4 py-4 text-left font-mono text-sm whitespace-nowrap transition-colors hover:bg-fd-accent"
               title="Copy the Lucid Agents skill installer"

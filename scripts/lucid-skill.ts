@@ -466,7 +466,7 @@ async function copyCurrentAliases(
   );
 }
 
-export function renderSkillInstaller(version: string): string {
+function renderSkillInstaller(version: string): string {
   if (!/^\d+\.\d+\.\d+$/u.test(version)) {
     throw new Error(`Invalid Lucid skill version: ${version}`);
   }
