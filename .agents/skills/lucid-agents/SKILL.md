@@ -63,7 +63,7 @@ For runtime and entrypoint code, read [runtime-entrypoints.md](references/runtim
 - Provider commands, manifests, environment handling, or production readiness: [deployment-production.md](references/deployment-production.md)
 - Build failures, routing errors, authorization failures, or portability: [troubleshooting.md](references/troubleshooting.md)
 
-If the bundle is incomplete, fetch the matching file from `https://docs.daydreams.systems/skills/lucid-agents/references/` and keep the skill version fixed while doing so.
+If the bundle is incomplete, read `VERSION` and fetch only the matching immutable file at `https://docs.daydreams.systems/skills/lucid-agents/<VERSION>/references/<file>`. Never use the unversioned reference path as a fallback.
 
 ## Implement in a narrow loop
 

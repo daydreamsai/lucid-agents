@@ -54,18 +54,24 @@ export async function inspectProject(inputRoot = '.') {
   const hasLocal = packages.some(item =>
     ['workspace', 'link', 'file'].includes(item.source)
   );
+  const hasAmbiguous = packages.some(item => item.source === 'other');
   const channel =
     packages.length === 0
       ? 'unknown'
-      : hasRegistry && hasLocal
-        ? 'mixed'
-        : hasLocal
-          ? 'next'
-          : hasRegistry
-            ? 'stable'
-            : 'unknown';
-  const blockingWarnings =
-    channel === 'mixed'
+      : hasAmbiguous
+        ? 'unknown'
+        : hasRegistry && hasLocal
+          ? 'mixed'
+          : hasLocal
+            ? 'next'
+            : hasRegistry
+              ? 'stable'
+              : 'unknown';
+  const blockingWarnings = hasAmbiguous
+    ? [
+        'Lucid dependencies include unsupported or ambiguous sources. Pin registry versions or use one local/workspace channel before editing.',
+      ]
+    : channel === 'mixed'
       ? [
           'Lucid dependencies mix local/workspace and registry sources. Select one release channel before editing.',
         ]
