@@ -877,7 +877,6 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 [data-service-ui-preset="console"] .workspace-header,
 [data-service-ui-preset="console"] .mobile-back,
 [data-service-ui-preset="console"] .readiness-panel,
-[data-service-ui-preset="console"] .run-actions,
 [data-service-ui-preset="console"] .integration-section,
 [data-service-ui-preset="console"] .protected-note,
 [data-service-ui-preset="console"] .tag-list {
@@ -885,6 +884,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 }
 
 [data-service-ui-preset="console"] .input-section,
+[data-service-ui-preset="console"] .run-actions,
 [data-service-ui-preset="console"] .request-contract {
   grid-column: 1;
 }
