@@ -367,6 +367,20 @@ a {
   overflow-wrap: anywhere;
 }
 
+a:visited {
+  color: var(--service-text);
+}
+
+.service-header a,
+.detail-card a,
+.service-footer a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .schema-grid,
 .contract-grid,
 .detail-grid {
