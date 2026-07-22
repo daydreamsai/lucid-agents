@@ -784,8 +784,8 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="folio"] .service-layout {
   grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.7fr);
-  gap: 34px;
-  padding-block: 36px;
+  gap: 28px;
+  padding-block: 28px;
 }
 
 [data-service-ui-preset="folio"] .offering-rail {
@@ -798,29 +798,30 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 [data-service-ui-preset="folio"] .offering-list,
 [data-service-ui-preset="folio"] .offering-rail ul {
   display: grid;
-  gap: 12px;
+  gap: 0;
 }
 
 [data-service-ui-preset="folio"] .offering-list li,
-[data-service-ui-preset="folio"] .offering-rail li,
-[data-service-ui-preset="folio"] .offering-list li:last-child,
-[data-service-ui-preset="folio"] .offering-rail li:last-child {
-  border: 0;
+[data-service-ui-preset="folio"] .offering-rail li {
+  border-top: 1px solid var(--service-border);
 }
 
-[data-service-ui-preset="folio"] .offering-list button,
-[data-service-ui-preset="folio"] .offering-rail a,
+[data-service-ui-preset="folio"] .offering-list li:last-child,
+[data-service-ui-preset="folio"] .offering-rail li:last-child {
+  border-bottom: 1px solid var(--service-border);
+}
+
 [data-service-ui-preset="folio"] .protected-note,
 [data-service-ui-preset="folio"] .readiness-panel,
 [data-service-ui-preset="folio"] .run-state {
   border: 1px solid var(--service-border);
-  border-radius: 14px;
+  border-radius: 6px;
   background: var(--service-surface);
 }
 
 [data-service-ui-preset="folio"] .offering-list .is-selected button,
 [data-service-ui-preset="folio"] .offering-rail a[aria-current='page'] {
-  box-shadow: inset 0 0 0 2px var(--service-accent);
+  box-shadow: inset 3px 0 0 var(--service-accent);
 }
 
 [data-service-ui-preset="folio"] .workspaces {
@@ -829,20 +830,36 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="folio"] .workspace,
 [data-service-ui-preset="folio"] .offering-workspace {
-  padding: clamp(24px, 4vw, 52px);
-  border: 1px solid var(--service-border);
-  border-radius: 18px;
-  background: var(--service-surface);
+  padding: 0 0 42px 28px;
+  border: 0;
+  border-left: 1px solid var(--service-border);
+  border-radius: 0;
+  background: transparent;
 }
 
 [data-service-ui-preset="folio"] .workspace + .workspace {
-  margin-top: 28px;
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--service-border);
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
   [data-service-ui-preset="folio"] .service-layout {
     grid-template-columns: minmax(220px, 0.62fr) minmax(0, 1.7fr);
     gap: 22px;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-service-ui-preset="folio"] .service-layout {
+    gap: 0;
+    padding-block: 24px;
+  }
+
+  [data-service-ui-preset="folio"] .workspace,
+  [data-service-ui-preset="folio"] .offering-workspace {
+    padding: 0 0 40px;
+    border-left: 0;
   }
 }`,
   console: `[data-service-ui-preset="console"] .service-page {
