@@ -52,7 +52,7 @@ const FOLIO: ResolvedServiceUi = {
       success: '#147A4A',
       warning: '#9A6700',
       danger: '#B42318',
-      code: '#171A18',
+      code: '#ECE7DE',
     },
     fonts: {
       display: ['Instrument Serif', 'Iowan Old Style', 'Georgia', 'serif'],

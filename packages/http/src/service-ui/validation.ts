@@ -141,6 +141,7 @@ export function validateServiceUiContrast(resolved: ResolvedServiceUi): void {
   const pairs = [
     ['text on canvas', colors.text, colors.canvas, 4.5],
     ['text on surface', colors.text, colors.surface, 4.5],
+    ['text on code', colors.text, colors.code, 4.5],
     ['muted text on canvas', colors.textMuted, colors.canvas, 4.5],
     ['accent text on accent', colors.accentText, colors.accent, 4.5],
     ['accent focus on canvas', colors.accent, colors.canvas, 3],
