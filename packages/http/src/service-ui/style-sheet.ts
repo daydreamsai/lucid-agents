@@ -524,8 +524,9 @@ summary {
 .service-details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  padding: 42px 0;
+  align-items: start;
+  gap: 32px 28px;
+  padding: 32px 0;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -535,7 +536,27 @@ summary {
 }
 
 .detail-card h3 {
-  margin-bottom: 14px;
+  margin-bottom: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--service-border);
+}
+
+.service-details > .detail-card {
+  align-self: start;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.service-details > .detail-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.service-details > .detail-card:last-child .capability-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
 }
 
 .detail-list,
@@ -543,7 +564,6 @@ summary {
   margin: 0;
   padding: 0;
   list-style: none;
-  border-top: 1px solid var(--service-border);
 }
 
 .detail-list > div,
@@ -551,8 +571,9 @@ summary {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  min-height: 52px;
   gap: 18px;
-  padding: 12px 0;
+  padding: 4px 0;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -659,6 +680,10 @@ footer {
   .contract-grid,
   .detail-grid {
     display: grid;
+  }
+
+  .service-details > .detail-card:last-child .capability-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .service-footer,
@@ -783,7 +808,6 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="folio"] .offering-list button,
 [data-service-ui-preset="folio"] .offering-rail a,
-[data-service-ui-preset="folio"] .detail-card,
 [data-service-ui-preset="folio"] .protected-note,
 [data-service-ui-preset="folio"] .readiness-panel,
 [data-service-ui-preset="folio"] .run-state {
@@ -912,10 +936,6 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 [data-service-ui-preset="console"] .run-state,
 [data-service-ui-preset="console"] .contract-output {
   grid-column: 2;
-}
-
-[data-service-ui-preset="console"] .detail-card {
-  background: var(--service-surface);
 }
 
 @media (max-width: 900px) {
