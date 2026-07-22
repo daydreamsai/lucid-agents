@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/deploy",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Secure deployment CLI for Lucid agent projects",
   "repository": {
     "type": "git",

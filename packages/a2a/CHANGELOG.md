@@ -1,5 +1,13 @@
 # @lucid-agents/a2a
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [5f35b68]
+  - @lucid-agents/types@2.1.0
+  - @lucid-agents/core@4.1.0
+
 ## 1.0.0
 
 ### Major Changes

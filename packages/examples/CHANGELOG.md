@@ -1,5 +1,27 @@
 # @lucid-agents/examples
 
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [5f35b68]
+- Updated dependencies [44fca3c]
+  - @lucid-agents/http@3.0.0
+  - @lucid-agents/types@2.1.0
+  - @lucid-agents/mpp@2.0.0
+  - @lucid-agents/core@4.1.0
+  - @lucid-agents/express@1.0.1
+  - @lucid-agents/hono@1.0.1
+  - @lucid-agents/tanstack@1.0.1
+  - @lucid-agents/a2a@1.0.1
+  - @lucid-agents/analytics@1.0.1
+  - @lucid-agents/ap2@0.4.5
+  - @lucid-agents/catalog@1.0.1
+  - @lucid-agents/identity@4.1.0
+  - @lucid-agents/payments@4.1.0
+  - @lucid-agents/scheduler@0.3.1
+  - @lucid-agents/wallet@0.6.5
+
 ## 0.4.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/catalog",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "YAML/CSV catalog-driven route generation for Lucid Agents",
   "repository": {
     "type": "git",
