@@ -926,6 +926,45 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   box-shadow: inset 0 -3px 0 var(--service-accent);
 }
 
+@media (min-width: 1200px) {
+  [data-service-ui-preset="console"] .offering-list,
+  [data-service-ui-preset="console"] .offering-rail ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0;
+    overflow-x: visible;
+    border-left: 1px solid var(--service-border);
+  }
+
+  [data-service-ui-preset="console"] .offering-list li,
+  [data-service-ui-preset="console"] .offering-rail li,
+  [data-service-ui-preset="console"] .offering-list li:last-child,
+  [data-service-ui-preset="console"] .offering-rail li:last-child {
+    display: flex;
+    min-width: 0;
+    border: 0;
+    border-right: 1px solid var(--service-border);
+  }
+
+  [data-service-ui-preset="console"] .offering-list button,
+  [data-service-ui-preset="console"] .offering-rail a {
+    height: 100%;
+    min-height: 124px;
+    gap: 5px;
+    padding: 12px 10px;
+    border: 0;
+    border-block: 1px solid var(--service-border);
+    border-radius: 0;
+    background: transparent;
+  }
+
+  [data-service-ui-preset="console"] .offering-description,
+  [data-service-ui-preset="console"] .offering-rail small {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+}
+
 [data-service-ui-preset="console"] .workspaces {
   padding: 26px 0 44px;
 }
