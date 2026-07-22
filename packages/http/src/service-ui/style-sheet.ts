@@ -934,7 +934,20 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 [data-service-ui-preset="console"] .offering-workspace {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 0 22px;
+}
+
+[data-service-ui-preset="console"] textarea {
+  min-height: 160px;
+}
+
+[data-service-ui-preset="console"] .run-actions {
+  align-self: start;
+}
+
+[data-service-ui-preset="console"] .run-state {
+  min-height: 132px;
 }
 
 [data-service-ui-preset="console"] .workspace-header,
