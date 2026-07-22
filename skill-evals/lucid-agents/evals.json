@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "skill": "lucid-agents",
-  "skillVersion": "1.0.1",
+  "skillVersion": "1.0.2",
   "cases": [
     {
       "id": "stable-hono-paid-entrypoint",

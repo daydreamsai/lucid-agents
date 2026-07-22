@@ -371,7 +371,7 @@ describe('Lucid skill distribution', () => {
         'deployment',
       ])
     );
-    expect(packets.every(packet => packet.skill.version === '1.0.1')).toBe(
+    expect(packets.every(packet => packet.skill.version === '1.0.2')).toBe(
       true
     );
     expect(
@@ -389,7 +389,7 @@ describe('Lucid skill distribution', () => {
 
     const results: LucidSkillEvalResults = {
       schemaVersion: 1,
-      skillVersion: '1.0.1',
+      skillVersion: '1.0.2',
       skillTreeSha256: packets[0].skill.treeSha256,
       evalSuiteSha256: packets[0].evalSuiteSha256,
       runs: ['model-a', 'model-b'].flatMap(model =>
