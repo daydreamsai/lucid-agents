@@ -651,6 +651,7 @@ function OfferingWorkspace({
           type="button"
           className="integration-toggle"
           aria-expanded={showIntegration}
+          aria-label={`${showIntegration ? 'Hide' : 'Show'} integration details`}
           onClick={() => setShowIntegration(value => !value)}
         >
           Integration details

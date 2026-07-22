@@ -459,6 +459,12 @@ a {
   color: var(--service-accent);
 }
 
+.integration-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .text-button.danger,
 .error-message {
   color: var(--service-danger);
