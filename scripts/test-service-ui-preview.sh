@@ -69,7 +69,7 @@ PRESET="$PRESET" bun -e '
 '
 
 "${PWCLI[@]}" resize 390 844 >/dev/null
-"${PWCLI[@]}" reload >/dev/null
+"${PWCLI[@]}" goto "$BASE_URL" >/dev/null
 MOBILE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ width: innerWidth, list: document.querySelector('.service-layout')?.classList.contains('show-mobile-list'), rail: getComputedStyle(document.querySelector('.offering-rail')).display, workspace: getComputedStyle(document.querySelector('.offering-workspace')).display })")"
 printf '%s\n' "$MOBILE" >mobile.json
 bun -e '
