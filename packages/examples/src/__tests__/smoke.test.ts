@@ -11,6 +11,11 @@ import { analytics } from '@lucid-agents/analytics';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
 import { buildServicePageModel, http } from '@lucid-agents/http';
+import {
+  createServiceUiStyleSheet,
+  defineServiceUi,
+  resolveServiceUi,
+} from '@lucid-agents/http/service-ui';
 import { mpp, tempo } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
 import type {
@@ -77,6 +82,47 @@ describe('Example Smoke Tests', () => {
     process.env.FACILITATOR_URL =
       process.env.FACILITATOR_URL ?? 'https://facilitator.example.com';
     process.env.NETWORK = process.env.NETWORK ?? 'base-sepolia';
+  });
+
+  describe('http/configurable service storefront', () => {
+    it('serves the typed preset as a complete static public surface', async () => {
+      const servicePage = defineServiceUi({ preset: 'folio' });
+      const resolved = resolveServiceUi(servicePage);
+      expect(resolved.preset).toBe('folio');
+      expect(createServiceUiStyleSheet(resolved)).toContain(
+        '[data-service-ui-preset="folio"]'
+      );
+
+      const agent = await createAgent({
+        name: 'storefront-smoke',
+        version: '1.0.0',
+        description: 'Typed configurable storefront smoke test',
+      })
+        .use(http({ servicePage }))
+        .build();
+      const agentApp = await createAgentApp(agent);
+      agentApp.addEntrypoint({
+        key: 'inspect',
+        description: 'Inspect a public payload',
+        input: z.object({ value: z.string() }),
+        output: z.object({ value: z.string() }),
+        handler: async ctx => ({ output: { value: ctx.input.value } }),
+      });
+
+      const response = await agentApp.app.fetch(
+        new Request('http://localhost/')
+      );
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html).toContain('data-service-ui-preset="folio"');
+      expect(html).toContain('data-service-ui-mode="static"');
+      expect(html).toContain('Typed configurable storefront smoke test');
+      expect(html).toContain('Inspect a public payload');
+      expect(html).toContain('Public service contract');
+      expect(html).toContain('Public Agent Card JSON');
+      expect(html).not.toContain('<script');
+      expect(html).not.toContain('data-action=');
+    });
   });
 
   // =========================================================================

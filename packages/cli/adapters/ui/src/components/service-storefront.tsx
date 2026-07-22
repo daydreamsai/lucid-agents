@@ -259,7 +259,15 @@ function ServiceDetails({
             {service.capabilities.extensions.map(extension => (
               <li key={extension.uri ?? extension.name}>
                 <strong>{extension.name}</strong>
-                <span>{extension.required ? 'Required' : 'Supported'}</span>
+                <span>
+                  {extension.required ? 'Required' : 'Supported'}
+                  {extension.uri ? (
+                    <>
+                      {' · '}
+                      <PublicLink value={extension.uri} label="Specification" />
+                    </>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>

@@ -9,6 +9,8 @@ import process, {
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
+import type { ServiceUiPreset } from '@lucid-agents/types/http';
+
 import {
   type AdapterDefinition,
   getAdapterDefinition,
@@ -139,8 +141,11 @@ const PAYMENTS_DESTINATION_KEY = 'PAYMENTS_DESTINATION';
 const PAYMENTS_NETWORK_KEY = 'PAYMENTS_NETWORK';
 const STRIPE_DESTINATION = 'stripe';
 const BASE_NETWORK = 'base';
-const SERVICE_UI_PRESETS = ['dossier', 'folio', 'console'] as const;
-type ServiceUiPreset = (typeof SERVICE_UI_PRESETS)[number];
+const SERVICE_UI_PRESETS = [
+  'dossier',
+  'folio',
+  'console',
+] as const satisfies readonly ServiceUiPreset[];
 
 const defaultLogger: RunLogger = {
   log: message => console.log(message),
@@ -1059,10 +1064,7 @@ function mergeAdapterAndTemplate(
   ];
   const configuredPreSetup =
     httpOptions.length > 0
-      ? templatePreSetup.replace(
-          /\.use\(http\(\)\)/g,
-          `.use(http({ ${httpOptions.join(', ')} }))`
-        )
+      ? configureHttpExtension(templatePreSetup, httpOptions)
       : templatePreSetup;
   const serviceUiImport = adapter.serviceUi
     ? `import serviceUi from ${JSON.stringify(adapter.serviceUi.configImport)};`
@@ -1087,6 +1089,23 @@ function mergeAdapterAndTemplate(
   ];
 
   return parts.filter(p => p.trim().length > 0).join('\n\n');
+}
+
+function configureHttpExtension(
+  templatePreSetup: string,
+  httpOptions: string[]
+): string {
+  const emptyHttpExtension = /\.use\(\s*http\(\s*\)\s*\)/u;
+  if (!emptyHttpExtension.test(templatePreSetup)) {
+    throw new TemplateError(
+      'Template must register .use(http()) so adapter HTTP options can be applied',
+      'MISSING_HTTP_EXTENSION'
+    );
+  }
+  return templatePreSetup.replace(
+    /\.use\(\s*http\(\s*\)\s*\)/gu,
+    `.use(http({ ${httpOptions.join(', ')} }))`
+  );
 }
 
 function mergePackageJson(

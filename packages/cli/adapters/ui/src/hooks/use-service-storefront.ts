@@ -102,13 +102,30 @@ export function useServiceStorefront(
   );
 
   useEffect(() => {
-    const key = new URLSearchParams(window.location.search).get('offering');
-    if (key && service.offerings.some(offering => offering.key === key)) {
-      setSelectedKey(key);
-      setShowMobileList(false);
-    } else if (window.matchMedia('(max-width: 767px)').matches) {
-      setShowMobileList(true);
-    }
+    const syncSelectionFromUrl = () => {
+      const url = new URL(window.location.href);
+      const requestedKey = url.searchParams.get('offering');
+      const requestedOffering = service.offerings.find(
+        offering => offering.key === requestedKey
+      );
+      const resolvedKey = requestedOffering?.key ?? service.offerings[0]?.key;
+      setSelectedKey(resolvedKey);
+      if (requestedOffering) {
+        setShowMobileList(false);
+      } else {
+        setShowMobileList(window.matchMedia('(max-width: 767px)').matches);
+        if (resolvedKey) {
+          url.searchParams.set('offering', resolvedKey);
+          window.history.replaceState(window.history.state, '', url);
+        }
+      }
+    };
+
+    syncSelectionFromUrl();
+    window.addEventListener('popstate', syncSelectionFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncSelectionFromUrl);
+    };
   }, [service.offerings]);
 
   useEffect(() => {

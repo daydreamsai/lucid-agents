@@ -591,6 +591,47 @@ describe('create-agent-kit CLI', () => {
     expect(page).toContain('serviceUi={serviceUi}');
   });
 
+  it('wires the typed storefront config into every server template', async () => {
+    const cwd = await createTempDir();
+    const { logger } = createLogger();
+
+    for (const adapter of ['hono', 'express'] as const) {
+      const projectName = `trading-${adapter}`;
+      await runCli(
+        [
+          projectName,
+          '--template=trading-data-agent',
+          `--adapter=${adapter}`,
+          '--ui-preset=console',
+          '--wizard=no',
+        ],
+        { cwd, logger }
+      );
+
+      const projectDir = join(cwd, projectName);
+      const agent = await readFile(
+        join(projectDir, 'src/lib/agent.ts'),
+        'utf8'
+      );
+      const config = await readFile(
+        join(projectDir, 'service-ui.config.ts'),
+        'utf8'
+      );
+      const pkg = await readJson(join(projectDir, 'package.json'));
+      const dependencies = pkg.dependencies as Record<string, string>;
+
+      expect(agent).toContain(
+        'import serviceUi from "../../service-ui.config"'
+      );
+      expect(agent).toContain('servicePage: serviceUi');
+      expect(agent).toContain('.use(payments({ config: paymentConfig }))');
+      expect(config).toContain('preset: "console"');
+      expect(dependencies['@lucid-agents/ap2']).toBe('latest');
+      expect(dependencies['@lucid-agents/http']).toBe('latest');
+      expect(dependencies['@lucid-agents/payments']).toBe('latest');
+    }
+  });
+
   it('scaffolds projects with the Next.js adapter', async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(['blank']);

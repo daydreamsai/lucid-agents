@@ -36,7 +36,6 @@ export type AdapterDefinition = {
   httpBasePath?: string;
   /** Storefront capability and config import relative to the generated agent. */
   serviceUi?: {
-    mode: 'static' | 'interactive';
     configImport: string;
   };
   /** Generate an API-only HTTP extension with no landing page. */
@@ -55,7 +54,7 @@ const adapterDefinitions: Record<string, AdapterDefinition> = {
     displayName: 'Hono',
     filesDir: join(ADAPTER_FILES_ROOT, 'hono'),
     placeholderTargets: ['src/lib/agent.ts.template'],
-    serviceUi: { mode: 'static', configImport: '../../service-ui.config' },
+    serviceUi: { configImport: '../../service-ui.config' },
     deployment: {
       templateIds: ['blank'],
       filesDir: join(ADAPTER_FILES_ROOT, 'hono-cloudflare'),
@@ -101,7 +100,7 @@ addEntrypoint({
     displayName: 'Express',
     filesDir: join(ADAPTER_FILES_ROOT, 'express'),
     placeholderTargets: ['src/lib/agent.ts.template'],
-    serviceUi: { mode: 'static', configImport: '../../service-ui.config' },
+    serviceUi: { configImport: '../../service-ui.config' },
     snippets: {
       imports: `import { createAgentApp } from "@lucid-agents/express";`,
       preSetup: ``,
@@ -138,7 +137,6 @@ addEntrypoint({
     placeholderTargets: ['src/lib/agent.ts.template'],
     httpBasePath: '/api/agent',
     serviceUi: {
-      mode: 'interactive',
       configImport: '../../service-ui.config',
     },
     snippets: {
@@ -209,7 +207,7 @@ runtime.entrypoints.add({
     filesDir: join(ADAPTER_FILES_ROOT, 'next'),
     placeholderTargets: ['lib/agent.ts.template'],
     httpBasePath: '/api/agent',
-    serviceUi: { mode: 'interactive', configImport: '../service-ui.config' },
+    serviceUi: { configImport: '../service-ui.config' },
     snippets: {
       imports: ``,
       preSetup: ``,

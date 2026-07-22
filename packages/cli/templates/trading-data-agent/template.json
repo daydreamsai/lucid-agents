@@ -4,7 +4,11 @@
   "description": "Agent that provides mock trading data via priced entrypoints (merchant agent)",
   "adapters": ["hono", "express"],
   "package": {
-    "dependencies": {}
+    "dependencies": {
+      "@lucid-agents/ap2": "latest",
+      "@lucid-agents/http": "latest",
+      "@lucid-agents/payments": "latest"
+    }
   },
   "wizard": {
     "prompts": [

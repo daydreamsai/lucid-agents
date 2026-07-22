@@ -83,6 +83,15 @@ bun -e '
   if (!state.columns.startsWith("320px")) throw new Error("portable Dossier desktop layout changed unexpectedly");
 '
 
+"${PWCLI[@]}" resize 1024 900 >/dev/null
+"${PWCLI[@]}" reload >/dev/null
+STATIC_TABLET="$("${PWCLI[@]}" --raw eval "() => getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns")"
+printf '%s\n' "$STATIC_TABLET" >static-tablet.txt
+if [[ "$STATIC_TABLET" != *"240px"* ]]; then
+  echo "portable Dossier tablet rail did not compact to 240px" >&2
+  exit 1
+fi
+
 "${PWCLI[@]}" resize 390 844 >/dev/null
 "${PWCLI[@]}" reload >/dev/null
 STATIC_MOBILE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ width: innerWidth, rail: getComputedStyle(document.querySelector('.offering-rail')).display, workspaces: getComputedStyle(document.querySelector('.workspaces')).display, columns: getComputedStyle(document.querySelector('.service-layout')).gridTemplateColumns })")"
@@ -134,7 +143,7 @@ for index in "${!THEMES[@]}"; do
   "${PWCLI[@]}" goto "http://127.0.0.1:$REACT_PORT" >/dev/null
   REACT_STATE=""
   for _ in $(seq 1 30); do
-    REACT_STATE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ identity: document.querySelector('h1')?.textContent, preset: document.querySelector('[data-service-ui-preset]')?.getAttribute('data-service-ui-preset'), mode: document.querySelector('[data-service-ui-mode]')?.getAttribute('data-service-ui-mode'), offering: document.querySelector('.offering-title')?.textContent, offerings: document.querySelectorAll('.offering-list button').length, workspace: document.querySelector('.offering-workspace h2')?.textContent, provider: document.body.textContent?.includes('Lucid Agents CI'), live: document.querySelector('.run-state')?.getAttribute('aria-live'), scheme: getComputedStyle(document.documentElement).colorScheme, canvas: getComputedStyle(document.body).backgroundColor, details: document.querySelectorAll('.service-details .detail-card').length, rawCard: Boolean(document.querySelector('[data-region=raw-card]')) })")"
+    REACT_STATE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ identity: document.querySelector('h1')?.textContent, preset: document.querySelector('[data-service-ui-preset]')?.getAttribute('data-service-ui-preset'), mode: document.querySelector('[data-service-ui-mode]')?.getAttribute('data-service-ui-mode'), offering: document.querySelector('.offering-title')?.textContent, offerings: document.querySelectorAll('.offering-list button').length, selectedUrl: new URL(location.href).searchParams.get('offering'), workspace: document.querySelector('.offering-workspace h2')?.textContent, provider: document.body.textContent?.includes('Lucid Agents CI'), live: document.querySelector('.run-state')?.getAttribute('aria-live'), scheme: getComputedStyle(document.documentElement).colorScheme, canvas: getComputedStyle(document.body).backgroundColor, details: document.querySelectorAll('.service-details .detail-card').length, specificationLinks: Array.from(document.querySelectorAll('.service-details a')).filter(link => link.textContent === 'Specification').length, rawCard: Boolean(document.querySelector('[data-region=raw-card]')) })")"
     if [[ "$REACT_STATE" == *"$THEME"* ]]; then
       break
     fi
@@ -147,8 +156,8 @@ for index in "${!THEMES[@]}"; do
     if (typeof state === "string") state = JSON.parse(state);
     if (state.identity !== `generated-next-${theme}`) throw new Error(`${theme} identity was not rendered`);
     if (state.preset !== theme || state.mode !== "interactive") throw new Error(`${theme} preset marker was incorrect`);
-    if (state.offering !== "Echo payload" || state.workspace !== "Echo payload" || state.offerings < 6) throw new Error(`${theme} kitchen-sink offerings were incomplete`);
-    if (!state.provider || state.live !== "polite" || state.details < 7 || !state.rawCard) throw new Error(`${theme} omitted public or accessible service information`);
+    if (state.offering !== "Echo payload" || state.workspace !== "Echo payload" || state.offerings < 6 || state.selectedUrl !== "echo") throw new Error(`${theme} kitchen-sink offerings or URL selection were incomplete`);
+    if (!state.provider || state.live !== "polite" || state.details < 7 || state.specificationLinks < 1 || !state.rawCard) throw new Error(`${theme} omitted public or accessible service information`);
     if (state.scheme !== Bun.env.EXPECTED_SCHEME || state.canvas !== Bun.env.EXPECTED_CANVAS) throw new Error(`${theme} design tokens were not applied`);
   '
 
@@ -170,6 +179,29 @@ for index in "${!THEMES[@]}"; do
     echo "$THEME offering selection did not move focus to the workspace" >&2
     exit 1
   fi
+
+  "${PWCLI[@]}" --raw eval "() => document.querySelectorAll('.offering-list button')[1]?.click()" >/dev/null
+  URL_AFTER_SELECTION="$("${PWCLI[@]}" --raw eval "() => new URL(location.href).searchParams.get('offering')")"
+  if [[ "$URL_AFTER_SELECTION" != "summarize" ]]; then
+    echo "$THEME offering selection was not written to the URL" >&2
+    exit 1
+  fi
+  "${PWCLI[@]}" --raw eval "() => history.back()" >/dev/null
+  HISTORY_STATE=""
+  for _ in $(seq 1 30); do
+    HISTORY_STATE="$("${PWCLI[@]}" --raw eval "() => JSON.stringify({ offering: new URL(location.href).searchParams.get('offering'), workspace: document.querySelector('.offering-workspace h2')?.textContent })")"
+    if [[ "$HISTORY_STATE" == *'"offering":"echo"'* ]]; then
+      break
+    fi
+    sleep 0.1
+  done
+  printf '%s\n' "$HISTORY_STATE" >"react-$THEME-history.json"
+  THEME="$THEME" bun -e '
+    const theme = Bun.env.THEME;
+    let state = JSON.parse(await Bun.file(`react-${theme}-history.json`).text());
+    if (typeof state === "string") state = JSON.parse(state);
+    if (state.offering !== "echo" || state.workspace !== "Echo payload") throw new Error(`${theme} browser history did not restore the selected offering`);
+  '
 
   "${PWCLI[@]}" --raw eval "() => { const input = document.querySelector('.offering-workspace textarea'); const button = document.querySelector('.offering-workspace .primary-button'); if (!(input instanceof HTMLTextAreaElement) || !(button instanceof HTMLButtonElement)) throw new Error('interactive controls missing'); const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set; setter?.call(input, JSON.stringify({ input: { text: '$THEME browser smoke' } })); input.dispatchEvent(new Event('input', { bubbles: true })); button.click(); }" >/dev/null
   REACT_RUN=""
