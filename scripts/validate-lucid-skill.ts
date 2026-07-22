@@ -9,6 +9,7 @@ const errors = await validateSkillReleaseState({
   canonicalRoot: resolve(repoRoot, '.agents/skills/lucid-agents'),
   releasesRoot: resolve(repoRoot, 'skill-releases/lucid-agents'),
   repoRoot,
+  evalSuitePath: resolve(repoRoot, 'skill-evals/lucid-agents/evals.json'),
 });
 
 if (errors.length > 0) {

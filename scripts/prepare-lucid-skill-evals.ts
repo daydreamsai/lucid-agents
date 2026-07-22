@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 
+import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
+
+import { computeSkillTreeDigest } from './lucid-skill';
 
 type EvalCase = {
   id: string;
@@ -17,9 +20,11 @@ export type LucidSkillEvalPacket = {
   skill: {
     name: 'lucid-agents';
     version: string;
+    treeSha256: string;
     instructions: string;
     resources: Record<string, string>;
   };
+  evalSuiteSha256: string;
   case: EvalCase;
   evaluator: {
     scale: [number, number];
@@ -31,9 +36,11 @@ export async function prepareLucidSkillEvalPackets(
   repoRoot: string
 ): Promise<LucidSkillEvalPacket[]> {
   const root = resolve(repoRoot);
-  const evals = JSON.parse(
-    await readFile(resolve(root, 'skill-evals/lucid-agents/evals.json'), 'utf8')
-  ) as {
+  const evalSource = await readFile(
+    resolve(root, 'skill-evals/lucid-agents/evals.json'),
+    'utf8'
+  );
+  const evals = JSON.parse(evalSource) as {
     schemaVersion: number;
     skill: string;
     skillVersion: string;
@@ -54,6 +61,8 @@ export async function prepareLucidSkillEvalPackets(
   await loadResources(skillRoot);
   const instructions = resources['SKILL.md'];
   const version = resources.VERSION.trim();
+  const treeSha256 = await computeSkillTreeDigest(skillRoot);
+  const evalSuiteSha256 = createHash('sha256').update(evalSource).digest('hex');
   if (
     evals.schemaVersion !== 1 ||
     evals.skill !== 'lucid-agents' ||
@@ -78,7 +87,14 @@ export async function prepareLucidSkillEvalPackets(
   }
   return evals.cases.map(evalCase => ({
     schemaVersion: 1,
-    skill: { name: 'lucid-agents', version, instructions, resources },
+    skill: {
+      name: 'lucid-agents',
+      version,
+      treeSha256,
+      instructions,
+      resources,
+    },
+    evalSuiteSha256,
     case: evalCase,
     evaluator: {
       scale: [0, 4],

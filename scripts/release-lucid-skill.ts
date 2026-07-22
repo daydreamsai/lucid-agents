@@ -8,10 +8,7 @@ import {
   computeSkillTreeDigest,
   validateSkillDirectory,
 } from './lucid-skill';
-import {
-  type LucidSkillEvalResults,
-  validateLucidSkillEvalResults,
-} from './lucid-skill-eval-results';
+import { validateLucidSkillEvalResults } from './lucid-skill-eval-results';
 import { prepareLucidSkillEvalPackets } from './prepare-lucid-skill-evals';
 
 const repoRoot = resolve(import.meta.dir, '..');
@@ -34,9 +31,9 @@ if (!evalResultsPath) {
   );
 }
 const evalPackets = await prepareLucidSkillEvalPackets(repoRoot);
-const evalResults = JSON.parse(
+const evalResults: unknown = JSON.parse(
   await readFile(resolve(evalResultsPath), 'utf8')
-) as LucidSkillEvalResults;
+);
 const evalErrors = validateLucidSkillEvalResults(evalPackets, evalResults);
 if (evalErrors.length > 0) {
   throw new Error(
@@ -48,7 +45,12 @@ let index: {
   current: string;
   releases: Record<
     string,
-    { releasedAt: string; sourceCommit: string; treeSha256: string }
+    {
+      releasedAt: string;
+      sourceCommit: string;
+      treeSha256: string;
+      evalSuiteSha256: string;
+    }
   >;
 };
 try {
@@ -100,6 +102,7 @@ index.releases[version] = {
   releasedAt,
   sourceCommit,
   treeSha256: await computeSkillTreeDigest(target),
+  evalSuiteSha256: evalPackets[0].evalSuiteSha256,
 };
 await writeFile(
   resolve(releasesRoot, 'releases.json'),

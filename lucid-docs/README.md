@@ -266,4 +266,6 @@ This keeps cross-model evaluation reproducible without placing model credentials
 in the repository or coupling the skill release to one provider.
 The provider-neutral result shape is documented by
 `skill-evals/lucid-agents/results.schema.json`; rubric cardinality and thresholds
-are enforced by the validator because they depend on each eval case.
+are enforced by the validator because they depend on each eval case. Results are
+bound to the exact canonical skill-tree and eval-suite SHA-256 digests, both of
+which are persisted in release metadata.

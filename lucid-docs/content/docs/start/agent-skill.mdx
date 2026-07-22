@@ -20,32 +20,39 @@ skill archive, verify its SHA-256 digest, and extract it into the portable
 `.agents/skills` directory.
 
 ```bash
+(
+set -eu
 mkdir -p .agents/skills
-lucid_skill_tmp="$(mktemp -d)"
-trap 'rm -rf "$lucid_skill_tmp"' EXIT
-curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz" \
-  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz
-curl -fsSLo "$lucid_skill_tmp/lucid-agents.tar.gz.sha256" \
-  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz.sha256
-(cd "$lucid_skill_tmp" && shasum -a 256 -c lucid-agents.tar.gz.sha256)
-mkdir "$lucid_skill_tmp/extracted"
-tar -xzf "$lucid_skill_tmp/lucid-agents.tar.gz" -C "$lucid_skill_tmp/extracted"
-test "$(cat "$lucid_skill_tmp/extracted/lucid-agents/VERSION")" = "1.0.1"
-node "$lucid_skill_tmp/extracted/lucid-agents/scripts/inspect-project.mjs" .
-if [ -e .agents/skills/lucid-agents ]; then
-  mv .agents/skills/lucid-agents "$lucid_skill_tmp/previous"
-fi
-if ! mv "$lucid_skill_tmp/extracted/lucid-agents" .agents/skills/lucid-agents; then
-  if [ -e "$lucid_skill_tmp/previous" ]; then
-    mv "$lucid_skill_tmp/previous" .agents/skills/lucid-agents
+lucid_skill_stage="$(mktemp -d .agents/skills/.lucid-agents-install.XXXXXX)"
+lucid_skill_backup=".agents/skills/.lucid-agents-backup.$$"
+test ! -e "$lucid_skill_backup"
+lucid_skill_cleanup() {
+  if [ -e "$lucid_skill_backup" ] && [ ! -e .agents/skills/lucid-agents ]; then
+    mv "$lucid_skill_backup" .agents/skills/lucid-agents
   fi
-  exit 1
+  rm -rf "$lucid_skill_stage"
+}
+trap lucid_skill_cleanup EXIT HUP INT TERM
+curl -fsSLo "$lucid_skill_stage/lucid-agents.tar.gz" \
+  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz
+curl -fsSLo "$lucid_skill_stage/lucid-agents.tar.gz.sha256" \
+  https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz.sha256
+(cd "$lucid_skill_stage" && shasum -a 256 -c lucid-agents.tar.gz.sha256)
+mkdir "$lucid_skill_stage/extracted"
+tar -xzf "$lucid_skill_stage/lucid-agents.tar.gz" -C "$lucid_skill_stage/extracted"
+test "$(cat "$lucid_skill_stage/extracted/lucid-agents/VERSION")" = "1.0.1"
+node "$lucid_skill_stage/extracted/lucid-agents/scripts/inspect-project.mjs" .
+if [ -e .agents/skills/lucid-agents ]; then
+  mv .agents/skills/lucid-agents "$lucid_skill_backup"
 fi
-trap - EXIT
-rm -rf "$lucid_skill_tmp"
+mv "$lucid_skill_stage/extracted/lucid-agents" .agents/skills/lucid-agents
+rm -rf "$lucid_skill_backup"
+trap - EXIT HUP INT TERM
+rm -rf "$lucid_skill_stage"
+)
 ```
 
-The final command prints JSON only and reads `package.json` plus an optional
+The inspector command prints JSON only and reads `package.json` plus an optional
 root `service-ui.config.ts`. It classifies registry dependencies as `stable`,
 local or workspace dependencies as `next`, and a mixture as `mixed`. Resolve a
 `mixed` result before asking an agent to modify Lucid code.
@@ -90,8 +97,9 @@ Node.js 20 or newer.
 ## Update or remove
 
 To update, inspect the new manifest and checksum, then repeat the project install
-commands. The temporary extraction and backup prevent removed files from an old
-release surviving the update; a failed final move restores the previous skill.
+commands. The same-filesystem staging directory and backup prevent removed files
+from an old release surviving the update; a failed or interrupted replacement
+restores the previous skill when the destination is absent.
 Commit the `.agents/skills/lucid-agents` directory when teammates and CI should
 use the same skill version.
 

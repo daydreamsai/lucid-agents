@@ -35,7 +35,12 @@ type ReleaseIndex = {
   current: string;
   releases: Record<
     string,
-    { releasedAt: string; sourceCommit?: string; treeSha256?: string }
+    {
+      releasedAt: string;
+      sourceCommit?: string;
+      treeSha256?: string;
+      evalSuiteSha256?: string;
+    }
   >;
 };
 
@@ -317,6 +322,7 @@ export async function validateSkillReleaseState(options: {
   canonicalRoot: string;
   releasesRoot: string;
   repoRoot?: string;
+  evalSuitePath?: string;
 }): Promise<string[]> {
   const errors = await validateSkillDirectory(options.canonicalRoot);
   const index = JSON.parse(
@@ -325,6 +331,14 @@ export async function validateSkillReleaseState(options: {
   const version = (
     await readFile(join(options.canonicalRoot, 'VERSION'), 'utf8')
   ).trim();
+  if (options.evalSuitePath && index.releases[index.current]) {
+    const evalSuiteSha256 = sha256(await readFile(options.evalSuitePath));
+    if (index.releases[index.current].evalSuiteSha256 !== evalSuiteSha256) {
+      errors.push(
+        'Current eval suite differs from the digest recorded by the current release.'
+      );
+    }
+  }
   if (version !== index.current) {
     errors.push(
       `Canonical VERSION ${version} does not match current release ${index.current}.`
@@ -345,6 +359,13 @@ export async function validateSkillReleaseState(options: {
       errors.push(`${release}: treeSha256 must be a lowercase SHA-256 digest.`);
     } else if ((await computeSkillTreeDigest(releaseRoot)) !== expectedTree) {
       errors.push(`${release}: immutable snapshot does not match treeSha256.`);
+    }
+    if (
+      !/^[a-f0-9]{64}$/u.test(index.releases[release].evalSuiteSha256 ?? '')
+    ) {
+      errors.push(
+        `${release}: evalSuiteSha256 must be a lowercase SHA-256 digest.`
+      );
     }
     if (options.repoRoot && index.releases[release].sourceCommit) {
       try {
@@ -492,6 +513,7 @@ export async function buildSkillAssets(options: {
       version,
       releasedAt: releaseIndex.releases[version].releasedAt,
       sourceCommit,
+      evalSuiteSha256: releaseIndex.releases[version].evalSuiteSha256,
       archive: {
         file: 'lucid-agents.tar.gz',
         size: archive.length,

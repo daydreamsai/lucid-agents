@@ -4,10 +4,18 @@
   "title": "Lucid Agents skill evaluation results",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "skillVersion", "runs"],
+  "required": [
+    "schemaVersion",
+    "skillVersion",
+    "skillTreeSha256",
+    "evalSuiteSha256",
+    "runs"
+  ],
   "properties": {
     "schemaVersion": { "const": 1 },
     "skillVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "skillTreeSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "evalSuiteSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "runs": {
       "type": "array",
       "items": {
@@ -15,8 +23,8 @@
         "additionalProperties": false,
         "required": ["caseId", "model", "baseline", "withSkill"],
         "properties": {
-          "caseId": { "type": "string", "minLength": 1 },
-          "model": { "type": "string", "minLength": 1 },
+          "caseId": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
+          "model": { "type": "string", "pattern": "^\\S(?:.*\\S)?$" },
           "baseline": { "$ref": "#/$defs/scores" },
           "withSkill": { "$ref": "#/$defs/scores" }
         }

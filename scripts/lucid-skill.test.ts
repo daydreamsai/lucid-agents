@@ -93,6 +93,19 @@ describe('Lucid skill project inspector', () => {
       expect(inspection.blockingWarnings).toEqual([
         'Lucid dependencies mix local/workspace and registry sources. Select one release channel before editing.',
       ]);
+
+      const bundled = Bun.spawnSync({
+        cmd: [
+          'node',
+          join(
+            repoRoot,
+            '.agents/skills/lucid-agents/scripts/inspect-project.mjs'
+          ),
+          root,
+        ],
+      });
+      expect(bundled.exitCode).toBe(0);
+      expect(JSON.parse(bundled.stdout.toString())).toEqual(inspection);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -166,11 +179,36 @@ describe('Lucid skill distribution', () => {
       'https://docs.daydreams.systems/skills/lucid-agents/lucid-agents.tar.gz'
     );
     expect(page).toContain('shasum -a 256 -c lucid-agents.tar.gz.sha256');
-    expect(page).toContain('lucid_skill_tmp/previous');
+    expect(page).toContain('set -eu');
+    expect(page).toContain('.agents/skills/.lucid-agents-backup.$$');
     expect(headers).toContain('Access-Control-Allow-Origin: *');
     expect(headers).toContain(
       'Cache-Control: public, max-age=31536000, immutable'
     );
+
+    const checksumRoot = await temporaryDirectory('lucid-skill-checksum-');
+    try {
+      await writeFile(join(checksumRoot, 'lucid-agents.tar.gz'), 'tampered');
+      await writeFile(
+        join(checksumRoot, 'lucid-agents.tar.gz.sha256'),
+        `${'0'.repeat(64)}  lucid-agents.tar.gz\n`
+      );
+      const result = Bun.spawnSync({
+        cmd: [
+          'bash',
+          '-c',
+          'set -eu\ncd "$1"\nshasum -a 256 -c lucid-agents.tar.gz.sha256\ntouch inspector-ran',
+          '_',
+          checksumRoot,
+        ],
+      });
+      expect(result.exitCode).not.toBe(0);
+      expect(await Bun.file(join(checksumRoot, 'inspector-ran')).exists()).toBe(
+        false
+      );
+    } finally {
+      await rm(checksumRoot, { force: true, recursive: true });
+    }
   });
 
   it('builds deterministic current and immutable release artifacts', async () => {
@@ -322,6 +360,8 @@ describe('Lucid skill distribution', () => {
     const results: LucidSkillEvalResults = {
       schemaVersion: 1,
       skillVersion: '1.0.1',
+      skillTreeSha256: packets[0].skill.treeSha256,
+      evalSuiteSha256: packets[0].evalSuiteSha256,
       runs: ['model-a', 'model-b'].flatMap(model =>
         packets.map(packet => ({
           caseId: packet.case.id,
@@ -341,6 +381,16 @@ describe('Lucid skill distribution', () => {
     results.runs[0].withSkill.criticalFailures.push('unsafe side effect');
     expect(validateLucidSkillEvalResults(packets, results)).toContain(
       'model-a/stable-hono-paid-entrypoint: skill run contains a critical failure.'
+    );
+    results.runs[0].withSkill.criticalFailures.length = 0;
+    results.runs[0].model = ' ';
+    expect(validateLucidSkillEvalResults(packets, results)).toContain(
+      'runs[0]: run does not match the published result schema.'
+    );
+    results.runs[0].model = 'model-a';
+    results.skillTreeSha256 = '0'.repeat(64);
+    expect(validateLucidSkillEvalResults(packets, results)).toContain(
+      'Eval results metadata does not match the current skill tree and eval suite.'
     );
   });
 });
