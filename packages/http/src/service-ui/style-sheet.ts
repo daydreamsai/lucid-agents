@@ -359,6 +359,12 @@ pre,
 
 code {
   font-family: var(--service-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+a {
+  overflow-wrap: anywhere;
 }
 
 .schema-grid,
@@ -540,6 +546,10 @@ summary {
   margin: 0;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.capability-list > li > span {
+  min-width: 0;
 }
 
 .raw-card {
