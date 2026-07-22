@@ -9,6 +9,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import type { ServiceUiPreset } from '@lucid-agents/types/http';
+
 import {
   allocatePort,
   startTestProcess,
@@ -24,13 +26,16 @@ const ADAPTERS = [
 ] as const;
 type Adapter = (typeof ADAPTERS)[number];
 const UI_ADAPTERS = ['hono', 'express', 'tanstack-ui', 'next'] as const;
-const PRESETS = ['dossier', 'folio', 'console'] as const;
+const PRESETS = [
+  'dossier',
+  'folio',
+  'console',
+] as const satisfies readonly ServiceUiPreset[];
 type UiAdapter = (typeof UI_ADAPTERS)[number];
-type Preset = (typeof PRESETS)[number];
 
 type VerificationCase = {
   adapter: Adapter;
-  preset?: Preset;
+  preset?: ServiceUiPreset;
 };
 
 const repoRoot = resolve(import.meta.dir, '..');
@@ -333,12 +338,12 @@ function requestedCases(): VerificationCase[] {
   if (requestedPreset === 'all') {
     return PRESETS.map(preset => ({ adapter, preset }));
   }
-  if (!PRESETS.includes(requestedPreset as Preset)) {
+  if (!PRESETS.includes(requestedPreset as ServiceUiPreset)) {
     throw new Error(
       `Unknown preset ${requestedPreset}. Expected ${PRESETS.join(', ')}`
     );
   }
-  return [{ adapter, preset: requestedPreset as Preset }];
+  return [{ adapter, preset: requestedPreset as ServiceUiPreset }];
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'lucid-generated-e2e-'));

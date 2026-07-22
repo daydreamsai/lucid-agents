@@ -1,16 +1,21 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const PRESETS = ['dossier', 'folio', 'console'] as const;
-type Preset = (typeof PRESETS)[number];
+import type { ServiceUiPreset } from '@lucid-agents/types/http';
 
-export function serviceUiPreviewWorkerName(preset: Preset): string {
+const PRESETS = [
+  'dossier',
+  'folio',
+  'console',
+] as const satisfies readonly ServiceUiPreset[];
+
+export function serviceUiPreviewWorkerName(preset: ServiceUiPreset): string {
   return `lucid-agents-ui-${preset}`;
 }
 
 export async function configureServiceUiCloudflarePreview(
   projectRoot: string,
-  preset: Preset
+  preset: ServiceUiPreset
 ): Promise<void> {
   if (!PRESETS.includes(preset)) {
     throw new Error(
@@ -53,5 +58,8 @@ if (import.meta.main) {
       'Usage: bun run scripts/configure-service-ui-cloudflare.ts <project-root> <preset>'
     );
   }
-  await configureServiceUiCloudflarePreview(projectRoot, preset as Preset);
+  await configureServiceUiCloudflarePreview(
+    projectRoot,
+    preset as ServiceUiPreset
+  );
 }
