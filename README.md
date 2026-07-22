@@ -2,83 +2,55 @@
 
 <div align="center">
   <h1>Lucid Agents</h1>
-  <p><strong>A TypeScript application runtime for machine commerce.</strong></p>
+  <p><strong>A TypeScript runtime for machine commerce.</strong></p>
 </div>
 
 <div align="center">
-  <a href="https://github.com/daydreamsai/lucid-agents/blob/master/LICENSE"><img src="https://img.shields.io/github/license/daydreamsai/lucid-agents?style=for-the-badge" alt="License"></a>
-  <a href="https://www.npmjs.com/package/@lucid-agents/cli"><img src="https://img.shields.io/npm/v/@lucid-agents/cli?style=for-the-badge" alt="NPM Version"></a>
-  <a href="https://github.com/daydreamsai/lucid-agents/actions"><img src="https://img.shields.io/github/actions/workflow/status/daydreamsai/lucid-agents/ci.yml?branch=master&style=for-the-badge" alt="CI Status"></a>
+  <a href="https://github.com/daydreamsai/lucid-agents/blob/master/LICENSE"><img src="https://img.shields.io/github/license/daydreamsai/lucid-agents?style=flat-square" alt="License"></a>
+  <a href="https://www.npmjs.com/package/@lucid-agents/cli"><img src="https://img.shields.io/npm/v/@lucid-agents/cli?style=flat-square" alt="npm version"></a>
+  <a href="https://github.com/daydreamsai/lucid-agents/actions"><img src="https://img.shields.io/github/actions/workflow/status/daydreamsai/lucid-agents/ci.yml?branch=master&style=flat-square" alt="CI status"></a>
 </div>
 
-Lucid turns a typed function into a discoverable service that applications and
-agents can call and pay for. It composes schema validation, payment admission,
-policy, idempotency, fulfillment, tasks, discovery, and durable accounting
-around the Stable x402 path or the qualified Next MPP subset. Wallets,
-facilitators, networks, and payment protocols stay external; Lucid owns the
-application transaction that connects them to your code.
+Lucid turns typed functions into discoverable services that agents and
+applications can call, pay for, stream, or run as tasks. It provides one
+runtime for schemas, payment admission, policy, idempotency, fulfillment,
+discovery, and accounting while wallets, payment protocols, networks, and
+facilitators remain external.
 
-Use Lucid when you need more than a route-level paywall: several typed
-capabilities, buyer or seller policy, safe retries, streaming or long-running
-work, framework portability, or one contract projected into discovery and a
-service storefront. For a single route with no application-runtime needs, the
-official x402 SDK may be the smaller dependency.
-
-> **Release channels:** public npm packages are the Stable channel. This
-> repository is the Next channel and is currently ahead of npm. Do not mix
-> package versions from the two channels. See the
-> [release table](https://docs.daydreams.systems/docs/reference/release-channels)
-> before copying repository examples into an npm-installed project.
+Use Lucid when a service needs several typed capabilities or shared behavior
+across frameworks. For a single paid route, the upstream payment middleware may
+be the smaller dependency.
 
 ## Quick start
 
-Requirements: Bun 1.3 or Node.js 20.9+.
+Requires Bun 1.3+. Runtime packages also support Node.js 20.9+.
 
 ```bash
-bunx @lucid-agents/cli@2.5.0 my-agent --adapter=hono
+bunx @lucid-agents/cli@2.5.0 my-agent --adapter=hono --template=blank
 cd my-agent
 bun install
 bun run dev
 ```
 
-This creates the Stable scaffold. To complete an unpaid `402` challenge and a
-paid Base Sepolia response, follow the tested
-[Sell a paid API](https://docs.daydreams.systems/docs/start/sell-paid-api)
-tutorial. Start from the
-[budgeted buyer](https://docs.daydreams.systems/docs/start/budgeted-buyer) or
-[existing application](https://docs.daydreams.systems/docs/start/existing-app)
-guide when that is your primary job.
-
-The CLI can generate Hono, Express, TanStack UI/headless, and Next.js projects:
+The generated service exposes health, discovery, and a typed `echo`
+entrypoint:
 
 ```bash
-bunx @lucid-agents/cli@2.5.0 my-agent \
-  --adapter=hono \
-  --template=blank \
-  --non-interactive
-```
-
-For the default empty API base path:
-
-```bash
+curl http://localhost:3000/health
 curl http://localhost:3000/.well-known/agent-card.json
-curl http://localhost:3000/entrypoints
 curl -X POST http://localhost:3000/entrypoints/echo/invoke \
   -H 'Content-Type: application/json' \
   -d '{"input":{"text":"Hello"}}'
 ```
 
-## Build against the Next runtime
+Public npm packages are the **Stable** channel. This repository is **Next** and
+can be ahead of npm. Keep all packages on one channel; see
+[release channels](https://docs.daydreams.systems/docs/reference/release-channels)
+for the current compatibility table.
 
-The rest of this README describes the current repository surface. Clone and
-build the workspace as one compatible set before using it:
+## Core API
 
-```bash
-git clone https://github.com/daydreamsai/lucid-agents.git
-cd lucid-agents
-bun install --frozen-lockfile
-bun run build:packages
-```
+This example uses the current repository surface:
 
 ```ts
 import { createAgent } from '@lucid-agents/core';
@@ -86,7 +58,7 @@ import { createAgentApp } from '@lucid-agents/hono';
 import { http } from '@lucid-agents/http';
 import { z } from 'zod';
 
-const agent = await createAgent({
+const runtime = await createAgent({
   name: 'greeter',
   version: '1.0.0',
   description: 'A typed greeting service',
@@ -102,7 +74,7 @@ const agent = await createAgent({
   })
   .build();
 
-const { app } = await createAgentApp(agent);
+const { app } = await createAgentApp(runtime);
 
 export default {
   port: Number(process.env.PORT ?? 3000),
@@ -110,207 +82,96 @@ export default {
 };
 ```
 
-Input and output are validated with Zod. The same canonical entrypoint registry
-drives invocation, streaming, tasks, discovery, and every adapter.
+The entrypoint definition is the source for validation, invocation, streaming,
+tasks, discovery, and every framework adapter.
 
-## Architecture at a glance
+The compiled [full agent example](packages/examples/src/core/full-agent.ts) adds
+payments, identity, and streaming.
+
+## Feature matrix
+
+Package names below use the `@lucid-agents/` prefix.
+
+| Capability                             | Packages involved             | What they provide                                                                                                                |
+| -------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Typed runtime                          | `core`, `types`               | Extension lifecycle, exact runtime types, and one entrypoint registry                                                            |
+| [HTTP](packages/http/README.md)        | `http`                        | Fetch handlers, route planning, authorization, idempotency, server-sent events (SSE), and service-page data                      |
+| x402 commerce                          | `payments`                    | Ethereum Virtual Machine (EVM) and Solana seller verification, EVM buying, Sign-In-With-X (SIWX), policy, and tracking           |
+| Machine Payments Protocol (MPP)        | `mpp`                         | Payment-Auth challenges and Tempo, Stripe, or custom credential verification                                                     |
+| Wallets                                | `wallet`                      | Agent and developer wallet connectors for signing and outgoing calls                                                             |
+| Identity                               | `identity`, `wallet`          | ERC-8004 registration and lookup, trust metadata, and [Open Agentic Schema Framework (OASF)](packages/identity/README.md) output |
+| Agent discovery and tasks              | `a2a`                         | Agent Card-shaped discovery, client calls, and token-protected asynchronous tasks                                                |
+| Agent Payments Protocol (AP2) metadata | `ap2`                         | AP2 v0.1 role metadata in discovery                                                                                              |
+| Analytics                              | `analytics`, `payments`       | Bound payment summaries and JSON/CSV exports                                                                                     |
+| Scheduling                             | `scheduler`, `a2a`            | Leased, idempotent scheduled agent calls                                                                                         |
+| Catalogs                               | `catalog`                     | YAML/CSV-defined entrypoints                                                                                                     |
+| Frameworks                             | `hono`, `express`, `tanstack` | Bind the canonical HTTP contract to Hono, Express, or TanStack Start                                                             |
+| Tooling                                | `cli`, `deploy`               | Project generation and guarded provider deployment                                                                               |
+| Hosted client                          | `api-sdk`                     | Generated client for the separately operated hosted Runtime API                                                                  |
+
+The CLI generates Hono, Express, TanStack UI/headless, and Next.js projects.
+Next.js uses generated App Router modules rather than a standalone adapter
+package. See the [package reference](https://docs.daydreams.systems/docs/packages)
+for open-source exports, configuration, and runtime support. The `api-sdk` has a
+[separate lifecycle](https://docs.daydreams.systems/docs/products/hosted-platform).
+
+Protocol names in the matrix describe Lucid's implemented subset, not blanket
+conformance. See [protocol compatibility](https://docs.daydreams.systems/docs/protocols)
+for versions, bindings, and exclusions.
+
+## Runtime model
 
 ```text
-createAgent(meta)
-    ↓ typed extension DAG
-AgentRuntime + exact installed capabilities
-    ↓
-http() → Fetch handlers + canonical route plan + one authorization gate
-    ↓
+typed entrypoint
+      ↓
+core registry + domain extensions
+      ↓
+one HTTP authorization and route contract
+      ↓
 Hono | Express | TanStack Start | generated Next.js routes
 ```
 
-The extension kernel validates dependencies, orders lifecycle hooks, rolls back
-partial builds, and disposes resources in reverse dependency order. Domain
-packages return complete runtime slices directly—core does not wrap payment,
-identity, A2A, analytics, or scheduler runtimes.
+The package boundaries are deliberate:
 
-The HTTP extension owns one authorization transaction for invoke, stream, and
-task creation. It selects one payment rail, verifies credentials through the
-owning extension, enforces sender policies and atomic limits, executes work, and
-then settles/commits or releases reservations.
+- `types` owns shared contracts; each domain package owns its runtime behavior.
+- Core exposes extension slices directly without wrappers or duplicate state.
+- Adapters bind the HTTP route plan; they do not add another paywall or registry.
+- In-memory state is the portable default; durable backends are explicit.
 
-See [the architecture guide](docs/ARCHITECTURE.md) for extension ordering, route
-contracts, payment boundaries, task ownership, portability, and test invariants.
+Read [the architecture guide](docs/ARCHITECTURE.md) for extension ordering,
+authorization, task ownership, deployment boundaries, and portability.
 
-## Core concepts
+## Guides
 
-### Extensions
+| Goal                        | Guide                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| Decide whether Lucid fits   | [When to use Lucid](https://docs.daydreams.systems/docs/start/when-to-use-lucid)         |
+| Build a paid service        | [Sell a paid API](https://docs.daydreams.systems/docs/start/sell-paid-api)               |
+| Build a controlled buyer    | [Budgeted buyer](https://docs.daydreams.systems/docs/start/budgeted-buyer)               |
+| Add Lucid to an application | [Existing app](https://docs.daydreams.systems/docs/start/existing-app)                   |
+| Prepare for production      | [Production checklist](https://docs.daydreams.systems/docs/operate/production-checklist) |
+| Browse tested examples      | [Examples](packages/examples/README.md)                                                  |
 
-Each extension adds an exact runtime capability:
-
-```ts
-const agent = await createAgent(meta)
-  .use(wallets({ config: walletsFromEnv() }))
-  .use(payments({ config: paymentsFromEnv() }))
-  .use(a2a())
-  .use(analytics())
-  .use(http({ basePath: '/api/agent' }))
-  .build();
-
-await agent.analytics.getSummary();
-await agent.close();
-```
-
-Required capabilities are checked by TypeScript and again at runtime. For
-example, `analytics()` requires an enabled payments runtime and `scheduler()`
-requires A2A.
-
-### Entrypoints
-
-An entrypoint declares schemas, handlers, streaming behavior, optional payment
-metadata, and optional SIWX policy. It can be added on the builder or later via
-`agent.entrypoints.add()`. Duplicate keys are rejected and dynamic additions
-invalidate the manifest cache.
-
-### Discovery
-
-The origin-aware agent card is served at:
-
-- `/.well-known/agent-card.json` (canonical)
-- `/.well-known/agent.json` (legacy compatibility)
-
-It includes the current entrypoint record and extension contributions such as
-payment methods, Lucid task capability metadata, AP2 v0.1 role metadata, and
-draft ERC-8004 trust registrations.
-
-### Payments
-
-`@lucid-agents/payments` accepts the documented x402 v2 HTTP `exact` subset on
-EVM and Solana seller networks and supplies an EVM x402-aware Fetch client for
-outgoing calls. `@lucid-agents/mpp` uses the Payment-Auth format from the active
-individual Internet-Draft, with native mppx Tempo/Stripe verification or an
-explicit verifier for custom methods. When both are installed, each priced
-entrypoint explicitly chooses `x402` or `mpp`.
-
-Payment policies support per-request amounts, atomic time-window/lifetime totals,
-rate limits, endpoint/peer scopes, and allow/deny lists for both outgoing and
-incoming traffic. The portable storage default is in-memory; SQLite, Postgres,
-and Stripe integrations are explicit subpath imports.
-
-### Agent Card discovery and Lucid tasks
-
-`a2a()` adds Agent Card-shaped discovery, Lucid HTTP clients, and bounded
-asynchronous tasks. It is not an official A2A v1 binding and does not claim TCK
-conformance. Task creation returns
-`{ taskId, accessToken }`; the token is required for reads, lists, cancellation,
-and SSE subscriptions, while only its hash is stored. Inject a durable
-`TaskStore` for restart survival or multiple processes.
-
-### Identity
-
-`identity()` owns draft ERC-8004 lookup/registration, trust metadata, and OASF output.
-Registration fails closed if it needs a wallet but no wallet capability exists.
-The resolved result is exposed as `agent.identity.result`.
-
-## Packages
-
-| Package                                                   | Responsibility                                 |
-| --------------------------------------------------------- | ---------------------------------------------- |
-| `@lucid-agents/types`                                     | Canonical shared contracts by protocol subpath |
-| [`@lucid-agents/core`](packages/core/README.md)           | Typed extension kernel and entrypoint registry |
-| [`@lucid-agents/http`](packages/http/README.md)           | Fetch handlers, routes, SSE, and authorization |
-| [`@lucid-agents/payments`](packages/payments/README.md)   | x402, SIWX, policies, tracking, storage ports  |
-| [`@lucid-agents/mpp`](packages/mpp/README.md)             | MPP-draft subset and credential verification   |
-| [`@lucid-agents/a2a`](packages/a2a/README.md)             | Agent Card-shaped metadata and Lucid task APIs |
-| `@lucid-agents/wallet`                                    | Agent/developer wallet connectors              |
-| [`@lucid-agents/identity`](packages/identity/README.md)   | Draft ERC-8004 identity, trust, and OASF       |
-| [`@lucid-agents/ap2`](packages/ap2/README.md)             | AP2 v0.1 role metadata only                    |
-| `@lucid-agents/analytics`                                 | Bound payment analytics and CSV/JSON export    |
-| [`@lucid-agents/scheduler`](packages/scheduler/README.md) | Leased scheduled Lucid HTTP-profile calls      |
-| [`@lucid-agents/catalog`](packages/catalog/README.md)     | YAML/CSV catalogue entrypoint generation       |
-| `@lucid-agents/hono`                                      | Hono adapter over the canonical route plan     |
-| `@lucid-agents/express`                                   | Express/Web Request bridge and route adapter   |
-| `@lucid-agents/tanstack`                                  | TanStack Start handler adapter                 |
-| [`@lucid-agents/api-sdk`](packages/api-sdk/README.md)     | Hosted Runtime API client; separate lifecycle  |
-| [`@lucid-agents/cli`](packages/cli/README.md)             | Project and template generator                 |
-| [`@lucid-agents/deploy`](packages/deploy/README.md)       | Guarded provider deployment executable         |
-
-## Monetized agent example
-
-```ts
-import { analytics } from '@lucid-agents/analytics';
-import { createAgent } from '@lucid-agents/core';
-import { http } from '@lucid-agents/http';
-import { payments, paymentsFromEnv } from '@lucid-agents/payments';
-
-const paymentConfig = paymentsFromEnv();
-if (!paymentConfig) throw new Error('Payment environment is incomplete');
-
-const merchant = await createAgent({ name: 'quotes', version: '1.0.0' })
-  .use(
-    payments({
-      config: {
-        ...paymentConfig,
-        storage: { type: 'in-memory' },
-        policyGroups: [
-          {
-            name: 'receivables',
-            incomingLimits: {
-              global: { maxPaymentUsd: 1, maxTotalUsd: 1_000 },
-            },
-            rateLimits: { maxPayments: 100, windowMs: 60_000 },
-          },
-        ],
-      },
-    })
-  )
-  .use(analytics())
-  .use(http())
-  .addEntrypoint({
-    key: 'market-quote',
-    price: '0.01',
-    paymentProtocol: 'x402',
-    handler: async ({ input }) => ({ output: { input, price: 42 } }),
-  })
-  .build();
-
-const summary = await merchant.analytics.getSummary(86_400_000);
-const csv = await merchant.analytics.exportCSV();
-```
-
-For SQLite or Postgres, import and inject the matching factory from
-`@lucid-agents/payments/storage/sqlite` or `/storage/postgres`.
-
-## Development
+## Contributing
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run build:packages
 bun run type-check
 bun run lint
-bun run format:check
-bun run test:portability
 bun run test:coverage
-bun test packages/examples/src/__tests__/
 ```
 
-The build script discovers all workspace packages and derives a topological
-order from package manifests. CI additionally imports portable package roots on
-Node 20 and 22, performs an edge-like dependency check, and runs Postgres
-integration tests. Coverage is measured from TypeScript sources (compiled
-`dist/` artifacts and tests are excluded); `scripts/check-coverage.ts` enforces
-aggregate minimums of 90% lines and 90% functions.
+Keep changes within the package that owns the behavior. Changes that add or
+modify SDK surface need unit or integration coverage, a matching examples smoke
+test, updates to the relevant `AGENTS.md` and package README, public API JSDoc,
+and a changeset. Shared concepts belong in `@lucid-agents/types`; do not
+duplicate or re-export them through another package. Run `bun run test:docs`
+when changing public examples, package references, or documentation navigation.
 
-New SDK surface requires unit/integration coverage, an examples smoke test,
-documentation, and a changeset. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Resources
-
-- [Documentation](https://docs.daydreams.systems/)
-- [When to use Lucid](https://docs.daydreams.systems/docs/start/when-to-use-lucid)
-- [Protocol compatibility](https://docs.daydreams.systems/docs/protocols)
-- [Architecture guide](docs/ARCHITECTURE.md)
-- [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004)
-- [x402](https://github.com/paywithx402)
-- [A2A Protocol](https://a2a-protocol.org/)
-- [Bun](https://bun.sh/docs)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, testing
+commands, pull-request checklist, and release process.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE)
