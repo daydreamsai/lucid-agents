@@ -234,12 +234,12 @@ describe('Lucid skill distribution', () => {
       await buildSkillAssets({ ...options, outputRoot: outputB });
 
       const archiveName = 'lucid-agents.tar.gz';
-      const archiveA = await readFile(join(outputA, '1.0.1', archiveName));
-      const archiveB = await readFile(join(outputB, '1.0.1', archiveName));
+      const archiveA = await readFile(join(outputA, '1.0.2', archiveName));
+      const archiveB = await readFile(join(outputB, '1.0.2', archiveName));
       expect(archiveA.equals(archiveB)).toBe(true);
 
       const manifest = JSON.parse(
-        await readFile(join(outputA, '1.0.1', 'manifest.json'), 'utf8')
+        await readFile(join(outputA, '1.0.2', 'manifest.json'), 'utf8')
       ) as {
         name: string;
         version: string;
@@ -248,7 +248,7 @@ describe('Lucid skill distribution', () => {
         files: Array<{ path: string }>;
       };
       expect(manifest.name).toBe('lucid-agents');
-      expect(manifest.version).toBe('1.0.1');
+      expect(manifest.version).toBe('1.0.2');
       expect(manifest.sourceCommit).toBe(options.sourceCommit);
       expect(manifest.archive.sha256).toMatch(/^[a-f0-9]{64}$/u);
       expect(manifest.files.map(file => file.path)).toContain('SKILL.md');
@@ -257,30 +257,30 @@ describe('Lucid skill distribution', () => {
         await readFile(join(outputA, archiveName + '.sha256'), 'utf8')
       ).toBe(`${manifest.archive.sha256}  ${archiveName}\n`);
       expect(await readFile(join(outputA, 'SKILL.md'), 'utf8')).toBe(
-        await readFile(join(outputA, '1.0.1', 'SKILL.md'), 'utf8')
+        await readFile(join(outputA, '1.0.2', 'SKILL.md'), 'utf8')
       );
       const installer = await readFile(
-        join(outputA, '1.0.1', 'install.sh'),
+        join(outputA, '1.0.2', 'install.sh'),
         'utf8'
       );
       expect(installer).toBe(
-        await readFile(join(outputB, '1.0.1', 'install.sh'), 'utf8')
+        await readFile(join(outputB, '1.0.2', 'install.sh'), 'utf8')
       );
       expect(installer).toBe(
         await readFile(join(outputA, 'install.sh'), 'utf8')
       );
       expect(installer).toContain(
-        "lucid_skill_base='https://docs.daydreams.systems/skills/lucid-agents/1.0.1'"
+        "lucid_skill_base='https://docs.daydreams.systems/skills/lucid-agents/1.0.2'"
       );
       expect(installer).toContain('shasum -a 256 -c');
       expect(installer).toContain('sha256sum -c');
       const installerSyntax = Bun.spawnSync({
-        cmd: ['sh', '-n', join(outputA, '1.0.1', 'install.sh')],
+        cmd: ['sh', '-n', join(outputA, '1.0.2', 'install.sh')],
       });
       expect(installerSyntax.exitCode).toBe(0);
 
       const listing = Bun.spawnSync({
-        cmd: ['tar', '-tzf', join(outputA, '1.0.1', archiveName)],
+        cmd: ['tar', '-tzf', join(outputA, '1.0.2', archiveName)],
         stderr: 'pipe',
         stdout: 'pipe',
       });

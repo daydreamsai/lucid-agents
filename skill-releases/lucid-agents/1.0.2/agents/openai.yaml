@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Lucid Agents'
+  short_description: 'Build and maintain Lucid agent services'
+  default_prompt: 'Use $lucid-agents to build or modify this Lucid service safely.'
