@@ -59,7 +59,14 @@ export const createSSEStream = (
   options?: SSEStreamOptions
 ): Response => {
   const lifecycle = new AbortController();
-  let notifyCapacity: (() => void) | undefined;
+  const capacityWaiters = new Set<() => void>();
+  const notifyCapacityWaiters = (): void => {
+    const waiters = [...capacityWaiters];
+    capacityWaiters.clear();
+    for (const notify of waiters) {
+      notify();
+    }
+  };
   if (options?.signal) {
     if (options.signal.aborted) {
       lifecycle.abort(options.signal.reason);
@@ -82,10 +89,10 @@ export const createSSEStream = (
           await new Promise<void>(resolve => {
             const finish = () => {
               lifecycle.signal.removeEventListener('abort', finish);
-              if (notifyCapacity === finish) notifyCapacity = undefined;
+              capacityWaiters.delete(finish);
               resolve();
             };
-            notifyCapacity = finish;
+            capacityWaiters.add(finish);
             lifecycle.signal.addEventListener('abort', finish, { once: true });
           });
         }
@@ -126,15 +133,11 @@ export const createSSEStream = (
       });
     },
     pull() {
-      const notify = notifyCapacity;
-      notifyCapacity = undefined;
-      notify?.();
+      notifyCapacityWaiters();
     },
     cancel(reason) {
       lifecycle.abort(reason);
-      const notify = notifyCapacity;
-      notifyCapacity = undefined;
-      notify?.();
+      notifyCapacityWaiters();
     },
   });
 

@@ -242,6 +242,182 @@ describe('shared execution authorization', () => {
     });
   });
 
+  it('accounts a verified Tempo session invoke as its settled one-shot charge', async () => {
+    const requirement: MppPaymentRequirement = {
+      required: true,
+      amount: '0.001',
+      currency: '0x20c0000000000000000000000000000000000000',
+      intent: 'session',
+      methods: ['tempo'],
+    };
+    const mpp = {
+      requirements: () => requirement,
+      authorize: async () => ({
+        authorized: true,
+        receipt: 'tempo-session-invoke-receipt',
+        payer: '0xverified',
+        network: 'eip155:42431',
+        payment: {
+          amount: '0.001',
+          currency: '0x20c0000000000000000000000000000000000000',
+          intent: 'session',
+          method: 'tempo',
+        },
+        accounting: { intent: 'charge' },
+      }),
+    } as unknown as MppRuntime;
+    let receivedPayment: Parameters<PaymentsRuntime['authorize']>[3];
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async (
+        _request: Request,
+        _entrypoint: EntrypointDef,
+        _kind: 'invoke' | 'stream',
+        payment: Parameters<PaymentsRuntime['authorize']>[3]
+      ) => {
+        receivedPayment = payment;
+        if (payment?.intent === 'session' && !payment.maximumAmount) {
+          return {
+            authorized: false,
+            response: Response.json(
+              {
+                error: {
+                  code: 'payment_configuration_error',
+                  message:
+                    'Verified MPP sessions require a positive atomic maximumAmount.',
+                },
+              },
+              { status: 503 }
+            ),
+          } as const;
+        }
+        return {
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => response,
+          }),
+        } as const;
+      },
+    } as unknown as PaymentsRuntime;
+    const entrypoint: EntrypointDef = {
+      key: 'tempo-session-invoke',
+      price: '0.001',
+      paymentProtocol: 'mpp',
+      metadata: { mpp: { intent: 'session', methods: ['tempo'] } },
+    };
+
+    const authorization = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/tempo-session-invoke/invoke'),
+      entrypoint,
+      'invoke',
+      runtimeWith(entrypoint, { mpp, payments })
+    );
+
+    expect(authorization.authorized).toBe(true);
+    expect(receivedPayment).toEqual({
+      protocol: 'mpp',
+      payer: '0xverified',
+      amount: '0.001',
+      currency: '0x20c0000000000000000000000000000000000000',
+      network: 'eip155:42431',
+      intent: 'charge',
+    });
+  });
+
+  it('passes the MPP-owned session accounting ceiling without deriving it from the meter', async () => {
+    const requirement: MppPaymentRequirement = {
+      required: true,
+      amount: '1',
+      currency: 'usd',
+      intent: 'session',
+      methods: ['tempo'],
+    };
+    const mpp = {
+      requirements: () => requirement,
+      authorize: async () => ({
+        authorized: true,
+        receipt: 'tempo-session-stream-receipt',
+        payment: {
+          amount: '7',
+          currency: 'usd',
+          intent: 'session',
+          method: 'tempo',
+        },
+        accounting: {
+          intent: 'session',
+          reference: 'verified-accounting-channel',
+          maximumAmount: '700',
+        },
+        sessionMeter: {
+          channelId:
+            '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          unitType: 'chunk',
+          unitAmount: '1',
+          maximumAmount: '999',
+          charge: async () => ({
+            status: 'unavailable',
+            reason: 'closed',
+            problem: {
+              type: 'about:blank',
+              title: 'closed',
+              status: 402,
+              detail: 'closed',
+            },
+          }),
+          receipt: async () => {
+            throw new Error('not used');
+          },
+          cancel: async () => {},
+        },
+      }),
+    } as unknown as MppRuntime;
+    let receivedPayment: Parameters<PaymentsRuntime['authorize']>[3];
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async (
+        _request: Request,
+        _entrypoint: EntrypointDef,
+        _kind: 'invoke' | 'stream',
+        payment: Parameters<PaymentsRuntime['authorize']>[3]
+      ) => {
+        receivedPayment = payment;
+        return {
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => response,
+          }),
+        } as const;
+      },
+    } as unknown as PaymentsRuntime;
+    const entrypoint: EntrypointDef = {
+      key: 'tempo-session-stream',
+      price: { stream: '1' },
+      paymentProtocol: 'mpp',
+      metadata: { mpp: { intent: 'session', methods: ['tempo'] } },
+    };
+
+    const authorization = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/tempo-session-stream/stream'),
+      entrypoint,
+      'stream',
+      runtimeWith(entrypoint, { mpp, payments })
+    );
+
+    expect(authorization.authorized).toBe(true);
+    expect(receivedPayment).toEqual({
+      protocol: 'mpp',
+      amount: '7',
+      currency: 'usd',
+      intent: 'session',
+      reference: 'verified-accounting-channel',
+      maximumAmount: '700',
+    });
+  });
+
   it('short-circuits protocol-managed MPP requests before entrypoint admission', async () => {
     const handled = new Response(null, {
       status: 204,

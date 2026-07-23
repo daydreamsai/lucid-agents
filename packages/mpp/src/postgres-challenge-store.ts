@@ -197,7 +197,10 @@ export class PostgresMppChallengeStore implements MppChallengeStore {
         const evictable = await client.query<{ count: string }>(
           `SELECT COUNT(*) AS count FROM mpp_challenges
            WHERE namespace = $1
-             AND (state <> 'leased' OR lease_expires_at <= $2)`,
+             AND (
+               state = 'issued'
+               OR (state = 'leased' AND lease_expires_at <= $2)
+             )`,
           [this.namespace, now]
         );
         if (Number(evictable.rows[0]?.count ?? 0) < toDelete) {
@@ -208,7 +211,10 @@ export class PostgresMppChallengeStore implements MppChallengeStore {
            WHERE (namespace, challenge_id) IN (
              SELECT namespace, challenge_id FROM mpp_challenges
              WHERE namespace = $1
-               AND (state <> 'leased' OR lease_expires_at <= $2)
+               AND (
+                 state = 'issued'
+                 OR (state = 'leased' AND lease_expires_at <= $2)
+               )
              ORDER BY issued_at ASC, challenge_id ASC
              LIMIT $3
            )`,

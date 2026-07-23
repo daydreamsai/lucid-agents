@@ -166,7 +166,10 @@ export class SQLiteMppChallengeStore implements MppChallengeStore {
           .prepare(
             `SELECT COUNT(*) AS count FROM mpp_challenges
              WHERE namespace = ?
-               AND (state <> 'leased' OR lease_expires_at <= ?)`
+               AND (
+                 state = 'issued'
+                 OR (state = 'leased' AND lease_expires_at <= ?)
+               )`
           )
           .get(this.namespace, now) as { count: number };
         if (evictable.count < toDelete) return { status: 'capacity' };
@@ -176,7 +179,10 @@ export class SQLiteMppChallengeStore implements MppChallengeStore {
              WHERE namespace = ? AND challenge_id IN (
                SELECT challenge_id FROM mpp_challenges
                WHERE namespace = ?
-                 AND (state <> 'leased' OR lease_expires_at <= ?)
+                 AND (
+                   state = 'issued'
+                   OR (state = 'leased' AND lease_expires_at <= ?)
+                 )
                ORDER BY issued_at ASC, challenge_id ASC
                LIMIT ?
              )`

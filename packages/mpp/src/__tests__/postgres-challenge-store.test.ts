@@ -96,4 +96,48 @@ describePostgres('PostgresMppChallengeStore integration', () => {
       await first.recover('postgres-shared', 'postgres-idempotency')
     ).toEqual({ receipt: 'postgres-receipt' });
   });
+
+  test('retains an unexpired consumed replay tombstone under capacity pressure', async () => {
+    const boundedNamespace = `bounded-${crypto.randomUUID()}`;
+    const store = createPostgresMppChallengeStore(connectionString!, {
+      namespace: boundedNamespace,
+      maxEntries: 1,
+      now: () => now,
+    });
+    try {
+      await store.issue({
+        challengeId: 'postgres-consumed',
+        binding,
+        issuedAt: now,
+        expiresAt: now + 60_000,
+      });
+      const claimed = await store.claim({
+        challengeId: 'postgres-consumed',
+        binding,
+      });
+      if (claimed.status !== 'claimed') throw new Error('Expected claim');
+      await store.consume({
+        challengeId: 'postgres-consumed',
+        leaseId: claimed.leaseId,
+      });
+
+      expect(
+        await store.issue({
+          challengeId: 'postgres-overflow',
+          binding,
+          issuedAt: now,
+          expiresAt: now + 60_000,
+        })
+      ).toEqual({ status: 'capacity' });
+      expect(
+        await store.claim({
+          challengeId: 'postgres-consumed',
+          binding,
+        })
+      ).toEqual({ status: 'invalid', reason: 'consumed' });
+    } finally {
+      await store.pruneExpired(Number.MAX_SAFE_INTEGER);
+      await store.close();
+    }
+  });
 });

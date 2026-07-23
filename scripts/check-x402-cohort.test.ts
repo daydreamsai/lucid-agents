@@ -40,6 +40,21 @@ describe('x402 dependency cohort check', () => {
     );
   });
 
+  test('rejects a stale direct package resolution', () => {
+    const result = inspectX402Cohort(
+      coherentCatalog,
+      '"@x402/core": ["@x402/core@2.19.0"]\n' +
+        '"@x402/evm": ["@x402/evm@2.18.0"]\n' +
+        '"@x402/extensions": ["@x402/extensions@2.19.0"]\n' +
+        '"@x402/fetch": ["@x402/fetch@2.19.0"]\n' +
+        '"@x402/svm": ["@x402/svm@2.19.0"]'
+    );
+
+    expect(result.errors).toContain(
+      'Catalog x402 version 2.19.0 does not match resolved @x402/evm 2.18.0'
+    );
+  });
+
   test('rejects catalog packages from different release families', () => {
     const result = inspectX402Cohort(
       {

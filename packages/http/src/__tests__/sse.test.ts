@@ -25,6 +25,44 @@ describe('createSSEStream', () => {
     );
   });
 
+  it('releases every capacity waiter when the consumer pulls', async () => {
+    let waitersAreBlocked!: () => void;
+    const blocked = new Promise<void>(resolve => {
+      waitersAreBlocked = resolve;
+    });
+    let waitersReleased!: () => void;
+    const released = new Promise<void>(resolve => {
+      waitersReleased = resolve;
+    });
+    const response = createSSEStream(async ctx => {
+      await ctx.write({ event: 'message', data: 'first' });
+      const firstWaiter = ctx.ready();
+      const secondWaiter = ctx.ready();
+      waitersAreBlocked();
+      await Promise.all([firstWaiter, secondWaiter]);
+      waitersReleased();
+      await ctx.write({ event: 'message', data: 'second' });
+      await ctx.close();
+    });
+
+    await blocked;
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: first'
+    );
+
+    const outcome = await Promise.race([
+      released.then(() => 'released'),
+      new Promise<'timed-out'>(resolve => {
+        setTimeout(() => resolve('timed-out'), 50);
+      }),
+    ]);
+    expect(outcome).toBe('released');
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: second'
+    );
+  });
+
   it('aborts the runner when the client cancels the response body', async () => {
     let observedAbort = false;
     const response = createSSEStream(async ctx => {

@@ -1,8 +1,8 @@
 # MPP and x402 release and gap analysis
 
-**Research date:** 24 July 2026  
-**Repository baseline:** current workspace against `origin/master`  
-**Scope:** The latest released MPP/`mppx` and x402 TypeScript capabilities, compared with `packages/mpp` and `packages/payments`.  
+**Research date:** 24 July 2026
+**Repository baseline:** current workspace against `origin/master`
+**Scope:** The latest released MPP/`mppx` and x402 TypeScript capabilities, compared with `packages/mpp` and `packages/payments`.
 **Method:** Primary sources only: protocol specifications, official documentation, official repositories and changelogs, release tags, published package metadata, and the pre-implementation repository source. This report records the baseline that informed the implementation in this branch.
 
 ## Executive conclusion

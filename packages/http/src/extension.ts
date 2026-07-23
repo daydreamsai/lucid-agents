@@ -513,9 +513,16 @@ export function http(
           }
 
           const paidTask = hasExplicitPrice(taskEntrypoint);
-          if (paidTask && runtime.payments) {
+          let mppTaskRequirement:
+            | ReturnType<MppRuntime['requirements']>
+            | undefined;
+          if (paidTask) {
             try {
-              runtime.payments.requirements(taskEntrypoint, 'task');
+              runtime.payments?.requirements(taskEntrypoint, 'task');
+              mppTaskRequirement = runtime.mpp?.requirements(
+                taskEntrypoint,
+                'task'
+              );
             } catch (error) {
               return jsonResponse(
                 {
@@ -553,8 +560,7 @@ export function http(
           const taskId = globalThis.crypto.randomUUID();
           const reserveBeforeAuthorization =
             hasMppCredential(req, runtime.mpp) &&
-            runtime.mpp?.requirements(taskEntrypoint, 'invoke').required ===
-              true;
+            mppTaskRequirement?.required === true;
           let taskReserved = false;
           let executionClaim: PreparedTaskExecution | undefined;
           if (reserveBeforeAuthorization) {
@@ -589,7 +595,9 @@ export function http(
               req.clone(),
               taskEntrypoint,
               'invoke',
-              runtime
+              runtime,
+              undefined,
+              { resolvedMppRequirement: mppTaskRequirement }
             );
           } catch (error) {
             const response = jsonResponse(

@@ -47,7 +47,7 @@ function expectOneClaim(
 
 function runChallengeStoreContract(
   name: string,
-  createStore: (now: () => number) => MppChallengeStore
+  createStore: (now: () => number, maxEntries?: number) => MppChallengeStore
 ): void {
   describe(name, () => {
     test('issues without overwriting and fences concurrent verification', async () => {
@@ -267,11 +267,37 @@ function runChallengeStoreContract(
       ).toBeUndefined();
       await store.close?.();
     });
+
+    test('retains an unexpired consumed replay tombstone under capacity pressure', async () => {
+      const now = 22_000;
+      const store = createStore(() => now, 1);
+      await store.issue(challenge('consumed-challenge', now));
+      const claimed = await store.claim({
+        challengeId: 'consumed-challenge',
+        binding,
+      });
+      if (claimed.status !== 'claimed') throw new Error('Expected claim');
+      await store.consume({
+        challengeId: 'consumed-challenge',
+        leaseId: claimed.leaseId,
+      });
+
+      expect(await store.issue(challenge('overflow-challenge', now))).toEqual({
+        status: 'capacity',
+      });
+      expect(
+        await store.claim({
+          challengeId: 'consumed-challenge',
+          binding,
+        })
+      ).toEqual({ status: 'invalid', reason: 'consumed' });
+      await store.close?.();
+    });
   });
 }
 
-runChallengeStoreContract('InMemoryMppChallengeStore', now =>
-  createInMemoryMppChallengeStore({ now })
+runChallengeStoreContract('InMemoryMppChallengeStore', (now, maxEntries) =>
+  createInMemoryMppChallengeStore({ now, maxEntries })
 );
 
 const sqliteDirectories: string[] = [];
@@ -282,11 +308,12 @@ afterEach(() => {
   }
 });
 
-runChallengeStoreContract('SQLiteMppChallengeStore', now => {
+runChallengeStoreContract('SQLiteMppChallengeStore', (now, maxEntries) => {
   const directory = mkdtempSync(join(tmpdir(), 'lucid-mpp-store-'));
   sqliteDirectories.push(directory);
   return createSQLiteMppChallengeStore(join(directory, 'challenges.db'), {
     now,
+    maxEntries,
   });
 });
 

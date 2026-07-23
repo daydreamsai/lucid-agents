@@ -42,6 +42,85 @@ const serverClient = createClient({
   }),
 });
 
+async function buildTaskSessionRuntime(includeCustomSession = false) {
+  const extension = mpp({
+    config: {
+      methods: [
+        tempo.session({
+          mode: 'development',
+          account: payee,
+          chainId,
+          currency: token,
+          recipient: payee.address,
+          decimals: 0,
+          amount: '1',
+          unitType: 'chunk',
+          deposit: { minimum: '1', suggested: '2', maximum: '3' },
+          store: createInMemoryTempoSessionStore(),
+          getClient: () => serverClient,
+        }),
+        ...(includeCustomSession
+          ? [
+              {
+                name: 'custom-session',
+                implementation: 'custom' as const,
+                config: {},
+              },
+            ]
+          : []),
+      ],
+      defaultIntent: 'session',
+      secretKey: 'tempo-session-task-test-secret-32-bytes',
+    },
+  });
+  const slice = await extension.build({
+    meta: { name: 'session-task-test', version: '1.0.0' },
+    runtime: {},
+  } as BuildContext);
+  if (!slice.mpp) throw new Error('expected MPP runtime');
+  return slice.mpp;
+}
+
+test('native Tempo sessions are unsupported for task requirements', async () => {
+  const runtime = await buildTaskSessionRuntime();
+  const entrypoint: EntrypointDef = {
+    key: 'native-session-task',
+    price: '1',
+    metadata: {
+      mpp: {
+        intent: 'session',
+        methods: ['tempo'],
+      },
+    },
+  };
+  runtime.activate(entrypoint);
+
+  expect(() => runtime.requirements(entrypoint, 'task')).toThrow(
+    'No configured MPP method supports session tasks'
+  );
+});
+
+test('task requirements retain custom sessions while excluding native Tempo sessions', async () => {
+  const runtime = await buildTaskSessionRuntime(true);
+  const entrypoint: EntrypointDef = {
+    key: 'mixed-session-task',
+    price: '1',
+    metadata: {
+      mpp: {
+        intent: 'session',
+        methods: ['tempo', 'custom-session'],
+      },
+    },
+  };
+  runtime.activate(entrypoint);
+
+  expect(runtime.requirements(entrypoint, 'task')).toMatchObject({
+    required: true,
+    intent: 'session',
+    methods: ['custom-session'],
+  });
+});
+
 test('native Tempo stream authorization exposes a durable session meter', async () => {
   const store = createInMemoryTempoSessionStore();
   const salt = `0x${'11'.repeat(32)}` as Hex;
@@ -218,6 +297,11 @@ test('native Tempo stream authorization exposes a durable session meter', async 
       intent: 'session',
       method: 'tempo',
     },
+    accounting: {
+      intent: 'session',
+      reference: channelId,
+      maximumAmount: '3',
+    },
     sessionMeter: {
       channelId,
       unitType: 'chunk',
@@ -250,36 +334,53 @@ test('native Tempo stream authorization exposes a durable session meter', async 
     invokeRequirement
   );
   if (invokeChallengeResult.authorized) throw new Error('expected challenge');
+  const invokeRequest = new Request('https://agent.test/stream', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'tempo-session-invoke-recovery-0001',
+      Authorization: Credential.serialize({
+        challenge: Challenge.fromResponse(invokeChallengeResult.response),
+        source: `did:pkh:eip155:${chainId}:${payer.address}`,
+        payload: {
+          action: 'voucher',
+          channelId,
+          descriptor,
+          cumulativeAmount: '2',
+          signature,
+        },
+      }),
+    },
+    body: '{"prompt":"invoke"}',
+  });
+  const invokeRetry = invokeRequest.clone();
   const invokeAuthorization = await slice.mpp.authorize(
-    new Request('https://agent.test/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: Credential.serialize({
-          challenge: Challenge.fromResponse(invokeChallengeResult.response),
-          source: `did:pkh:eip155:${chainId}:${payer.address}`,
-          payload: {
-            action: 'voucher',
-            channelId,
-            descriptor,
-            cumulativeAmount: '2',
-            signature,
-          },
-        }),
-      },
-      body: '{"prompt":"invoke"}',
-    }),
+    invokeRequest,
     entrypoint,
     'invoke',
-    invokeRequirement
+    invokeRequirement,
+    { allowIdempotencyRecovery: true }
   );
   expect(invokeAuthorization).toMatchObject({
     authorized: true,
     payment: { amount: '1', intent: 'session' },
+    accounting: { intent: 'charge' },
   });
   if (!invokeAuthorization.authorized) {
     throw new Error('expected invoke authorization');
   }
+  const recoveredInvoke = await slice.mpp.authorize(
+    invokeRetry,
+    entrypoint,
+    'invoke',
+    invokeRequirement,
+    { allowIdempotencyRecovery: true }
+  );
+  expect(recoveredInvoke).toMatchObject({
+    authorized: true,
+    payment: { amount: '1', intent: 'session' },
+    accounting: { intent: 'charge' },
+  });
   expect(invokeAuthorization.sessionMeter).toBeUndefined();
   expect(await store.get(channelId)).toMatchObject({
     spent: 2n,

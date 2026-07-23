@@ -171,6 +171,7 @@ export function createTempoSessionMeter(
   const pollIntervalMs = options.pollIntervalMs ?? 100;
   let prepaidUnits = options.prepaidUnits ?? 0;
   let cancelled = false;
+  let cancelPromise: Promise<void> | undefined;
 
   const attemptCharge = (): Promise<ChargeAttempt> =>
     options.store.update<ChargeAttempt>(options.channelId, current => {
@@ -234,13 +235,20 @@ export function createTempoSessionMeter(
     receipt: MppSessionReceiptEvent
   ): MppSessionMeterChargeResult => {
     let rolledBack = false;
+    let rollbackPromise: Promise<void> | undefined;
     return {
       status: 'charged',
       receipt,
       rollback: async () => {
         if (rolledBack) return;
-        rolledBack = true;
-        await rollbackCharge();
+        rollbackPromise ??= rollbackCharge()
+          .then(() => {
+            rolledBack = true;
+          })
+          .finally(() => {
+            rollbackPromise = undefined;
+          });
+        await rollbackPromise;
       },
     };
   };
@@ -335,29 +343,42 @@ export function createTempoSessionMeter(
       return receiptEvent(current, options.challengeId);
     },
     async cancel(): Promise<void> {
-      if (cancelled) return;
       cancelled = true;
+      if (cancelPromise) {
+        await cancelPromise;
+        return;
+      }
       const unusedPrepaid = prepaidUnits;
-      prepaidUnits = 0;
       if (unusedPrepaid <= 0) return;
-      await options.store.update<void>(options.channelId, current => {
-        if (!isChannel(current)) return { op: 'noop', result: undefined };
-        const spent = current.spent ?? 0n;
-        const units = current.units ?? 0;
-        const rollback = options.tickCost * BigInt(unusedPrepaid);
-        if (spent < rollback || units < unusedPrepaid) {
-          throw new Error('Tempo session prepaid accounting is inconsistent');
-        }
-        return {
-          op: 'set',
-          value: {
-            ...current,
-            spent: spent - rollback,
-            units: units - unusedPrepaid,
-          },
-          result: undefined,
-        };
-      });
+      const pending = options.store
+        .update<void>(options.channelId, current => {
+          if (!isChannel(current)) return { op: 'noop', result: undefined };
+          const spent = current.spent ?? 0n;
+          const units = current.units ?? 0;
+          const rollback = options.tickCost * BigInt(unusedPrepaid);
+          if (spent < rollback || units < unusedPrepaid) {
+            throw new Error(
+              'Tempo session prepaid accounting is inconsistent'
+            );
+          }
+          return {
+            op: 'set',
+            value: {
+              ...current,
+              spent: spent - rollback,
+              units: units - unusedPrepaid,
+            },
+            result: undefined,
+          };
+        })
+        .then(() => {
+          prepaidUnits -= unusedPrepaid;
+        })
+        .finally(() => {
+          cancelPromise = undefined;
+        });
+      cancelPromise = pending;
+      await pending;
     },
   };
 }

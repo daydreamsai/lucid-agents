@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import type {
+  TempoSessionStore,
+  TempoSessionStoreChange,
+} from '@lucid-agents/types/mpp';
 
 import { createTempoSessionMeter } from '../tempo-session-meter';
-import { createInMemoryTempoSessionStore } from '../tempo-session-store';
+import {
+  createInMemoryTempoSessionStore,
+  type InMemoryTempoSessionStore,
+} from '../tempo-session-store';
 
 const channelId =
   '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const;
@@ -16,6 +23,45 @@ function channel(overrides: Record<string, unknown> = {}) {
     finalized: false,
     closeRequestedAt: 0n,
     ...overrides,
+  };
+}
+
+function spent(value: unknown): bigint | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = (value as { spent?: unknown }).spent;
+  return typeof candidate === 'bigint' ? candidate : undefined;
+}
+
+function failNextSpentDecrease(
+  delegate: InMemoryTempoSessionStore
+): TempoSessionStore {
+  let shouldFail = true;
+  return {
+    durability: delegate.durability,
+    get: key => delegate.get(key),
+    put: (key, value) => delegate.put(key, value),
+    delete: key => delegate.delete(key),
+    update: async <Result>(
+      key: string,
+      fn: (
+        current: unknown | null
+      ) => TempoSessionStoreChange<Result>
+    ): Promise<Result> =>
+      delegate.update(key, current => {
+        const change = fn(current);
+        if (
+          shouldFail &&
+          change.op === 'set' &&
+          spent(change.value) !== undefined &&
+          spent(current) !== undefined &&
+          spent(change.value)! < spent(current)!
+        ) {
+          shouldFail = false;
+          throw new Error('transient durable store failure');
+        }
+        return change;
+      }),
+    close: () => delegate.close(),
   };
 }
 
@@ -102,6 +148,32 @@ describe('Tempo session meter', () => {
     await store.close();
   });
 
+  test('retries a charged unit rollback after a transient store failure', async () => {
+    const durableState = createInMemoryTempoSessionStore();
+    await durableState.put(channelId, channel());
+    const meter = createTempoSessionMeter({
+      store: failNextSpentDecrease(durableState),
+      channelId,
+      challengeId: 'challenge-retry-rollback',
+      tickCost: 1n,
+      maximumAmount: 3n,
+      unitType: 'chunk',
+    });
+
+    const charged = await meter.charge();
+    if (charged.status !== 'charged') throw new Error('Expected charged unit');
+    await expect(charged.rollback()).rejects.toThrow(
+      'transient durable store failure'
+    );
+    await charged.rollback();
+
+    expect(await durableState.get(channelId)).toMatchObject({
+      spent: 0n,
+      units: 0,
+    });
+    await durableState.close();
+  });
+
   test('rolls back only an unused prepaid unit when cancelled', async () => {
     const store = createInMemoryTempoSessionStore();
     await store.put(
@@ -125,5 +197,33 @@ describe('Tempo session meter', () => {
       highestVoucherAmount: 2n,
     });
     await store.close();
+  });
+
+  test('retries prepaid cancellation after a transient store failure', async () => {
+    const durableState = createInMemoryTempoSessionStore();
+    await durableState.put(
+      channelId,
+      channel({ spent: 1n, units: 1, highestVoucherAmount: 2n })
+    );
+    const meter = createTempoSessionMeter({
+      store: failNextSpentDecrease(durableState),
+      channelId,
+      challengeId: 'challenge-retry-cancel',
+      tickCost: 1n,
+      maximumAmount: 3n,
+      unitType: 'chunk',
+      prepaidUnits: 1,
+    });
+
+    await expect(meter.cancel()).rejects.toThrow(
+      'transient durable store failure'
+    );
+    await meter.cancel();
+
+    expect(await durableState.get(channelId)).toMatchObject({
+      spent: 0n,
+      units: 0,
+    });
+    await durableState.close();
   });
 });

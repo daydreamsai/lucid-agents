@@ -3,6 +3,8 @@ import type { FetchFunction } from '../http';
 import type { Account, Client } from 'viem';
 
 export type MppPaymentIntent = 'charge' | 'session';
+/** Canonical operation used when resolving transport-specific MPP support. */
+export type MppPaymentOperation = 'invoke' | 'stream' | 'task';
 export type MppPaymentMethod = string;
 
 export type TempoServerConfig = {
@@ -308,6 +310,20 @@ export type MppPaymentSelection = {
   method: MppPaymentMethod;
 };
 
+/**
+ * MPP-owned disposition for policy accounting after successful verification.
+ *
+ * Charge dispositions are already settled. Session dispositions reserve a
+ * verified atomic ceiling and finalize against the referenced channel.
+ */
+export type MppAccountingDisposition =
+  | { intent: 'charge' }
+  | {
+      intent: 'session';
+      reference: string;
+      maximumAmount: string;
+    };
+
 /** Recoverable authorization persisted after successful verification. */
 export type MppStoredAuthorization = {
   /** Non-empty serialized receipt proving successful verification. */
@@ -552,6 +568,8 @@ export type MppAuthorizationResult =
       network?: string;
       /** Exact server offer selected by the verified credential. */
       payment?: MppPaymentSelection;
+      /** Payment lifecycle already classified by the owning MPP runtime. */
+      accounting?: MppAccountingDisposition;
       /** Verified protocol response headers to add to the handler response. */
       responseHeaders?: Record<string, string>;
       /** Protocol management response that must bypass the entrypoint handler. */
@@ -628,7 +646,7 @@ export type MppRuntime = {
   hasCredential: (request: Request) => boolean;
   requirements: (
     entrypoint: EntrypointDef,
-    kind: 'invoke' | 'stream'
+    operation: MppPaymentOperation
   ) => MppPaymentRequirement;
   activate: (entrypoint: EntrypointDef) => void;
   resolvePrice: (

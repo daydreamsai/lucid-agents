@@ -1,5 +1,7 @@
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type {
+  MppAccountingDisposition,
+  MppPaymentRequirement,
   MppPaymentSelection,
   MppRuntime,
   MppSessionMeter,
@@ -62,6 +64,8 @@ export type EntrypointAuthorization =
 export type EntrypointAuthorizationOptions = {
   /** Enable MPP replay recovery only for a validated, store-backed invoke. */
   allowMppIdempotencyRecovery?: boolean;
+  /** Reuse an MPP-owned requirement resolved for a non-HTTP transport. */
+  resolvedMppRequirement?: MppPaymentRequirement;
 };
 
 function normalizeAddress(address: string): string {
@@ -194,7 +198,9 @@ export async function authorizeEntrypointRequest(
   }
 
   const x402Requirement = runtime.payments?.requirements(entrypoint, kind);
-  const mppRequirement = runtime.mpp?.requirements(entrypoint, kind);
+  const mppRequirement =
+    options?.resolvedMppRequirement ??
+    runtime.mpp?.requirements(entrypoint, kind);
   const x402Required = x402Requirement?.required === true;
   const mppRequired = mppRequirement?.required === true;
 
@@ -222,6 +228,7 @@ export async function authorizeEntrypointRequest(
   let mppPayer: string | undefined;
   let mppNetwork: string | undefined;
   let mppPayment: MppPaymentSelection | undefined;
+  let mppAccounting: MppAccountingDisposition | undefined;
   let mppResponseHeaders: Record<string, string> | undefined;
   let sessionMeter: MppSessionMeter | undefined;
   let reconciliation:
@@ -267,6 +274,7 @@ export async function authorizeEntrypointRequest(
     mppPayer = authorization.payer;
     mppNetwork = authorization.network;
     mppPayment = authorization.payment;
+    mppAccounting = authorization.accounting;
     mppResponseHeaders = authorization.responseHeaders;
     sessionMeter = authorization.sessionMeter;
     if (authorization.handled) {
@@ -292,15 +300,7 @@ export async function authorizeEntrypointRequest(
           amount: mppPayment?.amount ?? mppRequirement.amount,
           currency: mppPayment?.currency ?? mppRequirement.currency,
           network: mppNetwork,
-          ...(mppPayment?.intent === 'session'
-            ? { intent: mppPayment.intent }
-            : {}),
-          ...(sessionMeter
-            ? {
-                reference: sessionMeter.channelId,
-                maximumAmount: sessionMeter.maximumAmount,
-              }
-            : {}),
+          ...(mppAccounting ?? {}),
         }
       : undefined;
 
@@ -351,11 +351,13 @@ export async function authorizeEntrypointRequest(
     auth,
     reconciliation,
     sessionMeter,
-    ...(sessionMeter && verifiedMppPayment
+    ...(sessionMeter &&
+    verifiedMppPayment &&
+    mppAccounting?.intent === 'session'
       ? {
           sessionPayment: {
             asset: verifiedMppPayment.currency,
-            reference: sessionMeter.channelId,
+            reference: mppAccounting.reference,
           },
         }
       : {}),

@@ -101,6 +101,11 @@ function sessionRuntime(meter: MppSessionMeter): MppRuntime {
         intent: 'session',
         method: 'tempo',
       },
+      accounting: {
+        intent: 'session',
+        reference: meter.channelId,
+        maximumAmount: meter.maximumAmount,
+      },
       sessionMeter: meter,
     }),
   } as unknown as MppRuntime;
@@ -199,6 +204,54 @@ describe('HTTP stream execution', () => {
       usage: { total_tokens: 2 },
       model: 'test-model',
     });
+  });
+
+  it('completes concurrent emits after the consumer releases backpressure', async () => {
+    let emitsAreWaiting!: () => void;
+    const waiting = new Promise<void>(resolve => {
+      emitsAreWaiting = resolve;
+    });
+    const entrypoint: EntrypointDef = {
+      key: 'messages',
+      stream: async (_context, emit) => {
+        const first = emit({ kind: 'text', text: 'first' });
+        const second = emit({ kind: 'delta', delta: ' second', final: true });
+        emitsAreWaiting();
+        await Promise.all([first, second]);
+        return { status: 'succeeded' };
+      },
+    };
+    const response = await stream(
+      streamRequest(),
+      entrypoint.key,
+      makeRuntime(entrypoint)
+    );
+
+    await waiting;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const body = await Promise.race([
+      response.text(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('concurrent stream emits did not complete')),
+          100
+        );
+      }),
+    ]).finally(() => {
+      if (timeout) clearTimeout(timeout);
+    });
+    const events = envelopes(body);
+
+    expect(events.map(event => event.kind)).toEqual([
+      'run-start',
+      'text',
+      'delta',
+      'run-end',
+    ]);
+    expect(events.map(event => event.sequence)).toEqual([0, 1, 2, 3]);
+    expect(events[1]).toMatchObject({ text: 'first' });
+    expect(events[2]).toMatchObject({ delta: ' second', final: true });
+    expect(events[3]).toMatchObject({ status: 'succeeded' });
   });
 
   it('charges each Tempo session unit before delivery and emits actual accounting', async () => {

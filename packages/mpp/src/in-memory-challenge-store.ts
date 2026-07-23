@@ -84,9 +84,10 @@ export class InMemoryMppChallengeStore implements MppChallengeStore {
         const evictable = [...this.records]
           .filter(
             ([, record]) =>
-              record.state !== 'leased' ||
-              record.leaseExpiresAt === undefined ||
-              record.leaseExpiresAt <= now
+              record.state === 'issued' ||
+              (record.state === 'leased' &&
+                record.leaseExpiresAt !== undefined &&
+                record.leaseExpiresAt <= now)
           )
           .slice(0, toDelete);
         if (evictable.length < toDelete) return { status: 'capacity' };

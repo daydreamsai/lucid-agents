@@ -107,7 +107,8 @@ function bestMatch(
  *
  * Absent or malformed headers preserve server order. A valid header with no
  * compatible entry also falls back to all server offers, matching the
- * protocol's deterministic "ignore the preference" behavior.
+ * protocol's deterministic "ignore the preference" behavior. Compatible
+ * entries with q=0 remain explicit opt-outs.
  */
 export function negotiateMppOffers<const T extends NegotiableOffer>(
   offers: readonly T[],
@@ -122,11 +123,20 @@ export function negotiateMppOffers<const T extends NegotiableOffer>(
     return [...offers];
   }
 
-  const ranked = offers
-    .map((offer, index) => {
-      const match = bestMatch(offer, preferences);
-      return match && match.q > 0 ? { offer, index, match } : undefined;
-    })
+  const matches = offers.map((offer, index) => ({
+    offer,
+    index,
+    match: bestMatch(offer, preferences),
+  }));
+  const hasCompatiblePreference = matches.some(
+    value => value.match !== undefined
+  );
+  const ranked = matches
+    .map(value =>
+      value.match && value.match.q > 0
+        ? { ...value, match: value.match }
+        : undefined
+    )
     .filter(
       (
         value
@@ -141,5 +151,5 @@ export function negotiateMppOffers<const T extends NegotiableOffer>(
     )
     .map(value => value.offer);
 
-  return ranked.length > 0 ? ranked : [...offers];
+  return hasCompatiblePreference ? ranked : [...offers];
 }

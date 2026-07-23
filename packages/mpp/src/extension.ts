@@ -9,12 +9,14 @@ import type { FetchFunction } from '@lucid-agents/types/http';
 import type {
   MppChallengeBinding,
   MppChallengeStore,
+  MppAccountingDisposition,
   MppAuthorizationOptions,
   MppAuthorizationResult,
   MppClientConfig,
   MppConfig,
   EvmServerConfig,
   MppPaymentSelection,
+  MppPaymentOperation,
   MppPaymentRequirement,
   MppRuntime,
   MppSessionReceiptData,
@@ -691,6 +693,10 @@ async function createMppRuntime(
           ...(claimed.authorization.payment
             ? { payment: { ...claimed.authorization.payment } }
             : {}),
+          ...(kind === 'invoke' &&
+          claimed.authorization.payment?.intent === 'session'
+            ? { accounting: { intent: 'charge' as const } }
+            : {}),
         },
       };
     }
@@ -1131,14 +1137,34 @@ async function createMppRuntime(
 
   const requirements = (
     entrypoint: EntrypointDef,
-    kind: 'invoke' | 'stream'
+    operation: MppPaymentOperation
   ): MppPaymentRequirement => {
     if (!isActive || entrypoint.paymentProtocol === 'x402') {
       return { required: false };
     }
+    const kind = operation === 'stream' ? 'stream' : 'invoke';
     const price = resolveEntrypointPrice(entrypoint, kind);
     if (!price) return { required: false };
-    const offers = resolveMppOffers(config, entrypoint, kind);
+    const resolvedOffers = resolveMppOffers(config, entrypoint, kind);
+    const offers =
+      operation === 'task'
+        ? resolvedOffers.filter(offer =>
+            rails.some(
+              rail =>
+                rail.descriptor.name === offer.method &&
+                resolveMppMethodImplementation(rail.descriptor) !==
+                  'tempo-session'
+            )
+          )
+        : resolvedOffers;
+    if (
+      operation === 'task' &&
+      resolvedOffers.length > 0 &&
+      offers.length === 0
+    ) {
+      const intent = resolvedOffers[0]?.intent ?? 'charge';
+      throw new Error(`No configured MPP method supports ${intent} tasks`);
+    }
     if (offers.length === 0) {
       const entrypointConfig = resolveEntrypointMppConfig(entrypoint);
       return {
@@ -1844,6 +1870,17 @@ async function createMppRuntime(
                   : {}),
               })
             : undefined;
+        const accounting: MppAccountingDisposition | undefined =
+          resolveMppMethodImplementation(selected.descriptor) ===
+          'tempo-session'
+            ? sessionMeter
+              ? {
+                  intent: 'session',
+                  reference: sessionMeter.channelId,
+                  maximumAmount: sessionMeter.maximumAmount,
+                }
+              : { intent: 'charge' }
+            : undefined;
         return completeChallenge(credential, claim.leaseId, {
           authorized: true,
           receipt,
@@ -1863,6 +1900,7 @@ async function createMppRuntime(
             : {}),
           ...(handled ? { handled } : {}),
           ...(selectedPayment ? { payment: selectedPayment } : {}),
+          ...(accounting ? { accounting } : {}),
           ...(sessionMeter ? { sessionMeter } : {}),
         });
       } catch {

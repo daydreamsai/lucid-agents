@@ -25,6 +25,21 @@ function versionFromRange(range: string): string {
   return range.trim().replace(/^[~^]/, '');
 }
 
+function resolvedVersions(lockfile: string, packageName: string): string[] {
+  const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return uniqueSorted(
+    lockfile
+      .matchAll(
+        new RegExp(
+          `${escapedName}@(\\d+\\.\\d+\\.\\d+(?:-[^"\\]]+)?)`,
+          'g'
+        )
+      )
+      .map(match => match[1])
+      .filter((value): value is string => value !== undefined)
+  );
+}
+
 export function inspectX402Cohort(
   packageJson: RootPackageJson,
   lockfile: string
@@ -45,28 +60,20 @@ export function inspectX402Cohort(
     errors.push(`Catalog x402 versions are mixed: ${catalogVersions.join(', ')}`);
   }
 
-  const coreVersions = uniqueSorted(
-    lockfile.matchAll(/@x402\/core@(\d+\.\d+\.\d+(?:-[^"\]]+)?)/g)
-      .map(match => match[1])
-      .filter((value): value is string => value !== undefined)
-  );
-  if (coreVersions.length === 0) {
-    errors.push('bun.lock has no resolved @x402/core package');
-  } else if (coreVersions.length > 1) {
-    errors.push(
-      `Resolved @x402/core versions are mixed: ${coreVersions.join(', ')}`
-    );
-  }
-
   const version = catalogVersions.length === 1 ? catalogVersions[0] : undefined;
-  if (
-    version &&
-    coreVersions.length === 1 &&
-    coreVersions[0] !== version
-  ) {
-    errors.push(
-      `Catalog x402 version ${version} does not match resolved @x402/core ${coreVersions[0]}`
-    );
+  for (const packageName of REQUIRED_PACKAGES) {
+    const versions = resolvedVersions(lockfile, packageName);
+    if (versions.length === 0) {
+      errors.push(`bun.lock has no resolved ${packageName} package`);
+    } else if (versions.length > 1) {
+      errors.push(
+        `Resolved ${packageName} versions are mixed: ${versions.join(', ')}`
+      );
+    } else if (version && versions[0] !== version) {
+      errors.push(
+        `Catalog x402 version ${version} does not match resolved ${packageName} ${versions[0]}`
+      );
+    }
   }
 
   return { ...(version ? { version } : {}), errors };

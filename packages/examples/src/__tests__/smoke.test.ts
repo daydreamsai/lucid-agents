@@ -33,6 +33,7 @@ import { evm, mpp, tempo } from '@lucid-agents/mpp';
 import { createSQLiteTempoSessionStore } from '@lucid-agents/mpp/storage/sqlite';
 import {
   type BatchChannelStorage,
+  createInMemoryPaymentStorage,
   decodePaymentRequiredHeader,
   payments,
   type X402ReconciliationOptions,
@@ -1464,6 +1465,7 @@ describe('Example Smoke Tests', () => {
         spent: 0n,
         units: 0,
       });
+      const paymentStorage = createInMemoryPaymentStorage();
       let closeAgent: (() => Promise<void>) | undefined;
       try {
         const agent = await createAgent({
@@ -1471,6 +1473,24 @@ describe('Example Smoke Tests', () => {
           version: '1.0.0',
         })
           .use(http())
+          .use(
+            payments({
+              config: {
+                payTo: X402_PAY_TO,
+                network: X402_NETWORK,
+                facilitatorUrl: 'https://facilitator.example',
+                policyGroups: [
+                  {
+                    name: 'tempo-session-accounting',
+                    // Select a public accounting scope without assigning a
+                    // USD value to this token-denominated Tempo session.
+                    incomingLimits: { global: {} },
+                  },
+                ],
+              },
+              storageFactory: () => paymentStorage,
+            })
+          )
           .use(
             mpp({
               allowInsecureHttpForDevelopment: true,
@@ -1500,6 +1520,7 @@ describe('Example Smoke Tests', () => {
               },
             })
           )
+          .use(analytics())
           .build();
         closeAgent = () => agent.close();
         const agentApp = await createAgentApp(agent);
@@ -1516,8 +1537,10 @@ describe('Example Smoke Tests', () => {
             return { output: { ok: true } };
           },
           stream: async (_context, emit) => {
-            await emit({ kind: 'text', text: 'one' });
-            await emit({ kind: 'text', text: 'two' });
+            await Promise.all([
+              emit({ kind: 'text', text: 'one' }),
+              emit({ kind: 'text', text: 'two' }),
+            ]);
             return { status: 'succeeded', output: { ok: true } };
           },
         });
@@ -1527,8 +1550,10 @@ describe('Example Smoke Tests', () => {
           invoke: '1',
           stream: '1',
         });
-        expect(card.payments).toHaveLength(1);
-        expect(card.payments?.[0]).toMatchObject({
+        const mppPayment = card.payments?.find(
+          payment => payment.method === 'mpp'
+        );
+        expect(mppPayment).toMatchObject({
           method: 'mpp',
           network: 'mpp',
           priceModel: { default: '1' },
@@ -1585,10 +1610,30 @@ describe('Example Smoke Tests', () => {
             credentialFor(Challenge.fromResponse(invokeChallenge))
           )
         );
-        expect(invoked.status).toBe(200);
+        if (!invoked.ok) {
+          throw new Error(
+            `Tempo session invoke failed: ${invoked.status} ${await invoked.clone().text()}`
+          );
+        }
         expect(invoked.headers.get('Payment-Receipt')).toBeTruthy();
         expect(await invoked.json()).toMatchObject({ output: { ok: true } });
         expect(invocations).toBe(1);
+        expect(await store.get(channelId)).toMatchObject({
+          spent: 1n,
+          units: 1,
+        });
+        const invokeAccounting = await agent.analytics.getData();
+        expect(invokeAccounting.summary).toMatchObject({
+          incomingCount: 1,
+          incomingTotal: 0n,
+        });
+        expect(invokeAccounting.transactions).toHaveLength(1);
+        expect(invokeAccounting.transactions[0]).toMatchObject({
+          groupName: 'tempo-session-accounting',
+          scope: 'global',
+          direction: 'incoming',
+          amount: 0n,
+        });
 
         const streamChallenge = await agentApp.app.fetch(
           sessionRequest('stream')
@@ -1612,6 +1657,16 @@ describe('Example Smoke Tests', () => {
           spent: 3n,
           units: 3,
         });
+        const completedAccounting = await agent.analytics.getData();
+        expect(completedAccounting.summary).toMatchObject({
+          incomingCount: 2,
+          incomingTotal: 2n,
+        });
+        expect(
+          completedAccounting.transactions
+            .map(transaction => transaction.amount)
+            .sort((left, right) => Number(left - right))
+        ).toEqual([0n, 2n]);
 
         await agent.close();
         closeAgent = undefined;

@@ -34,6 +34,15 @@ describe('Accept-Payment negotiation', () => {
     ).toEqual([offers[1], offers[2]]);
   });
 
+  it('returns no offers when every compatible preference opts out', () => {
+    expect(
+      negotiateMppOffers(
+        offers,
+        'tempo/charge;q=0, stripe/charge;q=0, evm/charge;q=0'
+      )
+    ).toEqual([]);
+  });
+
   it('falls back to server offers when a valid header matches none', () => {
     expect(negotiateMppOffers(offers, 'lightning/session')).toEqual([
       ...offers,
