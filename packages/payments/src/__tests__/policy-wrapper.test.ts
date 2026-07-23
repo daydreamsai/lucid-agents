@@ -389,6 +389,8 @@ describe('wrapBaseFetchWithPolicy', () => {
         delegate.commitPaymentReservations(...args),
       stagePaymentSettlement: (...args) =>
         delegate.stagePaymentSettlement(...args),
+      adjustPaymentSettlement: (...args) =>
+        delegate.adjustPaymentSettlement(...args),
       commitPaymentSettlement: async () => {
         throw new Error('accounting unavailable');
       },

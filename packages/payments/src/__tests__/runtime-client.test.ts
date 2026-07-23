@@ -146,6 +146,38 @@ describe('runtime payment client context', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a POST Request body through the runtime-backed paid retry', async () => {
+    const bodies: string[] = [];
+    const paymentSignatures: Array<string | null> = [];
+    const fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      bodies.push(await request.text());
+      paymentSignatures.push(request.headers.get('PAYMENT-SIGNATURE'));
+      return paymentSignatures.length === 1
+        ? paymentRequired()
+        : new Response('paid');
+    });
+    const context = await createRuntimePaymentContext({
+      privateKey: PRIVATE_KEY,
+      network: 'base-sepolia',
+      fetch,
+    });
+    const body = JSON.stringify({ prompt: 'runtime replay' });
+
+    const response = await context.fetchWithPayment?.(
+      new Request('https://example.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+    );
+
+    expect(response?.status).toBe(200);
+    expect(bodies).toEqual([body, body]);
+    expect(paymentSignatures[0]).toBeNull();
+    expect(paymentSignatures[1]).toBeTruthy();
+  });
+
   it('fails closed when an agent wallet or usable address is unavailable', async () => {
     const warn = mock((_message: string) => undefined);
     const fetch = async () => new Response('ok');

@@ -23,6 +23,7 @@ describe('MPP authorization', () => {
       .use(http())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -73,6 +74,7 @@ describe('MPP authorization', () => {
       .use(http())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',

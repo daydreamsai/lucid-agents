@@ -132,9 +132,11 @@ describe('ask entrypoint', () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
 
     // The question was forwarded to the LLM
-    const callArgs = mockCreate.mock.calls[0][0] as {
-      messages: Array<{ content: string }>;
-    };
+    const callArgs = (
+      mockCreate.mock.calls as unknown as Array<
+        [{ messages: Array<{ content: string }> }]
+      >
+    )[0]![0];
     expect(callArgs.messages[0].content).toContain(
       'What is the capital of France?'
     );

@@ -1,5 +1,6 @@
 import {
   HTTPFacilitatorClient,
+  RouteConfigurationError,
   x402HTTPResourceServer,
   x402ResourceServer,
   type FacilitatorConfig,
@@ -7,19 +8,21 @@ import {
   type HTTPResponseInstructions,
   type RouteConfig,
 } from '@x402/core/server';
-import { ExactEvmScheme } from '@x402/evm/exact/server';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type {
   IncomingPaymentAdmission,
   IncomingPaymentAuthorizer,
   IncomingPaymentAuthorization,
+  IncomingPaymentFinalizeOptions,
+  PaymentSettlementAdjustment,
   PaymentTracker,
   PaymentsConfig,
   VerifiedIncomingPayment,
 } from '@lucid-agents/types/payments';
 import type { AgentAuthContext, SIWxConfig } from '@lucid-agents/types/siwx';
+import { createPublicClient, http } from 'viem';
+import type { EVMMessageVerifier } from '@x402/extensions/sign-in-with-x';
 
-import { resolvePayTo } from './payto-resolver';
 import {
   evaluateIncomingPolicyGroups,
   findMostSpecificIncomingLimit,
@@ -35,7 +38,37 @@ import {
 import { resolvePrice } from './pricing';
 import { createFacilitatorAuthHeaders, parsePriceAmount } from './utils';
 import { validatePaymentsConfig } from './validation';
-import { encodeBase64Utf8 } from './base64';
+import { compileX402Offers, type CompiledX402Offers } from './x402-offers';
+import { registerSellerSchemes } from './x402-scheme-registry';
+import {
+  createFacilitatorRegistry,
+  X402FacilitatorConfigurationError,
+} from './x402-facilitator-registry';
+import {
+  normalizeSIWxPublicOrigin,
+  resolveSIWxResourceUri,
+} from './siwx-origin';
+import {
+  compileReconciliationExtensions,
+  reconcilePaymentIdentifier,
+  registerReconciliationExtensions,
+  type X402Reconciliation,
+  type X402ReconciliationOptions,
+} from './x402-reconciliation';
+import {
+  batchSettlementReceiptHeaders,
+  resolveBatchSettlementChargedAmount,
+  type ResolvedBatchSettlementServerOptions,
+} from './batch-settlement';
+
+const MAX_CACHED_X402_SERVERS = 128;
+
+class X402ProviderError extends Error {
+  constructor(cause: unknown) {
+    super('x402 provider operation failed', { cause });
+    this.name = 'X402ProviderError';
+  }
+}
 
 class FetchHttpAdapter implements HTTPAdapter {
   constructor(
@@ -87,10 +120,13 @@ class FetchHttpAdapter implements HTTPAdapter {
   }
 }
 
-function facilitatorConfig(config: PaymentsConfig): FacilitatorConfig {
+function facilitatorConfig(
+  config: PaymentsConfig,
+  facilitatorUrl: string
+): FacilitatorConfig {
   const authHeaders = createFacilitatorAuthHeaders(config.facilitatorAuth);
   return {
-    url: config.facilitatorUrl,
+    url: facilitatorUrl,
     ...(authHeaders ? { createAuthHeaders: async () => authHeaders } : {}),
   };
 }
@@ -160,11 +196,11 @@ function incomingPoliciesRequireUsdAmount(config: PaymentsConfig): boolean {
 }
 
 function siwxEntitlementResource(
-  requestUrl: string,
+  publicResourceUri: string,
   entrypoint: EntrypointDef,
   kind: 'invoke' | 'stream'
 ): string {
-  const resource = new URL(requestUrl);
+  const resource = new URL(publicResourceUri);
   resource.hash = `lucid-entrypoint=${encodeURIComponent(entrypoint.key)}:${kind}`;
   return resource.toString();
 }
@@ -173,16 +209,17 @@ async function addSIWxChallenge(
   response: Response,
   request: Request,
   entrypoint: EntrypointDef,
-  config: SIWxConfig
+  config: SIWxConfig,
+  networks: readonly string[]
 ): Promise<Response> {
   if (response.status !== 402) return response;
 
-  const url = new URL(request.url);
+  const origin = normalizeSIWxPublicOrigin(config.origin);
+  const resourceUri = resolveSIWxResourceUri(origin, request.url);
   const declaration = buildSIWxExtensionDeclaration({
-    resourceUri: request.url,
-    domain: url.hostname,
+    resourceUri,
     statement: entrypoint.siwx?.statement ?? config.defaultStatement,
-    chainId: entrypoint.siwx?.network ?? entrypoint.network,
+    chainId: networks,
     expirationSeconds: config.expirationSeconds,
   });
   const parsedBody = await response
@@ -193,7 +230,12 @@ async function addSIWxChallenge(
     parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
       ? (parsedBody as Record<string, unknown>)
       : { error: parsedBody };
-  const enriched = enrichResponseWithSIWxChallenge(body, declaration, 402);
+  const enriched = enrichResponseWithSIWxChallenge(
+    body,
+    declaration,
+    402,
+    response.headers.get('PAYMENT-REQUIRED')
+  );
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(enriched.headers)) {
     headers.set(name, value);
@@ -204,10 +246,32 @@ async function addSIWxChallenge(
   });
 }
 
+function resolveSIWxNetworks(
+  entrypoint: EntrypointDef,
+  config: Pick<PaymentsConfig, 'network'>,
+  compiled: CompiledX402Offers | undefined
+): string[] {
+  if (entrypoint.siwx?.network) return [entrypoint.siwx.network];
+  if (compiled) {
+    return [...new Set(compiled.offers.map(offer => offer.network))];
+  }
+  if (entrypoint.network) return [entrypoint.network];
+  return [config.network];
+}
+
+function createSIWxEvmVerifier(
+  rpcUrl: string | undefined
+): EVMMessageVerifier | undefined {
+  if (!rpcUrl) return undefined;
+  const client = createPublicClient({ transport: http(rpcUrl) });
+  return args => client.verifyMessage(args);
+}
+
 type CachedServer = {
   server: x402HTTPResourceServer;
   ready: Promise<void>;
   verifiedPayers: WeakMap<object, string>;
+  extensions?: Record<string, unknown>;
 };
 
 type IncomingSettlement = {
@@ -215,8 +279,49 @@ type IncomingSettlement = {
   errorReason?: string;
   payer?: string;
   network?: string;
+  amount?: string;
+  extra?: Record<string, unknown>;
   headers: Record<string, string>;
 };
+
+function resolveMeteredActualAmount(
+  ceiling: bigint,
+  acceptedAsset: string | undefined,
+  acceptedReference: string | undefined,
+  mode: 'upto' | 'session',
+  options: IncomingPaymentFinalizeOptions | undefined
+): bigint {
+  const settlement = options?.payment;
+  if (!settlement) {
+    throw new Error(
+      `A ${mode} execution must provide payment.actualAmount during finalization`
+    );
+  }
+  if (!/^\d+$/u.test(settlement.actualAmount)) {
+    throw new Error(
+      'payment.actualAmount must be a non-negative integer in atomic units'
+    );
+  }
+  const actual = BigInt(settlement.actualAmount);
+  if (actual > ceiling) {
+    throw new Error(
+      `payment.actualAmount exceeds the accepted ${mode} ceiling`
+    );
+  }
+  if (
+    settlement.asset &&
+    acceptedAsset &&
+    settlement.asset.toLowerCase() !== acceptedAsset.toLowerCase()
+  ) {
+    throw new Error(`payment.asset does not match the accepted ${mode} asset`);
+  }
+  if (acceptedReference && settlement.reference !== acceptedReference) {
+    throw new Error(
+      `payment.reference does not match the verified ${mode} reference`
+    );
+  }
+  return actual;
+}
 
 function paymentErrorResponse(
   code: string,
@@ -225,6 +330,63 @@ function paymentErrorResponse(
   headers?: Record<string, string>
 ): Response {
   return Response.json({ error: { code, message } }, { status, headers });
+}
+
+/**
+ * Evaluate policy constraints that are knowable before another payment rail
+ * verifies and potentially settles a credential.
+ */
+export async function preflightIncomingPayment(
+  config: PaymentsConfig,
+  tracker: PaymentTracker | undefined,
+  request: Request,
+  payment: Pick<VerifiedIncomingPayment, 'amount' | 'currency'>
+): Promise<Response | undefined> {
+  const groups = config.policyGroups ?? [];
+  if (groups.length === 0) return undefined;
+  if (!tracker) {
+    return paymentErrorResponse(
+      'payment_configuration_error',
+      'Incoming payment policies require a payment tracker.',
+      503
+    );
+  }
+
+  let amount = 0n;
+  if (incomingPoliciesRequireUsdAmount(config)) {
+    const currency = payment.currency.trim().toLowerCase();
+    const parsedAmount = parsePriceAmount(payment.amount);
+    if (!parsedAmount || (currency !== 'usd' && currency !== 'usdc')) {
+      return paymentErrorResponse(
+        'payment_configuration_error',
+        `Incoming payment policies require a positive USD-denominated amount; received ${payment.amount} ${payment.currency}.`,
+        503
+      );
+    }
+    amount = parsedAmount;
+  }
+
+  const evaluation = await evaluateIncomingPolicyGroups(
+    groups,
+    tracker,
+    undefined,
+    undefined,
+    request.url,
+    amount,
+    undefined,
+    { deferUnknownSenderAddress: true }
+  );
+  if (evaluation.allowed) return undefined;
+  return Response.json(
+    {
+      error: {
+        code: 'policy_violation',
+        message: evaluation.reason ?? 'Payment blocked by policy',
+        groupName: evaluation.groupName,
+      },
+    },
+    { status: 403 }
+  );
 }
 
 /**
@@ -237,72 +399,129 @@ export function createIncomingPaymentAuthorizer(
     paymentTracker?: PaymentTracker;
     siwxStorage?: SIWxStorage;
     siwxConfig?: SIWxConfig;
+    batchSettlement?: ResolvedBatchSettlementServerOptions;
+    reconciliation?: X402ReconciliationOptions;
   }
 ): IncomingPaymentAuthorizer {
   const servers = new Map<string, Promise<CachedServer>>();
+  const siwxOrigin = options?.siwxConfig?.enabled
+    ? normalizeSIWxPublicOrigin(options.siwxConfig.origin)
+    : undefined;
+  const siwxEvmVerifier = createSIWxEvmVerifier(
+    options?.siwxConfig?.verify?.evmRpcUrl
+  );
 
   const getServer = async (
     request: Request,
     entrypoint: EntrypointDef,
-    kind: 'invoke' | 'stream'
+    kind: 'invoke' | 'stream',
+    compiled: CompiledX402Offers
   ): Promise<CachedServer> => {
     const url = new URL(request.url);
+    url.hash = '';
+    const resource = url.toString();
     const path = url.pathname;
-    const network = entrypoint.network ?? config.network;
-    const price = resolvePrice(entrypoint, config, kind);
-    validatePaymentsConfig(config, network, entrypoint.key);
-    if (!price) {
-      throw new Error(`Entrypoint "${entrypoint.key}" has no ${kind} price`);
+    for (const offer of compiled.offers) {
+      validatePaymentsConfig(config, offer.network, entrypoint.key);
     }
 
-    const payTo = resolvePayTo(config);
     const key = [
       request.method.toUpperCase(),
-      path,
+      resource,
       entrypoint.key,
       kind,
-      price,
-      network,
+      JSON.stringify(compiled.offers.map(offer => offer.publicOffer)),
     ].join('|');
     const cached = servers.get(key);
-    if (cached) return cached;
+    if (cached) {
+      servers.delete(key);
+      servers.set(key, cached);
+      return cached;
+    }
 
     const route: RouteConfig = {
-      accepts: {
-        scheme: 'exact',
-        payTo: payTo as never,
-        price,
-        network,
-      },
-      resource: request.url,
+      accepts: compiled.offers.map(offer => ({
+        scheme: offer.scheme,
+        payTo: offer.payTo as never,
+        price: offer.price,
+        network: offer.network,
+      })),
+      resource,
       description:
         entrypoint.description ??
         `${entrypoint.key}${kind === 'stream' ? ' (stream)' : ''}`,
       mimeType: kind === 'stream' ? 'text/event-stream' : 'application/json',
+      extensions: compileReconciliationExtensions(
+        entrypoint,
+        kind,
+        compiled,
+        options?.reconciliation
+      ),
     };
     const value = (async (): Promise<CachedServer> => {
-      const facilitator = new HTTPFacilitatorClient(facilitatorConfig(config));
-      const resourceServer = new x402ResourceServer(facilitator);
+      const facilitators = await createFacilitatorRegistry(
+        compiled,
+        facilitatorUrl =>
+          new HTTPFacilitatorClient(facilitatorConfig(config, facilitatorUrl))
+      );
+      const resourceServer = new x402ResourceServer(facilitators);
+      registerReconciliationExtensions(resourceServer, options?.reconciliation);
       const verifiedPayers = new WeakMap<object, string>();
       resourceServer.onAfterVerify(async ({ paymentPayload, result }) => {
         if (result.payer) verifiedPayers.set(paymentPayload, result.payer);
       });
-      if (network.startsWith('solana:')) {
-        // The SVM server pulls in Node-oriented WebSocket support. Keep it off
-        // the portable root import path and load it only for Solana receivers.
-        const { ExactSvmScheme } = await import('@x402/svm/exact/server');
-        resourceServer.register('solana:*', new ExactSvmScheme());
-      } else {
-        resourceServer.register('eip155:*', new ExactEvmScheme());
-      }
+      await registerSellerSchemes(
+        resourceServer,
+        compiled.offers,
+        options?.batchSettlement
+      );
       const server = new x402HTTPResourceServer(resourceServer, {
         [`${request.method.toUpperCase()} ${path}`]: route,
       });
-      const ready = server.initialize();
+      const ready = server.initialize().catch((error: unknown) => {
+        if (
+          error instanceof RouteConfigurationError &&
+          compiled.offers.some(
+            offer =>
+              !resourceServer.getSupportedKind(2, offer.network, offer.scheme)
+          )
+        ) {
+          const unsupported = compiled.offers.filter(
+            offer =>
+              !resourceServer.getSupportedKind(2, offer.network, offer.scheme)
+          );
+          if (unsupported.length === 1) {
+            const [offer] = unsupported;
+            throw new X402FacilitatorConfigurationError(
+              `Configured facilitator does not support x402 v2 ${offer!.scheme} payments on ${offer!.network}.`,
+              { cause: error }
+            );
+          }
+          throw new X402FacilitatorConfigurationError(
+            `Configured facilitators do not support the following x402 v2 offers: ${unsupported
+              .map(offer => `${offer.scheme} on ${offer.network}`)
+              .join('; ')}.`,
+            { cause: error }
+          );
+        }
+        throw new Error('x402 facilitator initialization failed.', {
+          cause: error,
+        });
+      });
       await ready;
-      return { server, ready, verifiedPayers };
+      return {
+        server,
+        ready,
+        verifiedPayers,
+        extensions: route.extensions,
+      };
     })();
     servers.set(key, value);
+    while (servers.size > MAX_CACHED_X402_SERVERS) {
+      const oldest = servers.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      servers.delete(oldest);
+    }
     try {
       return await value;
     } catch (error) {
@@ -319,12 +538,30 @@ export function createIncomingPaymentAuthorizer(
       payer?: string;
       amount: bigint;
       network?: string;
-      settle?: () => Promise<IncomingSettlement>;
+      scheme?: string;
+      asset?: string;
+      reference?: string;
+      maximumAmount?: bigint;
+      settle?: (actualAmount?: string) => Promise<IncomingSettlement>;
+      cancel?: (
+        reason: 'handler_threw' | 'handler_failed' | 'after_verify_aborted',
+        responseStatus?: number
+      ) => Promise<void>;
     }
   ): Promise<IncomingPaymentAdmission> => {
+    let canceled = false;
+    const cancelVerified = async (
+      reason: 'handler_threw' | 'handler_failed' | 'after_verify_aborted',
+      responseStatus?: number
+    ): Promise<void> => {
+      if (canceled || !payment.cancel) return;
+      canceled = true;
+      await payment.cancel(reason, responseStatus);
+    };
     const tracker = options?.paymentTracker;
     const groups = config.policyGroups ?? [];
     if (groups.length > 0 && !tracker) {
+      await cancelVerified('after_verify_aborted');
       return {
         admitted: false,
         response: paymentErrorResponse(
@@ -345,6 +582,7 @@ export function createIncomingPaymentAuthorizer(
         payment.amount
       );
       if (!evaluation.allowed) {
+        await cancelVerified('after_verify_aborted');
         return {
           admitted: false,
           response: Response.json(
@@ -363,6 +601,7 @@ export function createIncomingPaymentAuthorizer(
 
     const outstandingReservations = new Set<string>();
     const groupsWithTotalReservations = new Set<string>();
+    const totalReservationIds = new Set<string>();
     const policyScopes = new Map<string, string>();
     let committed = false;
     let committedHeaders: Record<string, string> = {};
@@ -406,6 +645,7 @@ export function createIncomingPaymentAuthorizer(
               );
               if (!reservation.allowed || !reservation.reservationId) {
                 await releaseOutstanding();
+                await cancelVerified('after_verify_aborted');
                 return {
                   admitted: false,
                   response: Response.json(
@@ -422,6 +662,7 @@ export function createIncomingPaymentAuthorizer(
                 };
               }
               outstandingReservations.add(reservation.reservationId);
+              totalReservationIds.add(reservation.reservationId);
               groupsWithTotalReservations.add(group.name);
             }
           }
@@ -435,6 +676,7 @@ export function createIncomingPaymentAuthorizer(
             );
             if (!reservation.allowed || !reservation.reservationId) {
               await releaseOutstanding();
+              await cancelVerified('after_verify_aborted');
               return {
                 admitted: false,
                 response: Response.json(
@@ -455,20 +697,36 @@ export function createIncomingPaymentAuthorizer(
         }
       } catch (error) {
         await releaseOutstanding().catch(() => undefined);
+        await cancelVerified('after_verify_aborted').catch(() => undefined);
         throw error;
       }
     }
 
+    const abortAdmission = async (): Promise<void> => {
+      const results = await Promise.allSettled([
+        releaseOutstanding(),
+        cancelVerified('after_verify_aborted'),
+      ]);
+      const failure = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected'
+      );
+      if (failure) throw failure.reason;
+    };
+
     return {
       admitted: true,
-      abort: releaseOutstanding,
+      abort: abortAdmission,
       isCommitted: () => committed,
       recoverCommittedResponse: response =>
         withSettlementHeaders(response, committedHeaders),
-      finalize: async response => {
+      finalize: async (response, finalizeOptions) => {
         if (response.status >= 400) {
           try {
-            await releaseOutstanding();
+            await Promise.all([
+              releaseOutstanding(),
+              cancelVerified('handler_failed', response.status),
+            ]);
             return response;
           } catch (error) {
             return paymentErrorResponse(
@@ -477,6 +735,35 @@ export function createIncomingPaymentAuthorizer(
                 ? error.message
                 : 'Payment reservation release failed',
               503
+            );
+          }
+        }
+
+        let actualAmount = payment.amount;
+        let settlementAmount: string | undefined;
+        if (payment.scheme === 'upto' || payment.scheme === 'session') {
+          try {
+            actualAmount = resolveMeteredActualAmount(
+              payment.maximumAmount ?? payment.amount,
+              payment.asset,
+              payment.reference,
+              payment.scheme,
+              finalizeOptions
+            );
+            if (payment.scheme === 'upto') {
+              settlementAmount = actualAmount.toString();
+            }
+          } catch (error) {
+            await Promise.allSettled([
+              releaseOutstanding(),
+              cancelVerified('handler_failed', 500),
+            ]);
+            return paymentErrorResponse(
+              'invalid_payment_settlement',
+              error instanceof Error
+                ? error.message
+                : `Invalid ${payment.scheme} settlement amount`,
+              500
             );
           }
         }
@@ -493,9 +780,15 @@ export function createIncomingPaymentAuthorizer(
                   groupName: group.name,
                   scope: policyScopes.get(group.name) ?? 'global',
                   direction: 'incoming' as const,
-                  amount: payment.amount,
+                  amount: actualAmount,
                 }))
             : [];
+        const reservationAdjustments = [...totalReservationIds].map(
+          reservationId => ({
+            reservationId,
+            amount: actualAmount,
+          })
+        );
         let settlementId: string | undefined;
         if (
           tracker &&
@@ -504,7 +797,8 @@ export function createIncomingPaymentAuthorizer(
           try {
             settlementId = await tracker.stageSettlement(
               [...outstandingReservations],
-              accountingRecords
+              accountingRecords,
+              reservationAdjustments
             );
             outstandingReservations.clear();
           } catch (error) {
@@ -526,8 +820,10 @@ export function createIncomingPaymentAuthorizer(
           headers: {},
         };
         try {
-          if (payment.settle) settlement = await payment.settle();
-        } catch (error) {
+          if (payment.settle) {
+            settlement = await payment.settle(settlementAmount);
+          }
+        } catch {
           if (settlementId) {
             await tracker
               ?.releaseSettlement(settlementId)
@@ -537,7 +833,7 @@ export function createIncomingPaymentAuthorizer(
           }
           return paymentErrorResponse(
             'settlement_failed',
-            error instanceof Error ? error.message : 'Settlement failed',
+            'Payment settlement is temporarily unavailable.',
             503
           );
         }
@@ -552,13 +848,33 @@ export function createIncomingPaymentAuthorizer(
           }
           return paymentErrorResponse(
             'settlement_failed',
-            settlement.errorReason ?? 'Settlement failed',
+            'Payment settlement was rejected.',
             402,
             settlement.headers
           );
         }
         committedHeaders = { ...settlement.headers };
         committed = true;
+
+        if (payment.scheme === 'batch-settlement') {
+          try {
+            actualAmount = resolveBatchSettlementChargedAmount(
+              payment.amount,
+              settlement
+            );
+          } catch (error) {
+            // Settlement is irreversible. Preserve any staged ceiling so
+            // accounting remains conservative until operators reconcile it.
+            return paymentErrorResponse(
+              'payment_recording_failed',
+              error instanceof Error
+                ? error.message
+                : 'Batch settlement amount could not be reconciled',
+              503,
+              settlement.headers
+            );
+          }
+        }
 
         const settledResponse = withSettlementHeaders(
           response,
@@ -567,6 +883,17 @@ export function createIncomingPaymentAuthorizer(
 
         if (settlementId && tracker) {
           try {
+            if (payment.scheme === 'batch-settlement') {
+              const adjustments: PaymentSettlementAdjustment[] = groups
+                .filter(group => group.incomingLimits)
+                .map(group => ({
+                  groupName: group.name,
+                  scope: policyScopes.get(group.name) ?? 'global',
+                  direction: 'incoming',
+                  amount: actualAmount,
+                }));
+              await tracker.adjustSettlement(settlementId, adjustments);
+            }
             await tracker.commitSettlement(settlementId);
           } catch (error) {
             // Settlement is irreversible. The durable staged batch remains
@@ -591,7 +918,11 @@ export function createIncomingPaymentAuthorizer(
         ) {
           try {
             await options.siwxStorage.recordPayment(
-              siwxEntitlementResource(request.url, entrypoint, kind),
+              siwxEntitlementResource(
+                resolveSIWxResourceUri(siwxOrigin!, request.url),
+                entrypoint,
+                kind
+              ),
               entitlementPayer,
               settlement.network ?? payment.network
             );
@@ -640,25 +971,31 @@ export function createIncomingPaymentAuthorizer(
       options.siwxConfig?.enabled &&
       entrypointHasSIWx(entrypoint, options.siwxConfig)
     ) {
-      const siwxHeader =
-        request.headers.get('SIGN-IN-WITH-X') ??
-        request.headers.get('X-SIGN-IN-WITH-X');
+      const siwxHeader = request.headers.get('SIGN-IN-WITH-X');
       const isAuthOnly = entrypoint.siwx?.authOnly === true;
+      const resourceUri = resolveSIWxResourceUri(siwxOrigin!, request.url);
+      const compiled = compileX402Offers(entrypoint, config, kind);
+      const supportedChainIds = resolveSIWxNetworks(
+        entrypoint,
+        config,
+        compiled
+      );
 
       if (siwxHeader) {
         const payload = parseSIWxHeader(siwxHeader);
         if (payload) {
-          const url = new URL(request.url);
           const verification = await verifySIWxPayload(payload, {
             storage: options.siwxStorage,
-            resourceUri: request.url,
+            resourceUri,
             entitlementResource: siwxEntitlementResource(
-              request.url,
+              resourceUri,
               entrypoint,
               kind
             ),
-            domain: url.hostname,
+            origin: siwxOrigin,
             requireEntitlement: !isAuthOnly,
+            supportedChainIds,
+            evmVerifier: siwxEvmVerifier,
             skipSignatureVerification:
               options.siwxConfig.verify?.skipSignatureVerification,
           });
@@ -698,34 +1035,33 @@ export function createIncomingPaymentAuthorizer(
           };
         }
       } else if (isAuthOnly) {
-        const url = new URL(request.url);
         const declaration = buildSIWxExtensionDeclaration({
-          resourceUri: request.url,
-          domain: url.hostname,
+          resourceUri,
           statement:
             entrypoint.siwx?.statement ?? options.siwxConfig.defaultStatement,
-          chainId: entrypoint.siwx?.network ?? entrypoint.network,
+          chainId: supportedChainIds,
           expirationSeconds: options.siwxConfig.expirationSeconds,
         });
+        const challengeBody = {
+          x402Version: 2,
+          error: {
+            code: 'auth_required',
+            message: 'Wallet authentication required',
+          },
+          resource: { url: resourceUri },
+          accepts: [],
+        };
+        const enriched = enrichResponseWithSIWxChallenge(
+          challengeBody,
+          declaration,
+          401
+        );
         return {
           authorized: false,
-          response: Response.json(
-            {
-              error: {
-                code: 'auth_required',
-                message: 'Wallet authentication required',
-                siwx: declaration,
-              },
-            },
-            {
-              status: 401,
-              headers: {
-                'X-SIWX-EXTENSION': encodeBase64Utf8(
-                  JSON.stringify(declaration)
-                ),
-              },
-            }
-          ),
+          response: Response.json(enriched.body, {
+            status: 401,
+            headers: enriched.headers,
+          }),
         };
       }
     }
@@ -743,11 +1079,44 @@ export function createIncomingPaymentAuthorizer(
     if (siwxAuthorization) return siwxAuthorization;
 
     const price = resolvePrice(entrypoint, config, kind);
-    if (!price) {
+    let compiled: CompiledX402Offers | undefined;
+    try {
+      compiled = verifiedPayment
+        ? undefined
+        : compileX402Offers(entrypoint, config, kind);
+    } catch (error) {
+      return {
+        authorized: false,
+        response: paymentErrorResponse(
+          'payment_configuration_error',
+          error instanceof Error
+            ? error.message
+            : 'Invalid x402 payment configuration.',
+          503
+        ),
+      };
+    }
+    if ((!verifiedPayment && !compiled) || (verifiedPayment && !price)) {
       return {
         authorized: true,
         admit: async () => noOpAdmission(),
       };
+    }
+
+    let reconciliation: X402Reconciliation | undefined;
+    if (
+      kind === 'invoke' &&
+      !verifiedPayment &&
+      options?.reconciliation?.paymentIdentifier
+    ) {
+      const checked = reconcilePaymentIdentifier(
+        request,
+        options.reconciliation.paymentIdentifier.required ?? true
+      );
+      if (!checked.ok) {
+        return { authorized: false, response: checked.response };
+      }
+      reconciliation = checked.metadata;
     }
 
     try {
@@ -769,10 +1138,32 @@ export function createIncomingPaymentAuthorizer(
           }
           amount = parsedAmount;
         }
+        let maximumAmount: bigint | undefined;
+        if (verifiedPayment.intent === 'session') {
+          if (
+            !verifiedPayment.maximumAmount ||
+            !/^\d+$/u.test(verifiedPayment.maximumAmount) ||
+            BigInt(verifiedPayment.maximumAmount) <= 0n
+          ) {
+            return {
+              authorized: false,
+              response: paymentErrorResponse(
+                'payment_configuration_error',
+                'Verified MPP sessions require a positive atomic maximumAmount.',
+                503
+              ),
+            };
+          }
+          maximumAmount = BigInt(verifiedPayment.maximumAmount);
+        }
         const payment = {
           payer: verifiedPayment.payer,
           amount,
           network: verifiedPayment.network,
+          scheme: verifiedPayment.intent,
+          asset: verifiedPayment.currency,
+          reference: verifiedPayment.reference,
+          maximumAmount,
         };
         return {
           authorized: true,
@@ -794,13 +1185,33 @@ export function createIncomingPaymentAuthorizer(
       }
 
       if (config.policyGroups?.length && options?.paymentTracker) {
+        if (
+          incomingPoliciesRequireUsdAmount(config) &&
+          compiled!.offers.some(offer => typeof offer.price !== 'string')
+        ) {
+          return {
+            authorized: false,
+            response: paymentErrorResponse(
+              'payment_configuration_error',
+              'Incoming USD payment policies require explicitly valued offers; token-denominated x402 amounts have no trusted USD valuation.',
+              503
+            ),
+          };
+        }
+        const maximumAmount = compiled!.offers.reduce((maximum, offer) => {
+          const amount =
+            typeof offer.price === 'object'
+              ? BigInt(offer.price.amount)
+              : parsePriceAmount(String(offer.price));
+          return amount !== undefined && amount > maximum ? amount : maximum;
+        }, 0n);
         const evaluation = await evaluateIncomingPolicyGroups(
           config.policyGroups,
           options.paymentTracker,
           undefined,
           undefined,
           request.url,
-          parsePriceAmount(price),
+          maximumAmount,
           undefined,
           { deferUnknownSenderAddress: true }
         );
@@ -822,20 +1233,45 @@ export function createIncomingPaymentAuthorizer(
       }
 
       const url = new URL(request.url);
-      const cached = await getServer(request, entrypoint, kind);
-      await cached.ready;
-      const adapter = new FetchHttpAdapter(request, url.pathname);
-      const result = await cached.server.processHTTPRequest({
-        adapter,
-        path: url.pathname,
-        method: request.method.toUpperCase(),
-        paymentHeader:
-          adapter.getHeader('PAYMENT-SIGNATURE') ??
-          adapter.getHeader('X-PAYMENT'),
-      });
+      let cached: CachedServer;
+      let result: Awaited<
+        ReturnType<x402HTTPResourceServer['processHTTPRequest']>
+      >;
+      try {
+        cached = await getServer(request, entrypoint, kind, compiled!);
+        await cached.ready;
+        const adapter = new FetchHttpAdapter(request, url.pathname);
+        result = await cached.server.processHTTPRequest({
+          adapter,
+          path: url.pathname,
+          method: request.method.toUpperCase(),
+          paymentHeader:
+            adapter.getHeader('PAYMENT-SIGNATURE') ??
+            adapter.getHeader('X-PAYMENT'),
+        });
+      } catch (error) {
+        if (error instanceof X402FacilitatorConfigurationError) throw error;
+        throw new X402ProviderError(error);
+      }
 
       if (result.type === 'payment-error') {
         const response = responseFromInstructions(result.response);
+        const responseBody = await response.clone().text();
+        if (
+          response.status >= 500 ||
+          ((request.headers.has('PAYMENT-SIGNATURE') ||
+            request.headers.has('X-PAYMENT')) &&
+            (!responseBody.trim() || responseBody.trim() === '{}'))
+        ) {
+          return {
+            authorized: false,
+            response: paymentErrorResponse(
+              'payment_verification_failed',
+              'x402 payment verification is temporarily unavailable.',
+              503
+            ),
+          };
+        }
         return {
           authorized: false,
           response:
@@ -846,7 +1282,8 @@ export function createIncomingPaymentAuthorizer(
                   response,
                   request,
                   entrypoint,
-                  options.siwxConfig
+                  options.siwxConfig,
+                  resolveSIWxNetworks(entrypoint, config, compiled)
                 )
               : response,
         };
@@ -855,11 +1292,17 @@ export function createIncomingPaymentAuthorizer(
       if (result.type === 'no-payment-required') {
         return {
           authorized: true,
+          reconciliation,
           admit: async () => noOpAdmission(),
         };
       }
 
-      const amount = parsePriceAmount(price);
+      let amount: bigint | undefined;
+      try {
+        amount = BigInt(result.paymentRequirements.amount);
+      } catch {
+        amount = undefined;
+      }
       const verifiedPayer = cached.verifiedPayers.get(result.paymentPayload);
       if (amount === undefined) {
         throw new Error(`Entrypoint "${entrypoint.key}" has an invalid price`);
@@ -868,15 +1311,50 @@ export function createIncomingPaymentAuthorizer(
         payer: verifiedPayer,
         amount,
         network: result.paymentRequirements.network,
-        settle: async () =>
-          (await cached.server.processSettlement(
+        scheme: result.paymentRequirements.scheme,
+        asset: result.paymentRequirements.asset,
+        cancel: async (
+          reason: 'handler_threw' | 'handler_failed' | 'after_verify_aborted',
+          responseStatus?: number
+        ) =>
+          result.cancellationDispatcher.cancel({
+            reason,
+            ...(responseStatus === undefined ? {} : { responseStatus }),
+          }),
+        settle: async (actualAmount?: string) => {
+          const settlement = (await cached.server.processSettlement(
             result.paymentPayload,
-            result.paymentRequirements
-          )) as IncomingSettlement,
+            result.paymentRequirements,
+            cached.extensions,
+            {
+              request: {
+                adapter: new FetchHttpAdapter(request, url.pathname),
+                path: url.pathname,
+                method: request.method.toUpperCase(),
+                paymentHeader:
+                  request.headers.get('PAYMENT-SIGNATURE') ??
+                  request.headers.get('X-PAYMENT') ??
+                  undefined,
+              },
+            },
+            actualAmount === undefined ? undefined : { amount: actualAmount }
+          )) as IncomingSettlement;
+          return {
+            ...settlement,
+            headers: {
+              ...settlement.headers,
+              ...batchSettlementReceiptHeaders(
+                result.paymentPayload,
+                settlement
+              ),
+            },
+          };
+        },
       };
       return {
         authorized: true,
         subject: paymentSubject(payment.payer, payment.network),
+        reconciliation,
         admit: () => admitVerifiedIncoming(request, entrypoint, kind, payment),
       };
     } catch (error) {
@@ -887,9 +1365,11 @@ export function createIncomingPaymentAuthorizer(
             error: {
               code: 'payment_configuration_error',
               message:
-                error instanceof Error
-                  ? error.message
-                  : 'Payment authorization failed',
+                error instanceof X402ProviderError
+                  ? 'x402 payment verification is temporarily unavailable.'
+                  : error instanceof Error
+                    ? error.message
+                    : 'Payment authorization failed',
             },
           },
           { status: 503 }

@@ -46,12 +46,30 @@ export {
 } from './crypto';
 export { payments } from './extension';
 export { createIncomingPaymentAuthorizer } from './incoming';
+export {
+  projectX402Payment,
+  x402OpenApiComponents,
+  type X402ReconciliationOptions,
+  type X402Reconciliation,
+} from './x402-reconciliation';
 export { createPaymentTracker, type PaymentTracker } from './payment-tracker';
 export type { PaymentStorage } from './payment-storage';
 export {
   createInMemoryPaymentStorage,
   type InMemoryPaymentStorage,
 } from './in-memory-payment-storage';
+export type { BatchChannelStorage } from './batch-channel-storage';
+export {
+  InMemoryBatchChannelStorage,
+  createInMemoryBatchChannelStorage,
+  type InMemoryBatchChannelStorageOptions,
+} from './in-memory-batch-channel-storage';
+export {
+  createBatchSettlementChannelManager,
+  type BatchSettlementBuyerOptions,
+  type BatchSettlementServerOptions,
+  type CreateBatchSettlementChannelManagerOptions,
+} from './batch-settlement';
 export { createRateLimiter } from './rate-limiter';
 export {
   evaluatePolicyGroups,

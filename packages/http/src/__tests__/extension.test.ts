@@ -5,7 +5,11 @@ import { describe, expect, it } from 'bun:test';
 import { http } from '../extension';
 
 const entrypoints: EntrypointDef[] = [
-  { key: 'ping', description: 'Ping the agent' },
+  {
+    key: 'ping',
+    description: 'Ping the agent',
+    handler: async () => ({ output: { ok: true } }),
+  },
 ];
 
 const makeRuntime = (withIdentity = true): AgentRuntime =>
@@ -80,6 +84,7 @@ describe('http extension discovery handlers', () => {
 
     expect(runtime.basePath).toBe('/api/agent');
     expect(runtime.routes.map(route => route.id)).toContain('landing');
+    expect(runtime.routes.map(route => route.id)).toContain('openapi');
     expect(await runtime.handlers.health!(request).then(r => r.json())).toEqual(
       { ok: true, version: '1.2.3' }
     );
@@ -88,6 +93,14 @@ describe('http extension discovery handlers', () => {
     ).toEqual({
       items: [{ key: 'ping', description: 'Ping the agent', streaming: false }],
     });
+    const openapi = (await runtime.handlers
+      .openapi(request)
+      .then(r => r.json())) as {
+      openapi: string;
+      paths: Record<string, unknown>;
+    };
+    expect(openapi.openapi).toBe('3.1.0');
+    expect(openapi.paths['/api/agent/entrypoints/ping/invoke']).toBeDefined();
     expect(
       await runtime.handlers.manifest!(request).then(r => r.json())
     ).toEqual({
@@ -200,6 +213,24 @@ describe('http extension entrypoint validation', () => {
         capabilities
       )
     ).not.toThrow();
+    expect(() =>
+      extension.onEntrypointAdded?.(
+        {
+          key: 'offer-priced',
+          x402: {
+            offers: [
+              {
+                scheme: 'exact',
+                network: 'eip155:84532',
+                price: '$0.01',
+                payTo: '0x0000000000000000000000000000000000000001',
+              },
+            ],
+          },
+        },
+        capabilities
+      )
+    ).toThrow('Set paymentProtocol to "x402" or "mpp"');
     expect(() =>
       extension.onEntrypointAdded?.({ key: 'free' }, capabilities)
     ).not.toThrow();

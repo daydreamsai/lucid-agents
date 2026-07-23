@@ -543,6 +543,189 @@ describe('PaymentTracker', () => {
       }
     });
 
+    it('atomically replaces reserved ceilings with actual amounts in memory and SQLite', async () => {
+      const dbPath = join(
+        tmpdir(),
+        `lucid-payment-adjustment-${crypto.randomUUID()}.db`
+      );
+      const storages = [
+        createInMemoryPaymentStorage(),
+        createSQLitePaymentStorage(dbPath),
+      ];
+      try {
+        for (const storage of storages) {
+          const adjustedTracker = createPaymentTracker(storage);
+          const reservation = await adjustedTracker.reserveIncomingLimit(
+            'metered',
+            'global',
+            0.001,
+            undefined,
+            1_000n
+          );
+          const settlementId = await adjustedTracker.stageSettlement(
+            [reservation.reservationId!],
+            [],
+            [{ reservationId: reservation.reservationId!, amount: 250n }]
+          );
+
+          expect(
+            await adjustedTracker.getIncomingTotal('metered', 'global')
+          ).toBe(250n);
+          const reused = await adjustedTracker.reserveIncomingLimit(
+            'metered',
+            'global',
+            0.001,
+            undefined,
+            750n
+          );
+          expect(reused.allowed).toBe(true);
+          await adjustedTracker.releaseReservation(reused.reservationId!);
+          await adjustedTracker.commitSettlement(settlementId);
+          expect(
+            await adjustedTracker.getIncomingTotal('metered', 'global')
+          ).toBe(250n);
+        }
+      } finally {
+        await Promise.all(storages.map(storage => storage.close?.()));
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+      }
+    });
+
+    it('atomically adjusts staged ceilings to settled usage in memory and SQLite', async () => {
+      const dbPath = join(
+        tmpdir(),
+        `lucid-payment-staged-adjustment-${crypto.randomUUID()}.db`
+      );
+      const storages = [
+        createInMemoryPaymentStorage(),
+        createSQLitePaymentStorage(dbPath),
+      ];
+      try {
+        for (const storage of storages) {
+          const adjustedTracker = createPaymentTracker(storage);
+          const reservation = await adjustedTracker.reserveIncomingLimit(
+            'reserved',
+            'global',
+            0.001,
+            undefined,
+            1_000n
+          );
+          const settlementId = await adjustedTracker.stageSettlement(
+            [reservation.reservationId!],
+            [
+              {
+                groupName: 'recorded',
+                scope: 'global',
+                direction: 'incoming',
+                amount: 1_000n,
+              },
+            ]
+          );
+
+          await adjustedTracker.adjustSettlement(settlementId, [
+            {
+              groupName: 'reserved',
+              scope: 'global',
+              direction: 'incoming',
+              amount: 250n,
+            },
+            {
+              groupName: 'recorded',
+              scope: 'global',
+              direction: 'incoming',
+              amount: 250n,
+            },
+          ]);
+          expect(
+            await adjustedTracker.getIncomingTotal('reserved', 'global')
+          ).toBe(250n);
+          expect(
+            await adjustedTracker.getIncomingTotal('recorded', 'global')
+          ).toBe(250n);
+
+          await adjustedTracker.commitSettlement(settlementId);
+          expect(
+            await adjustedTracker.getIncomingTotal('reserved', 'global')
+          ).toBe(250n);
+          expect(
+            await adjustedTracker.getIncomingTotal('recorded', 'global')
+          ).toBe(250n);
+        }
+      } finally {
+        await Promise.all(storages.map(storage => storage.close?.()));
+        rmSync(dbPath, { force: true });
+        rmSync(`${dbPath}-shm`, { force: true });
+        rmSync(`${dbPath}-wal`, { force: true });
+      }
+    });
+
+    it('rejects invalid staged settlement adjustments without changing ceilings', async () => {
+      const adjustedTracker = createPaymentTracker(
+        createInMemoryPaymentStorage()
+      );
+      const settlementId = await adjustedTracker.stageSettlement(
+        [],
+        [
+          {
+            groupName: 'batch',
+            scope: 'global',
+            direction: 'incoming',
+            amount: 1_000n,
+          },
+        ]
+      );
+
+      await expect(
+        adjustedTracker.adjustSettlement(settlementId, [
+          {
+            groupName: 'batch',
+            scope: 'global',
+            direction: 'incoming',
+            amount: 1_001n,
+          },
+        ])
+      ).rejects.toThrow('exceeds staged amount');
+      await expect(
+        adjustedTracker.adjustSettlement(settlementId, [
+          {
+            groupName: 'missing',
+            scope: 'global',
+            direction: 'incoming',
+            amount: 250n,
+          },
+        ])
+      ).rejects.toThrow('scope was not staged');
+      expect(await adjustedTracker.getIncomingTotal('batch', 'global')).toBe(
+        1_000n
+      );
+    });
+
+    it('rejects a reservation adjustment above its ceiling without consuming it', async () => {
+      const adjustedTracker = createPaymentTracker(
+        createInMemoryPaymentStorage()
+      );
+      const reservation = await adjustedTracker.reserveIncomingLimit(
+        'metered',
+        'global',
+        0.001,
+        undefined,
+        1_000n
+      );
+      await expect(
+        adjustedTracker.stageSettlement(
+          [reservation.reservationId!],
+          [],
+          [{ reservationId: reservation.reservationId!, amount: 1_001n }]
+        )
+      ).rejects.toThrow('exceeds reserved amount');
+      await adjustedTracker.commitReservation(reservation.reservationId!);
+      expect(await adjustedTracker.getIncomingTotal('metered', 'global')).toBe(
+        1_000n
+      );
+    });
+
     it('keeps staged settlement capacity across TTL expiry and SQLite restart', async () => {
       const dbPath = join(
         tmpdir(),

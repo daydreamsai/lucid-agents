@@ -33,8 +33,10 @@ export async function createKitchenSinkAgent(
           ...configuredPayments,
           siwx: {
             enabled: true,
+            origin: 'http://127.0.0.1',
             storage: { type: 'in-memory' },
             verify: { skipSignatureVerification: true },
+            ...configuredPayments.siwx,
           },
         }
       : configuredPayments;
@@ -56,6 +58,7 @@ export async function createKitchenSinkAgent(
     //    custom verifier in the MPP test profile.
     .use(
       mpp({
+        allowInsecureHttpForDevelopment: true,
         config:
           options.profile === 'mpp'
             ? {

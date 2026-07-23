@@ -2,6 +2,8 @@ import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import type { SIWxStorage } from '@lucid-agents/types/siwx';
 import { describe, expect, it } from 'bun:test';
+import { decodePaymentRequiredHeader } from '@x402/core/http';
+import { SIGN_IN_WITH_X } from '@x402/extensions/sign-in-with-x';
 
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import type { PaymentStorage } from '../payment-storage';
@@ -56,7 +58,14 @@ function x402PaymentSignature(
 
 async function withFacilitator<T>(
   action: () => Promise<T>,
-  options: { failSupported?: () => boolean; network?: string } = {}
+  options: {
+    failSupported?: () => boolean;
+    failSettle?: () => boolean;
+    failVerify?: () => boolean;
+    onSupported?: () => void;
+    network?: string;
+    networkForFacilitator?: (url: URL) => string;
+  } = {}
 ): Promise<T> {
   const network = options.network ?? 'eip155:84532';
   const originalFetch = globalThis.fetch;
@@ -69,13 +78,19 @@ async function withFacilitator<T>(
           : input.url;
     const path = new URL(rawUrl).pathname;
     if (path.endsWith('/supported')) {
+      options.onSupported?.();
       if (options.failSupported?.()) throw new Error('facilitator unavailable');
+      const supportedNetwork =
+        options.networkForFacilitator?.(new URL(rawUrl)) ?? network;
       return Response.json({
         kinds: [
           {
             x402Version: 2,
             scheme: 'exact',
-            network,
+            network: supportedNetwork,
+            extra: {
+              feePayer: '11111111111111111111111111111111',
+            },
             asset: {
               address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
               decimals: 6,
@@ -86,12 +101,18 @@ async function withFacilitator<T>(
       });
     }
     if (path.endsWith('/verify')) {
+      if (options.failVerify?.()) {
+        throw new Error('provider-secret-should-not-be-public');
+      }
       return Response.json({
         isValid: true,
         payer: '0x1234567890123456789012345678901234567890',
       });
     }
     if (path.endsWith('/settle')) {
+      if (options.failSettle?.()) {
+        throw new Error('settlement-secret-should-not-be-public');
+      }
       return Response.json({
         success: true,
         payer: '0x1234567890123456789012345678901234567890',
@@ -109,6 +130,54 @@ async function withFacilitator<T>(
 }
 
 describe('verified incoming payment authorization', () => {
+  it('fails closed when USD policies cannot value a token-denominated x402 offer', async () => {
+    const runtime = createPaymentsRuntime({
+      ...baseConfig,
+      policyGroups: [
+        {
+          name: 'usd-budget',
+          incomingLimits: { global: { maxTotalUsd: 1 } },
+        },
+      ],
+    })!;
+    const tokenPricedEntrypoint: EntrypointDef = {
+      key: 'token-priced',
+      paymentProtocol: 'x402',
+      x402: {
+        offers: [
+          {
+            scheme: 'exact',
+            network: 'eip155:84532',
+            price: {
+              amount: '1000',
+              asset: '0x0000000000000000000000000000000000000001',
+            },
+          },
+        ],
+      },
+    };
+
+    const authorization = await runtime.authorize(
+      new Request('https://agent.example.com/entrypoints/token-priced/invoke', {
+        method: 'POST',
+      }),
+      tokenPricedEntrypoint,
+      'invoke'
+    );
+
+    expect(authorization.authorized).toBe(false);
+    if (authorization.authorized) throw new Error('Expected rejection');
+    expect(authorization.response.status).toBe(503);
+    expect(await authorization.response.json()).toEqual({
+      error: {
+        code: 'payment_configuration_error',
+        message:
+          'Incoming USD payment policies require explicitly valued offers; token-denominated x402 amounts have no trusted USD valuation.',
+      },
+    });
+    await runtime.close();
+  });
+
   it('serves and settles x402 challenges through the Fetch authorizer', async () => {
     await withFacilitator(async () => {
       const payer = '0x1234567890123456789012345678901234567890';
@@ -181,6 +250,277 @@ describe('verified incoming payment authorization', () => {
       );
       await runtime.close();
     });
+  });
+
+  it('serves multiple exact offers in one challenge across facilitators', async () => {
+    const evmNetwork = 'eip155:84532';
+    const svmNetwork = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const authorization = await runtime.authorize(
+          new Request('https://agent.example.com/entrypoints/multi/invoke', {
+            method: 'POST',
+          }),
+          {
+            key: 'multi',
+            paymentProtocol: 'x402',
+            x402: {
+              offers: [
+                {
+                  scheme: 'exact',
+                  network: evmNetwork,
+                  price: {
+                    amount: '1000',
+                    asset: '0x0000000000000000000000000000000000000010',
+                  },
+                  payTo: '0x0000000000000000000000000000000000000020',
+                  facilitatorUrl: 'https://evm-facilitator.example',
+                },
+                {
+                  scheme: 'exact',
+                  network: svmNetwork,
+                  price: {
+                    amount: '2000',
+                    asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                  },
+                  payTo: '11111111111111111111111111111111',
+                  facilitatorUrl: 'https://svm-facilitator.example',
+                },
+              ],
+            },
+          },
+          'invoke'
+        );
+
+        expect(authorization.authorized).toBe(false);
+        if (authorization.authorized) throw new Error('Expected challenge');
+        expect(authorization.response.status).toBe(402);
+        const required = authorization.response.headers.get('PAYMENT-REQUIRED');
+        if (!required) throw new Error('Missing PAYMENT-REQUIRED header');
+        const challenge = JSON.parse(
+          Buffer.from(required, 'base64').toString('utf8')
+        ) as {
+          accepts: Array<{
+            scheme: string;
+            network: string;
+            amount: string;
+            asset: string;
+            payTo: string;
+          }>;
+        };
+        expect(challenge.accepts).toEqual([
+          expect.objectContaining({
+            scheme: 'exact',
+            network: evmNetwork,
+            amount: '1000',
+            asset: '0x0000000000000000000000000000000000000010',
+            payTo: '0x0000000000000000000000000000000000000020',
+          }),
+          expect.objectContaining({
+            scheme: 'exact',
+            network: svmNetwork,
+            amount: '2000',
+            asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            payTo: '11111111111111111111111111111111',
+          }),
+        ]);
+        await runtime.close();
+      },
+      {
+        networkForFacilitator: url =>
+          url.hostname === 'svm-facilitator.example' ? svmNetwork : evmNetwork,
+      }
+    );
+  });
+
+  it('serves exact SVM challenges through the Fetch authorizer', async () => {
+    const network = 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1';
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime({
+          ...baseConfig,
+          network,
+          payTo: '11111111111111111111111111111111',
+        })!;
+        const authorization = await runtime.authorize(
+          new Request('https://agent.example.com/entrypoints/svm/invoke', {
+            method: 'POST',
+          }),
+          {
+            key: 'svm',
+            price: '0.001',
+            paymentProtocol: 'x402',
+          },
+          'invoke'
+        );
+
+        expect(authorization.authorized).toBe(false);
+        if (authorization.authorized) throw new Error('Expected challenge');
+        expect(authorization.response.status).toBe(402);
+        const required = authorization.response.headers.get('PAYMENT-REQUIRED');
+        if (!required) throw new Error('Missing PAYMENT-REQUIRED header');
+        const challenge = JSON.parse(
+          Buffer.from(required, 'base64').toString('utf8')
+        ) as {
+          accepts: Array<{
+            scheme: string;
+            network: string;
+            extra?: Record<string, unknown>;
+          }>;
+        };
+        expect(challenge.accepts).toEqual([
+          expect.objectContaining({
+            scheme: 'exact',
+            network,
+            extra: expect.objectContaining({
+              feePayer: '11111111111111111111111111111111',
+            }),
+          }),
+        ]);
+        await runtime.close();
+      },
+      { network }
+    );
+  });
+
+  it('rejects a facilitator that does not support the configured exact network', async () => {
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const authorization = await runtime.authorize(
+          new Request(
+            'https://agent.example.com/entrypoints/unsupported/invoke',
+            {
+              method: 'POST',
+            }
+          ),
+          {
+            key: 'unsupported',
+            price: '0.001',
+            paymentProtocol: 'x402',
+          },
+          'invoke'
+        );
+
+        expect(authorization.authorized).toBe(false);
+        if (authorization.authorized) throw new Error('Expected rejection');
+        expect(authorization.response.status).toBe(503);
+        expect(await authorization.response.json()).toEqual({
+          error: {
+            code: 'payment_configuration_error',
+            message:
+              'Configured facilitator does not support x402 v2 exact payments on eip155:84532.',
+          },
+        });
+        await runtime.close();
+      },
+      { network: 'eip155:8453' }
+    );
+  });
+
+  it('reports every unsupported offer in declaration order', async () => {
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const authorization = await runtime.authorize(
+          new Request(
+            'https://agent.example.com/entrypoints/unsupported/invoke',
+            {
+              method: 'POST',
+            }
+          ),
+          {
+            key: 'unsupported-many',
+            paymentProtocol: 'x402',
+            x402: {
+              offers: [
+                {
+                  scheme: 'exact',
+                  network: 'eip155:84532',
+                  price: '0.001',
+                },
+                {
+                  scheme: 'exact',
+                  network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+                  price: '0.002',
+                },
+              ],
+            },
+          },
+          'invoke'
+        );
+
+        expect(authorization.authorized).toBe(false);
+        if (authorization.authorized) throw new Error('Expected rejection');
+        expect(authorization.response.status).toBe(503);
+        expect(await authorization.response.json()).toEqual({
+          error: {
+            code: 'payment_configuration_error',
+            message:
+              'Configured x402 facilitators do not support their declared offers: ' +
+              'exact on eip155:84532; ' +
+              'exact on solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1.',
+          },
+        });
+        await runtime.close();
+      },
+      { network: 'eip155:8453' }
+    );
+  });
+
+  it('does not let one facilitator satisfy another facilitator declaration', async () => {
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const authorization = await runtime.authorize(
+          new Request('https://agent.example.com/entrypoints/crossed/invoke', {
+            method: 'POST',
+          }),
+          {
+            key: 'crossed',
+            paymentProtocol: 'x402',
+            x402: {
+              offers: [
+                {
+                  scheme: 'exact',
+                  network: 'eip155:84532',
+                  price: '0.001',
+                  facilitatorUrl: 'https://facilitator-a.example',
+                },
+                {
+                  scheme: 'exact',
+                  network: 'eip155:8453',
+                  price: '0.002',
+                  facilitatorUrl: 'https://facilitator-b.example',
+                },
+              ],
+            },
+          },
+          'invoke'
+        );
+
+        expect(authorization.authorized).toBe(false);
+        if (authorization.authorized) throw new Error('Expected rejection');
+        expect(authorization.response.status).toBe(503);
+        expect(await authorization.response.json()).toEqual({
+          error: {
+            code: 'payment_configuration_error',
+            message:
+              'Configured x402 facilitators do not support their declared offers: ' +
+              'exact on eip155:84532; ' +
+              'exact on eip155:8453.',
+          },
+        });
+        await runtime.close();
+      },
+      {
+        networkForFacilitator: url =>
+          url.hostname === 'facilitator-a.example'
+            ? 'eip155:8453'
+            : 'eip155:84532',
+      }
+    );
   });
 
   it('uses the facilitator-verified payer for sender policies', async () => {
@@ -273,12 +613,19 @@ describe('verified incoming payment authorization', () => {
     await withFacilitator(async () => {
       const runtime = createPaymentsRuntime({
         ...baseConfig,
-        siwx: { enabled: true },
+        siwx: {
+          enabled: true,
+          origin: 'https://public.agent.example.com',
+        },
       })!;
       const authorization = await runtime.authorize(
-        new Request('https://agent.example.com/entrypoints/paid/stream', {
+        new Request('http://internal-service:8787/entrypoints/paid/stream', {
           method: 'POST',
-          headers: { Accept: 'text/html' },
+          headers: {
+            Accept: 'text/html',
+            Forwarded: 'host=spoofed.example.com;proto=https',
+            'X-Forwarded-Host': 'also-spoofed.example.com',
+          },
         }),
         {
           key: 'paid',
@@ -292,11 +639,25 @@ describe('verified incoming payment authorization', () => {
       expect(authorization.authorized).toBe(false);
       if (authorization.authorized) throw new Error('Expected challenge');
       expect(authorization.response.status).toBe(402);
-      expect(
-        authorization.response.headers.get('X-SIWX-EXTENSION')
-      ).toBeTruthy();
+      expect(authorization.response.headers.has('X-SIWX-EXTENSION')).toBe(
+        false
+      );
+      const paymentRequired = decodePaymentRequiredHeader(
+        authorization.response.headers.get('PAYMENT-REQUIRED')!
+      );
+      const siwx = paymentRequired.extensions?.[SIGN_IN_WITH_X] as {
+        info: { domain: string; uri: string };
+        supportedChains: Array<{ chainId: string; type: string }>;
+      };
+      expect(siwx.info.domain).toBe('public.agent.example.com');
+      expect(siwx.info.uri).toBe(
+        'https://public.agent.example.com/entrypoints/paid/stream'
+      );
+      expect(siwx.supportedChains).toEqual([
+        { chainId: 'eip155:84532', type: 'eip191' },
+      ]);
       const body = await authorization.response.json();
-      expect(body.extensions).toBeDefined();
+      expect(body.extensions[SIGN_IN_WITH_X]).toEqual(siwx);
       await runtime.close();
     });
   });
@@ -321,8 +682,7 @@ describe('verified incoming payment authorization', () => {
         expect(await failed.response.json()).toEqual({
           error: {
             code: 'payment_configuration_error',
-            message:
-              'Failed to initialize: no supported payment kinds loaded from any facilitator.',
+            message: 'x402 payment verification is temporarily unavailable.',
           },
         });
 
@@ -334,6 +694,198 @@ describe('verified incoming payment authorization', () => {
         await runtime.close();
       },
       { failSupported: () => failSupported }
+    );
+  });
+
+  it('binds cached x402 servers to the full request resource', async () => {
+    await withFacilitator(async () => {
+      const runtime = createPaymentsRuntime(baseConfig)!;
+      const paid: EntrypointDef = {
+        key: 'resource-bound',
+        price: '0.001',
+        paymentProtocol: 'x402',
+      };
+      const first = await runtime.authorize(
+        new Request('https://alpha.agent.example/pay?tenant=one#ignored', {
+          method: 'POST',
+        }),
+        paid,
+        'invoke'
+      );
+      const second = await runtime.authorize(
+        new Request('https://beta.agent.example/pay?tenant=two', {
+          method: 'POST',
+        }),
+        paid,
+        'invoke'
+      );
+      if (first.authorized || second.authorized) {
+        throw new Error('Expected payment challenges');
+      }
+
+      const firstRequired = decodePaymentRequiredHeader(
+        first.response.headers.get('PAYMENT-REQUIRED')!
+      );
+      const secondRequired = decodePaymentRequiredHeader(
+        second.response.headers.get('PAYMENT-REQUIRED')!
+      );
+      expect(firstRequired.resource.url).toBe(
+        'https://alpha.agent.example/pay?tenant=one'
+      );
+      expect(secondRequired.resource.url).toBe(
+        'https://beta.agent.example/pay?tenant=two'
+      );
+      await runtime.close();
+    });
+  });
+
+  it('bounds the x402 server cache with least-recently-used eviction', async () => {
+    let supportedCalls = 0;
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const paid: EntrypointDef = {
+          key: 'bounded-cache',
+          price: '0.001',
+          paymentProtocol: 'x402',
+        };
+        for (let index = 0; index < 129; index += 1) {
+          await runtime.authorize(
+            new Request(`https://agent.example/pay?resource=${index}`, {
+              method: 'POST',
+            }),
+            paid,
+            'invoke'
+          );
+        }
+        expect(supportedCalls).toBe(129);
+        await runtime.authorize(
+          new Request('https://agent.example/pay?resource=0', {
+            method: 'POST',
+          }),
+          paid,
+          'invoke'
+        );
+        expect(supportedCalls).toBe(130);
+        await runtime.close();
+      },
+      { onSupported: () => (supportedCalls += 1) }
+    );
+  });
+
+  it('rejects credential-bearing facilitator URLs without reflecting secrets', async () => {
+    const runtime = createPaymentsRuntime({
+      ...baseConfig,
+      facilitatorUrl: 'https://api-user:super-secret@facilitator.example.com',
+    })!;
+    const authorization = await runtime.authorize(
+      new Request('https://agent.example/pay', { method: 'POST' }),
+      {
+        key: 'credential-url',
+        price: '0.001',
+        paymentProtocol: 'x402',
+      },
+      'invoke'
+    );
+
+    expect(authorization.authorized).toBe(false);
+    if (authorization.authorized) throw new Error('Expected rejection');
+    expect(authorization.response.status).toBe(503);
+    const body = await authorization.response.text();
+    expect(body).toContain('use facilitatorAuth instead');
+    expect(body).not.toContain('api-user');
+    expect(body).not.toContain('super-secret');
+    await runtime.close();
+  });
+
+  it('contains facilitator verification failures behind a stable public error', async () => {
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const paid: EntrypointDef = {
+          key: 'provider-failure',
+          price: '0.001',
+          paymentProtocol: 'x402',
+        };
+        const request = new Request('https://agent.example/pay', {
+          method: 'POST',
+        });
+        const challenge = await runtime.authorize(
+          new Request(request),
+          paid,
+          'invoke'
+        );
+        if (challenge.authorized) throw new Error('Expected challenge');
+        const failed = await runtime.authorize(
+          new Request(request, {
+            headers: {
+              'PAYMENT-SIGNATURE': x402PaymentSignature(
+                challenge.response,
+                '0x1234567890123456789012345678901234567890'
+              ),
+            },
+          }),
+          paid,
+          'invoke'
+        );
+
+        expect(failed.authorized).toBe(false);
+        if (failed.authorized) throw new Error('Expected provider failure');
+        const body = await failed.response.text();
+        expect(body).toContain(
+          'x402 payment verification is temporarily unavailable.'
+        );
+        expect(body).not.toContain('provider-secret-should-not-be-public');
+        await runtime.close();
+      },
+      { failVerify: () => true }
+    );
+  });
+
+  it('contains facilitator settlement failures behind a stable public error', async () => {
+    await withFacilitator(
+      async () => {
+        const runtime = createPaymentsRuntime(baseConfig)!;
+        const paid: EntrypointDef = {
+          key: 'settlement-failure',
+          price: '0.001',
+          paymentProtocol: 'x402',
+        };
+        const request = new Request('https://agent.example/pay', {
+          method: 'POST',
+        });
+        const challenge = await runtime.authorize(
+          new Request(request),
+          paid,
+          'invoke'
+        );
+        if (challenge.authorized) throw new Error('Expected challenge');
+        const authorized = await runtime.authorize(
+          new Request(request, {
+            headers: {
+              'PAYMENT-SIGNATURE': x402PaymentSignature(
+                challenge.response,
+                '0x1234567890123456789012345678901234567890'
+              ),
+            },
+          }),
+          paid,
+          'invoke'
+        );
+        if (!authorized.authorized) throw new Error('Expected authorization');
+        const admission = await authorized.admit();
+        if (!admission.admitted) throw new Error('Expected admission');
+        const response = await admission.finalize(Response.json({ ok: true }));
+        const body = await response.text();
+
+        expect(response.status).toBeGreaterThanOrEqual(400);
+        expect(body).toMatch(
+          /Payment settlement (?:is temporarily unavailable|was rejected)\./u
+        );
+        expect(body).not.toContain('settlement-secret-should-not-be-public');
+        await runtime.close();
+      },
+      { failSettle: () => true }
     );
   });
 
@@ -409,6 +961,35 @@ describe('verified incoming payment authorization', () => {
     if (!authorization.authorized) throw new Error('Expected authorization');
     const admission = await authorization.admit();
     expect(admission.admitted).toBe(true);
+    await runtime.close();
+  });
+
+  it('fails closed when USD policies cannot value a native-token MPP payment', async () => {
+    const runtime = createPaymentsRuntime({
+      ...baseConfig,
+      policyGroups: [
+        {
+          name: 'usd-budget',
+          incomingLimits: { global: { maxTotalUsd: 1 } },
+        },
+      ],
+    })!;
+    const authorization = await runtime.authorize(
+      mppRequest(),
+      entrypoint,
+      'invoke',
+      {
+        protocol: 'mpp',
+        payer: '0xpayer',
+        amount: '1000000',
+        currency: '0x20c0000000000000000000000000000000000001',
+        network: 'eip155:42431',
+      }
+    );
+
+    expect(authorization.authorized).toBe(false);
+    if (authorization.authorized) throw new Error('Expected rejection');
+    expect(authorization.response.status).toBe(503);
     await runtime.close();
   });
 
@@ -493,6 +1074,113 @@ describe('verified incoming payment authorization', () => {
       throw new Error('Expected rate limit rejection');
     expect(secondAdmission.response.status).toBe(403);
     await runtime.close();
+  });
+
+  it('replaces a verified MPP session ceiling with delivered usage', async () => {
+    const runtime = createPaymentsRuntime({
+      ...baseConfig,
+      policyGroups: [
+        {
+          name: 'mpp-session-policy',
+          incomingLimits: { global: { maxTotalUsd: 5 } },
+        },
+      ],
+    })!;
+    const channelId = `0x${'ab'.repeat(32)}`;
+    const authorization = await runtime.authorize(
+      mppRequest(),
+      entrypoint,
+      'stream',
+      {
+        protocol: 'mpp',
+        payer: '0xpayer',
+        amount: '3',
+        currency: 'usd',
+        intent: 'session',
+        reference: channelId,
+        maximumAmount: '3000000',
+      }
+    );
+    if (!authorization.authorized) {
+      throw new Error('Expected MPP session authorization');
+    }
+    const admission = await authorization.admit();
+    if (!admission.admitted) throw new Error('Expected session admission');
+
+    const response = await admission.finalize(Response.json({ ok: true }), {
+      payment: {
+        actualAmount: '2000000',
+        asset: 'usd',
+        reference: channelId,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      await runtime.paymentTracker?.getIncomingTotal(
+        'mpp-session-policy',
+        'global'
+      )
+    ).toBe(2_000_000n);
+    await runtime.close();
+  });
+
+  it('rejects MPP session accounting above its ceiling or for another channel', async () => {
+    const createRuntime = () =>
+      createPaymentsRuntime({
+        ...baseConfig,
+        policyGroups: [
+          {
+            name: 'mpp-session-policy',
+            incomingLimits: { global: { maxTotalUsd: 5 } },
+          },
+        ],
+      })!;
+    const channelId = `0x${'ab'.repeat(32)}`;
+    for (const payment of [
+      {
+        actualAmount: '3000001',
+        asset: 'usd',
+        reference: channelId,
+      },
+      {
+        actualAmount: '1000000',
+        asset: 'usd',
+        reference: `0x${'cd'.repeat(32)}`,
+      },
+    ]) {
+      const runtime = createRuntime();
+      const authorization = await runtime.authorize(
+        mppRequest(),
+        entrypoint,
+        'stream',
+        {
+          protocol: 'mpp',
+          amount: '3',
+          currency: 'usd',
+          intent: 'session',
+          reference: channelId,
+          maximumAmount: '3000000',
+        }
+      );
+      if (!authorization.authorized) {
+        throw new Error('Expected MPP session authorization');
+      }
+      const admission = await authorization.admit();
+      if (!admission.admitted) throw new Error('Expected session admission');
+
+      expect(
+        (await admission.finalize(Response.json({ ok: true }), { payment }))
+          .status
+      ).toBe(500);
+      expect(
+        await runtime.paymentTracker?.getIncomingTotal(
+          'mpp-session-policy',
+          'global'
+        )
+      ).toBe(0n);
+      await runtime.close();
+    }
   });
 
   it('releases MPP reservations when execution fails', async () => {
@@ -595,6 +1283,8 @@ describe('verified incoming payment authorization', () => {
         delegate.commitPaymentReservations(...args),
       stagePaymentSettlement: (...args) =>
         delegate.stagePaymentSettlement(...args),
+      adjustPaymentSettlement: (...args) =>
+        delegate.adjustPaymentSettlement(...args),
       commitPaymentSettlement: async () => {
         throw new Error('accounting unavailable');
       },
@@ -679,7 +1369,13 @@ describe('verified incoming payment authorization', () => {
       clear: async () => {},
     };
     const runtime = createPaymentsRuntime(
-      { ...baseConfig, siwx: { enabled: true } },
+      {
+        ...baseConfig,
+        siwx: {
+          enabled: true,
+          origin: 'https://agent.example.com',
+        },
+      },
       undefined,
       undefined,
       () => storage

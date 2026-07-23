@@ -26,7 +26,9 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
+      - run: bun run check:x402-cohort
       - run: bun run build:packages
+      - run: bun run check:payment-support
       - run: bun run type-check
       - run: bun run deadcode
       - run: bun run lint

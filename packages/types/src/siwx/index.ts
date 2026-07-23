@@ -4,6 +4,11 @@
 export type SIWxConfig = {
   /** Enable SIWX globally */
   enabled: boolean;
+  /**
+   * Public browser-visible origin used to bind SIWX domain and URI values.
+   * Required when SIWX is enabled outside an explicit local-development mode.
+   */
+  origin?: string;
   /** Default statement shown to users when signing */
   defaultStatement?: string;
   /** Default expiration in seconds for SIWX payloads */

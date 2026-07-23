@@ -34,6 +34,18 @@ export function paymentsFromEnv(
     env.FACILITATOR_AUTH ??
     env.PAYMENTS_FACILITATOR_AUTH ??
     env.DREAMS_AUTH_TOKEN;
+  const siwxOrigin =
+    configOverrides?.siwx?.origin ??
+    env.SIWX_PUBLIC_ORIGIN ??
+    env.PAYMENTS_PUBLIC_ORIGIN;
+  const siwx =
+    configOverrides?.siwx ??
+    (siwxOrigin
+      ? {
+          enabled: true,
+          origin: siwxOrigin,
+        }
+      : undefined);
 
   const baseConfig = {
     facilitatorUrl: facilitatorUrl as PaymentsConfig['facilitatorUrl'],
@@ -43,6 +55,7 @@ export function paymentsFromEnv(
       : (network as PaymentsConfig['network']),
     policyGroups: configOverrides?.policyGroups,
     storage: configOverrides?.storage,
+    siwx,
   };
 
   const stripeConfig = (configOverrides as { stripe?: StripePaymentsConfig })
@@ -61,7 +74,7 @@ export function paymentsFromEnv(
     | undefined;
   const hasConfiguration =
     explicitKeys.length > 0 ||
-    Boolean(facilitatorUrl || network || payToEnv || destinationMode);
+    Boolean(facilitatorUrl || network || payToEnv || destinationMode || siwx);
 
   if (!hasConfiguration) return undefined;
 

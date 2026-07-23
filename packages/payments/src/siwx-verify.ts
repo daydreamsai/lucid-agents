@@ -1,21 +1,24 @@
-import { verifyMessage } from 'viem';
+import {
+  SIGN_IN_WITH_X,
+  SIWxPayloadSchema,
+  createSIWxMessage,
+  declareSIWxExtension,
+  parseSIWxHeader as parseOfficialSIWxHeader,
+  validateSIWxMessage,
+  verifySIWxSignature,
+  type CompleteSIWxInfo,
+  type EVMMessageVerifier,
+  type SIWxExtension,
+  type SIWxPayload as OfficialSIWxPayload,
+} from '@x402/extensions/sign-in-with-x';
+import {
+  decodePaymentRequiredHeader,
+  encodePaymentRequiredHeader,
+} from '@x402/core/http';
+import type { PaymentRequired, PaymentRequirements } from '@x402/core/types';
 import type { SIWxStorage } from './siwx-storage';
-import { decodeBase64Utf8, encodeBase64Utf8 } from './base64';
 
-export type SIWxPayload = {
-  domain: string;
-  address: string;
-  uri: string;
-  version: string;
-  chainId: string;
-  nonce: string;
-  issuedAt: string;
-  expirationTime?: string;
-  notBefore?: string;
-  statement?: string;
-  signature?: string;
-  resources?: string[];
-};
+export type SIWxPayload = OfficialSIWxPayload;
 
 export type SIWxVerifyResult = {
   success: boolean;
@@ -31,149 +34,86 @@ export type SIWxVerifyOptions = {
   resourceUri: string;
   /** Internal storage scope for an entitlement when it differs from the signed URI. */
   entitlementResource?: string;
-  domain: string;
-  requireEntitlement?: boolean; // true for paid-route reuse, false for auth-only
-  /** Skip cryptographic signature verification (for testing only) */
+  /** Configured public origin. Request host headers are never used. */
+  origin?: string;
+  /** @deprecated Use `origin`. Retained for source compatibility. */
+  domain?: string;
+  requireEntitlement?: boolean;
+  supportedChainIds?: readonly string[];
+  evmVerifier?: EVMMessageVerifier;
+  /** Skip cryptographic signature verification (for testing only). */
   skipSignatureVerification?: boolean;
 };
 
 /**
- * Parse a SIWX header value into a structured payload.
- * The header is expected to be a base64-encoded JSON string.
+ * Parse and validate the official `SIGN-IN-WITH-X` header payload.
  */
 export function parseSIWxHeader(
   headerValue: string | null | undefined
 ): SIWxPayload | undefined {
   if (!headerValue) return undefined;
   try {
-    const decoded = decodeBase64Utf8(headerValue);
-    return JSON.parse(decoded) as SIWxPayload;
+    return parseOfficialSIWxHeader(headerValue);
   } catch {
     return undefined;
   }
 }
 
 /**
- * Build the canonical EIP-191 message string from a SIWX payload.
- * This follows the CAIP-122 / EIP-4361 (Sign-In with Ethereum) message format.
+ * Build the official SIWE/SIWS message for a SIWX payload.
  */
 export function buildSIWxMessage(payload: SIWxPayload): string {
-  const lines: string[] = [];
-  lines.push(`${payload.domain} wants you to sign in with your account:`);
-  lines.push(payload.address);
-  lines.push('');
-  if (payload.statement) {
-    lines.push(payload.statement);
-    lines.push('');
-  }
-  lines.push(`URI: ${payload.uri}`);
-  lines.push(`Version: ${payload.version}`);
-  lines.push(`Chain ID: ${payload.chainId}`);
-  lines.push(`Nonce: ${payload.nonce}`);
-  lines.push(`Issued At: ${payload.issuedAt}`);
-  if (payload.expirationTime) {
-    lines.push(`Expiration Time: ${payload.expirationTime}`);
-  }
-  if (payload.notBefore) {
-    lines.push(`Not Before: ${payload.notBefore}`);
-  }
-  if (payload.resources && payload.resources.length > 0) {
-    lines.push('Resources:');
-    for (const resource of payload.resources) {
-      lines.push(`- ${resource}`);
-    }
-  }
-  return lines.join('\n');
+  return createSIWxMessage(payload as CompleteSIWxInfo, payload.address);
 }
 
 /**
- * Verify the cryptographic signature of a SIWX payload using EIP-191.
- * Returns true if the signature was created by the address in the payload.
- */
-async function verifySignature(payload: SIWxPayload): Promise<boolean> {
-  if (!payload.signature) return false;
-
-  try {
-    const message = buildSIWxMessage(payload);
-    const isValid = await verifyMessage({
-      address: payload.address as `0x${string}`,
-      message,
-      signature: payload.signature as `0x${string}`,
-    });
-    return isValid;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify a SIWX payload against storage and constraints.
- * Validates: payload shape, domain/URI matching, timing, cryptographic signature,
- * nonce replay, and entitlement check.
+ * Validate an official SIWX proof while preserving Lucid's atomic nonce and
+ * entitlement semantics.
  */
 export async function verifySIWxPayload(
-  payload: SIWxPayload,
+  untrustedPayload: SIWxPayload,
   options: SIWxVerifyOptions
 ): Promise<SIWxVerifyResult> {
-  // Validate required fields
-  if (
-    !payload.address ||
-    !payload.chainId ||
-    !payload.nonce ||
-    !payload.uri ||
-    !payload.domain ||
-    !payload.issuedAt ||
-    !payload.version
-  ) {
-    return { success: false, error: 'missing_required_fields' };
+  const parsed = SIWxPayloadSchema.safeParse(untrustedPayload);
+  if (!parsed.success) {
+    return { success: false, error: 'invalid_siwx_payload' };
   }
+  const payload = parsed.data;
 
-  // Validate domain matches
-  if (payload.domain !== options.domain) {
-    return { success: false, error: 'domain_mismatch' };
+  const expectedOrigin = resolveExpectedOrigin(options);
+  const validation = await validateSIWxMessage(payload, expectedOrigin);
+  if (!validation.isValid) {
+    return { success: false, error: validation.invalidReason };
   }
-
-  // Validate resource URI matches
   if (payload.uri !== options.resourceUri) {
-    return { success: false, error: 'resource_uri_mismatch' };
+    return { success: false, error: 'invalid_siwx_uri_mismatch' };
+  }
+  if (
+    options.supportedChainIds &&
+    !options.supportedChainIds.includes(payload.chainId)
+  ) {
+    return { success: false, error: 'invalid_siwx_chain_id' };
   }
 
-  // Validate timing
-  const now = Date.now();
-
-  const issuedAt = new Date(payload.issuedAt).getTime();
-  if (isNaN(issuedAt)) {
-    return { success: false, error: 'invalid_issued_at' };
-  }
-
-  if (payload.expirationTime) {
-    const expiration = new Date(payload.expirationTime).getTime();
-    if (isNaN(expiration) || expiration < now) {
-      return { success: false, error: 'expired' };
-    }
-  }
-
-  if (payload.notBefore) {
-    const notBefore = new Date(payload.notBefore).getTime();
-    if (isNaN(notBefore) || notBefore > now) {
-      return { success: false, error: 'not_yet_valid' };
-    }
-  }
-
-  // Verify cryptographic signature (EIP-191)
   if (!options.skipSignatureVerification) {
-    if (!payload.signature) {
-      return { success: false, error: 'missing_signature' };
-    }
-    const sigValid = await verifySignature(payload);
-    if (!sigValid) {
-      return { success: false, error: 'invalid_signature' };
+    const verification = await verifySIWxSignature(payload, {
+      evmVerifier: options.evmVerifier,
+    }).catch(() => ({
+      isValid: false as const,
+      invalidReason: 'invalid_siwx_verifier_error' as const,
+      invalidMessage: 'SIWX signature verification failed.',
+    }));
+    if (!verification.isValid) {
+      return { success: false, error: verification.invalidReason };
     }
   }
 
-  const normalizedAddress = payload.address.toLowerCase();
+  const normalizedAddress = payload.chainId.startsWith('eip155:')
+    ? payload.address.toLowerCase()
+    : payload.address;
 
-  // For paid-route reuse, check entitlement BEFORE consuming the nonce
+  // Entitlement is checked before nonce consumption so an unpaid proof can be
+  // retried after settlement without burning its challenge.
   if (options.requireEntitlement !== false) {
     const hasPaid = await options.storage.hasPaid(
       options.entitlementResource ?? options.resourceUri,
@@ -184,7 +124,6 @@ export async function verifySIWxPayload(
     }
   }
 
-  // Atomically consume nonce (prevents replay even under concurrent requests)
   const nonceResult = await options.storage.consumeNonce(payload.nonce, {
     resource: options.resourceUri,
     address: payload.address,
@@ -196,107 +135,144 @@ export async function verifySIWxPayload(
     return { success: false, error: 'nonce_replayed' };
   }
 
-  if (options.requireEntitlement !== false) {
-    return {
-      success: true,
-      address: normalizedAddress,
-      chainId: payload.chainId,
-      grantedBy: 'entitlement',
-      payload,
-    };
-  }
-
-  // Auth-only mode
   return {
     success: true,
     address: normalizedAddress,
     chainId: payload.chainId,
-    grantedBy: 'auth-only',
+    grantedBy:
+      options.requireEntitlement === false ? 'auth-only' : 'entitlement',
     payload,
   };
 }
 
+function resolveExpectedOrigin(options: SIWxVerifyOptions): URL {
+  if (options.origin) return new URL(options.origin);
+  if (options.domain) return new URL(`https://${options.domain}`);
+  throw new Error('SIWX verification requires a configured public origin.');
+}
+
 /**
- * Build a SIWX extension declaration for a 402 response.
+ * Build the official SIWX extension value placed at
+ * `PaymentRequired.extensions["sign-in-with-x"]`.
  */
 export function buildSIWxExtensionDeclaration(options: {
   resourceUri: string;
-  domain: string;
+  /** @deprecated Derived from `resourceUri`; retained for source compatibility. */
+  domain?: string;
   statement?: string;
-  chainId?: string;
+  chainId?: string | readonly string[];
   expirationSeconds?: number;
-}): Record<string, unknown> {
-  const nonce = generateNonce();
+}): SIWxExtension {
+  const resource = new URL(options.resourceUri);
+  if (options.domain && options.domain !== resource.host) {
+    throw new Error(
+      `SIWX declaration domain "${options.domain}" does not match resource origin "${resource.host}".`
+    );
+  }
   const now = new Date();
+  const networks = options.chainId
+    ? Array.isArray(options.chainId)
+      ? [...options.chainId]
+      : [options.chainId]
+    : [];
+  const declared = declareSIWxExtension({
+    ...(options.statement ? { statement: options.statement } : {}),
+    network: networks,
+    expirationSeconds: options.expirationSeconds,
+  })[SIGN_IN_WITH_X];
 
   return {
-    scheme: 'sign-in-with-x',
-    domain: options.domain,
-    uri: options.resourceUri,
-    version: '1',
-    chainId: options.chainId,
-    nonce,
-    issuedAt: now.toISOString(),
-    ...(options.expirationSeconds
-      ? {
-          expirationTime: new Date(
-            now.getTime() + options.expirationSeconds * 1000
-          ).toISOString(),
-        }
-      : {}),
-    ...(options.statement ? { statement: options.statement } : {}),
+    info: {
+      domain: resource.host,
+      uri: resource.toString(),
+      version: '1',
+      nonce: generateNonce(),
+      issuedAt: now.toISOString(),
+      resources: [resource.toString()],
+      ...(options.expirationSeconds !== undefined
+        ? {
+            expirationTime: new Date(
+              now.getTime() + options.expirationSeconds * 1000
+            ).toISOString(),
+          }
+        : {}),
+      ...(options.statement ? { statement: options.statement } : {}),
+    },
+    supportedChains: declared.supportedChains,
+    schema: declared.schema,
   };
 }
 
 /**
- * Enrich a response object with SIWX challenge data.
- * For 402 responses: adds to `extensions.siwx`
- * For 401 responses: adds to `error.siwx`
- * Both include the `X-SIWX-EXTENSION` header as base64-encoded JSON.
+ * Add an official SIWX extension to an x402 response and emit only the
+ * standard `PAYMENT-REQUIRED` transport header.
  */
 export function enrichResponseWithSIWxChallenge(
   body: Record<string, unknown>,
-  declaration: Record<string, unknown>,
-  statusCode: 401 | 402
+  declaration: SIWxExtension,
+  _statusCode: 401 | 402,
+  paymentRequiredHeader?: string | null
 ): { body: Record<string, unknown>; headers: Record<string, string> } {
-  const headerValue = encodeBase64Utf8(JSON.stringify(declaration));
-  const headers: Record<string, string> = {
-    'X-SIWX-EXTENSION': headerValue,
+  const existing = decodeExistingPaymentRequired(paymentRequiredHeader);
+  const extensions = {
+    ...(isRecord(existing?.extensions) ? existing.extensions : {}),
+    ...(isRecord(body.extensions) ? body.extensions : {}),
+    [SIGN_IN_WITH_X]: declaration,
+  };
+  const enrichedBody = {
+    ...body,
+    extensions,
+  };
+  const paymentRequired: PaymentRequired = {
+    x402Version:
+      typeof body.x402Version === 'number'
+        ? body.x402Version
+        : (existing?.x402Version ?? 2),
+    resource: isResourceInfo(body.resource)
+      ? body.resource
+      : (existing?.resource ?? { url: declaration.info.uri }),
+    accepts: Array.isArray(body.accepts)
+      ? (body.accepts as PaymentRequirements[])
+      : Array.isArray(existing?.accepts)
+        ? existing.accepts
+        : [],
+    ...(typeof body.error === 'string'
+      ? { error: body.error }
+      : typeof existing?.error === 'string'
+        ? { error: existing.error }
+        : {}),
+    extensions,
   };
 
-  if (statusCode === 402) {
-    return {
-      body: {
-        ...body,
-        extensions: {
-          ...((body.extensions as Record<string, unknown>) ?? {}),
-          siwx: declaration,
-        },
-      },
-      headers,
-    };
-  }
-
-  // 401: put in error.siwx
   return {
-    body: {
-      ...body,
-      error: {
-        ...(typeof body.error === 'object' && body.error !== null
-          ? body.error
-          : {
-              code: 'auth_required',
-              message: String(body.error ?? 'Authentication required'),
-            }),
-        siwx: declaration,
-      },
+    body: enrichedBody,
+    headers: {
+      'PAYMENT-REQUIRED': encodePaymentRequiredHeader(paymentRequired),
     },
-    headers,
   };
+}
+
+function decodeExistingPaymentRequired(
+  header: string | null | undefined
+): PaymentRequired | undefined {
+  if (!header) return undefined;
+  try {
+    return decodePaymentRequiredHeader(header);
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isResourceInfo(value: unknown): value is PaymentRequired['resource'] {
+  return isRecord(value) && typeof value.url === 'string';
 }
 
 function generateNonce(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }

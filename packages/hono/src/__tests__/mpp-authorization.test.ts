@@ -23,6 +23,7 @@ describe('MPP authorization', () => {
       .use(http())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -65,6 +66,7 @@ describe('MPP authorization', () => {
       .use(http())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -137,9 +139,10 @@ describe('MPP authorization', () => {
       .use(http())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
-            challengeExpirySeconds: 0,
+            challengeExpirySeconds: 0.01,
             verifyCredential: async () => {
               verifierCalls += 1;
               return { valid: true, receipt: 'expired-test-receipt' };
@@ -170,6 +173,7 @@ describe('MPP authorization', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ input: {} }),
     });
+    await new Promise(resolve => setTimeout(resolve, 20));
     const expired = await app.request(url, {
       method: 'POST',
       headers: {

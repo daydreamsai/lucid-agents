@@ -246,6 +246,33 @@ Low-level `createSSEStream` and `writeSSE` helpers are available for custom
 transports. Envelope and route contracts are defined in
 `@lucid-agents/types/http`.
 
+`createSSEStream()` exposes asynchronous `ready()`, `write()`, and `close()`
+operations. Awaiting them applies response-consumer backpressure. Its runner
+`signal` aborts when either the request aborts or the response reader cancels,
+so generators can stop external work promptly.
+
+An MPP Tempo session-backed stream meters each handler `emit()` as one
+configured unit. HTTP waits for downstream capacity, atomically charges the
+verified session meter, and only then writes the envelope. Session control
+frames are protocol-native SSE events:
+
+```text
+event: payment-need-voucher
+data: {"channelId":"0x...","requiredCumulative":"20",...}
+
+event: payment-receipt
+data: {"method":"tempo","intent":"session","spent":"20","units":2,...}
+```
+
+The stream waits for a live top-up according to the configured session policy.
+If funding remains unavailable, it emits the standard session Problem Details
+document as an `error` event and terminates with a failed `run-end`. Consumer
+cancellation aborts the wait and releases only uncommitted meter work. Shared
+payment policies reserve the verified maximum before streaming and finalize
+exactly once with `deliveredUnits * unitAmount` after completion, failure, or
+disconnect, so resumed and simultaneous streams do not double-count cumulative
+channel spend.
+
 ## Low-level invocation
 
 `invoke`, `invokeHandler`, and `stream` are exported for integration code. They

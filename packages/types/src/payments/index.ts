@@ -125,8 +125,14 @@ export interface PaymentTracker {
    */
   stageSettlement(
     reservationIds: readonly string[],
-    records?: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[]
+    records?: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[],
+    adjustments?: readonly PaymentReservationAdjustment[]
   ): Promise<string>;
+  /** Adjust staged policy scopes after a rail reports actual usage. */
+  adjustSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<void>;
   /** Commit a staged settlement batch to payment history. */
   commitSettlement(settlementId: string): Promise<void>;
   /** Release a staged settlement batch after settlement definitively fails. */
@@ -262,6 +268,87 @@ export type StripePaymentsDestination = {
   payTo?: never;
 };
 
+/** Token-denominated amount expressed in the asset's atomic units. */
+export type X402TokenAmount = {
+  amount: string;
+  asset: string;
+};
+
+/** Human-readable money or an explicit token-denominated amount. */
+export type X402OfferAmount = string | X402TokenAmount;
+
+/** Protocol extension declaration attached to one accepted x402 offer. */
+export type X402ExtensionDeclaration = {
+  key: string;
+  info?: Record<string, unknown>;
+};
+
+type X402OfferBase = {
+  network: Network;
+  payTo?: string;
+  facilitatorUrl?: Resource;
+  extensions?: readonly X402ExtensionDeclaration[];
+};
+
+/** Fixed-price x402 offer. */
+export type X402ExactOffer = X402OfferBase & {
+  scheme: 'exact';
+  price: X402OfferAmount;
+};
+
+/** Usage-metered x402 offer authorizing a maximum settlement amount. */
+export type X402UptoOffer = X402OfferBase & {
+  scheme: 'upto';
+  network: `eip155:${string}`;
+  maximum: X402OfferAmount;
+};
+
+/** Channel-backed x402 offer redeemable through batch settlement. */
+export type X402BatchSettlementOffer = X402OfferBase & {
+  scheme: 'batch-settlement';
+  network: `eip155:${string}`;
+  maximum: X402OfferAmount;
+};
+
+/** One seller-accepted x402 commercial offer. */
+export type X402Offer =
+  | X402ExactOffer
+  | X402UptoOffer
+  | X402BatchSettlementOffer;
+
+/** Explicit x402 offers for one entrypoint. */
+export type EntrypointX402Config = {
+  offers: readonly X402Offer[];
+};
+
+/** Actual amount selected by a usage-metered entrypoint after execution. */
+export type EntrypointPaymentSettlement = {
+  actualAmount: string;
+  /** Asset identifier when the amount is not the configured USD denomination. */
+  asset?: string;
+  /** Verified payment channel or session reference. */
+  reference?: string;
+};
+
+/** Execution-owned metadata supplied to payment finalization out-of-band. */
+export type IncomingPaymentFinalizeOptions = {
+  payment?: EntrypointPaymentSettlement;
+};
+
+/** Atomically replace a reserved ceiling with the amount actually consumed. */
+export type PaymentReservationAdjustment = {
+  reservationId: string;
+  amount: bigint;
+};
+
+/** Atomically replace one staged policy scope's ceiling with actual usage. */
+export type PaymentSettlementAdjustment = {
+  groupName: string;
+  scope: string;
+  direction: PaymentDirection;
+  amount: bigint;
+};
+
 /**
  * Payment configuration for x402 protocol.
  * Supports static wallet destination and Stripe-backed dynamic destination.
@@ -277,6 +364,11 @@ export type PaymentsConfig = {
   storage?: PaymentStorageConfig;
   /** Optional SIWX (Sign-In With X) configuration */
   siwx?: SIWxConfig;
+  /**
+   * Optional explicit seller offers. Legacy destination, network, and
+   * entrypoint price fields remain compatibility sugar for one exact offer.
+   */
+  offers?: readonly X402Offer[];
 } & (StaticPaymentsDestination | StripePaymentsDestination);
 
 /**
@@ -295,6 +387,7 @@ export type PaymentRequirement =
       price: string;
       network: Network;
       facilitatorUrl?: string;
+      offers?: readonly X402Offer[];
     };
 
 /**
@@ -321,7 +414,10 @@ export type IncomingPaymentAdmission =
        */
       recoverCommittedResponse?: (response: Response) => Response;
       /** Settle and account for the payment against the application response. */
-      finalize: (response: Response) => Promise<Response>;
+      finalize: (
+        response: Response,
+        options?: IncomingPaymentFinalizeOptions
+      ) => Promise<Response>;
     };
 
 /** Result of verifying an incoming payment or SIWX credential. */
@@ -332,9 +428,29 @@ export type IncomingPaymentAuthorization =
       /** Stable, verified caller identity used to scope idempotent responses. */
       subject?: string;
       auth?: AgentAuthContext;
+      /**
+       * Verified protocol metadata for transport-owned reconciliation.
+       * A payment identifier is correlation metadata, never caller identity.
+       * Transports that support durable idempotency must claim this identifier
+       * before admission or application execution and return the stored
+       * response on replay.
+       */
+      reconciliation?: {
+        paymentIdentifier?: string;
+        extensions: Record<string, unknown>;
+      };
       /** Atomically reserve policy capacity before application execution. */
       admit: () => Promise<IncomingPaymentAdmission>;
     };
+
+/** Transport-neutral x402 discovery projection for one operation. */
+export type X402PaymentProjection = {
+  entrypointKey: string;
+  kind: 'invoke' | 'stream' | 'task';
+  description?: string;
+  offers: readonly X402Offer[];
+  extensions: Record<string, unknown>;
+};
 
 /** Fetch-native incoming payment verifier with reusable SIWX authorization. */
 export type IncomingPaymentAuthorizer = {
@@ -358,6 +474,12 @@ export type VerifiedIncomingPayment = {
   amount: string;
   currency: string;
   network?: string;
+  /** Identifies a bounded session amount that is finalized after delivery. */
+  intent?: 'charge' | 'session';
+  /** Verified session channel identifier used to bind final accounting. */
+  reference?: string;
+  /** Verified maximum in atomic units for deferred session finalization. */
+  maximumAmount?: string;
 };
 
 /**
@@ -369,13 +491,20 @@ export type PaymentsRuntime = {
   readonly isActive: boolean;
   requirements: (
     entrypoint: EntrypointDef,
-    kind: 'invoke' | 'stream'
+    kind: 'invoke' | 'stream' | 'task'
   ) => RuntimePaymentRequirement;
   activate: (entrypoint: EntrypointDef) => void;
   resolvePrice: (
     entrypoint: EntrypointDef,
     which: 'invoke' | 'stream'
   ) => string | null;
+  /** Project canonical entrypoint payment and discovery metadata. */
+  projectPayment: (
+    entrypoint: EntrypointDef,
+    kind: 'invoke' | 'stream' | 'task'
+  ) => X402PaymentProjection | undefined;
+  /** Shared OpenAPI components contributed by x402 reconciliation features. */
+  readonly openApiComponents: Record<string, unknown>;
   /** Verify an incoming credential, then admit and settle it in explicit phases. */
   authorize: (
     request: Request,
@@ -384,6 +513,14 @@ export type PaymentsRuntime = {
     /** Optional verified context supplied by another payment rail. */
     verifiedPayment?: VerifiedIncomingPayment
   ) => Promise<IncomingPaymentAuthorization>;
+  /**
+   * Evaluate amount and endpoint policies before another rail attempts an
+   * irreversible settlement. Sender-specific checks still run after verify.
+   */
+  preflightIncoming: (
+    request: Request,
+    payment: Pick<VerifiedIncomingPayment, 'amount' | 'currency'>
+  ) => Promise<Response | undefined>;
   /** Verify SIWX independently so alternate payment rails can reuse entitlements. */
   authorizeSIWx: (
     request: Request,

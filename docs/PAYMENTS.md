@@ -5,6 +5,7 @@ The payments extension enables your agent to receive payments using the x402 pro
 ## Table of Contents
 
 - [Overview](#overview)
+- [x402 2.19 Migration](#x402-219-migration)
 - [Basic Usage](#basic-usage)
 - [Configuration](#configuration)
 - [Payment Policies](#payment-policies)
@@ -22,6 +23,88 @@ The payments extension provides:
 - **Payment Policies**: Control spending with limits, rate limits, and recipient restrictions
 - **Automatic Manifest Integration**: Payment information is automatically added to your agent's manifest
 - **Policy Enforcement**: Policies are enforced when your agent makes outbound payments to other agents
+
+## x402 2.19 Migration
+
+Lucid now models x402 offers on the canonical entrypoint instead of assuming one
+fixed-price EVM route. Existing `price` configuration continues to produce one
+`exact` offer, while new code can declare ordered offers explicitly:
+
+```typescript
+agent.addEntrypoint({
+  key: 'metered-search',
+  paymentProtocol: 'x402',
+  x402: {
+    offers: [
+      {
+        scheme: 'exact',
+        network: 'eip155:84532',
+        price: '0.01',
+      },
+      {
+        scheme: 'upto',
+        network: 'eip155:84532',
+        maximum: {
+          amount: '10000',
+          asset: '0x0000000000000000000000000000000000000010',
+        },
+      },
+    ],
+  },
+  handler: async ({ input }) => ({
+    output: await search(input),
+    payment: {
+      // Required when the accepted offer uses `upto`.
+      actualAmount: '2500',
+    },
+  }),
+});
+```
+
+The resource server advertises every accepted offer in declaration order and
+checks support against the offer's assigned facilitator. EVM and SVM `exact`
+offers may coexist. The released `upto` and `batch-settlement` schemes are
+EVM-only; `upto` is restricted to invoke because settlement depends on the
+handler's out-of-band `payment.actualAmount`.
+
+Official extensions are configured once on `payments()`:
+
+```typescript
+payments({
+  config: {
+    ...config,
+    siwx: {
+      enabled: true,
+      origin: 'https://agent.example.com',
+    },
+  },
+  reconciliation: {
+    paymentIdentifier: { required: true },
+    bazaar: { enabled: true },
+    offerReceipt: { issuer },
+  },
+});
+```
+
+Migration requirements:
+
+- SIWX-enabled services must set the operator-controlled public HTTPS origin.
+  Challenges use `sign-in-with-x` and proofs use `SIGN-IN-WITH-X`; legacy Lucid
+  extension/header names are not accepted.
+- Payment Identifier is invoke-only and must equal `Idempotency-Key`. HTTP
+  claims the completed-response idempotency record before payment admission;
+  replay returns the stored settled response without executing or settling
+  again. The identifier is correlation metadata, never payer identity.
+- Bazaar and OpenAPI payment discovery are projections of the same entrypoint
+  schemas and ordered offers.
+- Offer/receipt signing accepts an injected issuer capability. Do not pass
+  private-key material through discovery or client-visible configuration.
+- Production batch channels require the SQLite or Postgres storage subpath so
+  cumulative vouchers and pending requests survive process restart.
+
+See the
+[payments package migration guide](../packages/payments/README.md#migrating-from-the-single-offer-x402-configuration)
+for configuration and storage examples.
 
 ## Basic Usage
 

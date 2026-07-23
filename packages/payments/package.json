@@ -14,6 +14,8 @@
       "./node",
       "./storage/sqlite",
       "./storage/postgres",
+      "./storage/batch-sqlite",
+      "./storage/batch-postgres",
       "./providers/stripe"
     ]
   },
@@ -41,6 +43,16 @@
       "import": "./dist/storage/postgres.js",
       "default": "./dist/storage/postgres.js"
     },
+    "./storage/batch-sqlite": {
+      "types": "./dist/storage/batch-sqlite.d.ts",
+      "import": "./dist/storage/batch-sqlite.js",
+      "default": "./dist/storage/batch-sqlite.js"
+    },
+    "./storage/batch-postgres": {
+      "types": "./dist/storage/batch-postgres.d.ts",
+      "import": "./dist/storage/batch-postgres.js",
+      "default": "./dist/storage/batch-postgres.js"
+    },
     "./providers/stripe": {
       "types": "./dist/providers/stripe.d.ts",
       "import": "./dist/providers/stripe.js",
@@ -64,6 +76,7 @@
     "@lucid-agents/types": "workspace:*",
     "viem": "catalog:",
     "@x402/core": "catalog:",
+    "@x402/extensions": "catalog:",
     "@x402/fetch": "catalog:",
     "@x402/evm": "catalog:",
     "@x402/svm": "catalog:",

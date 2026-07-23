@@ -72,6 +72,40 @@ function invokeOptions(store: HttpIdempotencyStore): InvokeOptions {
 }
 
 describe('HTTP invoke idempotency', () => {
+  it('passes metered handler usage to payment finalization out of band', async () => {
+    let actualAmount: string | undefined;
+    const entrypoint: EntrypointDef = {
+      key: 'work',
+      handler: async () => ({
+        output: { ok: true },
+        payment: { actualAmount: '7' },
+      }),
+    };
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async () => ({
+        authorized: true,
+        admit: async () => ({
+          admitted: true,
+          abort: async () => {},
+          finalize: async (
+            response: Response,
+            options?: { payment?: { actualAmount: string } }
+          ) => {
+            actualAmount = options?.payment?.actualAmount;
+            return response;
+          },
+        }),
+      }),
+    } as unknown as PaymentsRuntime;
+
+    const response = await invoke(request(), 'work', makeRuntime(entrypoint, payments));
+
+    expect(response.status).toBe(200);
+    expect(actualAmount).toBe('7');
+    expect(await response.json()).not.toHaveProperty('payment');
+  });
+
   it('is enabled by default and replays a completed response exactly once', async () => {
     let executions = 0;
     let finalizations = 0;
@@ -285,6 +319,12 @@ describe('HTTP invoke idempotency', () => {
           authorized: true,
           subject:
             'payment:eip155:84532:0x0000000000000000000000000000000000000001',
+          reconciliation: {
+            paymentIdentifier: IDEMPOTENCY_KEY,
+            extensions: {
+              'payment-identifier': { id: IDEMPOTENCY_KEY },
+            },
+          },
           admit: async () => {
             admissions += 1;
             return {
@@ -343,6 +383,52 @@ describe('HTTP invoke idempotency', () => {
     expect(executions).toBe(1);
     expect(finalizations).toBe(1);
     expect(aborts).toBe(0);
+  });
+
+  it('rejects a verified payment identifier when idempotency is disabled', async () => {
+    let admissions = 0;
+    let executions = 0;
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async () => ({
+        authorized: true,
+        subject:
+          'payment:eip155:84532:0x0000000000000000000000000000000000000001',
+        reconciliation: {
+          paymentIdentifier: IDEMPOTENCY_KEY,
+          extensions: {
+            'payment-identifier': { id: IDEMPOTENCY_KEY },
+          },
+        },
+        admit: async () => {
+          admissions += 1;
+          return {
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => response,
+          };
+        },
+      }),
+    } as unknown as PaymentsRuntime;
+    const runtime = makeRuntime(
+      {
+        key: 'work',
+        handler: async () => {
+          executions += 1;
+          return { output: { ok: true } };
+        },
+      },
+      payments
+    );
+
+    const response = await invoke(request(), 'work', runtime);
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe(
+      'payment_identifier_requires_idempotency'
+    );
+    expect(admissions).toBe(0);
+    expect(executions).toBe(0);
   });
 
   it('does not admit provisional policy state when a verified subject conflicts', async () => {

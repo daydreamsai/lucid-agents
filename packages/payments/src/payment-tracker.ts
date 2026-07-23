@@ -1,6 +1,8 @@
 import type {
   PaymentDirection,
   PaymentRecord,
+  PaymentReservationAdjustment,
+  PaymentSettlementAdjustment,
   PaymentTracker as PaymentTrackerInterface,
 } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
@@ -138,19 +140,34 @@ export class PaymentTracker implements PaymentTrackerInterface {
    */
   async stageSettlement(
     reservationIds: readonly string[],
-    records: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[] = []
+    records: readonly Omit<PaymentRecord, 'id' | 'timestamp'>[] = [],
+    adjustments: readonly PaymentReservationAdjustment[] = []
   ): Promise<string> {
     if (reservationIds.length === 0 && records.length === 0) {
       throw new Error('Settlement accounting batch must not be empty');
     }
     const settlementId = await this.storage.stagePaymentSettlement(
       reservationIds,
-      records
+      records,
+      adjustments
     );
     if (!settlementId) {
       throw new Error('One or more payment reservations expired');
     }
     return settlementId;
+  }
+
+  /** Atomically reduce staged policy scopes from a ceiling to actual usage. */
+  async adjustSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<void> {
+    if (adjustments.length === 0) return;
+    const adjusted = await this.storage.adjustPaymentSettlement(
+      settlementId,
+      adjustments
+    );
+    if (!adjusted) throw new Error('Payment settlement batch was not found');
   }
 
   /** Commit a durable settlement batch to payment history. */

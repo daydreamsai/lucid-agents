@@ -1,323 +1,199 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  parseSIWxExtension,
+  SIGN_IN_WITH_X,
+  buildSIWxSchema,
+  parseSIWxHeader,
+  type SIWxExtension,
+} from '@x402/extensions/sign-in-with-x';
+import {
   buildSIWxHeaderValue,
-  wrapFetchWithSIWx,
   hasSIWxExtension,
+  parseSIWxExtension,
+  wrapFetchWithSIWx,
+  type SIWxSigner,
 } from '../siwx-client';
-import type { SIWxSigner } from '../siwx-client';
+import { enrichResponseWithSIWxChallenge } from '../siwx-verify';
 
-describe('SIWX Client', () => {
-  describe('hasSIWxExtension', () => {
-    it('should return true when X-SIWX-EXTENSION header is present', async () => {
-      const response = new Response('{}', {
-        status: 402,
-        headers: { 'X-SIWX-EXTENSION': 'some-value' },
-      });
-      expect(await hasSIWxExtension(response)).toBe(true);
-    });
+const extension: SIWxExtension = {
+  info: {
+    domain: 'test.com',
+    uri: 'https://test.com/api',
+    version: '1',
+    nonce: 'abc12345',
+    issuedAt: new Date().toISOString(),
+  },
+  supportedChains: [{ chainId: 'eip155:84532', type: 'eip191' }],
+  schema: buildSIWxSchema(),
+};
 
-    it('should return true when SIWX extension is in response body', async () => {
-      const response = new Response(
-        JSON.stringify({ error: { siwx: { scheme: 'sign-in-with-x' } } }),
-        { status: 402, headers: { 'Content-Type': 'application/json' } }
-      );
-      expect(await hasSIWxExtension(response)).toBe(true);
-    });
+function challenge(
+  status: 401 | 402 = 402,
+  declaration: SIWxExtension = extension
+): Response {
+  const enriched = enrichResponseWithSIWxChallenge(
+    {
+      x402Version: 2,
+      error: status === 402 ? 'Payment required' : 'Authentication required',
+      resource: { url: declaration.info.uri },
+      accepts: [],
+    },
+    declaration,
+    status
+  );
+  return Response.json(enriched.body, {
+    status,
+    headers: enriched.headers,
+  });
+}
 
-    it('should return false when no SIWX extension is present', async () => {
-      const response = new Response(
-        JSON.stringify({ error: 'payment_required' }),
-        { status: 402 }
-      );
-      expect(await hasSIWxExtension(response)).toBe(false);
-    });
+describe('official SIWX client', () => {
+  const mockSigner: SIWxSigner = {
+    signMessage: async () => '0xsignature',
+    getAddress: async () => '0x1234567890abcdef1234567890abcdef12345678',
+    getChainId: async () => 'eip155:84532',
+  };
+
+  it('detects and parses the extension from PAYMENT-REQUIRED', async () => {
+    const response = challenge();
+
+    expect(await hasSIWxExtension(response)).toBe(true);
+    expect(await parseSIWxExtension(response)).toEqual(extension);
   });
 
-  describe('parseSIWxExtension', () => {
-    it('should parse SIWX extension from X-SIWX-EXTENSION header', async () => {
-      const ext = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        nonce: 'abc',
-      };
-      const response = new Response('{}', {
-        status: 402,
-        headers: {
-          'X-SIWX-EXTENSION': Buffer.from(JSON.stringify(ext)).toString(
-            'base64'
-          ),
-        },
-      });
-      const result = await parseSIWxExtension(response);
-      expect(result).toEqual(ext);
+  it('uses the official body extension field as a fallback', async () => {
+    const response = Response.json({
+      extensions: { [SIGN_IN_WITH_X]: extension },
     });
 
-    it('should parse SIWX extension from response body error.siwx', async () => {
-      const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
-      const response = new Response(JSON.stringify({ error: { siwx: ext } }), {
-        status: 402,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const result = await parseSIWxExtension(response);
-      expect(result).toEqual(ext);
-    });
-
-    it('should parse SIWX extension from response body extensions.siwx', async () => {
-      const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
-      const response = new Response(
-        JSON.stringify({ extensions: { siwx: ext } }),
-        {
-          status: 402,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-      const result = await parseSIWxExtension(response);
-      expect(result).toEqual(ext);
-    });
-
-    it('should return undefined when no SIWX extension present', async () => {
-      const response = new Response(
-        JSON.stringify({ error: 'payment_required' }),
-        { status: 402 }
-      );
-      const result = await parseSIWxExtension(response);
-      expect(result).toBeUndefined();
-    });
-
-    it('should return undefined for non-JSON body without header', async () => {
-      const response = new Response('not json', { status: 402 });
-      const result = await parseSIWxExtension(response);
-      expect(result).toBeUndefined();
-    });
-
-    it('should NOT parse from body.siwx (non-standard location)', async () => {
-      const ext = { scheme: 'sign-in-with-x', domain: 'test.com' };
-      const response = new Response(JSON.stringify({ siwx: ext }), {
-        status: 402,
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const result = await parseSIWxExtension(response);
-      // body.siwx is NOT a standard location - should not be parsed
-      expect(result).toBeUndefined();
-    });
+    expect(await parseSIWxExtension(response)).toEqual(extension);
   });
 
-  describe('buildSIWxHeaderValue', () => {
-    it('should encode payload as base64 JSON', () => {
-      const payload = { domain: 'test.com', nonce: 'abc' };
-      const header = buildSIWxHeaderValue(payload);
-      const decoded = JSON.parse(
-        Buffer.from(header, 'base64').toString('utf-8')
-      );
-      expect(decoded).toEqual(payload);
-    });
+  it('does not consume deprecated X-SIWX-EXTENSION or error.siwx wire fields', async () => {
+    const legacy = Response.json(
+      { error: { siwx: extension } },
+      {
+        status: 401,
+        headers: { 'X-SIWX-EXTENSION': 'legacy' },
+      }
+    );
+
+    expect(await hasSIWxExtension(legacy)).toBe(false);
   });
 
-  describe('wrapFetchWithSIWx', () => {
-    const mockSigner: SIWxSigner = {
-      signMessage: async () => '0xsignature',
-      getAddress: async () => '0x1234567890abcdef1234567890abcdef12345678',
-      getChainId: async () => 'eip155:84532',
+  it('encodes a source-compatible payload with the official encoder', () => {
+    const payload = {
+      ...extension.info,
+      ...extension.supportedChains[0],
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      signature: '0xsignature',
     };
 
-    it('should pass through non-402 responses unchanged', async () => {
-      const baseFetch = async () => new Response('ok', { status: 200 });
-      const wrappedFetch = wrapFetchWithSIWx(baseFetch, mockSigner);
-      const response = await wrappedFetch('http://test.com/api');
-      expect(response.status).toBe(200);
-    });
+    expect(parseSIWxHeader(buildSIWxHeaderValue(payload))).toEqual(payload);
+  });
 
-    it('should pass through 402 without SIWX extension', async () => {
-      const baseFetch = async () =>
-        new Response(JSON.stringify({ error: 'payment_required' }), {
-          status: 402,
-        });
-      const wrappedFetch = wrapFetchWithSIWx(baseFetch, mockSigner);
-      const response = await wrappedFetch('http://test.com/api');
-      expect(response.status).toBe(402);
-    });
+  it('passes through success and payment responses without SIWX', async () => {
+    const success = await wrapFetchWithSIWx(
+      async () => new Response('ok'),
+      mockSigner
+    )('https://test.com/api');
+    const paymentOnly = await wrapFetchWithSIWx(
+      async () => new Response('payment', { status: 402 }),
+      mockSigner
+    )('https://test.com/api');
 
-    it('should retry with SIWX header when 402 has SIWX extension', async () => {
-      let callCount = 0;
-      const ext = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        uri: 'http://test.com/api',
-        nonce: 'abc123',
-      };
+    expect(success.status).toBe(200);
+    expect(paymentOnly.status).toBe(402);
+  });
 
-      const baseFetch = async (
-        _input: RequestInfo | URL,
-        init?: RequestInit
-      ) => {
-        callCount++;
-        if (callCount === 1) {
-          return new Response(JSON.stringify({ error: { siwx: ext } }), {
-            status: 402,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        // Second call should have SIWX header
-        const headers = new Headers(init?.headers);
-        expect(headers.get('SIGN-IN-WITH-X')).toBeDefined();
-        return new Response('ok', { status: 200 });
-      };
-
-      const wrappedFetch = wrapFetchWithSIWx(baseFetch, mockSigner);
-      const response = await wrappedFetch('http://test.com/api');
-      expect(response.status).toBe(200);
-      expect(callCount).toBe(2);
-    });
-
-    it('should retry auth-only 401 challenges with a SIWX header', async () => {
-      let callCount = 0;
-      const extension = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        uri: 'http://test.com/api',
-        nonce: 'auth-only-nonce',
-      };
-      const baseFetch = async (
-        _input: RequestInfo | URL,
-        init?: RequestInit
-      ) => {
-        callCount++;
-        if (callCount === 1) {
-          return Response.json({ error: { siwx: extension } }, { status: 401 });
-        }
-        expect(new Headers(init?.headers).has('SIGN-IN-WITH-X')).toBe(true);
+  it('retries official paid and auth-only challenges with SIGN-IN-WITH-X', async () => {
+    for (const status of [401, 402] as const) {
+      let calls = 0;
+      const response = await wrapFetchWithSIWx(async input => {
+        calls += 1;
+        const request = new Request(input);
+        if (calls === 1) return challenge(status);
+        expect(request.headers.has('SIGN-IN-WITH-X')).toBe(true);
+        expect(request.headers.has('X-SIGN-IN-WITH-X')).toBe(false);
         return new Response('authorized');
-      };
-
-      const response = await wrapFetchWithSIWx(
-        baseFetch,
-        mockSigner
-      )('http://test.com/api');
+      }, mockSigner)('https://test.com/api');
 
       expect(response.status).toBe(200);
-      expect(callCount).toBe(2);
+      expect(calls).toBe(2);
+    }
+  });
+
+  it('emits an official typed payload and signs the official SIWE message', async () => {
+    let signedMessage = '';
+    let payloadHeader = '';
+    const signer: SIWxSigner = {
+      ...mockSigner,
+      signMessage: async message => {
+        signedMessage = message;
+        return '0xsignature';
+      },
+    };
+    let calls = 0;
+
+    await wrapFetchWithSIWx(async input => {
+      calls += 1;
+      const request = new Request(input);
+      if (calls === 1) return challenge();
+      payloadHeader = request.headers.get('SIGN-IN-WITH-X') ?? '';
+      return new Response('authorized');
+    }, signer)('https://test.com/api');
+
+    const payload = parseSIWxHeader(payloadHeader);
+    expect(payload?.type).toBe('eip191');
+    expect(payload?.chainId).toBe('eip155:84532');
+    expect(payload?.signature).toBe('0xsignature');
+    expect(signedMessage).toContain(
+      'test.com wants you to sign in with your Ethereum account:'
+    );
+  });
+
+  it('preserves a POST Request body through the retry', async () => {
+    const bodies: string[] = [];
+    let calls = 0;
+    const original = new Request('https://test.com/api', {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'hello' }),
+      headers: { 'Content-Type': 'application/json' },
     });
 
-    it('should include signature in SIWX payload', async () => {
-      let capturedHeaders: Headers | undefined;
-      const ext = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        uri: 'http://test.com/api',
-        nonce: 'nonce1',
-      };
+    const response = await wrapFetchWithSIWx(async input => {
+      calls += 1;
+      const request = new Request(input);
+      bodies.push(await request.text());
+      return calls === 1 ? challenge(401) : new Response('authorized');
+    }, mockSigner)(original);
 
-      const baseFetch = async (
-        _input: RequestInfo | URL,
-        _init?: RequestInit
-      ) => {
-        if (!capturedHeaders) {
-          return new Response(JSON.stringify({ error: { siwx: ext } }), {
-            status: 402,
-          });
-        }
-        return new Response('ok', { status: 200 });
-      };
+    expect(response.status).toBe(200);
+    expect(bodies).toEqual(['{"prompt":"hello"}', '{"prompt":"hello"}']);
+  });
 
-      // Capture headers on retry
-      let callCount = 0;
-      const capturingFetch = async (
-        input: RequestInfo | URL,
-        init?: RequestInit
-      ) => {
-        callCount++;
-        if (callCount === 2) {
-          capturedHeaders = new Headers(init?.headers);
-        }
-        return baseFetch(input, init);
-      };
+  it('does not retry when the signer chain was not declared', async () => {
+    let calls = 0;
+    const otherChainSigner: SIWxSigner = {
+      ...mockSigner,
+      getChainId: async () => 'eip155:1',
+    };
 
-      const wrappedFetch = wrapFetchWithSIWx(capturingFetch, mockSigner);
-      await wrappedFetch('http://test.com/api');
+    const response = await wrapFetchWithSIWx(async () => {
+      calls += 1;
+      return challenge();
+    }, otherChainSigner)('https://test.com/api');
 
-      expect(capturedHeaders).toBeDefined();
-      const headerValue = capturedHeaders!.get('SIGN-IN-WITH-X')!;
-      const decoded = JSON.parse(
-        Buffer.from(headerValue, 'base64').toString('utf-8')
-      );
-      expect(decoded.signature).toBe('0xsignature');
-      expect(decoded.address).toBe(
-        '0x1234567890abcdef1234567890abcdef12345678'
-      );
-      expect(decoded.chainId).toBe('eip155:84532');
+    expect(response.status).toBe(402);
+    expect(calls).toBe(1);
+  });
+
+  it('prevents recursive authentication retries', async () => {
+    const authenticated = new Request('https://test.com/api', {
+      headers: { 'SIGN-IN-WITH-X': 'already-attempted' },
     });
 
-    it('should sign the canonical SIWX message (not JSON.stringify)', async () => {
-      let signedMessage: string | undefined;
-      const capturingSigner: SIWxSigner = {
-        signMessage: async (message: string) => {
-          signedMessage = message;
-          return '0xsignature';
-        },
-        getAddress: async () => '0x1234567890abcdef1234567890abcdef12345678',
-        getChainId: async () => 'eip155:84532',
-      };
-
-      const ext = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        uri: 'http://test.com/api',
-        nonce: 'nonce1',
-        issuedAt: '2026-03-19T00:00:00.000Z',
-      };
-
-      let callCount = 0;
-      const baseFetch = async () => {
-        callCount++;
-        if (callCount === 1) {
-          return new Response(JSON.stringify({ error: { siwx: ext } }), {
-            status: 402,
-          });
-        }
-        return new Response('ok', { status: 200 });
-      };
-
-      const wrappedFetch = wrapFetchWithSIWx(baseFetch, capturingSigner);
-      await wrappedFetch('http://test.com/api');
-
-      expect(signedMessage).toBeDefined();
-      // The message should contain EIP-191 style lines, NOT be a JSON string
-      expect(signedMessage).toContain(
-        'test.com wants you to sign in with your account:'
-      );
-      expect(signedMessage).toContain('URI: http://test.com/api');
-      expect(signedMessage).toContain('Nonce: nonce1');
-      // It should NOT be JSON
-      expect(signedMessage!.startsWith('{')).toBe(false);
-    });
-
-    it('should compose with payment fetch (payment + SIWX)', async () => {
-      const ext = {
-        scheme: 'sign-in-with-x',
-        domain: 'test.com',
-        uri: 'http://test.com/api',
-        nonce: 'nonce1',
-      };
-      let callCount = 0;
-
-      const baseFetch = async (
-        _input: RequestInfo | URL,
-        _init?: RequestInit
-      ) => {
-        callCount++;
-        if (callCount === 1) {
-          return new Response(JSON.stringify({ error: { siwx: ext } }), {
-            status: 402,
-          });
-        }
-        return new Response('access granted', { status: 200 });
-      };
-
-      const siwxFetch = wrapFetchWithSIWx(baseFetch, mockSigner);
-      const response = await siwxFetch('http://test.com/api');
-      expect(response.status).toBe(200);
-      expect(await response.text()).toBe('access granted');
-    });
+    await expect(
+      wrapFetchWithSIWx(async () => challenge(401), mockSigner)(authenticated)
+    ).rejects.toThrow('already attempted');
   });
 });

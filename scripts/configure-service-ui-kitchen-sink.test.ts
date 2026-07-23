@@ -53,6 +53,7 @@ export { agent };
     expect(source).toContain('.use(a2a())');
     expect(source).toContain('.use(ap2({ roles: ["merchant"] }))');
     expect(source).toContain('custom.server("lucid-ci-proof"');
+    expect(source).toContain('origin: "https://agent.example.test"');
     expect(fixture).toContain("key: 'summarize'");
     expect(fixture).toContain("key: 'attest'");
     expect(fixture).toContain("key: 'stream'");

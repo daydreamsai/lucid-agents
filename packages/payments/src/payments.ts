@@ -6,18 +6,31 @@ import type {
   PaymentsRuntime,
   PaymentStorageConfig,
 } from '@lucid-agents/types/payments';
-import { resolvePrice } from './pricing';
 import { createPaymentTracker, type PaymentTracker } from './payment-tracker';
 import { createInMemoryPaymentStorage } from './in-memory-payment-storage';
 import type { PaymentStorage } from './payment-storage';
 import { encodePaymentRequiredHeader } from './utils';
-import { resolvePayTo } from './payto-resolver';
 import { createInMemorySIWxStorage } from './siwx-in-memory-storage';
 import type { SIWxStorage } from './siwx-storage';
-import type { SIWxStorageConfig } from '@lucid-agents/types/siwx';
+import type { SIWxConfig, SIWxStorageConfig } from '@lucid-agents/types/siwx';
 import type { WalletsRuntime } from '@lucid-agents/types/wallets';
-import { createIncomingPaymentAuthorizer } from './incoming';
+import {
+  createIncomingPaymentAuthorizer,
+  preflightIncomingPayment,
+} from './incoming';
 import { normalizePaymentNetwork, validatePaymentsConfig } from './validation';
+import { compileX402Offers } from './x402-offers';
+import {
+  resolveBatchSettlementServerOptions,
+  type BatchSettlementServerOptions,
+  type ResolvedBatchSettlementServerOptions,
+} from './batch-settlement';
+import { normalizeSIWxPublicOrigin } from './siwx-origin';
+import {
+  projectX402Payment,
+  x402OpenApiComponents,
+  type X402ReconciliationOptions,
+} from './x402-reconciliation';
 
 /**
  * Checks if an entrypoint has an explicit price set.
@@ -88,17 +101,16 @@ export function resolveActivePayments(
     return currentActivePayments;
   }
 
-  // If entrypoint has no explicit price and no SIWX auth-only, don't activate payments
-  if (
-    (!entrypointHasExplicitPrice(entrypoint) ||
-      entrypoint.paymentProtocol === 'mpp') &&
-    !entrypoint.siwx?.authOnly
-  ) {
+  // If no resolved payments config, don't activate
+  if (!resolvedPayments) {
     return undefined;
   }
 
-  // If no resolved payments config, don't activate
-  if (!resolvedPayments) {
+  const hasX402Offers =
+    compileX402Offers(entrypoint, resolvedPayments, 'invoke') !== undefined ||
+    (entrypoint.stream !== undefined &&
+      compileX402Offers(entrypoint, resolvedPayments, 'stream') !== undefined);
+  if (!hasX402Offers && !entrypoint.siwx?.authOnly) {
     return undefined;
   }
 
@@ -111,7 +123,7 @@ export function resolveActivePayments(
  */
 export function evaluatePaymentRequirement(
   entrypoint: EntrypointDef,
-  kind: 'invoke' | 'stream',
+  kind: 'invoke' | 'stream' | 'task',
   activePayments: PaymentsConfig | undefined
 ): RuntimePaymentRequirement {
   const requirement = resolvePaymentRequirement(
@@ -135,7 +147,7 @@ export function evaluatePaymentRequirement(
 
 export const resolvePaymentRequirement = (
   entrypoint: EntrypointDef,
-  kind: 'invoke' | 'stream',
+  kind: 'invoke' | 'stream' | 'task',
   payments?: PaymentsConfig
 ): PaymentRequirement => {
   if (!payments) {
@@ -146,25 +158,24 @@ export const resolvePaymentRequirement = (
     return { required: false };
   }
 
-  const network = normalizePaymentNetwork(
-    entrypoint.network ?? payments.network
-  );
-  if (!network) {
+  const compiled = compileX402Offers(entrypoint, payments, kind);
+  const primary = compiled?.offers[0];
+  if (!compiled || !primary) {
     return { required: false };
   }
-
-  const price = resolvePrice(entrypoint, payments, kind);
-  if (!price) {
-    return { required: false };
-  }
-  const payTo = resolvePayTo(payments);
 
   return {
     required: true,
-    payTo: typeof payTo === 'string' ? payTo : undefined,
-    price,
-    network,
-    facilitatorUrl: payments.facilitatorUrl,
+    payTo: typeof primary.payTo === 'string' ? primary.payTo : undefined,
+    price:
+      typeof primary.price === 'object'
+        ? primary.price.amount
+        : String(primary.price),
+    network: primary.network,
+    facilitatorUrl: primary.facilitatorUrl,
+    ...(compiled.source === 'legacy'
+      ? {}
+      : { offers: compiled.offers.map(offer => offer.publicOffer) }),
   };
 };
 
@@ -251,8 +262,19 @@ export function createPaymentsRuntime(
     storageConfig?: PaymentStorageConfig,
     agentId?: string
   ) => PaymentStorage,
-  customSIWxStorageFactory?: SIWxStorageFactory
+  customSIWxStorageFactory?: SIWxStorageFactory,
+  batchSettlementOptions?: BatchSettlementServerOptions,
+  reconciliationOptions?: X402ReconciliationOptions
 ): PaymentsRuntime | undefined {
+  const normalizedSIWx =
+    paymentsOption && paymentsOption.siwx?.enabled
+      ? {
+          ...paymentsOption.siwx,
+          origin: normalizeSIWxPublicOrigin(paymentsOption.siwx.origin),
+        }
+      : paymentsOption
+        ? paymentsOption.siwx
+        : undefined;
   const config: PaymentsConfig | undefined =
     paymentsOption === false || !paymentsOption
       ? undefined
@@ -262,6 +284,7 @@ export function createPaymentsRuntime(
             typeof paymentsOption.network === 'string'
               ? normalizePaymentNetwork(paymentsOption.network)
               : paymentsOption.network,
+          ...(normalizedSIWx ? { siwx: normalizedSIWx } : {}),
         };
 
   if (!config) {
@@ -302,11 +325,23 @@ export function createPaymentsRuntime(
     }
   }
 
-  const authorizeIncoming = createIncomingPaymentAuthorizer(config, {
+  let batchSettlement: ResolvedBatchSettlementServerOptions | undefined;
+  const incomingOptions: {
+    paymentTracker?: PaymentTracker;
+    siwxStorage?: SIWxStorage;
+    siwxConfig?: SIWxConfig;
+    batchSettlement?: ResolvedBatchSettlementServerOptions;
+    reconciliation?: X402ReconciliationOptions;
+  } = {
     paymentTracker,
     siwxStorage,
     siwxConfig,
-  });
+    reconciliation: reconciliationOptions,
+  };
+  const authorizeIncoming = createIncomingPaymentAuthorizer(
+    config,
+    incomingOptions
+  );
   let closePromise: Promise<void> | undefined;
 
   return {
@@ -328,7 +363,10 @@ export function createPaymentsRuntime(
     get siwxConfig() {
       return siwxConfig;
     },
-    requirements(entrypoint: EntrypointDef, kind: 'invoke' | 'stream') {
+    requirements(
+      entrypoint: EntrypointDef,
+      kind: 'invoke' | 'stream' | 'task'
+    ) {
       return evaluatePaymentRequirement(
         entrypoint,
         kind,
@@ -336,29 +374,51 @@ export function createPaymentsRuntime(
       );
     },
     activate(entrypoint: EntrypointDef) {
-      if (isActive || !config) return;
+      if (!config) return;
 
-      if (
-        (entrypointHasExplicitPrice(entrypoint) &&
-          entrypoint.paymentProtocol !== 'mpp') ||
-        entrypoint.siwx?.authOnly
-      ) {
-        if (entrypointHasExplicitPrice(entrypoint)) {
-          validatePaymentsConfig(
-            config,
-            entrypoint.network ?? config.network,
-            entrypoint.key
+      const invokeOffers = compileX402Offers(entrypoint, config, 'invoke');
+      const streamOffers = entrypoint.stream
+        ? compileX402Offers(entrypoint, config, 'stream')
+        : undefined;
+      const offers = invokeOffers?.offers ?? streamOffers?.offers;
+      if (offers || entrypoint.siwx?.authOnly) {
+        for (const offer of offers ?? []) {
+          validatePaymentsConfig(config, offer.network, entrypoint.key);
+        }
+        if (
+          offers?.some(offer => offer.scheme === 'batch-settlement') &&
+          !batchSettlement
+        ) {
+          batchSettlement = resolveBatchSettlementServerOptions(
+            batchSettlementOptions
           );
+          incomingOptions.batchSettlement = batchSettlement;
         }
         isActive = true;
       }
     },
     resolvePrice(entrypoint: EntrypointDef, which: 'invoke' | 'stream') {
       if (entrypoint.paymentProtocol === 'mpp') return null;
-      return resolvePrice(entrypoint, config, which);
+      const primary = compileX402Offers(entrypoint, config, which)?.offers[0];
+      if (!primary) return null;
+      return typeof primary.price === 'object'
+        ? primary.price.amount
+        : String(primary.price);
     },
+    projectPayment(entrypoint, kind) {
+      return projectX402Payment(
+        entrypoint,
+        kind,
+        config,
+        reconciliationOptions
+      );
+    },
+    openApiComponents: x402OpenApiComponents,
     authorize(request, entrypoint, kind, verifiedPayment) {
       return authorizeIncoming(request, entrypoint, kind, verifiedPayment);
+    },
+    preflightIncoming(request, payment) {
+      return preflightIncomingPayment(config, paymentTracker, request, payment);
     },
     authorizeSIWx(request, entrypoint, kind) {
       return authorizeIncoming.authorizeSIWx(request, entrypoint, kind);
@@ -368,6 +428,7 @@ export function createPaymentsRuntime(
         await Promise.all([
           paymentTracker?.close(),
           Promise.resolve(siwxStorage?.close?.()),
+          Promise.resolve(batchSettlement?.storage.close()),
         ]);
       })();
       await closePromise;

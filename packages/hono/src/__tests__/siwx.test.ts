@@ -1,6 +1,11 @@
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { payments } from '@lucid-agents/payments';
+import {
+  buildSIWxHeaderValue,
+  parseSIWxExtension,
+  payments,
+  type SIWxPayload,
+} from '@lucid-agents/payments';
 import { createAgentApp } from '@lucid-agents/hono';
 import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import type { SIWxStorage } from '@lucid-agents/payments';
@@ -91,18 +96,20 @@ afterEach(() => {
   acceptPayments = false;
 });
 
-function createSIWxHeader(overrides?: Record<string, unknown>): string {
-  const payload = {
+function createSIWxHeader(overrides?: Partial<SIWxPayload>): string {
+  const payload: SIWxPayload = {
     domain: 'localhost',
     address: '0x1234567890abcdef1234567890abcdef12345678',
     uri: 'http://localhost/entrypoints/report/invoke',
     version: '1',
     chainId: 'eip155:84532',
-    nonce: `test-nonce-${Date.now()}-${Math.random()}`,
+    type: 'eip191',
+    nonce: `testnonce${Date.now()}${Math.floor(Math.random() * 1_000_000)}`,
     issuedAt: new Date().toISOString(),
+    signature: '0xtest-signature',
     ...overrides,
   };
-  return Buffer.from(JSON.stringify(payload)).toString('base64');
+  return buildSIWxHeaderValue({ ...payload });
 }
 
 describe('SIWX Integration (Hono)', () => {
@@ -122,6 +129,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 defaultStatement: 'Sign to access',
                 expirationSeconds: 3600,
                 storage: { type: 'in-memory' },
@@ -150,9 +158,11 @@ describe('SIWX Integration (Hono)', () => {
 
       expect(res.status).toBe(402);
       const body = await res.json();
-      expect(body.extensions.siwx).toBeDefined();
-      expect(body.extensions.siwx.scheme).toBe('sign-in-with-x');
-      expect(body.extensions.siwx.domain).toBe('localhost');
+      const extension = await parseSIWxExtension(res);
+      expect(extension).toBeDefined();
+      expect(body.extensions['sign-in-with-x']).toEqual(extension);
+      expect(extension?.info.domain).toBe('localhost');
+      expect(extension?.info.statement).toBe('Sign to access');
     });
 
     it('should grant access via SIWX for entitled wallet (bypassing payment)', async () => {
@@ -166,6 +176,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -218,6 +229,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -259,6 +271,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -323,6 +336,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -399,6 +413,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 defaultStatement: 'Authenticate your wallet',
                 expirationSeconds: 3600,
                 storage: { type: 'in-memory' },
@@ -429,15 +444,11 @@ describe('SIWX Integration (Hono)', () => {
       expect(res.status).toBe(401);
       const body = await res.json();
       expect(body.error.code).toBe('auth_required');
-      expect(body.error.siwx).toBeDefined();
-      expect(body.error.siwx.scheme).toBe('sign-in-with-x');
-      // Should include X-SIWX-EXTENSION header
-      const siwxHeader = res.headers.get('X-SIWX-EXTENSION');
-      expect(siwxHeader).toBeDefined();
-      const parsedHeader = JSON.parse(
-        Buffer.from(siwxHeader!, 'base64').toString('utf-8')
-      );
-      expect(parsedHeader.scheme).toBe('sign-in-with-x');
+      const extension = await parseSIWxExtension(res);
+      expect(extension).toBeDefined();
+      expect(body.extensions['sign-in-with-x']).toEqual(extension);
+      expect(res.headers.get('X-SIWX-EXTENSION')).toBeNull();
+      expect(res.headers.get('PAYMENT-REQUIRED')).toBeTruthy();
     });
 
     it('should grant access with valid SIWX on auth-only route', async () => {
@@ -451,6 +462,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -497,6 +509,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -539,6 +552,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -600,6 +614,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -704,6 +719,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },
@@ -761,6 +777,7 @@ describe('SIWX Integration (Hono)', () => {
               network: 'eip155:84532',
               siwx: {
                 enabled: true,
+                origin: 'http://localhost',
                 storage: { type: 'in-memory' },
                 verify: { skipSignatureVerification: true },
               },

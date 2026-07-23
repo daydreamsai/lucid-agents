@@ -30,6 +30,7 @@ const agent = await createAgent({
   .use(http())
   .use(
     mpp({
+      allowInsecureHttpForDevelopment: true,
       config: {
         // Accept Tempo stablecoin payments
         methods: [

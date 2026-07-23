@@ -7,14 +7,22 @@ export type SSEWriteOptions = {
 };
 
 export type SSEStreamRunnerContext = {
-  write: (options: SSEWriteOptions) => void;
-  close: () => void;
+  /** Wait until the consumer can accept another event. */
+  ready: () => Promise<void>;
+  write: (options: SSEWriteOptions) => Promise<void>;
+  close: () => Promise<void>;
+  /** Aborted when the HTTP request aborts or the response reader cancels. */
+  signal: AbortSignal;
   controller: ReadableStreamDefaultController<Uint8Array>;
 };
 
 export type SSEStreamRunner = (
   ctx: SSEStreamRunnerContext
 ) => Promise<void> | void;
+
+export type SSEStreamOptions = {
+  signal?: AbortSignal;
+};
 
 const toDataLines = (value: string): string[] => {
   return value.split(/\r?\n/).map(line => line || '');
@@ -40,17 +48,93 @@ export const writeSSE = (
   controller.enqueue(encoder.encode(`${buildSSEChunk(options)}\n`));
 };
 
-export const createSSEStream = (runner: SSEStreamRunner): Response => {
+function abortedError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The SSE stream was aborted.', 'AbortError');
+}
+
+export const createSSEStream = (
+  runner: SSEStreamRunner,
+  options?: SSEStreamOptions
+): Response => {
+  const lifecycle = new AbortController();
+  let notifyCapacity: (() => void) | undefined;
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      lifecycle.abort(options.signal.reason);
+    } else {
+      options.signal.addEventListener(
+        'abort',
+        () => lifecycle.abort(options.signal!.reason),
+        { once: true }
+      );
+    }
+  }
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
+      let closed = false;
+      let pending = Promise.resolve();
+      const ready = async (): Promise<void> => {
+        while (!lifecycle.signal.aborted && controller.desiredSize !== null) {
+          if ((controller.desiredSize ?? 0) > 0) return;
+          await new Promise<void>(resolve => {
+            const finish = () => {
+              lifecycle.signal.removeEventListener('abort', finish);
+              if (notifyCapacity === finish) notifyCapacity = undefined;
+              resolve();
+            };
+            notifyCapacity = finish;
+            lifecycle.signal.addEventListener('abort', finish, { once: true });
+          });
+        }
+        throw abortedError(lifecycle.signal);
+      };
       const context: SSEStreamRunnerContext = {
         controller,
-        close: () => controller.close(),
-        write: options => writeSSE(controller, options),
+        ready,
+        signal: lifecycle.signal,
+        write: writeOptions => {
+          const operation = pending.then(async () => {
+            try {
+              await ready();
+            } catch (error) {
+              if (lifecycle.signal.aborted) return;
+              throw error;
+            }
+            if (closed) throw new Error('SSE stream is closed');
+            writeSSE(controller, writeOptions);
+          });
+          pending = operation;
+          return operation;
+        },
+        close: () => {
+          const operation = pending.then(() => {
+            if (closed || lifecycle.signal.aborted) return;
+            closed = true;
+            controller.close();
+          });
+          pending = operation;
+          return operation;
+        },
       };
       Promise.resolve(runner(context)).catch(error => {
+        if (lifecycle.signal.aborted || closed) return;
+        closed = true;
         controller.error(error);
       });
+    },
+    pull() {
+      const notify = notifyCapacity;
+      notifyCapacity = undefined;
+      notify?.();
+    },
+    cancel(reason) {
+      lifecycle.abort(reason);
+      const notify = notifyCapacity;
+      notifyCapacity = undefined;
+      notify?.();
     },
   });
 
@@ -63,4 +147,3 @@ export const createSSEStream = (runner: SSEStreamRunner): Response => {
     },
   });
 };
-

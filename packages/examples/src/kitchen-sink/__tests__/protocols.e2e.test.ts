@@ -1,4 +1,5 @@
 import { createAgentApp } from '@lucid-agents/hono';
+import { buildSIWxHeaderValue } from '@lucid-agents/payments';
 import { describe, expect, it } from 'bun:test';
 import { Challenge, Credential } from 'mppx';
 
@@ -11,6 +12,7 @@ type PaymentRequired = {
   x402Version: number;
   resource: Record<string, unknown>;
   accepts: Array<Record<string, unknown>>;
+  extensions?: Record<string, unknown>;
 };
 
 function decodeHeader(value: string): PaymentRequired {
@@ -97,7 +99,9 @@ describe('kitchen-sink payment profiles E2E', () => {
       expect(challengeResponse.status).toBe(402);
       const challengeHeader = challengeResponse.headers.get('PAYMENT-REQUIRED');
       expect(challengeHeader).toBeTruthy();
-      expect((await challengeResponse.json()).extensions?.siwx).toBeDefined();
+      expect(
+        (await challengeResponse.json()).extensions?.['sign-in-with-x']
+      ).toBeDefined();
       const challenge = decodeHeader(challengeHeader!);
 
       const payment = Buffer.from(
@@ -127,17 +131,16 @@ describe('kitchen-sink payment profiles E2E', () => {
         output: { transactionCount: 1 },
       });
 
-      const siwx = Buffer.from(
-        JSON.stringify({
-          domain: '127.0.0.1',
-          address: PAYER,
-          uri: `${origin}/entrypoints/summarize/invoke`,
-          version: '1',
-          chainId: 'eip155:84532',
-          nonce: 'kitchen-sink-entitlement-0001',
-          issuedAt: new Date().toISOString(),
-        })
-      ).toString('base64');
+      const siwxExtension = challenge.extensions?.['sign-in-with-x'] as {
+        info: Record<string, unknown>;
+        supportedChains: Array<Record<string, unknown>>;
+      };
+      const siwx = buildSIWxHeaderValue({
+        ...siwxExtension.info,
+        ...siwxExtension.supportedChains[0],
+        address: PAYER,
+        signature: '0xtest-signature',
+      });
       const entitled = await invoke({ 'SIGN-IN-WITH-X': siwx });
       expect(entitled.status).toBe(200);
       expect(calls).toEqual({ verify: 1, settle: 1 });

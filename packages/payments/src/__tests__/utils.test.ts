@@ -13,6 +13,8 @@ const ENV_KEYS = [
   'FACILITATOR_AUTH',
   'PAYMENTS_FACILITATOR_AUTH',
   'DREAMS_AUTH_TOKEN',
+  'SIWX_PUBLIC_ORIGIN',
+  'PAYMENTS_PUBLIC_ORIGIN',
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
@@ -149,6 +151,41 @@ describe('paymentsFromEnv', () => {
     const config = paymentsFromEnv();
 
     expect(config?.network).toBe('eip155:84532');
+  });
+
+  it('reads SIWX_PUBLIC_ORIGIN into enabled SIWX configuration', () => {
+    process.env.SIWX_PUBLIC_ORIGIN = 'https://agent.example.com';
+
+    const config = paymentsFromEnv();
+
+    expect(config?.siwx).toEqual({
+      enabled: true,
+      origin: 'https://agent.example.com',
+    });
+  });
+
+  it('supports PAYMENTS_PUBLIC_ORIGIN as a SIWX origin alias', () => {
+    process.env.PAYMENTS_PUBLIC_ORIGIN = 'https://payments.example.com';
+
+    const config = paymentsFromEnv();
+
+    expect(config?.siwx).toEqual({
+      enabled: true,
+      origin: 'https://payments.example.com',
+    });
+  });
+
+  it('prefers an explicit SIWX configuration over origin environment aliases', () => {
+    process.env.SIWX_PUBLIC_ORIGIN = 'https://env.example.com';
+
+    const config = paymentsFromEnv({
+      siwx: {
+        enabled: true,
+        origin: 'https://override.example.com',
+      },
+    });
+
+    expect(config?.siwx?.origin).toBe('https://override.example.com');
   });
 });
 

@@ -199,6 +199,66 @@ describe('Task Operations', () => {
   });
 
   describe('POST /tasks - Create Task', () => {
+    it('rejects invoke-only payment schemes before task authorization', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('upto-task', {
+        key: 'upto-task',
+        x402: {
+          offers: [
+            {
+              scheme: 'upto',
+              network: 'eip155:84532',
+              maximum: '1000',
+              payTo: '0x0000000000000000000000000000000000000001',
+            },
+          ],
+        },
+        handler: async () => ({ output: { ok: true } }),
+      });
+      let authorizations = 0;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: (
+          _entrypoint: EntrypointDef,
+          kind: 'invoke' | 'stream' | 'task'
+        ) => {
+          if (kind === 'task') {
+            throw new Error('x402 upto only supports invoke operations');
+          }
+          return { required: false };
+        },
+        authorize: async () => {
+          authorizations += 1;
+          throw new Error('authorization must not run');
+        },
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'upto-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.code).toBe(
+        'payment_capability_unsupported'
+      );
+      expect(authorizations).toBe(0);
+      await runtime.a2a.tasks.close();
+    });
+
     it('rejects paid tasks before authorization on a process-local store', async () => {
       const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
       runtime.a2a.tasks = createTaskRuntime({
@@ -1459,6 +1519,56 @@ describe('Task Operations', () => {
 
       const response = await handlers.tasks(request);
       expect(response.status).toBe(400);
+    });
+
+    it('rejects invalid paid task input before MPP verification can settle', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      let authorizations = 0;
+      entrypoints.set('validated-paid-task', {
+        key: 'validated-paid-task',
+        price: '1',
+        paymentProtocol: 'mpp',
+        input: z.object({ text: z.string() }),
+        handler: async () => ({ output: { ok: true } }),
+      });
+      (runtime as unknown as { mpp: MppRuntime }).mpp = {
+        hasCredential: () => true,
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () => {
+          authorizations += 1;
+          return { authorized: true, receipt: 'must-not-settle' };
+        },
+      } as unknown as MppRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+            Authorization: 'Payment invalid-but-present',
+          },
+          body: JSON.stringify({
+            skillId: 'validated-paid-task',
+            message: {
+              role: 'user',
+              content: { text: JSON.stringify({}) },
+            },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'invalid_input' },
+      });
+      expect(authorizations).toBe(0);
     });
 
     it('returns 400 for malformed message objects instead of throwing', async () => {

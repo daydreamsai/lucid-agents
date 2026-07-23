@@ -1,6 +1,7 @@
 import type {
   PaymentRecord,
   PaymentDirection,
+  PaymentSettlementAdjustment,
 } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
 import type {
@@ -8,6 +9,11 @@ import type {
   PaymentLimitReservation,
   PaymentLimitReservationResult,
 } from './payment-storage';
+import {
+  indexPaymentReservationAdjustments,
+  indexPaymentSettlementAdjustments,
+} from './payment-storage';
+import type { PaymentReservationAdjustment } from '@lucid-agents/types/payments';
 
 type PaymentEntry = {
   amount: bigint;
@@ -172,17 +178,25 @@ export class InMemoryPaymentStorage implements PaymentStorage {
 
   async stagePaymentSettlement(
     reservationIds: readonly string[],
-    records: readonly PaymentAccountingRecord[] = []
+    records: readonly PaymentAccountingRecord[] = [],
+    adjustments: readonly PaymentReservationAdjustment[] = []
   ): Promise<string | undefined> {
     return this.withLock(() => {
       if (new Set(reservationIds).size !== reservationIds.length) {
         return undefined;
       }
+      const adjustedAmounts = indexPaymentReservationAdjustments(
+        reservationIds,
+        adjustments
+      );
       const now = Date.now();
-      const reservations = reservationIds.map(id => this.reservations.get(id));
+      const reservations = reservationIds.map(id => ({
+        id,
+        reservation: this.reservations.get(id),
+      }));
       if (
         reservations.some(
-          reservation => !reservation || reservation.expiresAt <= now
+          ({ reservation }) => !reservation || reservation.expiresAt <= now
         )
       ) {
         for (const id of reservationIds) {
@@ -193,12 +207,20 @@ export class InMemoryPaymentStorage implements PaymentStorage {
         }
         return undefined;
       }
+      for (const { id, reservation } of reservations) {
+        const adjusted = adjustedAmounts.get(id);
+        if (adjusted !== undefined && adjusted > reservation!.amount) {
+          throw new Error(
+            'Payment reservation adjustment exceeds reserved amount'
+          );
+        }
+      }
       const entries: StagedPaymentEntry[] = [
-        ...reservations.map(reservation => ({
+        ...reservations.map(({ id, reservation }) => ({
           groupName: reservation!.groupName,
           scope: reservation!.scope,
           direction: reservation!.direction,
-          amount: reservation!.amount,
+          amount: adjustedAmounts.get(id) ?? reservation!.amount,
           timestamp: now,
         })),
         ...records.map(record => ({ ...record, timestamp: now })),
@@ -209,6 +231,39 @@ export class InMemoryPaymentStorage implements PaymentStorage {
       this.settlements.set(settlementId, entries);
       for (const id of reservationIds) this.reservations.delete(id);
       return settlementId;
+    });
+  }
+
+  async adjustPaymentSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<boolean> {
+    return this.withLock(() => {
+      const entries = this.settlements.get(settlementId);
+      if (!entries) return false;
+      const indexed = indexPaymentSettlementAdjustments(adjustments);
+      const matched = new Set<string>();
+      const updated = entries.map(entry => {
+        const key = JSON.stringify([
+          entry.groupName,
+          entry.scope,
+          entry.direction,
+        ]);
+        const amount = indexed.get(key);
+        if (amount === undefined) return entry;
+        if (amount > entry.amount) {
+          throw new Error(
+            'Payment settlement adjustment exceeds staged amount'
+          );
+        }
+        matched.add(key);
+        return { ...entry, amount };
+      });
+      if (matched.size !== indexed.size) {
+        throw new Error('Payment settlement adjustment scope was not staged');
+      }
+      this.settlements.set(settlementId, updated);
+      return true;
     });
   }
 

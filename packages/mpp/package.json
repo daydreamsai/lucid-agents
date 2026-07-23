@@ -9,7 +9,11 @@
   },
   "type": "module",
   "lucidAgents": {
-    "runtime": "portable"
+    "runtime": "portable",
+    "nodeExports": [
+      "./storage/sqlite",
+      "./storage/postgres"
+    ]
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -19,6 +23,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./storage/sqlite": {
+      "types": "./dist/storage/sqlite.d.ts",
+      "import": "./dist/storage/sqlite.js",
+      "default": "./dist/storage/sqlite.js"
+    },
+    "./storage/postgres": {
+      "types": "./dist/storage/postgres.d.ts",
+      "import": "./dist/storage/postgres.js",
+      "default": "./dist/storage/postgres.js"
     },
     "./package.json": "./package.json"
   },
@@ -39,10 +53,18 @@
     "mppx": "catalog:"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "tsup": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "viem": ">=2.47.5"
+    "pg": "^8.13.1",
+    "viem": ">=2.54.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
   }
 }

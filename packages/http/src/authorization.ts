@@ -1,7 +1,12 @@
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
-import type { MppRuntime } from '@lucid-agents/types/mpp';
+import type {
+  MppPaymentSelection,
+  MppRuntime,
+  MppSessionMeter,
+} from '@lucid-agents/types/mpp';
 import type {
   IncomingPaymentAdmission,
+  IncomingPaymentFinalizeOptions,
   PaymentsRuntime,
 } from '@lucid-agents/types/payments';
 import type { AgentAuthContext } from '@lucid-agents/types/siwx';
@@ -11,14 +16,17 @@ export type AuthorizationRuntime = AgentRuntime<{
   mpp?: MppRuntime;
 }>;
 
-export type EntrypointAdmission =
+type EntrypointAdmission =
   | { admitted: false; response: Response }
   | {
       admitted: true;
       abort: () => Promise<void>;
       isCommitted?: () => boolean;
       recoverCommittedResponse: (response: Response) => Response;
-      finalize: (response: Response) => Promise<Response>;
+      finalize: (
+        response: Response,
+        options?: IncomingPaymentFinalizeOptions
+      ) => Promise<Response>;
     };
 
 export type AdmittedEntrypointAdmission = Extract<
@@ -33,6 +41,18 @@ export type EntrypointAuthorization =
       /** Stable verified caller identity for idempotency scoping. */
       subject?: string;
       auth?: AgentAuthContext;
+      /** Verified correlation metadata; never a caller identity. */
+      reconciliation?: {
+        paymentIdentifier?: string;
+        extensions: Record<string, unknown>;
+      };
+      /** Verified Tempo session meter for transport-owned unit delivery. */
+      sessionMeter?: MppSessionMeter;
+      /** Verified terms used for deferred session accounting. */
+      sessionPayment?: {
+        asset: string;
+        reference: string;
+      };
       /** Add verified protocol response metadata without settling. */
       decorate: (response: Response) => Response;
       /** Reserve policy capacity after an idempotency claim is won. */
@@ -63,6 +83,9 @@ function hasConfiguredPrice(
   entrypoint: EntrypointDef,
   kind: 'invoke' | 'stream'
 ): boolean {
+  if ((entrypoint.x402?.offers.length ?? 0) > 0) {
+    return true;
+  }
   if (typeof entrypoint.price === 'string') {
     return entrypoint.price.trim().length > 0;
   }
@@ -89,10 +112,36 @@ function withPaymentReceipt(
   response: Response,
   receipt: string | undefined
 ): Response {
-  if (!receipt) return response;
+  const effectiveReceipt = receipt ?? response.headers.get('Payment-Receipt');
+  if (!effectiveReceipt) return response;
   const decorated = new Response(response.body, response);
-  decorated.headers.set('Payment-Receipt', receipt);
+  decorated.headers.set('Payment-Receipt', effectiveReceipt);
+  const cacheDirectives = (decorated.headers.get('Cache-Control') ?? '')
+    .split(',')
+    .map(directive => directive.trim())
+    .filter(Boolean)
+    .filter(directive => {
+      const name = directive.split('=', 1)[0]?.trim().toLowerCase();
+      return name !== 'public' && name !== 'private';
+    });
+  cacheDirectives.push('private');
+  decorated.headers.set('Cache-Control', cacheDirectives.join(', '));
   return decorated;
+}
+
+function withPaymentResponseHeaders(
+  response: Response,
+  receipt: string | undefined,
+  responseHeaders: Record<string, string> | undefined
+): Response {
+  const decorated = withPaymentReceipt(response, receipt);
+  const paymentResponse = Object.entries(responseHeaders ?? {}).find(
+    ([name]) => name.toLowerCase() === 'payment-response'
+  )?.[1];
+  if (!paymentResponse) return decorated;
+  const result = new Response(decorated.body, decorated);
+  result.headers.set('PAYMENT-RESPONSE', paymentResponse);
+  return result;
 }
 
 /**
@@ -172,6 +221,15 @@ export async function authorizeEntrypointRequest(
   let mppReceipt: string | undefined;
   let mppPayer: string | undefined;
   let mppNetwork: string | undefined;
+  let mppPayment: MppPaymentSelection | undefined;
+  let mppResponseHeaders: Record<string, string> | undefined;
+  let sessionMeter: MppSessionMeter | undefined;
+  let reconciliation:
+    | {
+        paymentIdentifier?: string;
+        extensions: Record<string, unknown>;
+      }
+    | undefined;
   let reusedSIWxEntitlement = false;
   if (mppRequired && runtime.payments?.authorizeSIWx) {
     const siwxAuthorization = await runtime.payments.authorizeSIWx(
@@ -196,23 +254,55 @@ export async function authorizeEntrypointRequest(
       mppRequirement,
       {
         allowIdempotencyRecovery: options?.allowMppIdempotencyRecovery === true,
+        ...(runtime.payments
+          ? {
+              preflightPayment: (payment: MppPaymentSelection) =>
+                runtime.payments!.preflightIncoming(request, payment),
+            }
+          : {}),
       }
     );
     if (authorization.authorized === false) return authorization;
     mppReceipt = authorization.receipt;
     mppPayer = authorization.payer;
     mppNetwork = authorization.network;
+    mppPayment = authorization.payment;
+    mppResponseHeaders = authorization.responseHeaders;
+    sessionMeter = authorization.sessionMeter;
     if (authorization.handled) {
       return {
         authorized: false,
-        response: withPaymentReceipt(authorization.handled, mppReceipt),
+        response: withPaymentResponseHeaders(
+          authorization.handled,
+          mppReceipt,
+          mppResponseHeaders
+        ),
       };
     }
     subject = paymentSubject(mppPayer, mppNetwork) ?? subject;
   }
 
   const decorate = (response: Response): Response =>
-    withPaymentReceipt(response, mppReceipt);
+    withPaymentResponseHeaders(response, mppReceipt, mppResponseHeaders);
+  const verifiedMppPayment =
+    mppRequired && mppRequirement.required
+      ? {
+          protocol: 'mpp' as const,
+          payer: mppPayer,
+          amount: mppPayment?.amount ?? mppRequirement.amount,
+          currency: mppPayment?.currency ?? mppRequirement.currency,
+          network: mppNetwork,
+          ...(mppPayment?.intent === 'session'
+            ? { intent: mppPayment.intent }
+            : {}),
+          ...(sessionMeter
+            ? {
+                reference: sessionMeter.channelId,
+                maximumAmount: sessionMeter.maximumAmount,
+              }
+            : {}),
+        }
+      : undefined;
 
   if (runtime.payments && !reusedSIWxEntitlement) {
     let authorization: Awaited<ReturnType<PaymentsRuntime['authorize']>>;
@@ -221,15 +311,7 @@ export async function authorizeEntrypointRequest(
         request,
         entrypoint,
         kind,
-        mppRequired
-          ? {
-              protocol: 'mpp',
-              payer: mppPayer,
-              amount: mppRequirement.amount,
-              currency: mppRequirement.currency,
-              network: mppNetwork,
-            }
-          : undefined
+        verifiedMppPayment
       );
     } catch (error) {
       if (!mppReceipt) throw error;
@@ -259,6 +341,7 @@ export async function authorizeEntrypointRequest(
     }
     auth = authorization.auth ?? auth;
     subject = authorization.subject ?? authSubject(auth) ?? subject;
+    reconciliation = authorization.reconciliation;
     admitPayments = authorization.admit;
   }
 
@@ -266,6 +349,16 @@ export async function authorizeEntrypointRequest(
     authorized: true,
     subject,
     auth,
+    reconciliation,
+    sessionMeter,
+    ...(sessionMeter && verifiedMppPayment
+      ? {
+          sessionPayment: {
+            asset: verifiedMppPayment.currency,
+            reference: sessionMeter.channelId,
+          },
+        }
+      : {}),
     decorate,
     admit: async () => {
       const admission = admitPayments
@@ -290,8 +383,8 @@ export async function authorizeEntrypointRequest(
             : undefined,
         recoverCommittedResponse: response =>
           decorate(admission.recoverCommittedResponse?.(response) ?? response),
-        finalize: async response =>
-          decorate(await admission.finalize(response)),
+        finalize: async (response, finalizeOptions) =>
+          decorate(await admission.finalize(response, finalizeOptions)),
       };
     },
   };

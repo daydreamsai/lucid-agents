@@ -59,6 +59,7 @@ const agent = await createAgent({
   .use(http())
   .use(
     mpp({
+      allowInsecureHttpForDevelopment: true,
       config: {
         methods: [
           tempo.server({

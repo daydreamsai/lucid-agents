@@ -30,8 +30,10 @@ import { renderLandingPage } from './landing-page';
 import { stream } from './stream';
 import { createSSEStream, type SSEStreamRunnerContext } from './sse';
 import { createAgentRoutePlan } from './route-plan';
+import { buildOpenApiDocument, projectX402OpenApiPayment } from './openapi';
 import { createInMemoryHttpIdempotencyStore } from './idempotency';
 import { admitTaskExecution, rejectReservedTask } from './task-admission';
+import { parseInput } from './validation';
 
 type HttpDependencies = {
   payments?: PaymentsRuntime;
@@ -41,6 +43,9 @@ type HttpDependencies = {
 };
 
 function hasExplicitPrice(entrypoint: EntrypointDef): boolean {
+  if (entrypoint.x402?.offers?.length) {
+    return true;
+  }
   if (typeof entrypoint.price === 'string') {
     return entrypoint.price.trim().length > 0;
   }
@@ -51,6 +56,34 @@ function hasExplicitPrice(entrypoint: EntrypointDef): boolean {
       (typeof entrypoint.price.stream === 'string' &&
         entrypoint.price.stream.trim().length > 0))
   );
+}
+
+function extractTaskInput(content: unknown): unknown {
+  if (content && typeof content === 'object' && !Array.isArray(content)) {
+    if ('text' in content) {
+      const text = (content as { text: unknown }).text;
+      if (typeof text !== 'string') return text;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+    if (
+      'parts' in content &&
+      Array.isArray((content as { parts: unknown }).parts) &&
+      (content as { parts: unknown[] }).parts.length > 0
+    ) {
+      const firstPart = (content as { parts: unknown[] }).parts[0];
+      return firstPart &&
+        typeof firstPart === 'object' &&
+        !Array.isArray(firstPart) &&
+        'text' in firstPart
+        ? (firstPart as { text: unknown }).text
+        : firstPart;
+    }
+  }
+  return content;
 }
 
 const TASK_STATUSES = new Set<TaskStatus>([
@@ -319,6 +352,42 @@ export function http(
         entrypoints: async () => {
           return jsonResponse({ items: runtime.entrypoints.list() });
         },
+        openapi: async () => {
+          const entrypointSnapshot = runtime.entrypoints.snapshot();
+          return jsonResponse(
+            buildOpenApiDocument({
+              title: meta.name,
+              version: meta.version,
+              description: meta.description,
+              basePath,
+              entrypoints: entrypointSnapshot,
+              projectPayment: (entrypoint, operation) => {
+                const mppProjection = runtime.mpp?.projectPayment(
+                  entrypoint,
+                  operation
+                );
+                if (mppProjection) {
+                  return mppProjection as Record<string, unknown>;
+                }
+                const x402Projection = runtime.payments?.projectPayment(
+                  entrypoint,
+                  operation
+                );
+                return x402Projection
+                  ? projectX402OpenApiPayment(x402Projection)
+                  : undefined;
+              },
+              paymentComponents: [
+                ...(runtime.payments?.openApiComponents
+                  ? [runtime.payments.openApiComponents]
+                  : []),
+                ...(runtime.mpp?.openApiComponents
+                  ? [runtime.mpp.openApiComponents() as Record<string, unknown>]
+                  : []),
+              ],
+            })
+          );
+        },
         manifest: async req => {
           const publicBaseUrl = `${normalizeOrigin(req)}${basePath}`;
           return jsonResponse(runtime.manifest.build(publicBaseUrl));
@@ -425,7 +494,43 @@ export function http(
             );
           }
 
+          const rawInput = extractTaskInput(message.content);
+          try {
+            parseInput(taskEntrypoint, rawInput);
+          } catch (error) {
+            if (error instanceof ZodValidationError && error.kind === 'input') {
+              return jsonResponse(
+                {
+                  error: {
+                    code: 'invalid_input',
+                    issues: error.issues,
+                  },
+                },
+                { status: 400 }
+              );
+            }
+            throw error;
+          }
+
           const paidTask = hasExplicitPrice(taskEntrypoint);
+          if (paidTask && runtime.payments) {
+            try {
+              runtime.payments.requirements(taskEntrypoint, 'task');
+            } catch (error) {
+              return jsonResponse(
+                {
+                  error: {
+                    code: 'payment_capability_unsupported',
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : 'This payment scheme does not support tasks',
+                  },
+                },
+                { status: 400 }
+              );
+            }
+          }
           const taskAccess = readTaskAccessToken(req, {
             generate: !paidTask,
           });
@@ -559,46 +664,6 @@ export function http(
                   executionClaim,
                 })
               : response;
-          }
-
-          let rawInput: unknown;
-          // Guard: message.content must be an object to use 'in' operator
-          if (
-            message.content &&
-            typeof message.content === 'object' &&
-            !Array.isArray(message.content) &&
-            'text' in message.content
-          ) {
-            try {
-              rawInput = JSON.parse(
-                (message.content as { text: unknown }).text as string
-              );
-            } catch {
-              rawInput = (message.content as { text: unknown }).text;
-            }
-          } else if (
-            message.content &&
-            typeof message.content === 'object' &&
-            !Array.isArray(message.content) &&
-            'parts' in message.content &&
-            Array.isArray((message.content as { parts: unknown }).parts) &&
-            (message.content as { parts: unknown[] }).parts.length > 0
-          ) {
-            const firstPart = (message.content as { parts: unknown[] })
-              .parts[0];
-            // Guard: firstPart must be an object to use 'in' operator
-            if (
-              firstPart &&
-              typeof firstPart === 'object' &&
-              !Array.isArray(firstPart) &&
-              'text' in firstPart
-            ) {
-              rawInput = (firstPart as { text: unknown }).text;
-            } else {
-              rawInput = firstPart;
-            }
-          } else {
-            rawInput = message.content;
           }
 
           if (!taskReserved) {

@@ -338,14 +338,15 @@ describe('PostgresPaymentStorage without a live database', () => {
           direction: 'incoming',
           amount: 4n,
         },
-      ]
+      ],
+      [{ reservationId: 'reservation-a', amount: 1n }]
     );
     expect(settlementId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(
-      pool.client.queries.filter(query =>
-        query.sql.includes('INSERT INTO payment_settlement_entries')
-      )
-    ).toHaveLength(2);
+    const settlementEntries = pool.client.queries.filter(query =>
+      query.sql.includes('INSERT INTO payment_settlement_entries')
+    );
+    expect(settlementEntries).toHaveLength(2);
+    expect(settlementEntries.some(query => query.params[6] === '1')).toBe(true);
 
     expect(await storage.commitPaymentSettlement(settlementId!)).toBe(true);
     expect(
@@ -365,10 +366,7 @@ describe('PostgresPaymentStorage without a live database', () => {
       'agent-a',
     ]);
     expect(
-      await storage.stagePaymentSettlement(
-        ['duplicate', 'duplicate'],
-        []
-      )
+      await storage.stagePaymentSettlement(['duplicate', 'duplicate'], [])
     ).toBeUndefined();
   });
 

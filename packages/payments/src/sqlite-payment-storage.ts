@@ -4,12 +4,18 @@ import { Database } from 'bun:sqlite';
 import type {
   PaymentRecord,
   PaymentDirection,
+  PaymentReservationAdjustment,
+  PaymentSettlementAdjustment,
 } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
 import type {
   PaymentAccountingRecord,
   PaymentLimitReservation,
   PaymentLimitReservationResult,
+} from './payment-storage';
+import {
+  indexPaymentReservationAdjustments,
+  indexPaymentSettlementAdjustments,
 } from './payment-storage';
 
 /**
@@ -419,7 +425,8 @@ export class SQLitePaymentStorage implements PaymentStorage {
 
   async stagePaymentSettlement(
     reservationIds: readonly string[],
-    records: readonly PaymentAccountingRecord[] = []
+    records: readonly PaymentAccountingRecord[] = [],
+    adjustments: readonly PaymentReservationAdjustment[] = []
   ): Promise<string | undefined> {
     if (
       new Set(reservationIds).size !== reservationIds.length ||
@@ -427,6 +434,10 @@ export class SQLitePaymentStorage implements PaymentStorage {
     ) {
       return undefined;
     }
+    const adjustedAmounts = indexPaymentReservationAdjustments(
+      reservationIds,
+      adjustments
+    );
     this.beginImmediate();
     try {
       const now = Date.now();
@@ -451,6 +462,14 @@ export class SQLitePaymentStorage implements PaymentStorage {
         this.db.exec('COMMIT');
         return undefined;
       }
+      reservations.forEach((row, index) => {
+        const adjusted = adjustedAmounts.get(reservationIds[index]!);
+        if (adjusted !== undefined && adjusted > BigInt(row!.amount)) {
+          throw new Error(
+            'Payment reservation adjustment exceeds reserved amount'
+          );
+        }
+      });
 
       const settlementId = crypto.randomUUID();
       const insert = this.db.prepare(`
@@ -458,14 +477,16 @@ export class SQLitePaymentStorage implements PaymentStorage {
           (entry_id, settlement_id, group_name, scope, direction, amount, timestamp)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
-      for (const row of reservations) {
+      for (const [index, row] of reservations.entries()) {
         insert.run(
           crypto.randomUUID(),
           settlementId,
           row!.group_name,
           row!.scope,
           row!.direction,
-          row!.amount,
+          (
+            adjustedAmounts.get(reservationIds[index]!) ?? BigInt(row!.amount)
+          ).toString(),
           now
         );
       }
@@ -486,6 +507,64 @@ export class SQLitePaymentStorage implements PaymentStorage {
       for (const id of reservationIds) remove.run(id);
       this.db.exec('COMMIT');
       return settlementId;
+    } catch (error) {
+      this.rollback();
+      throw error;
+    }
+  }
+
+  async adjustPaymentSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<boolean> {
+    const indexed = indexPaymentSettlementAdjustments(adjustments);
+    this.beginImmediate();
+    try {
+      const rows = this.db
+        .prepare(
+          `SELECT group_name, scope, direction, amount
+           FROM payment_settlement_entries WHERE settlement_id = ?`
+        )
+        .all(settlementId) as Array<{
+        group_name: string;
+        scope: string;
+        direction: PaymentDirection;
+        amount: string;
+      }>;
+      if (rows.length === 0) {
+        this.db.exec('COMMIT');
+        return false;
+      }
+      const matched = new Set<string>();
+      for (const row of rows) {
+        const key = JSON.stringify([row.group_name, row.scope, row.direction]);
+        const amount = indexed.get(key);
+        if (amount === undefined) continue;
+        if (amount > BigInt(row.amount)) {
+          throw new Error(
+            'Payment settlement adjustment exceeds staged amount'
+          );
+        }
+        matched.add(key);
+      }
+      if (matched.size !== indexed.size) {
+        throw new Error('Payment settlement adjustment scope was not staged');
+      }
+      const update = this.db.prepare(
+        `UPDATE payment_settlement_entries SET amount = ?
+         WHERE settlement_id = ? AND group_name = ? AND scope = ? AND direction = ?`
+      );
+      for (const adjustment of adjustments) {
+        update.run(
+          adjustment.amount.toString(),
+          settlementId,
+          adjustment.groupName,
+          adjustment.scope,
+          adjustment.direction
+        );
+      }
+      this.db.exec('COMMIT');
+      return true;
     } catch (error) {
       this.rollback();
       throw error;
