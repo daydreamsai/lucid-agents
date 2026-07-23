@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { resolveServiceUi } from '@lucid-agents/http/service-ui';
+import type { ReactNode } from 'react';
 
 import serviceUi from '@/service-ui.config';
 import './globals.css';
@@ -16,11 +17,7 @@ export const viewport: Viewport = {
   themeColor: resolvedServiceUi.tokens.colors.canvas,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>{children}</body>
