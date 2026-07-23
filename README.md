@@ -1,4 +1,4 @@
-![Lucid Agents](./info.jpeg)
+![Lucid Agents machine commerce runtime infographic](./lucid-agents-infographic.webp)
 
 <div align="center">
   <h1>Lucid Agents</h1>
