@@ -8,3 +8,6 @@
 
 /skills/lucid-agents/1.0.1/*
   Cache-Control: public, max-age=31536000, immutable
+
+/skills/lucid-agents/1.0.2/*
+  Cache-Control: public, max-age=31536000, immutable
