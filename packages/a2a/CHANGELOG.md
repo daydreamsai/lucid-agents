@@ -1,5 +1,11 @@
 # @lucid-agents/a2a
 
+## 1.0.2
+
+### Patch Changes
+
+- @lucid-agents/core@4.2.0
+
 ## 1.0.1
 
 ### Patch Changes
