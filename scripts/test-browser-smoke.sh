@@ -115,7 +115,7 @@ for index in "${!THEMES[@]}"; do
   THEME="${THEMES[$index]}"
   EXPECTED_SCHEME="${SCHEMES[$index]}"
   EXPECTED_CANVAS="${CANVASES[$index]}"
-  REACT_PROJECT="$GENERATED_ROOT/generated-next-$THEME"
+  REACT_PROJECT="$GENERATED_ROOT/generated-blank-next-$THEME"
   REACT_PORT="$((PORT + 2 + index))"
 
   PORT="$REACT_PORT" bun run --cwd "$REACT_PROJECT" start \
@@ -145,7 +145,7 @@ for index in "${!THEMES[@]}"; do
     const theme = Bun.env.THEME;
     let state = JSON.parse(await Bun.file(`react-${theme}-state.json`).text());
     if (typeof state === "string") state = JSON.parse(state);
-    if (state.identity !== `generated-next-${theme}` || state.preset !== theme || state.mode !== "directory") throw new Error(`${theme} endpoint directory markers were incorrect`);
+    if (state.identity !== `generated-blank-next-${theme}` || state.preset !== theme || state.mode !== "directory") throw new Error(`${theme} endpoint directory markers were incorrect`);
     if (state.rows < 6 || state.paths.length !== state.rows || state.payments.length !== state.rows || state.prices.length !== state.rows) throw new Error(`${theme} endpoint rows were incomplete`);
     if (state.headers.join("|") !== "Endpoint|Payment method|Price" || !state.methods.every(method => method === "POST")) throw new Error(`${theme} endpoint columns or methods changed unexpectedly`);
     if (!state.paths.every(path => path?.startsWith("/")) || !state.prices.includes("Free")) throw new Error(`${theme} endpoint details were incomplete`);
