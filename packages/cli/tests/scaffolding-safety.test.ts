@@ -258,6 +258,52 @@ describe('scaffolding safety', () => {
     expect(await readdir(cwd)).toEqual([]);
   });
 
+  it('leaves payments unconfigured in the default identity project', async () => {
+    const cwd = await createTempDir();
+
+    await runCli(
+      [
+        'readonly-identity-agent',
+        '--template=identity',
+        '--adapter=hono',
+        '--non-interactive',
+      ],
+      { cwd, logger }
+    );
+
+    const env = await readFile(
+      join(cwd, 'readonly-identity-agent', '.env'),
+      'utf8'
+    );
+    expect(env).toContain('PAYMENTS_ENABLED=false');
+    expect(env).not.toContain('PAYMENTS_FACILITATOR_URL=');
+    expect(env).not.toContain('PAYMENTS_NETWORK=');
+    expect(env).not.toContain('PAYMENTS_DESTINATION=');
+    expect(env).not.toContain('PAYMENTS_RECEIVABLE_ADDRESS=');
+    expect(env).not.toContain('STRIPE_SECRET_KEY=');
+  });
+
+  it('requires a complete payment destination when payments are enabled', async () => {
+    const cwd = await createTempDir();
+
+    await expect(
+      runCli(
+        [
+          'incomplete-payment-agent',
+          '--template=identity',
+          '--adapter=hono',
+          '--non-interactive',
+          '--PAYMENTS_ENABLED=true',
+        ],
+        { cwd, logger }
+      )
+    ).rejects.toThrow(/PAYMENTS_RECEIVABLE_ADDRESS.*at least 1 character/u);
+
+    await expect(
+      lstat(join(cwd, 'incomplete-payment-agent'))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('leaves no destination behind when generation fails', async () => {
     const cwd = await createTempDir();
     const templateRoot = await createTemplateRoot(metadata => metadata);
@@ -278,7 +324,9 @@ describe('scaffolding safety', () => {
         ],
         { cwd, logger, templateRoot }
       )
-    ).rejects.toThrow('Template missing required marker');
+    ).rejects.toThrow(
+      /Template missing required marker[\s\S]*Re-run: bunx @lucid-agents\/cli failed-agent --template=safety --adapter=hono --non-interactive/u
+    );
 
     await expect(lstat(join(cwd, 'failed-agent'))).rejects.toMatchObject({
       code: 'ENOENT',

@@ -255,8 +255,9 @@ export async function runCli(
   const templateJsonRaw = await fs.readFile(templateJsonPath, 'utf8');
   const templateMeta = JSON.parse(templateJsonRaw);
 
-  const stagingDir = await createStagingDirectory(targetDir);
+  let stagingDir: string | undefined;
   try {
+    stagingDir = await createStagingDirectory(targetDir);
     await copyTemplate(
       template.path,
       stagingDir,
@@ -295,8 +296,21 @@ export async function runCli(
       targetDir,
     });
   } catch (error) {
-    await fs.rm(stagingDir, { recursive: true, force: true });
-    throw error;
+    if (stagingDir) {
+      await fs.rm(stagingDir, { recursive: true, force: true });
+    }
+    const reason =
+      error instanceof Error ? error.message : 'Unknown scaffolding failure';
+    const recoveryArgs = [
+      projectName,
+      `--template=${template.id}`,
+      `--adapter=${selectedAdapter}`,
+      parsed.options.skipWizard ? '--non-interactive' : undefined,
+    ].filter((value): value is string => Boolean(value));
+    const recoveryCommand = ['bunx', '@lucid-agents/cli', ...recoveryArgs]
+      .map(shellQuote)
+      .join(' ');
+    throw new Error(`${reason}\nRe-run: ${recoveryCommand}`, { cause: error });
   }
 
   const relativeTarget = relative(cwd, targetDir) || '.';
@@ -743,6 +757,13 @@ function toPackageName(input: string): string {
     .replace(/^-+/, '')
     .replace(/-+$/, '');
   return normalized.length > 0 ? normalized : 'agent-app';
+}
+
+function shellQuote(value: string): string {
+  if (/^[a-zA-Z0-9_./:@=-]+$/u.test(value)) {
+    return value;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 async function resolveProjectName(params: {

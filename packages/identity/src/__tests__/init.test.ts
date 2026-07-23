@@ -1,3 +1,4 @@
+import type { DeveloperWalletHandle } from '@lucid-agents/types/wallets';
 import { afterAll, afterEach, describe, expect, it, mock } from 'bun:test';
 
 import {
@@ -446,27 +447,22 @@ describe('createAgentIdentity', () => {
       currentTestPublicClient = publicClient;
 
       const result = await createAgentIdentity({
-        runtime: {
-          wallets: {
-            developer: {
-              kind: 'local',
-              connector: {
-                async getWalletMetadata() {
-                  return { address: walletClient.account.address };
-                },
-                async signChallenge() {
-                  return '0xsignature';
-                },
-                async getWalletClient() {
-                  return walletClient;
-                },
-                async getPublicClient() {
-                  return publicClient;
-                },
-              },
+        walletHandle: {
+          kind: 'local',
+          connector: {
+            async getWalletMetadata() {
+              return { address: walletClient.account.address };
+            },
+            async signChallenge() {
+              return '0xsignature';
+            },
+            async getWalletClient<
+              TClient = unknown,
+            >(): Promise<TClient | null> {
+              return walletClient as TClient;
             },
           },
-        } as any,
+        } satisfies DeveloperWalletHandle,
         agentId: 42n,
         domain: 'readonly-with-wallet.example.com',
         registryAddress: REGISTRY_ADDRESS,
@@ -582,26 +578,24 @@ describe('createAgentIdentity', () => {
 
     await expect(
       createAgentIdentity({
-        runtime: {
-          wallets: {
-            developer: {
-              kind: 'server',
-              connector: {
-                async getWalletMetadata() {
-                  return {
-                    address: '0x0000000000000000000000000000000000000007',
-                  };
-                },
-                async signChallenge() {
-                  return '0xsignature';
-                },
-                async getWalletClient() {
-                  return undefined;
-                },
-              },
+        walletHandle: {
+          kind: 'signer',
+          connector: {
+            async getWalletMetadata() {
+              return {
+                address: '0x0000000000000000000000000000000000000007',
+              };
+            },
+            async signChallenge() {
+              return '0xsignature';
+            },
+            async getWalletClient<
+              TClient = unknown,
+            >(): Promise<TClient | null> {
+              return null;
             },
           },
-        } as any,
+        } satisfies DeveloperWalletHandle,
         domain: 'register.example.com',
         registryAddress: REGISTRY_ADDRESS,
         chainId: 84532,

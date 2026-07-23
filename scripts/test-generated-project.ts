@@ -242,6 +242,11 @@ async function verifyAdapter(
           `${adapter} Agent Card identity was ${card.name ?? 'missing'}, expected ${projectName}`
         );
       }
+      if (template === 'identity' && (card.payments?.length ?? 0) > 0) {
+        throw new Error(
+          `${adapter} default identity Agent Card advertised payments`
+        );
+      }
       if (template === 'blank' && preset) {
         const paymentMethods = new Set(
           (card.payments ?? []).map(payment => payment.method)
@@ -325,7 +330,7 @@ async function verifyIdentityDefaults(projectDir: string): Promise<void> {
     'CHAIN_ID=84532',
     'IDENTITY_AGENT_ID=',
     'IDENTITY_AUTO_REGISTER=false',
-    'PAYMENTS_NETWORK=base-sepolia',
+    'PAYMENTS_ENABLED=false',
   ]) {
     if (!env.includes(expected)) {
       throw new Error(`identity scaffold did not include ${expected}`);
@@ -335,10 +340,15 @@ async function verifyIdentityDefaults(projectDir: string): Promise<void> {
     env.includes('AGENT_WALLET_TYPE=local') ||
     env.includes('AGENT_WALLET_PRIVATE_KEY=') ||
     env.includes('DEVELOPER_WALLET_PRIVATE_KEY=') ||
-    env.includes('IDENTITY_ALLOW_MAINNET_REGISTRATION=true')
+    env.includes('IDENTITY_ALLOW_MAINNET_REGISTRATION=true') ||
+    env.includes('PAYMENTS_FACILITATOR_URL=') ||
+    env.includes('PAYMENTS_NETWORK=') ||
+    env.includes('PAYMENTS_DESTINATION=') ||
+    env.includes('PAYMENTS_RECEIVABLE_ADDRESS=') ||
+    env.includes('STRIPE_SECRET_KEY=')
   ) {
     throw new Error(
-      'identity scaffold emitted a signer secret or enabled a mainnet write'
+      'identity scaffold emitted a signer secret, enabled a mainnet write, or configured payments by default'
     );
   }
 }

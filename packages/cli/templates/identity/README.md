@@ -49,8 +49,9 @@ address and checks that address has a nonzero native-token balance through
 balance does not guarantee the eventual transaction fee, so inspect current gas
 conditions as part of the reviewed registration run.
 
-Payment receiving is independent. Configure the full `PAYMENTS_*` group only
-for priced entrypoints.
+Payment receiving is independent and disabled by default. Set
+`PAYMENTS_ENABLED=true` and configure the full `PAYMENTS_*` group only for
+priced entrypoints.
 
 ## Run and verify
 

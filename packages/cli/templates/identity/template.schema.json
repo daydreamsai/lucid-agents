@@ -120,6 +120,11 @@
       "description": "Support email for service endpoint",
       "default": ""
     },
+    "PAYMENTS_ENABLED": {
+      "type": "boolean",
+      "description": "Whether to configure x402 payment receiving. Disabled by default so free identity projects do not advertise an incomplete payment method.",
+      "default": false
+    },
     "PAYMENTS_FACILITATOR_URL": {
       "type": "string",
       "description": "x402 facilitator endpoint. The template default is for development; choose and validate a production facilitator before launch.",
@@ -234,6 +239,51 @@
   "allOf": [
     {
       "if": {
+        "required": ["PAYMENTS_ENABLED"],
+        "properties": {
+          "PAYMENTS_ENABLED": { "const": true }
+        }
+      },
+      "then": {
+        "required": [
+          "PAYMENTS_FACILITATOR_URL",
+          "PAYMENTS_NETWORK",
+          "PAYMENTS_DESTINATION"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": ["PAYMENTS_ENABLED", "PAYMENTS_DESTINATION"],
+        "properties": {
+          "PAYMENTS_ENABLED": { "const": true },
+          "PAYMENTS_DESTINATION": { "const": "static" }
+        }
+      },
+      "then": {
+        "required": ["PAYMENTS_RECEIVABLE_ADDRESS"],
+        "properties": {
+          "PAYMENTS_RECEIVABLE_ADDRESS": { "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["PAYMENTS_ENABLED", "PAYMENTS_DESTINATION"],
+        "properties": {
+          "PAYMENTS_ENABLED": { "const": true },
+          "PAYMENTS_DESTINATION": { "const": "stripe" }
+        }
+      },
+      "then": {
+        "required": ["STRIPE_SECRET_KEY"],
+        "properties": {
+          "STRIPE_SECRET_KEY": { "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
         "required": ["IDENTITY_AUTO_REGISTER"],
         "properties": {
           "IDENTITY_AUTO_REGISTER": { "const": true }
@@ -280,5 +330,5 @@
       }
     }
   ],
-  "notes": "The default project uses Base Sepolia (CHAIN_ID=84532), leaves IDENTITY_AGENT_ID empty for bounded domain-document discovery, and keeps IDENTITY_AUTO_REGISTER=false, so the wizard neither requests nor emits a signer secret and startup cannot perform an on-chain write. Set IDENTITY_AGENT_ID to resolve a known ERC-8004 token directly. Enabling registration emits AGENT_WALLET_TYPE=local and prompts for AGENT_WALLET_PRIVATE_KEY; a separate DEVELOPER_WALLET_PRIVATE_KEY remains an advanced manual configuration. Local signers are bound to the same RPC_URL and CHAIN_ID used for identity registry reads. Ethereum mainnet (CHAIN_ID=1) additionally requires IDENTITY_ALLOW_MAINNET_REGISTRATION=true and a successful signer-address/native-gas-balance preflight after the chain, registry, domain, agent URI, and transaction policy have been reviewed. Supported registry chains are Ethereum, Ethereum Sepolia, and Base Sepolia. Payment receiving is a separate concern."
+  "notes": "The default project uses Base Sepolia (CHAIN_ID=84532), leaves IDENTITY_AGENT_ID empty for bounded domain-document discovery, keeps IDENTITY_AUTO_REGISTER=false, and sets PAYMENTS_ENABLED=false. The wizard therefore emits neither signer secrets nor an incomplete payment configuration, and startup cannot perform an on-chain write. Set IDENTITY_AGENT_ID to resolve a known ERC-8004 token directly. Enabling registration emits AGENT_WALLET_TYPE=local and prompts for AGENT_WALLET_PRIVATE_KEY; a separate DEVELOPER_WALLET_PRIVATE_KEY remains an advanced manual configuration. Local signers are bound to the same RPC_URL and CHAIN_ID used for identity registry reads. Ethereum mainnet (CHAIN_ID=1) additionally requires IDENTITY_ALLOW_MAINNET_REGISTRATION=true and a successful signer-address/native-gas-balance preflight after the chain, registry, domain, agent URI, and transaction policy have been reviewed. Supported registry chains are Ethereum, Ethereum Sepolia, and Base Sepolia. Payment receiving is a separate opt-in concern."
 }

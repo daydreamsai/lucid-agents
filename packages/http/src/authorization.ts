@@ -11,7 +11,7 @@ export type AuthorizationRuntime = AgentRuntime<{
   mpp?: MppRuntime;
 }>;
 
-type EntrypointAdmission =
+export type EntrypointAdmission =
   | { admitted: false; response: Response }
   | {
       admitted: true;
@@ -20,6 +20,11 @@ type EntrypointAdmission =
       recoverCommittedResponse: (response: Response) => Response;
       finalize: (response: Response) => Promise<Response>;
     };
+
+export type AdmittedEntrypointAdmission = Extract<
+  EntrypointAdmission,
+  { admitted: true }
+>;
 
 export type EntrypointAuthorization =
   | { authorized: false; response: Response }
@@ -284,9 +289,7 @@ export async function authorizeEntrypointRequest(
             ? () => Boolean(mppReceipt) || admission.isCommitted?.() === true
             : undefined,
         recoverCommittedResponse: response =>
-          decorate(
-            admission.recoverCommittedResponse?.(response) ?? response
-          ),
+          decorate(admission.recoverCommittedResponse?.(response) ?? response),
         finalize: async response =>
           decorate(await admission.finalize(response)),
       };

@@ -2,23 +2,18 @@ import type {
   A2ATaskRuntime,
   ExecuteTaskOptions,
   PreparedTaskExecution,
+  TaskAccess,
   Task,
   TaskStatus,
 } from '@lucid-agents/types/a2a';
 
-type TaskAuthorizationAdmission = {
-  abort?: () => Promise<void>;
-  isCommitted?: () => boolean;
-  recoverCommittedResponse?: (response: Response) => Response;
-  finalize: (response: Response) => Promise<Response>;
-};
+import type { AdmittedEntrypointAdmission } from './authorization';
 
 type TaskExecutionAdmissionOptions = {
   runtime: A2ATaskRuntime;
-  taskId: string;
-  accessToken: string;
+  task: TaskAccess;
   capabilityResponse: Response;
-  authorization: TaskAuthorizationAdmission;
+  authorization: AdmittedEntrypointAdmission;
   executionClaim: PreparedTaskExecution;
   execution: ExecuteTaskOptions;
   executionErrorResponse: (error: unknown) => Response;
@@ -59,36 +54,35 @@ const TERMINAL_TASK_STATUSES = new Set<TaskStatus>([
 
 async function cancelTask(
   runtime: A2ATaskRuntime,
-  taskId: string,
-  accessToken: string
+  access: TaskAccess
 ): Promise<Task | undefined> {
   const cancelled = await runtime
-    .cancel(taskId, accessToken)
+    .cancel(access.taskId, access.accessToken)
     .catch(() => undefined);
   if (cancelled && TERMINAL_TASK_STATUSES.has(cancelled.status)) {
     return cancelled;
   }
-  const stored = await runtime.get(taskId, accessToken).catch(() => undefined);
+  const stored = await runtime
+    .get(access.taskId, access.accessToken)
+    .catch(() => undefined);
   return stored && TERMINAL_TASK_STATUSES.has(stored.status)
     ? stored
     : undefined;
 }
 
 function terminalCapabilityResponse(
-  taskId: string,
-  accessToken: string,
+  access: TaskAccess,
   task: Task,
   source: Response
 ): Response {
   return preserveTaskCapability(
-    Response.json({ taskId, accessToken, status: task.status }),
+    Response.json({ ...access, status: task.status }),
     source
   );
 }
 
 function unconfirmedTerminalResponse(
-  taskId: string,
-  accessToken: string,
+  access: TaskAccess,
   source: Response
 ): Response {
   return preserveTaskCapability(
@@ -99,8 +93,7 @@ function unconfirmedTerminalResponse(
           message:
             'Payment committed, but the terminal task state could not be confirmed. Retain this capability and query the task again.',
         },
-        taskId,
-        accessToken,
+        ...access,
       },
       { status: 503 }
     ),
@@ -109,13 +102,10 @@ function unconfirmedTerminalResponse(
 }
 
 function recoverCommittedCapability(
-  authorization: TaskAuthorizationAdmission,
+  authorization: AdmittedEntrypointAdmission,
   capabilityResponse: Response
 ): Response {
-  return (
-    authorization.recoverCommittedResponse?.(capabilityResponse) ??
-    capabilityResponse
-  );
+  return authorization.recoverCommittedResponse(capabilityResponse);
 }
 
 /**
@@ -124,31 +114,17 @@ function recoverCommittedCapability(
  */
 export async function rejectReservedTask(options: {
   runtime: A2ATaskRuntime;
-  taskId: string;
-  accessToken: string;
+  task: TaskAccess;
   response: Response;
   committed: boolean;
   executionClaim?: Pick<PreparedTaskExecution, 'release'>;
 }): Promise<Response> {
   options.executionClaim?.release();
-  const task = await cancelTask(
-    options.runtime,
-    options.taskId,
-    options.accessToken
-  );
+  const task = await cancelTask(options.runtime, options.task);
   return options.committed
     ? task
-      ? terminalCapabilityResponse(
-          options.taskId,
-          options.accessToken,
-          task,
-          options.response
-        )
-      : unconfirmedTerminalResponse(
-          options.taskId,
-          options.accessToken,
-          options.response
-        )
+      ? terminalCapabilityResponse(options.task, task, options.response)
+      : unconfirmedTerminalResponse(options.task, options.response)
     : options.response;
 }
 
@@ -167,11 +143,7 @@ export async function admitTaskExecution(
     await options.executionClaim.renew();
   } catch (error) {
     options.executionClaim.release();
-    const task = await cancelTask(
-      options.runtime,
-      options.taskId,
-      options.accessToken
-    );
+    const task = await cancelTask(options.runtime, options.task);
     if (options.authorization.isCommitted?.() === true) {
       const committedResponse = recoverCommittedCapability(
         options.authorization,
@@ -179,17 +151,8 @@ export async function admitTaskExecution(
       );
       return {
         response: task
-          ? terminalCapabilityResponse(
-              options.taskId,
-              options.accessToken,
-              task,
-              committedResponse
-            )
-          : unconfirmedTerminalResponse(
-              options.taskId,
-              options.accessToken,
-              committedResponse
-            ),
+          ? terminalCapabilityResponse(options.task, task, committedResponse)
+          : unconfirmedTerminalResponse(options.task, committedResponse),
         accepted: true,
       };
     }
@@ -210,7 +173,7 @@ export async function admitTaskExecution(
     committed = options.authorization.isCommitted?.() === true;
     if (!committed) {
       options.executionClaim.release();
-      await cancelTask(options.runtime, options.taskId, options.accessToken);
+      await cancelTask(options.runtime, options.task);
       await options.authorization.abort?.().catch(() => undefined);
       return {
         response: options.executionErrorResponse(error),
@@ -228,7 +191,7 @@ export async function admitTaskExecution(
     finalized.status >= 200 && finalized.status < 300;
   if (!finalizedSuccessfully && !committed) {
     options.executionClaim.release();
-    await cancelTask(options.runtime, options.taskId, options.accessToken);
+    await cancelTask(options.runtime, options.task);
     await options.authorization.abort?.().catch(() => undefined);
     return { response: finalized, accepted: false };
   }
@@ -241,25 +204,12 @@ export async function admitTaskExecution(
     await options.executionClaim.activate(options.execution);
   } catch (error) {
     options.executionClaim.release();
-    const task = await cancelTask(
-      options.runtime,
-      options.taskId,
-      options.accessToken
-    );
+    const task = await cancelTask(options.runtime, options.task);
     if (committed) {
       return {
         response: task
-          ? terminalCapabilityResponse(
-              options.taskId,
-              options.accessToken,
-              task,
-              acceptedResponse
-            )
-          : unconfirmedTerminalResponse(
-              options.taskId,
-              options.accessToken,
-              acceptedResponse
-            ),
+          ? terminalCapabilityResponse(options.task, task, acceptedResponse)
+          : unconfirmedTerminalResponse(options.task, acceptedResponse),
         accepted: true,
       };
     }

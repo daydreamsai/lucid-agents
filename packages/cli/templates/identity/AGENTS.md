@@ -124,8 +124,9 @@ IDENTITY_AUTO_REGISTER=true
 IDENTITY_ALLOW_MAINNET_REGISTRATION=true
 ```
 
-Identity registration is EVM-only. Payment receiving is independent and may
-use an EVM or Solana network.
+Identity registration is EVM-only. Payment receiving is independent, defaults
+to `PAYMENTS_ENABLED=false`, and may use an EVM or Solana network after the
+complete payment group is configured.
 
 ## Registration document
 

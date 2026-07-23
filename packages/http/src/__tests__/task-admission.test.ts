@@ -4,12 +4,10 @@ import type {
   PreparedTaskExecution,
   Task,
 } from '@lucid-agents/types/a2a';
-import {
-  createInMemoryTaskStore,
-  createTaskRuntime,
-} from '@lucid-agents/a2a';
+import { createInMemoryTaskStore, createTaskRuntime } from '@lucid-agents/a2a';
 import { describe, expect, it } from 'bun:test';
 
+import type { AdmittedEntrypointAdmission } from '../authorization';
 import { admitTaskExecution, rejectReservedTask } from '../task-admission';
 
 const accessToken = 'test-access-token-0001';
@@ -58,6 +56,18 @@ function capability(): Response {
   });
 }
 
+function admission(
+  overrides: Partial<AdmittedEntrypointAdmission> = {}
+): AdmittedEntrypointAdmission {
+  return {
+    admitted: true,
+    abort: async () => {},
+    recoverCommittedResponse: response => response,
+    finalize: async response => response,
+    ...overrides,
+  };
+}
+
 describe('task execution admission edge cases', () => {
   it('starts the execution timeout only after delayed settlement completes', async () => {
     const taskRuntime = createTaskRuntime({
@@ -75,11 +85,10 @@ describe('task execution admission edge cases', () => {
 
     const result = await admitTaskExecution({
       runtime: taskRuntime,
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       capabilityResponse: capability(),
       executionClaim,
-      authorization: {
+      authorization: admission({
         isCommitted: () => committed,
         finalize: async response => {
           await Bun.sleep(30);
@@ -87,7 +96,7 @@ describe('task execution admission edge cases', () => {
           response.headers.set('Payment-Receipt', 'delayed-settlement');
           return response;
         },
-      },
+      }),
       execution: {
         execute: async () => {
           handlerCalls += 1;
@@ -122,11 +131,10 @@ describe('task execution admission edge cases', () => {
     });
     const result = await admitTaskExecution({
       runtime: taskRuntime,
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       capabilityResponse: capability(),
       executionClaim: prepared(taskRuntime),
-      authorization: {
+      authorization: admission({
         isCommitted: () => committed,
         finalize: async () => {
           committed = true;
@@ -136,7 +144,7 @@ describe('task execution admission edge cases', () => {
           response.headers.set('Payment-Receipt', 'receipt-after-commit');
           return response;
         },
-      },
+      }),
       execution: {
         execute: async () => ({ output: 'unused' }),
       },
@@ -165,8 +173,7 @@ describe('task execution admission edge cases', () => {
     const taskRuntime = runtime();
     const result = await admitTaskExecution({
       runtime: taskRuntime,
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       capabilityResponse: capability(),
       executionClaim: {
         task: task('running'),
@@ -180,7 +187,7 @@ describe('task execution admission edge cases', () => {
           released = true;
         },
       },
-      authorization: {
+      authorization: admission({
         isCommitted: () => true,
         recoverCommittedResponse: response => {
           response.headers.set('Payment-Receipt', 'mpp-receipt');
@@ -189,7 +196,7 @@ describe('task execution admission edge cases', () => {
         finalize: async () => {
           throw new Error('finalize must not run');
         },
-      },
+      }),
       execution: {
         execute: async () => ({ output: 'unused' }),
       },
@@ -218,11 +225,10 @@ describe('task execution admission edge cases', () => {
     });
     const result = await admitTaskExecution({
       runtime: taskRuntime,
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       capabilityResponse: capability(),
       executionClaim: prepared(taskRuntime),
-      authorization: {
+      authorization: admission({
         isCommitted: () => committed,
         finalize: async () => {
           committed = true;
@@ -232,7 +238,7 @@ describe('task execution admission edge cases', () => {
           response.headers.set('X-Payment-Response', 'settled');
           return response;
         },
-      },
+      }),
       execution: {
         execute: async () => ({ output: 'completed' }),
       },
@@ -256,8 +262,7 @@ describe('task execution admission edge cases', () => {
         cancel: async () => task('running'),
         get: async () => task('failed'),
       }),
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       response: new Response(null, {
         status: 503,
         headers: { 'Payment-Receipt': 'receipt-1' },
@@ -283,8 +288,7 @@ describe('task execution admission edge cases', () => {
           throw new Error('store unavailable');
         },
       }),
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       response: new Response(null, {
         status: 503,
         headers: { 'Payment-Receipt': 'receipt-unknown-state' },
@@ -310,8 +314,7 @@ describe('task execution admission edge cases', () => {
   it('preserves only payment receipts on the JSON task capability', async () => {
     const response = await rejectReservedTask({
       runtime: runtime(),
-      taskId: 'task-1',
-      accessToken,
+      task: { taskId: 'task-1', accessToken },
       response: new Response(null, {
         status: 302,
         headers: {

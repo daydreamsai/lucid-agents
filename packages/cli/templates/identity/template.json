@@ -147,17 +147,25 @@
         "when": { "key": "IDENTITY_INCLUDE_EMAIL", "equals": true }
       },
       {
+        "key": "PAYMENTS_ENABLED",
+        "type": "confirm",
+        "message": "Configure x402 payment receiving?",
+        "defaultValue": false
+      },
+      {
         "key": "PAYMENTS_FACILITATOR_URL",
         "type": "input",
         "message": "Facilitator URL (replace the development default before production)",
-        "defaultValue": "https://facilitator.daydreams.systems"
+        "defaultValue": "https://facilitator.daydreams.systems",
+        "when": { "key": "PAYMENTS_ENABLED", "equals": true }
       },
       {
         "key": "PAYMENTS_FACILITATOR_AUTH",
         "type": "input",
         "message": "Facilitator auth token (optional; legacy fallback: DREAMS_AUTH_TOKEN)",
         "defaultValue": "",
-        "sensitive": true
+        "sensitive": true,
+        "when": { "key": "PAYMENTS_ENABLED", "equals": true }
       },
       {
         "key": "PAYMENTS_NETWORK",
@@ -170,7 +178,8 @@
           { "value": "solana", "title": "Solana Mainnet" },
           { "value": "solana-devnet", "title": "Solana Devnet" }
         ],
-        "defaultValue": "base-sepolia"
+        "defaultValue": "base-sepolia",
+        "when": { "key": "PAYMENTS_ENABLED", "equals": true }
       },
       {
         "key": "PAYMENTS_DESTINATION",
@@ -183,7 +192,8 @@
             "title": "Stripe dynamic destination (Base only)"
           }
         ],
-        "defaultValue": "static"
+        "defaultValue": "static",
+        "when": { "key": "PAYMENTS_ENABLED", "equals": true }
       },
       {
         "key": "PAYMENTS_RECEIVABLE_ADDRESS",

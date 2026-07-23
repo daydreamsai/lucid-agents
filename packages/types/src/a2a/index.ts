@@ -229,13 +229,16 @@ export type StoredTask = {
   };
 };
 
+/** Persistence boundary available to the task state machine. */
+export type TaskStoreDurability = 'process' | 'durable';
+
 /** Atomic persistence port for A2A task state, ownership, and update delivery. */
 export type TaskStore = {
   /**
    * Process-local stores cannot back paid tasks. Durable stores must preserve
    * task records and atomic leases across worker restarts.
    */
-  readonly durability: 'process' | 'durable';
+  readonly durability: TaskStoreDurability;
   /** Terminalize abandoned admissions and return the number reaped. */
   reapExpiredAdmissions: (now: number) => Promise<number>;
   create: (record: StoredTask, event: TaskUpdateEvent) => Promise<void>;
@@ -313,7 +316,7 @@ export type PreparedTaskExecution = {
 
 /** A2A-owned task state machine used by HTTP and other transports. */
 export type A2ATaskRuntime = {
-  readonly durability: 'process' | 'durable';
+  readonly durability: TaskStoreDurability;
   reserve: (options: ReserveTaskOptions) => Promise<Task>;
   prepare: (taskId: string) => Promise<PreparedTaskExecution>;
   execute: (taskId: string, options: ExecuteTaskOptions) => Promise<Task>;

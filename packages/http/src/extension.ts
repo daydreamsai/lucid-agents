@@ -468,8 +468,7 @@ export function http(
               return taskReserved
                 ? rejectReservedTask({
                     runtime: taskRuntime,
-                    taskId,
-                    accessToken,
+                    task: { taskId, accessToken },
                     response,
                     committed: false,
                   })
@@ -503,8 +502,7 @@ export function http(
             return taskReserved
               ? rejectReservedTask({
                   runtime: taskRuntime,
-                  taskId,
-                  accessToken,
+                  task: { taskId, accessToken },
                   response,
                   committed: false,
                   executionClaim,
@@ -515,8 +513,7 @@ export function http(
             return taskReserved
               ? rejectReservedTask({
                   runtime: taskRuntime,
-                  taskId,
-                  accessToken,
+                  task: { taskId, accessToken },
                   response: authorization.response,
                   committed: hasPaymentReceipt(authorization.response),
                   executionClaim,
@@ -544,8 +541,7 @@ export function http(
             return taskReserved
               ? rejectReservedTask({
                   runtime: taskRuntime,
-                  taskId,
-                  accessToken,
+                  task: { taskId, accessToken },
                   response,
                   committed: hasPaymentReceipt(response),
                   executionClaim,
@@ -557,8 +553,7 @@ export function http(
             return taskReserved
               ? rejectReservedTask({
                   runtime: taskRuntime,
-                  taskId,
-                  accessToken,
+                  task: { taskId, accessToken },
                   response,
                   committed: hasPaymentReceipt(response),
                   executionClaim,
@@ -624,8 +619,7 @@ export function http(
               return taskReserved
                 ? rejectReservedTask({
                     runtime: taskRuntime,
-                    taskId,
-                    accessToken,
+                    task: { taskId, accessToken },
                     response,
                     committed: admission.isCommitted?.() === true,
                   })
@@ -640,8 +634,7 @@ export function http(
             );
             return rejectReservedTask({
               runtime: taskRuntime,
-              taskId,
-              accessToken,
+              task: { taskId, accessToken },
               response,
               committed: admission.isCommitted?.() === true,
             });
@@ -654,8 +647,7 @@ export function http(
           });
           const executionAdmission = await admitTaskExecution({
             runtime: taskRuntime,
-            taskId,
-            accessToken,
+            task: { taskId, accessToken },
             capabilityResponse: taskResponse,
             authorization: admission,
             executionClaim,
