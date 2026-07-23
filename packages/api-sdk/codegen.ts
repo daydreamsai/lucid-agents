@@ -1,20 +1,36 @@
 import { createClient } from '@hey-api/openapi-ts';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
-const OPENAPI_URL =
-  process.env.OPENAPI_URL ||
-  'https://api-lucid-dev.daydreams.systems/doc';
+import {
+  classifyOpenApiCompatibility,
+  type CompatibilityResult,
+} from './openapi-compatibility';
+import { hashOpenApiSource, redactOpenApiSource } from './openapi-provenance';
 
-// Validate URL format
-function isValidUrl(url: string): boolean {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const packageRoot = import.meta.dir;
+const schemaPath = path.join(packageRoot, 'openapi-schema.json');
+const provenancePath = path.join(packageRoot, 'openapi-provenance.json');
+const provenanceModulePath = path.join(
+  packageRoot,
+  'src/openapi-provenance.gen.ts'
+);
+const maxSchemaBytes = 50 * 1024 * 1024;
 
-// Retry with exponential backoff
+type GenerationResult = {
+  classification: CompatibilityResult['classification'];
+  recommendedBump: CompatibilityResult['recommendedBump'];
+  schemaSha256: string;
+  schemaSource: string;
+};
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries = 3,
@@ -35,24 +51,153 @@ async function withRetry<T>(
   throw new Error('Unreachable');
 }
 
-// Validate URL before proceeding
-if (!isValidUrl(OPENAPI_URL)) {
-  console.error(`Invalid OpenAPI URL: ${OPENAPI_URL}`);
-  process.exit(1);
+function resultPathFromArgs(argv: string[]): string | undefined {
+  const resultIndex = argv.indexOf('--result');
+  if (resultIndex === -1) return undefined;
+  const resultPath = argv[resultIndex + 1]?.trim();
+  if (!resultPath) {
+    throw new Error('--result requires a file path');
+  }
+  return path.resolve(resultPath);
 }
 
-console.log(`Generating SDK from OpenAPI spec: ${OPENAPI_URL}`);
+function parseOpenApiSource(source: string): unknown {
+  try {
+    return JSON.parse(source) as unknown;
+  } catch {
+    return Bun.YAML.parse(source) as unknown;
+  }
+}
 
-try {
-  await withRetry(async () => {
+function readPreviousSchema(): unknown {
+  if (!existsSync(schemaPath)) return undefined;
+  return JSON.parse(readFileSync(schemaPath, 'utf8')) as unknown;
+}
+
+async function fetchSchema(sourceUrl: string): Promise<Uint8Array> {
+  return withRetry(async () => {
+    const response = await fetch(sourceUrl, {
+      headers: { accept: 'application/json, application/yaml, text/yaml' },
+    });
+    if (!response.ok) {
+      throw new Error(`Schema request failed with HTTP ${response.status}`);
+    }
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > maxSchemaBytes) {
+      throw new Error(
+        `Schema exceeds the ${maxSchemaBytes} byte generation limit`
+      );
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > maxSchemaBytes) {
+      throw new Error(
+        `Schema exceeds the ${maxSchemaBytes} byte generation limit`
+      );
+    }
+    return bytes;
+  });
+}
+
+async function generate(): Promise<GenerationResult> {
+  const sourceUrl = process.env.OPENAPI_URL?.trim();
+  if (!sourceUrl) {
+    throw new Error(
+      'OPENAPI_URL is required; SDK generation must name its authorized schema source'
+    );
+  }
+
+  const redactedSource = redactOpenApiSource(sourceUrl);
+  console.log(`Fetching OpenAPI schema from ${redactedSource}`);
+  const bytes = await fetchSchema(sourceUrl);
+  const source = new TextDecoder().decode(bytes);
+  const nextSchema = parseOpenApiSource(source);
+  const previousSchema = readPreviousSchema();
+  const compatibility = classifyOpenApiCompatibility(
+    previousSchema,
+    nextSchema
+  );
+  const schemaSha256 = hashOpenApiSource(bytes);
+  const previousProvenance = existsSync(provenancePath)
+    ? (JSON.parse(readFileSync(provenancePath, 'utf8')) as {
+        schemaSha256?: string | null;
+      })
+    : undefined;
+
+  const temporaryDirectory = mkdtempSync(
+    path.join(tmpdir(), 'lucid-api-sdk-schema-')
+  );
+  const temporarySchemaPath = path.join(temporaryDirectory, 'openapi.json');
+  try {
+    writeFileSync(
+      temporarySchemaPath,
+      `${JSON.stringify(nextSchema, null, 2)}\n`,
+      'utf8'
+    );
     await createClient({
-      input: OPENAPI_URL,
+      input: temporarySchemaPath,
       output: './src/sdk',
       plugins: ['@tanstack/react-query'],
     });
-  });
-  console.log('✅ SDK generated successfully');
-} catch (error) {
-  console.error('❌ Failed to generate SDK:', error);
-  process.exit(1);
+  } finally {
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+
+  writeFileSync(schemaPath, `${JSON.stringify(nextSchema, null, 2)}\n`, 'utf8');
+  const provenance = {
+    schemaSource: redactedSource,
+    schemaSha256,
+    comparedToSha256: previousProvenance?.schemaSha256 ?? null,
+    compatibility,
+    generator: {
+      package: '@hey-api/openapi-ts',
+      version: '0.88.2',
+    },
+  };
+  writeFileSync(
+    provenancePath,
+    `${JSON.stringify(provenance, null, 2)}\n`,
+    'utf8'
+  );
+  writeFileSync(
+    provenanceModulePath,
+    [
+      '// Generated by codegen.ts. Do not edit by hand.',
+      `export const openApiProvenance = ${JSON.stringify(
+        {
+          schemaSource: provenance.schemaSource,
+          schemaSha256: provenance.schemaSha256,
+          comparedToSha256: provenance.comparedToSha256,
+          classification: provenance.compatibility.classification,
+          generator: provenance.generator,
+        },
+        null,
+        2
+      )} as const;`,
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+
+  return {
+    classification: compatibility.classification,
+    recommendedBump: compatibility.recommendedBump,
+    schemaSha256,
+    schemaSource: redactedSource,
+  };
 }
+
+generate()
+  .then(result => {
+    const resultPath = resultPathFromArgs(process.argv.slice(2));
+    if (resultPath) {
+      writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    }
+    console.log(
+      `SDK generated from schema ${result.schemaSha256} (${result.classification}).`
+    );
+  })
+  .catch(error => {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`SDK generation failed: ${message}`);
+    process.exitCode = 1;
+  });

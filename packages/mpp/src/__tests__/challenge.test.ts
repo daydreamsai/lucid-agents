@@ -60,5 +60,19 @@ describe('MPP challenge security', () => {
       payload: { proof: true },
       source: 'did:pkh:eip155:1:0xpayer',
     });
+    expect(
+      decodeMppCredential(
+        new Request('https://agent.test', {
+          headers: {
+            Authorization: `Bearer caller-token, ${authorization}`,
+          },
+        })
+      )
+    ).toEqual({
+      challengeId: challenge.id,
+      challenge,
+      payload: { proof: true },
+      source: 'did:pkh:eip155:1:0xpayer',
+    });
   });
 });

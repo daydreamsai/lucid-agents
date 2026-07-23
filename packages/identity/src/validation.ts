@@ -3,6 +3,7 @@ import {
   type OASFStructuredConfig,
 } from '@lucid-agents/types/identity';
 
+import { normalizeIdentityAgentId } from './agent-id';
 import type { CreateAgentIdentityOptions } from './init';
 
 /**
@@ -243,6 +244,19 @@ export function validateIdentityConfig(
     errors.push('CHAIN_ID (set CHAIN_ID or pass the chainId option)');
   }
 
+  const envAgentId = envVars.IDENTITY_AGENT_ID?.trim();
+  const agentId =
+    options.agentId ??
+    (envAgentId && envAgentId.length > 0 ? envAgentId : undefined);
+  if (agentId !== undefined) {
+    try {
+      normalizeIdentityAgentId(agentId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`IDENTITY_AGENT_ID (${message})`);
+    }
+  }
+
   const registration = options.registration;
   const selectedOASF = isOASFServiceSelected(registration?.selectedServices);
   const hasInlineOASF = Boolean(registration?.oasf);
@@ -316,11 +330,12 @@ export function resolveAutoRegister(
   }
 
   // Otherwise parse from environment variable (case-insensitive)
-  const autoRegisterEnv = envVars.IDENTITY_AUTO_REGISTER;
+  const autoRegisterEnv =
+    envVars.REGISTER_IDENTITY ?? envVars.IDENTITY_AUTO_REGISTER;
   if (autoRegisterEnv !== undefined) {
     return parseBoolean(autoRegisterEnv);
   }
 
-  // Default to true if not specified anywhere
-  return true;
+  // Registration is an external write and must be explicitly enabled.
+  return false;
 }

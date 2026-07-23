@@ -16,6 +16,7 @@
  *    - RPC_URL=https://sepolia.base.org
  *    - CHAIN_ID=84532
  *    - AGENT_WALLET_PRIVATE_KEY=0x...
+ *    - IDENTITY_RUN_WRITE_EXAMPLE=true
  * 4. Run: bun run examples/full-integration.ts
  */
 
@@ -27,7 +28,21 @@ import {
 } from '@lucid-agents/identity';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-async function main() {
+export async function runFullIdentityIntegration(
+  env: Record<string, string | undefined> = process.env
+): Promise<void> {
+  if (env.IDENTITY_RUN_WRITE_EXAMPLE !== 'true') {
+    throw new Error(
+      'This integration example performs multiple on-chain writes. Set IDENTITY_RUN_WRITE_EXAMPLE=true only after reviewing the configured signer, chain, domains, and gas policy.'
+    );
+  }
+  const baseDomain = env.AGENT_DOMAIN?.trim();
+  if (!baseDomain) {
+    throw new Error(
+      'AGENT_DOMAIN is required; this write example never registers placeholder domains.'
+    );
+  }
+
   console.log('='.repeat(80));
   console.log('ERC-8004 Identity SDK - Integration Test');
   console.log('='.repeat(80));
@@ -45,7 +60,7 @@ async function main() {
     version: '1.0.0',
     description: 'ERC-8004 integration test agent',
   })
-    .use(wallets({ config: walletsFromEnv() }))
+    .use(wallets({ config: walletsFromEnv(undefined, env) }))
     .build();
 
   console.log('Runtime created with wallet configuration');
@@ -57,8 +72,6 @@ async function main() {
   console.log('-'.repeat(80));
 
   // Register Agent 1 (main agent)
-  const env = typeof process !== 'undefined' ? process.env : {};
-  const baseDomain = env.AGENT_DOMAIN || 'test-agent.example.com';
   const agent1Domain = baseDomain;
   const agent2Domain = `client.${baseDomain}`;
 
@@ -638,7 +651,9 @@ async function main() {
   console.log('='.repeat(80));
 }
 
-main().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  runFullIdentityIntegration().catch(error => {
+    console.error('Fatal error:', error);
+    process.exitCode = 1;
+  });
+}

@@ -115,6 +115,35 @@ describe('identity extension runtime state', () => {
     );
   });
 
+  it('resolves read-only identity configuration without a wallet', async () => {
+    const extension = identity({
+      config: {
+        domain: 'agent.example.com',
+        chainId: 84532,
+        rpcUrl: 'http://localhost:8545',
+        registrationDiscovery: {
+          fetch: async () => new Response(null, { status: 404 }),
+        },
+      },
+    });
+
+    const slice = await extension.build(makeContext());
+
+    expect(slice.identity?.result?.didRegister).not.toBe(true);
+    expect(slice.identity?.result?.clients?.identity).toBeDefined();
+  });
+
+  it('treats an isolated false registration default as unconfigured', async () => {
+    const extension = identity({
+      config: { autoRegister: false },
+    });
+
+    const slice = await extension.build(makeContext());
+
+    expect(slice.identity).toBeUndefined();
+    expect(slice.trust).toBeUndefined();
+  });
+
   it('uses a developer-only wallet instead of skipping identity resolution', async () => {
     const context = makeContext();
     let walletClientRequests = 0;
@@ -142,6 +171,9 @@ describe('identity extension runtime state', () => {
         chainId: 84532,
         rpcUrl: 'http://localhost:8545',
         autoRegister: false,
+        registrationDiscovery: {
+          fetch: async () => new Response(null, { status: 404 }),
+        },
       },
     });
 

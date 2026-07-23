@@ -12,6 +12,9 @@ import type {
   ListTasksResponse,
   A2AInvokeOptions,
   TaskAccess,
+  SendMessageOptions,
+  TaskSettlementMetadata,
+  TaskStatus,
 } from '@lucid-agents/types/a2a';
 
 import { fetchAgentCard, findSkill } from './card';
@@ -41,6 +44,113 @@ function normalizeIdempotencyKey(
     throw new Error('Idempotency key must contain 20 to 256 characters');
   }
   return key;
+}
+
+function normalizeTaskAccessToken(
+  value: string | undefined
+): string | undefined {
+  if (value === undefined) return undefined;
+  const token = value.trim();
+  if (token.length < 20 || token.length > 256) {
+    throw new Error('Task access token must contain 20 to 256 characters');
+  }
+  return token;
+}
+
+const TASK_STATUSES = new Set<TaskStatus>([
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+type TaskCreationErrorDetails = {
+  accessToken: string;
+  idempotencyKey: string;
+  cause?: unknown;
+  response?: Response;
+  body?: unknown;
+  taskId?: string;
+  taskStatus?: TaskStatus;
+  settlement?: TaskSettlementMetadata;
+};
+
+/**
+ * Recoverable task-creation failure. The capability and idempotency key are
+ * always exposed so a caller can inspect/list durable tasks before retrying.
+ */
+export class TaskCreationError extends Error {
+  readonly accessToken: string;
+  readonly idempotencyKey: string;
+  readonly cause?: unknown;
+  readonly response?: Response;
+  readonly responseStatus?: number;
+  readonly responseStatusText?: string;
+  readonly body?: unknown;
+  readonly taskId?: string;
+  readonly taskStatus?: TaskStatus;
+  readonly settlement?: TaskSettlementMetadata;
+
+  constructor(message: string, details: TaskCreationErrorDetails) {
+    super(message);
+    this.name = 'TaskCreationError';
+    this.accessToken = details.accessToken;
+    this.idempotencyKey = details.idempotencyKey;
+    this.cause = details.cause;
+    this.response = details.response;
+    this.responseStatus = details.response?.status;
+    this.responseStatusText = details.response?.statusText;
+    this.body = details.body;
+    this.taskId = details.taskId;
+    this.taskStatus = details.taskStatus;
+    this.settlement = details.settlement;
+  }
+}
+
+function taskSettlementMetadata(
+  response: Response
+): TaskSettlementMetadata | undefined {
+  const paymentReceipt = response.headers.get('Payment-Receipt') ?? undefined;
+  const paymentResponse = response.headers.get('Payment-Response') ?? undefined;
+  const xPaymentResponse =
+    response.headers.get('X-Payment-Response') ?? undefined;
+  if (!paymentReceipt && !paymentResponse && !xPaymentResponse) {
+    return undefined;
+  }
+  return {
+    ...(paymentReceipt ? { paymentReceipt } : {}),
+    ...(paymentResponse ? { paymentResponse } : {}),
+    ...(xPaymentResponse ? { xPaymentResponse } : {}),
+  };
+}
+
+function taskCreationBody(value: unknown): {
+  taskId?: string;
+  taskStatus?: TaskStatus;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const taskId =
+    typeof record.taskId === 'string' && record.taskId.trim()
+      ? record.taskId
+      : undefined;
+  const taskStatus =
+    typeof record.status === 'string' &&
+    TASK_STATUSES.has(record.status as TaskStatus)
+      ? (record.status as TaskStatus)
+      : undefined;
+  return {
+    ...(taskId ? { taskId } : {}),
+    ...(taskStatus ? { taskStatus } : {}),
+  };
+}
+
+async function readTaskCreationBody(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -202,11 +312,7 @@ export async function sendMessage(
   skillId: string,
   input: unknown,
   fetchImpl?: FetchFunction,
-  options?: {
-    contextId?: string;
-    metadata?: Record<string, unknown>;
-    accessToken?: string;
-  }
+  options?: SendMessageOptions
 ): Promise<SendMessageResponse> {
   const skill = findSkill(card, skillId);
   if (!skill) {
@@ -236,24 +342,103 @@ export async function sendMessage(
   };
 
   const url = resolveAgentRoute(baseUrl, 'tasks');
-  const accessToken = options?.accessToken ?? globalThis.crypto.randomUUID();
-  const response = await fetchFn(url.toString(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Task-Access-Token': accessToken,
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const accessToken =
+    normalizeTaskAccessToken(options?.accessToken) ??
+    globalThis.crypto.randomUUID();
+  const idempotencyKey =
+    normalizeIdempotencyKey(options?.idempotencyKey) ??
+    globalThis.crypto.randomUUID();
+  let response: Response;
+  try {
+    response = await fetchFn(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': accessToken,
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (cause) {
+    throw new TaskCreationError('Task creation request failed', {
+      accessToken,
+      idempotencyKey,
+      cause,
+    });
+  }
 
+  const settlement = taskSettlementMetadata(response);
+  let recoveryResponse: Response;
+  try {
+    recoveryResponse = response.clone();
+  } catch (cause) {
+    throw new TaskCreationError(
+      'Task creation response could not be inspected',
+      {
+        accessToken,
+        idempotencyKey,
+        cause,
+        response,
+        settlement,
+      }
+    );
+  }
+  const body = await readTaskCreationBody(response);
+  const capability = taskCreationBody(body);
   if (!response.ok) {
-    throw new Error(
-      `Task creation failed: ${response.status} ${response.statusText}`
+    throw new TaskCreationError(
+      `Task creation failed: ${response.status} ${response.statusText}`,
+      {
+        accessToken,
+        idempotencyKey,
+        response: recoveryResponse,
+        body,
+        settlement,
+        ...capability,
+      }
     );
   }
 
-  const result = (await response.json()) as SendMessageResponse;
-  return { ...result, accessToken: result.accessToken ?? accessToken };
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    Array.isArray(body) ||
+    !capability.taskId ||
+    !capability.taskStatus
+  ) {
+    throw new TaskCreationError(
+      'Task creation returned an invalid capability response',
+      {
+        accessToken,
+        idempotencyKey,
+        response: recoveryResponse,
+        body,
+        settlement,
+        ...capability,
+      }
+    );
+  }
+  const result = body as Partial<SendMessageResponse>;
+  if (result.accessToken && result.accessToken !== accessToken) {
+    throw new TaskCreationError(
+      'Task creation returned a mismatched owner capability',
+      {
+        accessToken,
+        idempotencyKey,
+        response: recoveryResponse,
+        body,
+        settlement,
+        ...capability,
+      }
+    );
+  }
+  return {
+    taskId: capability.taskId,
+    accessToken,
+    status: capability.taskStatus,
+    idempotencyKey,
+    ...(settlement ? { settlement } : {}),
+  };
 }
 
 /**
@@ -401,10 +586,11 @@ export async function fetchAndSendMessage(
   baseUrl: string,
   skillId: string,
   input: unknown,
-  fetchImpl?: FetchFunction
+  fetchImpl?: FetchFunction,
+  options?: SendMessageOptions
 ): Promise<SendMessageResponse> {
   const card = await fetchAgentCard(baseUrl, fetchImpl);
-  return sendMessage(card, skillId, input, fetchImpl);
+  return sendMessage(card, skillId, input, fetchImpl, options);
 }
 
 /**

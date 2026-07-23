@@ -173,8 +173,31 @@ export type SendMessageRequest = {
   metadata?: Record<string, unknown>;
 };
 
+/** Settlement evidence copied from task-creation response headers. */
+export type TaskSettlementMetadata = {
+  paymentReceipt?: string;
+  paymentResponse?: string;
+  xPaymentResponse?: string;
+};
+
+export type SendMessageOptions = {
+  contextId?: string;
+  metadata?: Record<string, unknown>;
+  /** Reuse a capability to group tasks under the same owner. */
+  accessToken?: string;
+  /**
+   * Stable key used by payment verifiers to deduplicate retries. The client
+   * generates one when omitted and returns it on success or failure.
+   */
+  idempotencyKey?: string;
+};
+
 export type SendMessageResponse = TaskAccess & {
-  status: 'running';
+  status: TaskStatus;
+  /** Key sent with this creation attempt for safe payment reconciliation. */
+  idempotencyKey: string;
+  /** Settlement evidence returned by the selected payment rail. */
+  settlement?: TaskSettlementMetadata;
 };
 
 export type GetTaskResponse = Task;
@@ -193,23 +216,53 @@ export type TaskUpdateEvent = {
 export type StoredTask = {
   task: Task;
   ownerHash: string;
+  /**
+   * Expiry for a capacity reservation that has not started execution yet.
+   * Durable stores must reap expired admissions before enforcing capacity.
+   */
+  admissionExpiresAt?: number;
   /** Fenced execution lease. A replacement worker may claim it after expiry. */
   executionLease?: {
     ownerId: string;
     expiresAt: number;
+    phase: 'prepared' | 'active';
   };
 };
 
 /** Atomic persistence port for A2A task state, ownership, and update delivery. */
 export type TaskStore = {
+  /**
+   * Process-local stores cannot back paid tasks. Durable stores must preserve
+   * task records and atomic leases across worker restarts.
+   */
+  readonly durability: 'process' | 'durable';
+  /** Terminalize abandoned admissions and return the number reaped. */
+  reapExpiredAdmissions: (now: number) => Promise<number>;
   create: (record: StoredTask, event: TaskUpdateEvent) => Promise<void>;
   get: (taskId: string) => Promise<StoredTask | undefined>;
   list: (
     ownerHash: string,
     filters?: ListTasksRequest
   ) => Promise<ListTasksResponse>;
-  /** Atomically claim or recover execution of a running task. */
+  /**
+   * Atomically create a prepared claim or recover an expired active lease.
+   * An expired admission must be terminalized rather than claimed.
+   */
   claimExecution: (
+    taskId: string,
+    ownerId: string,
+    expiresAt: number,
+    now: number
+  ) => Promise<Task | undefined>;
+  /** Keep an in-flight prepared claim alive while authorization is pending. */
+  renewExecutionClaim: (
+    taskId: string,
+    ownerId: string,
+    expiresAt: number,
+    now: number
+  ) => Promise<Task | undefined>;
+  /** Atomically turn a prepared claim into an active execution lease. */
+  activateExecution: (
     taskId: string,
     ownerId: string,
     expiresAt: number,
@@ -243,12 +296,26 @@ export type StartTaskOptions = {
 export type ReserveTaskOptions = Pick<
   StartTaskOptions,
   'taskId' | 'contextId' | 'accessToken'
->;
+> & {
+  /** Reap this reservation if no execution claim starts before the TTL. */
+  admissionTtlMs?: number;
+};
 export type ExecuteTaskOptions = Pick<StartTaskOptions, 'execute' | 'mapError'>;
+
+/** Two-phase execution claim held while payment authorization finalizes. */
+export type PreparedTaskExecution = {
+  readonly task: Task;
+  /** Revalidate and extend the prepared claim before settlement begins. */
+  renew: () => Promise<void>;
+  activate: (options: ExecuteTaskOptions) => Promise<Task>;
+  release: () => void;
+};
 
 /** A2A-owned task state machine used by HTTP and other transports. */
 export type A2ATaskRuntime = {
+  readonly durability: 'process' | 'durable';
   reserve: (options: ReserveTaskOptions) => Promise<Task>;
+  prepare: (taskId: string) => Promise<PreparedTaskExecution>;
   execute: (taskId: string, options: ExecuteTaskOptions) => Promise<Task>;
   start: (options: StartTaskOptions) => Promise<Task>;
   get: (taskId: string, accessToken: string) => Promise<Task | undefined>;
@@ -310,6 +377,8 @@ export type CreateA2ARuntimeOptions = {
     maxTasks?: number;
     retentionMs?: number;
     maxRunMs?: number;
+    /** Lease renewed while authorization is in flight before execution starts. */
+    admissionLeaseMs?: number;
   };
 };
 
@@ -358,12 +427,7 @@ export type A2AClient = {
     skillId: string,
     input: unknown,
     fetch?: FetchFunction,
-    options?: {
-      contextId?: string;
-      metadata?: Record<string, unknown>;
-      /** Reuse a capability to group tasks under the same owner. */
-      accessToken?: string;
-    }
+    options?: SendMessageOptions
   ) => Promise<SendMessageResponse>;
 
   /**
@@ -392,7 +456,8 @@ export type A2AClient = {
     baseUrl: string,
     skillId: string,
     input: unknown,
-    fetch?: FetchFunction
+    fetch?: FetchFunction,
+    options?: SendMessageOptions
   ) => Promise<SendMessageResponse>;
 
   /**

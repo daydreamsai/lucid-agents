@@ -391,13 +391,16 @@ When making changes that should be included in release notes:
 
 Release workflow:
 
-```bash
-# 1. Version packages (updates package.json and CHANGELOG.md)
-bun run release:version
+1. Merge the changeset with the implementation.
+2. Review and merge the **Version Packages** pull request after CI succeeds.
+3. Wait for CI on that committed version bump; the release bot publishes the
+   exact verified `master` commit.
 
-# 2. Build and publish to npm
-bun run release:publish
-```
+The manual **Release** workflow is recovery-only. Live mode refuses pending
+changesets. Dry-run mode may version an ephemeral checkout for build and pack
+validation, but cannot publish it. Local `bun run release` and
+`bun run release:publish` require CI release attestation and are not a
+version-and-publish shortcut.
 
 ## Code Standards
 

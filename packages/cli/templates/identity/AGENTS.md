@@ -9,18 +9,38 @@ registration, trust metadata, and OASF discovery.
 The generated agent follows this pattern:
 
 ```ts
+const autoRegisterIdentity = process.env.IDENTITY_AUTO_REGISTER === 'true';
+const identityChainId = Number(process.env.CHAIN_ID);
+const isIdentityMainnet = identityChainId === 1;
+if (
+  autoRegisterIdentity &&
+  isIdentityMainnet &&
+  process.env.IDENTITY_ALLOW_MAINNET_REGISTRATION !== 'true'
+) {
+  throw new Error('Mainnet identity registration requires confirmation');
+}
+
+const identityWalletEnv = {
+  ...process.env,
+  AGENT_WALLET_RPC_URL: process.env.RPC_URL,
+  AGENT_WALLET_CHAIN_ID: process.env.CHAIN_ID,
+  DEVELOPER_WALLET_RPC_URL: process.env.RPC_URL,
+  DEVELOPER_WALLET_CHAIN_ID: process.env.CHAIN_ID,
+};
+const walletConfig = walletsFromEnv(undefined, identityWalletEnv);
+
 const agent = await createAgent({
   name: process.env.AGENT_NAME ?? 'my-agent',
   version: process.env.AGENT_VERSION ?? '0.1.0',
   description: process.env.AGENT_DESCRIPTION,
 })
-  .use(wallets({ config: walletsFromEnv() }))
+  .use(wallets({ config: walletConfig }))
   .use(payments({ config: paymentsFromEnv() }))
   .use(
     identity({
       config: {
         ...identityFromEnv(),
-        autoRegister: process.env.IDENTITY_AUTO_REGISTER === 'true',
+        autoRegister: autoRegisterIdentity,
         registration: registrationOptions,
       },
     })
@@ -47,27 +67,62 @@ export const validationClient = result?.clients?.validation;
 The validation registry client is deprecated and is not created by the default
 bootstrap path; do not make normal application startup depend on it.
 
-If auto-registration is enabled and no agent wallet is available, build fails
-closed. An empty payments environment is allowed until an entrypoint declares a
-price.
+The template resolves `walletConfig` once, explicitly binds both supported
+local signer roles to the identity `RPC_URL` and `CHAIN_ID`, and runs identity
+registration preflight before building. If auto-registration is enabled and no
+developer or agent wallet is available, build fails closed. Ethereum mainnet
+additionally requires `IDENTITY_ALLOW_MAINNET_REGISTRATION=true`, derives the
+configured local signer address, and requires a readable nonzero native-token
+balance for gas. An empty payments environment is allowed until an entrypoint
+declares a price.
 
 ## Required identity configuration
 
 ```dotenv
 AGENT_NAME=my-agent
 AGENT_DOMAIN=agent.example.com
-RPC_URL=https://...
+RPC_URL=https://sepolia.base.org
 CHAIN_ID=84532
-AGENT_WALLET_PRIVATE_KEY=0x...
+IDENTITY_AGENT_ID=
 IDENTITY_AUTO_REGISTER=false
+IDENTITY_ALLOW_MAINNET_REGISTRATION=false
+
+# Configure only for an intentional registration run.
+# AGENT_WALLET_TYPE=local
+AGENT_WALLET_PRIVATE_KEY=
 ```
 
 The agent wallet signs identity transactions. A developer wallet is optional
 and should be configured only when the application needs separate contract
 operations. Never place either private key in browser-visible environment
-variables. Enable auto-registration only after verifying the chain, registry,
-domain, hosted registration URI, and gas funding; the current wizard default
-must be reviewed rather than accepted blindly.
+variables. The wizard defaults to Base Sepolia with auto-registration disabled,
+so it neither requests nor emits signer secrets and the generated project boots
+without a signer or identity write. The agent-key prompt appears only when
+registration is explicitly enabled; configure a separate developer key manually
+when the application actually needs one. Enable registration only after
+verifying the chain, registry, domain, hosted registration URI, signer, and gas
+funding.
+
+When `IDENTITY_AGENT_ID` is set, the identity extension reads `ownerOf` and
+`tokenURI` directly. When it is empty, the extension performs a bounded fetch of
+`AGENT_DOMAIN/.well-known/agent-registration.json`, requires a registration for
+the configured chain and registry, then verifies the discovered ID on-chain.
+Neither path requires a signer. For HTTP(S) records, the on-chain URI origin
+must match `AGENT_DOMAIN`. The scaffold fails closed for malformed, mismatched,
+non-HTTP, or ambiguous discovery state; it never turns a read failure into a
+write.
+
+The generated registration path currently preflights a local private-key signer.
+Its nonzero-balance check is fail-closed but cannot guarantee the final gas fee;
+review current gas conditions before the intentional registration run.
+
+For Ethereum mainnet, startup requires a second explicit acknowledgement:
+
+```dotenv
+CHAIN_ID=1
+IDENTITY_AUTO_REGISTER=true
+IDENTITY_ALLOW_MAINNET_REGISTRATION=true
+```
 
 Identity registration is EVM-only. Payment receiving is independent and may
 use an EVM or Solana network.
@@ -147,8 +202,9 @@ Before enabling auto-registration on mainnet:
 3. run once on a testnet and inspect the transaction receipt;
 4. publish and fetch the registration document;
 5. fetch the agent card and OASF record from the deployed origin;
-6. disable automatic registration if deployment restarts should never submit a
-   transaction unexpectedly.
+6. set `IDENTITY_ALLOW_MAINNET_REGISTRATION=true` only for the reviewed
+   registration run;
+7. disable automatic registration before normal deployment restarts.
 
 ## Verification
 

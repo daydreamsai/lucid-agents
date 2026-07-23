@@ -48,6 +48,8 @@
   },
   "devDependencies": {
     "@lucid-agents/a2a": "workspace:*",
+    "@lucid-agents/mpp": "workspace:*",
+    "mppx": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "zod": "catalog:"

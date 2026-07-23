@@ -5,8 +5,8 @@ type NpmFailureContext = {
 };
 
 export function getPackageScope(packageName: string): string | undefined {
-  if (!packageName.startsWith("@")) return undefined;
-  const slashIndex = packageName.indexOf("/");
+  if (!packageName.startsWith('@')) return undefined;
+  const slashIndex = packageName.indexOf('/');
   if (slashIndex <= 1) return undefined;
   return packageName.slice(0, slashIndex);
 }
@@ -21,9 +21,9 @@ export function describeNpmAccessFailure({
       `NPM_TOKEN is missing or invalid.`,
       packageName
         ? `npm access preflight failed for ${packageName}.`
-        : "npm access preflight failed.",
-      "Use an npm automation token with publish access to this scope.",
-    ].join(" ");
+        : 'npm access preflight failed.',
+      'Use an npm automation token with publish access to this scope.',
+    ].join(' ');
   }
 
   if (
@@ -35,9 +35,9 @@ export function describeNpmAccessFailure({
       `NPM_TOKEN authenticates, but it lacks collaborator or publish access for ${scope}.`,
       packageName
         ? `The preflight probe against ${packageName} was rejected by npm.`
-        : "The publish access probe was rejected by npm.",
+        : 'The publish access probe was rejected by npm.',
       `Use a token from an npm owner or package collaborator that can publish ${scope} packages.`,
-    ].join(" ");
+    ].join(' ');
   }
 
   return undefined;
@@ -63,26 +63,36 @@ export function describeNpmPublishFailure({
       `npm returned a PUT 404 while publishing ${scope} packages.`,
       `For scoped packages that already exist on npm, this is likely a permissions problem with NPM_TOKEN rather than missing package metadata.`,
       `Verify that the token belongs to an npm owner or collaborator with publish access to ${scope}.`,
-    ].join(" ");
+    ].join(' ');
   }
 
   return undefined;
 }
 
 export function partitionPublishArgs(argv: string[]): {
+  dryRun: boolean;
   preflightOnly: boolean;
   passthroughArgs: string[];
 } {
   const passthroughArgs: string[] = [];
+  let dryRun = false;
   let preflightOnly = false;
 
   for (const arg of argv) {
-    if (arg === "--preflight-only") {
+    if (arg === '--dry-run') {
+      dryRun = true;
+      continue;
+    }
+    if (arg === '--preflight-only') {
       preflightOnly = true;
       continue;
     }
     passthroughArgs.push(arg);
   }
 
-  return { preflightOnly, passthroughArgs };
+  if (dryRun && preflightOnly) {
+    throw new Error('--dry-run and --preflight-only cannot be combined');
+  }
+
+  return { dryRun, preflightOnly, passthroughArgs };
 }

@@ -1,3 +1,4 @@
+export type { IdentityAgentId } from './agent-id';
 export * from './config';
 export type { IdentityConfig } from './env';
 export { identityFromEnv } from './env';

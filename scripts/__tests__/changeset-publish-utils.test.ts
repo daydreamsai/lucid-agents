@@ -60,13 +60,29 @@ describe('partitionPublishArgs', () => {
     const result = partitionPublishArgs(['--preflight-only', '--tag', 'next']);
 
     expect(result.preflightOnly).toBe(true);
+    expect(result.dryRun).toBe(false);
     expect(result.passthroughArgs).toEqual(['--tag', 'next']);
+  });
+
+  test('extracts dry-run without passing it to changesets', () => {
+    const result = partitionPublishArgs(['--dry-run']);
+
+    expect(result.preflightOnly).toBe(false);
+    expect(result.dryRun).toBe(true);
+    expect(result.passthroughArgs).toEqual([]);
+  });
+
+  test('rejects conflicting non-publishing modes', () => {
+    expect(() =>
+      partitionPublishArgs(['--dry-run', '--preflight-only'])
+    ).toThrow('--dry-run and --preflight-only cannot be combined');
   });
 
   test('passes through regular changeset publish args unchanged', () => {
     const result = partitionPublishArgs(['--tag', 'beta']);
 
     expect(result.preflightOnly).toBe(false);
+    expect(result.dryRun).toBe(false);
     expect(result.passthroughArgs).toEqual(['--tag', 'beta']);
   });
 });

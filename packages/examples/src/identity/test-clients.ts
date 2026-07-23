@@ -1,10 +1,23 @@
-/** Test script to verify the default identity and reputation clients. */
+/**
+ * Write-enabled registry client probe.
+ *
+ * Set IDENTITY_RUN_WRITE_EXAMPLE=true only for an intentional registration
+ * against the configured chain and signer.
+ */
 
 import { createAgent } from '@lucid-agents/core';
 import { createAgentIdentity } from '@lucid-agents/identity';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-async function main() {
+export async function runIdentityClientProbe(
+  env: Record<string, string | undefined> = process.env
+): Promise<void> {
+  if (env.IDENTITY_RUN_WRITE_EXAMPLE !== 'true') {
+    throw new Error(
+      'This client probe may register an on-chain identity. Set IDENTITY_RUN_WRITE_EXAMPLE=true only after reviewing the configured signer, chain, domain, and gas policy.'
+    );
+  }
+
   console.log('Testing ERC-8004 Registry Clients Integration\n');
 
   // Create a minimal runtime with wallet configuration
@@ -13,13 +26,13 @@ async function main() {
     version: '1.0.0',
     description: 'Test registry clients',
   })
-    .use(wallets({ config: walletsFromEnv() }))
+    .use(wallets({ config: walletsFromEnv(undefined, env) }))
     .build();
 
   const identity = await createAgentIdentity({
     runtime: agent,
     autoRegister: true,
-    env: process.env as Record<string, string | undefined>,
+    env,
   });
 
   console.log('Status:', identity.status);
@@ -82,7 +95,9 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error('Error:', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  runIdentityClientProbe().catch(error => {
+    console.error('Error:', error);
+    process.exitCode = 1;
+  });
+}

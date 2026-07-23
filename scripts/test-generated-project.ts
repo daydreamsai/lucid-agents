@@ -25,6 +25,8 @@ const ADAPTERS = [
   'next',
 ] as const;
 type Adapter = (typeof ADAPTERS)[number];
+const TEMPLATES = ['blank', 'identity'] as const;
+type TemplateId = (typeof TEMPLATES)[number];
 const UI_ADAPTERS = ['hono', 'express', 'tanstack-ui', 'next'] as const;
 const PRESETS = [
   'dossier',
@@ -36,6 +38,7 @@ type UiAdapter = (typeof UI_ADAPTERS)[number];
 type VerificationCase = {
   adapter: Adapter;
   preset?: ServiceUiPreset;
+  template: TemplateId;
 };
 
 const repoRoot = resolve(import.meta.dir, '..');
@@ -129,14 +132,14 @@ async function verifyAdapter(
   root: string,
   packed: Map<string, string>
 ): Promise<void> {
-  const { adapter, preset } = verification;
-  const projectName = `generated-${adapter}${preset ? `-${preset}` : ''}`;
+  const { adapter, preset, template } = verification;
+  const projectName = `generated-${template}-${adapter}${preset ? `-${preset}` : ''}`;
   const cliArguments = [
     'bun',
     join(repoRoot, 'packages/cli/dist/index.js'),
     projectName,
     `--adapter=${adapter}`,
-    '--template=blank',
+    `--template=${template}`,
     '--non-interactive',
     '--no-install',
   ];
@@ -144,8 +147,11 @@ async function verifyAdapter(
   await run(cliArguments, root);
   const projectDir = join(root, projectName);
   try {
-    if (preset && isUiAdapter(adapter)) {
+    if (template === 'blank' && preset && isUiAdapter(adapter)) {
       await configureServiceUiKitchenSinkProject(projectDir, adapter);
+    }
+    if (template === 'identity') {
+      await verifyIdentityDefaults(projectDir);
     }
     const serviceUiConfigPath = join(projectDir, 'service-ui.config.ts');
     if (preset) {
@@ -163,7 +169,11 @@ async function verifyAdapter(
     await run(['bun', 'install', '--no-cache'], projectDir);
     await run(['bun', 'run', 'type-check'], projectDir);
     await run(['bun', 'run', 'build'], projectDir);
-    if (adapter === 'hono') {
+    if (template === 'identity') {
+      await verifyIdentityWalletRouting(projectDir);
+      await verifyIdentityMainnetPreflight(projectDir);
+    }
+    if (template === 'blank' && adapter === 'hono') {
       await run(['bun', 'run', 'deploy', '--', '--help'], projectDir);
       await run(
         [
@@ -232,7 +242,7 @@ async function verifyAdapter(
           `${adapter} Agent Card identity was ${card.name ?? 'missing'}, expected ${projectName}`
         );
       }
-      if (preset) {
+      if (template === 'blank' && preset) {
         const paymentMethods = new Set(
           (card.payments ?? []).map(payment => payment.method)
         );
@@ -284,11 +294,12 @@ async function verifyAdapter(
           throw new Error(`${adapter} static service page included JavaScript`);
         }
         if (
-          !html.includes('summarize') ||
-          !html.includes('attest') ||
-          !html.includes('Payment method') ||
-          !html.includes('data-region="endpoints"') ||
-          html.includes('Public Agent Card JSON')
+          template === 'blank' &&
+          (!html.includes('summarize') ||
+            !html.includes('attest') ||
+            !html.includes('Payment method') ||
+            !html.includes('data-region="endpoints"') ||
+            html.includes('Public Agent Card JSON'))
         ) {
           throw new Error(
             `${adapter} ${preset} endpoint directory did not match the minimal UI contract`
@@ -307,6 +318,244 @@ async function verifyAdapter(
   }
 }
 
+async function verifyIdentityDefaults(projectDir: string): Promise<void> {
+  const env = await readFile(join(projectDir, '.env'), 'utf8');
+  for (const expected of [
+    'RPC_URL=https://sepolia.base.org',
+    'CHAIN_ID=84532',
+    'IDENTITY_AGENT_ID=',
+    'IDENTITY_AUTO_REGISTER=false',
+    'PAYMENTS_NETWORK=base-sepolia',
+  ]) {
+    if (!env.includes(expected)) {
+      throw new Error(`identity scaffold did not include ${expected}`);
+    }
+  }
+  if (
+    env.includes('AGENT_WALLET_TYPE=local') ||
+    env.includes('AGENT_WALLET_PRIVATE_KEY=') ||
+    env.includes('DEVELOPER_WALLET_PRIVATE_KEY=') ||
+    env.includes('IDENTITY_ALLOW_MAINNET_REGISTRATION=true')
+  ) {
+    throw new Error(
+      'identity scaffold emitted a signer secret or enabled a mainnet write'
+    );
+  }
+}
+
+async function verifyIdentityMainnetPreflight(
+  projectDir: string
+): Promise<void> {
+  const envPath = join(projectDir, '.env');
+  const nestedAgentPath = join(projectDir, 'src/lib/agent.ts');
+  const agentPath = (await Bun.file(nestedAgentPath).exists())
+    ? nestedAgentPath
+    : join(projectDir, 'lib/agent.ts');
+  const originalEnv = await readFile(envPath, 'utf8');
+
+  try {
+    for (const chainId of ['1']) {
+      const mainnetBase = originalEnv
+        .replace(/^CHAIN_ID=.*$/mu, `CHAIN_ID=${chainId}`)
+        .replace(
+          /^IDENTITY_AUTO_REGISTER=.*$/mu,
+          'IDENTITY_AUTO_REGISTER=true'
+        );
+      const mainnetEnv = /^IDENTITY_ALLOW_MAINNET_REGISTRATION=/mu.test(
+        mainnetBase
+      )
+        ? mainnetBase.replace(
+            /^IDENTITY_ALLOW_MAINNET_REGISTRATION=.*$/mu,
+            'IDENTITY_ALLOW_MAINNET_REGISTRATION=false'
+          )
+        : `${mainnetBase}${mainnetBase.endsWith('\n') ? '' : '\n'}IDENTITY_ALLOW_MAINNET_REGISTRATION=false\n`;
+      await writeFile(envPath, mainnetEnv, 'utf8');
+
+      const { exitCode, output } = await runIdentityAgentProbe(
+        projectDir,
+        agentPath
+      );
+      if (exitCode === undefined) {
+        throw new Error(
+          `identity mainnet preflight did not stop startup for CHAIN_ID=${chainId}`
+        );
+      }
+      if (
+        exitCode === 0 ||
+        !output.includes('IDENTITY_ALLOW_MAINNET_REGISTRATION=true')
+      ) {
+        throw new Error(
+          `identity mainnet preflight was not actionable for CHAIN_ID=${chainId}\n${output}`
+        );
+      }
+    }
+
+    const rpc = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const payload = (await request.json()) as {
+          id?: number | string;
+          method?: string;
+        };
+        return Response.json({
+          jsonrpc: '2.0',
+          id: payload.id ?? 1,
+          result: payload.method === 'eth_chainId' ? '0x1' : '0x0',
+        });
+      },
+    });
+    try {
+      const acknowledgedBase = originalEnv
+        .replace(/^RPC_URL=.*$/mu, `RPC_URL=http://127.0.0.1:${rpc.port}`)
+        .replace(/^CHAIN_ID=.*$/mu, 'CHAIN_ID=1')
+        .replace(
+          /^IDENTITY_AUTO_REGISTER=.*$/mu,
+          'IDENTITY_AUTO_REGISTER=true'
+        );
+      const acknowledgedEnv = /^IDENTITY_ALLOW_MAINNET_REGISTRATION=/mu.test(
+        acknowledgedBase
+      )
+        ? acknowledgedBase.replace(
+            /^IDENTITY_ALLOW_MAINNET_REGISTRATION=.*$/mu,
+            'IDENTITY_ALLOW_MAINNET_REGISTRATION=true'
+          )
+        : `${acknowledgedBase}${acknowledgedBase.endsWith('\n') ? '' : '\n'}IDENTITY_ALLOW_MAINNET_REGISTRATION=true\n`;
+      const acknowledgedNoGas = /^AGENT_WALLET_PRIVATE_KEY=/mu.test(
+        acknowledgedEnv
+      )
+        ? acknowledgedEnv.replace(
+            /^AGENT_WALLET_PRIVATE_KEY=.*$/mu,
+            'AGENT_WALLET_PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001'
+          )
+        : `${acknowledgedEnv}${acknowledgedEnv.endsWith('\n') ? '' : '\n'}AGENT_WALLET_PRIVATE_KEY=0x0000000000000000000000000000000000000000000000000000000000000001\n`;
+      const withSignerType = /^AGENT_WALLET_TYPE=/mu.test(acknowledgedNoGas)
+        ? acknowledgedNoGas.replace(
+            /^AGENT_WALLET_TYPE=.*$/mu,
+            'AGENT_WALLET_TYPE=local'
+          )
+        : `${acknowledgedNoGas}${acknowledgedNoGas.endsWith('\n') ? '' : '\n'}AGENT_WALLET_TYPE=local\n`;
+      await writeFile(envPath, withSignerType, 'utf8');
+
+      const { exitCode, output } = await runIdentityAgentProbe(
+        projectDir,
+        agentPath
+      );
+      if (
+        exitCode === undefined ||
+        exitCode === 0 ||
+        !output.includes('has no native balance for gas')
+      ) {
+        throw new Error(
+          `acknowledged identity mainnet registration did not fail its gas preflight\n${output}`
+        );
+      }
+    } finally {
+      rpc.stop(true);
+    }
+  } finally {
+    await writeFile(envPath, originalEnv, 'utf8');
+  }
+}
+
+async function verifyIdentityWalletRouting(projectDir: string): Promise<void> {
+  const nestedAgentPath = join(projectDir, 'src/lib/agent.ts');
+  const agentPath = (await Bun.file(nestedAgentPath).exists())
+    ? nestedAgentPath
+    : join(projectDir, 'lib/agent.ts');
+  const observedMethods: string[] = [];
+  const rpc = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const raw = (await request.json()) as
+        | { id?: number | string; method?: string }
+        | Array<{ id?: number | string; method?: string }>;
+      const payloads = Array.isArray(raw) ? raw : [raw];
+      const responses = payloads.map(payload => {
+        if (payload.method) observedMethods.push(payload.method);
+        return payload.method === 'eth_chainId'
+          ? {
+              jsonrpc: '2.0',
+              id: payload.id ?? 1,
+              result: '0x14a34',
+            }
+          : {
+              jsonrpc: '2.0',
+              id: payload.id ?? 1,
+              error: {
+                code: -32_000,
+                message: 'intentional generated-wallet routing probe',
+              },
+            };
+      });
+      return Response.json(Array.isArray(raw) ? responses : responses[0]);
+    },
+  });
+
+  try {
+    const rpcUrl = `http://127.0.0.1:${rpc.port}`;
+    const { exitCode, output } = await runIdentityAgentProbe(
+      projectDir,
+      agentPath,
+      {
+        RPC_URL: rpcUrl,
+        CHAIN_ID: '84532',
+        AGENT_DOMAIN: 'routing-probe.example.com',
+        IDENTITY_AGENT_ID: '',
+        IDENTITY_AUTO_REGISTER: 'true',
+        IDENTITY_ALLOW_MAINNET_REGISTRATION: 'false',
+        AGENT_WALLET_TYPE: 'local',
+        AGENT_WALLET_PRIVATE_KEY:
+          '0x0000000000000000000000000000000000000000000000000000000000000001',
+        DEVELOPER_WALLET_PRIVATE_KEY: '',
+        // Deliberately conflicting values prove the template pins the signer
+        // transport to the identity registry network.
+        AGENT_WALLET_RPC_URL: 'http://127.0.0.1:1',
+        AGENT_WALLET_CHAIN_ID: '31337',
+      }
+    );
+    if (exitCode === undefined) {
+      throw new Error(
+        `identity wallet routing probe did not terminate\n${output}`
+      );
+    }
+    if (exitCode === 0 || observedMethods.length === 0) {
+      throw new Error(
+        `identity registration signer did not use RPC_URL/CHAIN_ID\n${output}`
+      );
+    }
+  } finally {
+    rpc.stop(true);
+  }
+}
+
+async function runIdentityAgentProbe(
+  projectDir: string,
+  agentPath: string,
+  env: Record<string, string> = {}
+): Promise<{ exitCode: number | undefined; output: string }> {
+  const child = Bun.spawn(['bun', agentPath], {
+    cwd: projectDir,
+    env: { ...Bun.env, ...env },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  const stdoutPromise = new Response(child.stdout).text();
+  const stderrPromise = new Response(child.stderr).text();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const exitCode = await Promise.race([
+    child.exited,
+    new Promise<undefined>(resolve => {
+      timeout = setTimeout(() => {
+        child.kill();
+        resolve(undefined);
+      }, 10_000);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+  const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
+  return { exitCode, output: `${stdout}\n${stderr}` };
+}
+
 function isUiAdapter(adapter: Adapter): adapter is UiAdapter {
   return UI_ADAPTERS.includes(adapter as UiAdapter);
 }
@@ -316,9 +565,9 @@ function requestedCases(): VerificationCase[] {
   if (requested.length === 0 || requested[0] === 'all') {
     return [
       ...UI_ADAPTERS.flatMap(adapter =>
-        PRESETS.map(preset => ({ adapter, preset }))
+        PRESETS.map(preset => ({ adapter, preset, template: 'blank' as const }))
       ),
-      { adapter: 'tanstack-headless' },
+      { adapter: 'tanstack-headless', template: 'blank' },
     ];
   }
 
@@ -328,23 +577,29 @@ function requestedCases(): VerificationCase[] {
       `Unknown adapter ${requested[0]}. Expected ${ADAPTERS.join(', ')}`
     );
   }
+  const template = (requested[2] ?? 'blank') as TemplateId;
+  if (!TEMPLATES.includes(template)) {
+    throw new Error(
+      `Unknown template ${requested[2]}. Expected ${TEMPLATES.join(', ')}`
+    );
+  }
   if (!isUiAdapter(adapter)) {
     if (requested[1] && requested[1] !== 'none') {
       throw new Error(`${adapter} is headless and does not accept a preset`);
     }
-    return [{ adapter }];
+    return [{ adapter, template }];
   }
 
   const requestedPreset = requested[1] ?? 'dossier';
   if (requestedPreset === 'all') {
-    return PRESETS.map(preset => ({ adapter, preset }));
+    return PRESETS.map(preset => ({ adapter, preset, template }));
   }
   if (!PRESETS.includes(requestedPreset as ServiceUiPreset)) {
     throw new Error(
       `Unknown preset ${requestedPreset}. Expected ${PRESETS.join(', ')}`
     );
   }
-  return [{ adapter, preset: requestedPreset as ServiceUiPreset }];
+  return [{ adapter, preset: requestedPreset as ServiceUiPreset, template }];
 }
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), 'lucid-generated-e2e-'));
@@ -358,7 +613,7 @@ try {
   for (const verification of requestedCases()) {
     await verifyAdapter(verification, temporaryRoot, packed);
     console.log(
-      `verified generated ${verification.adapter}${verification.preset ? ` ${verification.preset}` : ''} project from packed workspaces`
+      `verified generated ${verification.template} ${verification.adapter}${verification.preset ? ` ${verification.preset}` : ''} project from packed workspaces`
     );
   }
 } finally {

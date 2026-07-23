@@ -173,6 +173,12 @@ describe('verified incoming payment authorization', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('X-Application')).toBe('preserved');
       expect(response.headers.get('PAYMENT-RESPONSE')).toBeTruthy();
+      const recovered = admission.recoverCommittedResponse?.(
+        Response.json({ taskId: 'durable-task' })
+      );
+      expect(recovered?.headers.get('PAYMENT-RESPONSE')).toBe(
+        response.headers.get('PAYMENT-RESPONSE')
+      );
       await runtime.close();
     });
   });

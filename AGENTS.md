@@ -367,15 +367,13 @@ bun run build
 # or
 bun run build:packages
 
-# Version packages (for release)
+# Add release intent
 bun run changeset
-bun run release:version
 
-# Publish packages
-bun run release:publish
+# Versioning and publication happen through the reviewed Version Packages PR.
+# The release commands require CI attestation and are not a local version+publish shortcut.
 
-# Full release flow
-bun run release
+# Exercise ephemeral versioning/build/packing through the Release workflow's dry-run mode.
 ```
 
 ### Package-Level Commands
@@ -721,35 +719,22 @@ This prompts you for:
 
 Creates a file in `.changeset/` describing the change.
 
-### Versioning
+### Versioning and publishing
 
-```bash
-bun run release:version
-```
+1. Merge changesets to `master`.
+2. Wait for the **Version Packages** pull request created after successful CI.
+3. Review and merge that version PR.
+4. Wait for CI on the committed version bump. The release bot publishes that
+   exact verified commit.
 
-This:
+The manual **Release** workflow is a recovery path. Live mode rejects pending
+changesets and only publishes versions already committed on verified `master`.
+Its dry-run mode may apply `bun run release:version` in the ephemeral checkout
+to build and inspect package archives, but never publishes them.
 
-1. Reads all changeset files
-2. Updates package.json versions
-3. Updates CHANGELOG.md files
-4. Removes processed changeset files
-
-### Publishing
-
-```bash
-bun run release:publish
-```
-
-This:
-
-1. Builds all packages
-2. Publishes to npm
-
-**Full flow:**
-
-```bash
-bun run release  # version + publish
-```
+`bun run release` and `bun run release:publish` are CI-attested entrypoints;
+they intentionally fail outside a verified release job. Never locally combine
+`release:version` with an npm publish.
 
 ## Coding Standards
 

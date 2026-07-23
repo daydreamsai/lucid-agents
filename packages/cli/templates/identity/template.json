@@ -36,7 +36,7 @@
         "key": "IDENTITY_INCLUDE_A2A",
         "type": "confirm",
         "message": "Include A2A service in registration?",
-        "defaultValue": true
+        "defaultValue": false
       },
       {
         "key": "IDENTITY_A2A_ENDPOINT",
@@ -156,7 +156,8 @@
         "key": "PAYMENTS_FACILITATOR_AUTH",
         "type": "input",
         "message": "Facilitator auth token (optional; legacy fallback: DREAMS_AUTH_TOKEN)",
-        "defaultValue": ""
+        "defaultValue": "",
+        "sensitive": true
       },
       {
         "key": "PAYMENTS_NETWORK",
@@ -169,7 +170,7 @@
           { "value": "solana", "title": "Solana Mainnet" },
           { "value": "solana-devnet", "title": "Solana Devnet" }
         ],
-        "defaultValue": "ethereum"
+        "defaultValue": "base-sepolia"
       },
       {
         "key": "PAYMENTS_DESTINATION",
@@ -199,6 +200,7 @@
         "type": "input",
         "message": "Stripe secret key (required for Stripe destination mode)",
         "defaultValue": "",
+        "sensitive": true,
         "when": {
           "key": "PAYMENTS_DESTINATION",
           "equals": "stripe"
@@ -208,31 +210,62 @@
         "key": "RPC_URL",
         "type": "input",
         "message": "RPC URL (blockchain endpoint)",
-        "defaultValue": "https://eth.llamarpc.com"
+        "defaultValue": "https://sepolia.base.org"
       },
       {
         "key": "CHAIN_ID",
         "type": "input",
         "message": "Chain ID",
-        "defaultValue": "1"
+        "defaultValue": "84532"
+      },
+      {
+        "key": "IDENTITY_AGENT_ID",
+        "type": "input",
+        "message": "Existing ERC-8004 agent ID (blank discovers from the domain document)",
+        "defaultValue": ""
       },
       {
         "key": "IDENTITY_AUTO_REGISTER",
         "type": "confirm",
         "message": "Auto-register on ERC-8004 registry?",
-        "defaultValue": true
+        "defaultValue": false
+      },
+      {
+        "key": "IDENTITY_ALLOW_MAINNET_REGISTRATION",
+        "type": "confirm",
+        "message": "Allow identity registration on a mainnet chain?",
+        "defaultValue": false,
+        "when": {
+          "key": "IDENTITY_AUTO_REGISTER",
+          "equals": true
+        }
+      },
+      {
+        "key": "AGENT_WALLET_TYPE",
+        "type": "select",
+        "message": "Identity registration signer type",
+        "choices": [
+          {
+            "value": "local",
+            "title": "Local private key"
+          }
+        ],
+        "defaultValue": "local",
+        "when": {
+          "key": "IDENTITY_AUTO_REGISTER",
+          "equals": true
+        }
       },
       {
         "key": "AGENT_WALLET_PRIVATE_KEY",
         "type": "input",
         "message": "Agent wallet private key (required for identity registration)",
-        "defaultValue": ""
-      },
-      {
-        "key": "DEVELOPER_WALLET_PRIVATE_KEY",
-        "type": "input",
-        "message": "Developer wallet private key (optional, for contract interactions)",
-        "defaultValue": ""
+        "defaultValue": "",
+        "sensitive": true,
+        "when": {
+          "key": "IDENTITY_AUTO_REGISTER",
+          "equals": true
+        }
       }
     ]
   }

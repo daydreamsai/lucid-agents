@@ -17,6 +17,7 @@ type EntrypointAdmission =
       admitted: true;
       abort: () => Promise<void>;
       isCommitted?: () => boolean;
+      recoverCommittedResponse: (response: Response) => Response;
       finalize: (response: Response) => Promise<Response>;
     };
 
@@ -77,6 +78,16 @@ function missingRailResponse(
     },
     { status: 503 }
   );
+}
+
+function withPaymentReceipt(
+  response: Response,
+  receipt: string | undefined
+): Response {
+  if (!receipt) return response;
+  const decorated = new Response(response.body, response);
+  decorated.headers.set('Payment-Receipt', receipt);
+  return decorated;
 }
 
 /**
@@ -183,42 +194,68 @@ export async function authorizeEntrypointRequest(
       }
     );
     if (authorization.authorized === false) return authorization;
-    if (authorization.handled) {
-      return { authorized: false, response: authorization.handled };
-    }
     mppReceipt = authorization.receipt;
     mppPayer = authorization.payer;
     mppNetwork = authorization.network;
+    if (authorization.handled) {
+      return {
+        authorized: false,
+        response: withPaymentReceipt(authorization.handled, mppReceipt),
+      };
+    }
     subject = paymentSubject(mppPayer, mppNetwork) ?? subject;
   }
 
+  const decorate = (response: Response): Response =>
+    withPaymentReceipt(response, mppReceipt);
+
   if (runtime.payments && !reusedSIWxEntitlement) {
-    const authorization = await runtime.payments.authorize(
-      request,
-      entrypoint,
-      kind,
-      mppRequired
-        ? {
-            protocol: 'mpp',
-            payer: mppPayer,
-            amount: mppRequirement.amount,
-            currency: mppRequirement.currency,
-            network: mppNetwork,
-          }
-        : undefined
-    );
-    if (authorization.authorized === false) return authorization;
+    let authorization: Awaited<ReturnType<PaymentsRuntime['authorize']>>;
+    try {
+      authorization = await runtime.payments.authorize(
+        request,
+        entrypoint,
+        kind,
+        mppRequired
+          ? {
+              protocol: 'mpp',
+              payer: mppPayer,
+              amount: mppRequirement.amount,
+              currency: mppRequirement.currency,
+              network: mppNetwork,
+            }
+          : undefined
+      );
+    } catch (error) {
+      if (!mppReceipt) throw error;
+      return {
+        authorized: false,
+        response: decorate(
+          Response.json(
+            {
+              error: {
+                code: 'authorization_failed',
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Payment authorization failed',
+              },
+            },
+            { status: 503 }
+          )
+        ),
+      };
+    }
+    if (authorization.authorized === false) {
+      return {
+        authorized: false,
+        response: decorate(authorization.response),
+      };
+    }
     auth = authorization.auth ?? auth;
     subject = authorization.subject ?? authSubject(auth) ?? subject;
     admitPayments = authorization.admit;
   }
-
-  const decorate = (response: Response): Response => {
-    if (!mppReceipt) return response;
-    const decorated = new Response(response.body, response);
-    decorated.headers.set('Payment-Receipt', mppReceipt);
-    return decorated;
-  };
 
   return {
     authorized: true,
@@ -233,11 +270,23 @@ export async function authorizeEntrypointRequest(
             abort: async () => {},
             finalize: async (response: Response) => response,
           };
-      if (!admission.admitted) return admission;
+      if (!admission.admitted) {
+        return {
+          admitted: false,
+          response: decorate(admission.response),
+        };
+      }
       return {
         admitted: true,
         abort: admission.abort,
-        isCommitted: admission.isCommitted,
+        isCommitted:
+          mppReceipt || admission.isCommitted
+            ? () => Boolean(mppReceipt) || admission.isCommitted?.() === true
+            : undefined,
+        recoverCommittedResponse: response =>
+          decorate(
+            admission.recoverCommittedResponse?.(response) ?? response
+          ),
         finalize: async response =>
           decorate(await admission.finalize(response)),
       };

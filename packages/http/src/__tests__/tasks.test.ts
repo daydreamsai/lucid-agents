@@ -4,12 +4,16 @@ import type {
   A2ARuntime,
   SendMessageRequest,
   Task,
+  TaskStore,
   TaskStatus,
 } from '@lucid-agents/types/a2a';
 import type { AgentRuntime, EntrypointDef } from '@lucid-agents/types/core';
 import type { AgentHttpRuntime } from '@lucid-agents/types/http';
+import type { MppRuntime } from '@lucid-agents/types/mpp';
 import type { PaymentsRuntime } from '@lucid-agents/types/payments';
+import { buildChallengeResponse, decodeMppCredential } from '@lucid-agents/mpp';
 import { describe, expect, it } from 'bun:test';
+import { Challenge, Credential } from 'mppx';
 import { z } from 'zod';
 
 import { http } from '../index';
@@ -22,6 +26,16 @@ const meta = {
   description: 'Test agent',
 };
 const TASK_ACCESS_TOKEN = 'http-task-access-token-0001';
+
+function createDurableTestTaskStore(options: { maxTasks: number }): TaskStore {
+  return {
+    ...createInMemoryTaskStore(options),
+    durability: 'durable',
+    close() {
+      // The test store survives individual runtime instances.
+    },
+  };
+}
 
 function withTaskAccess(request: Request): Request {
   const headers = new Headers(request.headers);
@@ -110,7 +124,7 @@ const makeTestHandlers = (
   }>;
   runtime.a2a = {
     tasks: createTaskRuntime({
-      store: createInMemoryTaskStore({ maxTasks: 1_000 }),
+      store: createDurableTestTaskStore({ maxTasks: 1_000 }),
     }),
   } as A2ARuntime;
   const slice = ext.build({ meta, runtime }) as {
@@ -185,6 +199,1075 @@ describe('Task Operations', () => {
   });
 
   describe('POST /tasks - Create Task', () => {
+    it('rejects paid tasks before authorization on a process-local store', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createInMemoryTaskStore({ maxTasks: 1 }),
+      });
+      entrypoints.set('paid-process-task', {
+        key: 'paid-process-task',
+        price: '1',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      let authorizations = 0;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => {
+          authorizations += 1;
+          return {
+            authorized: true,
+            admit: async () => ({
+              admitted: true,
+              abort: async () => {},
+              finalize: async (response: Response) => response,
+            }),
+          };
+        },
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'paid-process-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe(
+        'durable_task_store_required'
+      );
+      expect(authorizations).toBe(0);
+      await runtime.a2a.tasks.close();
+    });
+
+    it('requires a caller-known capability for paid tasks before authorization', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('paid-task-without-capability', {
+        key: 'paid-task-without-capability',
+        price: '1',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      let authorizations = 0;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => {
+          authorizations += 1;
+          throw new Error('authorization must not run');
+        },
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skillId: 'paid-task-without-capability',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(401);
+      expect((await response.json()).error.code).toBe('task_access_required');
+      expect(authorizations).toBe(0);
+      await runtime.a2a.tasks.close();
+    });
+
+    it('continues to generate a capability for unpaid tasks', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('free-task-without-capability', {
+        key: 'free-task-without-capability',
+        handler: async () => ({ output: { ok: true } }),
+      });
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skillId: 'free-task-without-capability',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      const created = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+      };
+      expect(created.accessToken.length).toBeGreaterThanOrEqual(20);
+      expect(
+        await runtime.a2a.tasks.get(created.taskId, created.accessToken)
+      ).toBeDefined();
+      await runtime.a2a.tasks.close();
+    });
+
+    it('keeps unpaid tasks available on the default process-local store', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createInMemoryTaskStore({ maxTasks: 1 }),
+      });
+      entrypoints.set('free-process-task', {
+        key: 'free-process-task',
+        handler: async () => ({ output: { ok: true } }),
+      });
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'free-process-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+      };
+      await Bun.sleep(1);
+      const stored = await runtime.a2a.tasks.get(
+        access.taskId,
+        access.accessToken
+      );
+      expect(stored).toMatchObject({
+        status: 'completed',
+        result: { output: { ok: true } },
+      });
+      await runtime.a2a.tasks.close();
+    });
+
+    it('returns a settled terminal capability when execution activation fails', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('paid-task', {
+        key: 'paid-task',
+        price: '1',
+        handler: async () => ({ output: { ok: true } }),
+      });
+
+      const baseStore = createDurableTestTaskStore({ maxTasks: 1 });
+      let rejectNextActivation = true;
+      const store: TaskStore = {
+        ...baseStore,
+        activateExecution: async (...args) => {
+          if (rejectNextActivation) {
+            rejectNextActivation = false;
+            throw new Error('execution lease unavailable');
+          }
+          return baseStore.activateExecution(...args);
+        },
+      };
+      runtime.a2a.tasks = createTaskRuntime({ store });
+
+      let paymentState: 'available' | 'reserved' | 'consumed' = 'available';
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => {
+          if (paymentState !== 'available') {
+            return {
+              authorized: false,
+              response: Response.json(
+                {
+                  error: {
+                    code:
+                      paymentState === 'consumed'
+                        ? 'payment_already_consumed'
+                        : 'payment_still_reserved',
+                    message:
+                      paymentState === 'consumed'
+                        ? 'The payment was already consumed'
+                        : 'The payment reservation was not released',
+                  },
+                },
+                { status: paymentState === 'consumed' ? 409 : 429 }
+              ),
+            };
+          }
+          return {
+            authorized: true,
+            admit: async () => {
+              paymentState = 'reserved';
+              return {
+                admitted: true,
+                abort: async () => {
+                  paymentState = 'available';
+                },
+                isCommitted: () => paymentState === 'consumed',
+                finalize: async (response: Response) => {
+                  if (response.status < 200 || response.status >= 300) {
+                    paymentState = 'available';
+                    return response;
+                  }
+                  paymentState = 'consumed';
+                  const settled = new Response(response.body, response);
+                  settled.headers.set(
+                    'X-Payment-Response',
+                    'settlement-receipt'
+                  );
+                  return settled;
+                },
+              };
+            },
+          };
+        },
+      } as unknown as PaymentsRuntime;
+
+      const request = () =>
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'paid-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        });
+
+      const failed = await rawHandlers.tasks(request());
+      expect(failed.status).toBe(200);
+      expect(failed.headers.get('X-Payment-Response')).toBe(
+        'settlement-receipt'
+      );
+      const failedAccess = (await failed.json()) as {
+        taskId: string;
+        accessToken: string;
+        status: TaskStatus;
+      };
+      expect(failedAccess.status).toBe('cancelled');
+      const failedList = await rawHandlers.listTasks(
+        new Request('http://localhost/tasks', {
+          headers: { 'Task-Access-Token': TASK_ACCESS_TOKEN },
+        })
+      );
+      const [failedTask] = ((await failedList.json()) as { tasks: Task[] })
+        .tasks;
+      expect(failedTask?.status).toBe('cancelled');
+      const failedTaskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${failedTask?.taskId}`, {
+          headers: { 'Task-Access-Token': TASK_ACCESS_TOKEN },
+        }),
+        { taskId: failedTask?.taskId ?? '' }
+      );
+      expect(failedTaskResponse.status).toBe(200);
+      expect(((await failedTaskResponse.json()) as Task).status).toBe(
+        'cancelled'
+      );
+
+      const retried = await rawHandlers.tasks(request());
+      expect(retried.status).toBe(409);
+      expect((await retried.json()).error.code).toBe(
+        'payment_already_consumed'
+      );
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('preserves the task capability when committed settlement accounting fails', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('settled-task', {
+        key: 'settled-task',
+        price: '1',
+        handler: async () => ({ output: { ok: true } }),
+      });
+
+      let committed = false;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => ({
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            isCommitted: () => committed,
+            finalize: async () => {
+              committed = true;
+              return Response.json(
+                {
+                  error: {
+                    code: 'payment_recording_failed',
+                    message: 'accounting unavailable',
+                  },
+                },
+                {
+                  status: 503,
+                  headers: {
+                    'X-Payment-Response': 'committed-settlement-receipt',
+                  },
+                }
+              );
+            },
+          }),
+        }),
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'settled-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-Payment-Response')).toBe(
+        'committed-settlement-receipt'
+      );
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+      };
+      const task = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${access.taskId}`, {
+          headers: { 'Task-Access-Token': access.accessToken },
+        }),
+        { taskId: access.taskId }
+      );
+      expect(task.status).toBe(200);
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('preserves a pre-settled MPP receipt and terminal task when execution admission fails', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-task', {
+        key: 'mpp-task',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+
+      const baseStore = createDurableTestTaskStore({ maxTasks: 1 });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: {
+          ...baseStore,
+          activateExecution: async () => {
+            throw new Error('execution lease unavailable');
+          },
+        },
+      });
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          mpp: MppRuntime;
+        }>
+      ).mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () => ({
+          authorized: true,
+          receipt: 'mpp-settlement-receipt',
+        }),
+      } as unknown as MppRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Payment credential-bearing-request',
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Payment-Receipt')).toBe(
+        'mpp-settlement-receipt'
+      );
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+        status: TaskStatus;
+      };
+      expect(access.status).toBe('cancelled');
+      const taskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${access.taskId}`, {
+          headers: { 'Task-Access-Token': access.accessToken },
+        }),
+        { taskId: access.taskId }
+      );
+      expect(taskResponse.status).toBe(200);
+      expect(((await taskResponse.json()) as Task).status).toBe('cancelled');
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('rejects MPP credential work at capacity before returning a receipt', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-capacity', {
+        key: 'mpp-capacity',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createDurableTestTaskStore({ maxTasks: 1 }),
+      });
+      await runtime.a2a.tasks.reserve({
+        taskId: 'occupied-task',
+        accessToken: TASK_ACCESS_TOKEN,
+      });
+      const challenge = Challenge.fromResponse(
+        buildChallengeResponse({
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+          realm: 'localhost',
+        })
+      );
+      const credential = Credential.serialize({
+        challenge,
+        payload: { proof: true },
+      });
+      let authorizations = 0;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          mpp: MppRuntime;
+        }>
+      ).mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        hasCredential: (request: Request) =>
+          decodeMppCredential(request) !== null,
+        authorize: async () => {
+          authorizations += 1;
+          return {
+            authorized: true,
+            receipt: 'must-not-be-committed',
+          };
+        },
+      } as unknown as MppRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer caller-token, ${credential}`,
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-capacity',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('Payment-Receipt')).toBeNull();
+      expect(await response.json()).toMatchObject({
+        error: { code: 'task_capacity_exhausted' },
+      });
+      expect(authorizations).toBe(0);
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('does not reserve task capacity for an initial MPP challenge', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-challenge', {
+        key: 'mpp-challenge',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createDurableTestTaskStore({ maxTasks: 1 }),
+      });
+      await runtime.a2a.tasks.reserve({
+        taskId: 'occupied-task',
+        accessToken: TASK_ACCESS_TOKEN,
+      });
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          mpp: MppRuntime;
+        }>
+      ).mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () => ({
+          authorized: false,
+          response: new Response(null, {
+            status: 402,
+            headers: { 'WWW-Authenticate': 'Payment challenge' },
+          }),
+        }),
+      } as unknown as MppRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-challenge',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(402);
+      expect(response.headers.get('WWW-Authenticate')).toBe(
+        'Payment challenge'
+      );
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('releases a pre-reserved task after uncommitted MPP rejection', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-retry', {
+        key: 'mpp-retry',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createDurableTestTaskStore({ maxTasks: 1 }),
+      });
+      let rejectCredential = true;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          mpp: MppRuntime;
+        }>
+      ).mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () =>
+          rejectCredential
+            ? {
+                authorized: false as const,
+                response: new Response(null, { status: 402 }),
+              }
+            : {
+                authorized: true as const,
+                receipt: 'retry-settlement-receipt',
+              },
+      } as unknown as MppRuntime;
+
+      const request = () =>
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Payment credential-bearing-request',
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-retry',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        });
+
+      const rejected = await rawHandlers.tasks(request());
+      expect(rejected.status).toBe(402);
+      expect(rejected.headers.get('Payment-Receipt')).toBeNull();
+
+      rejectCredential = false;
+      const retried = await rawHandlers.tasks(request());
+      expect(retried.status).toBe(200);
+      expect(retried.headers.get('Payment-Receipt')).toBe(
+        'retry-settlement-receipt'
+      );
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('returns a terminal task capability for an MPP handled response', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-handled', {
+        key: 'mpp-handled',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          mpp: MppRuntime;
+        }>
+      ).mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'session',
+          methods: ['test'],
+        }),
+        authorize: async () => ({
+          authorized: true,
+          receipt: 'handled-mpp-receipt',
+          handled: new Response(null, {
+            status: 204,
+            headers: { 'Payment-Receipt': 'handled-mpp-receipt' },
+          }),
+        }),
+      } as unknown as MppRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Payment credential-bearing-request',
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-handled',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Payment-Receipt')).toBe(
+        'handled-mpp-receipt'
+      );
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+        status: TaskStatus;
+      };
+      expect(access.status).toBe('cancelled');
+      const taskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${access.taskId}`, {
+          headers: { 'Task-Access-Token': access.accessToken },
+        }),
+        { taskId: access.taskId }
+      );
+      expect(((await taskResponse.json()) as Task).status).toBe('cancelled');
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('returns a terminal MPP capability when post-payment admission rejects', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-rejected', {
+        key: 'mpp-rejected',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      const paidRuntime = runtime as AgentRuntime<{
+        a2a: A2ARuntime;
+        mpp: MppRuntime;
+        payments: PaymentsRuntime;
+      }>;
+      paidRuntime.mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () => ({
+          authorized: true,
+          receipt: 'rejected-admission-receipt',
+        }),
+      } as unknown as MppRuntime;
+      paidRuntime.payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => ({
+          authorized: true,
+          admit: async () => ({
+            admitted: false,
+            response: Response.json(
+              {
+                error: {
+                  code: 'policy_violation',
+                  message: 'Payment policy rejected the task',
+                },
+              },
+              { status: 403 }
+            ),
+          }),
+        }),
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Payment credential-bearing-request',
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-rejected',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Payment-Receipt')).toBe(
+        'rejected-admission-receipt'
+      );
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+        status: TaskStatus;
+      };
+      expect(access.status).toBe('cancelled');
+      const taskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${access.taskId}`, {
+          headers: { 'Task-Access-Token': access.accessToken },
+        }),
+        { taskId: access.taskId }
+      );
+      expect(((await taskResponse.json()) as Task).status).toBe('cancelled');
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('returns a terminal MPP capability when post-payment admission throws', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('mpp-admission-error', {
+        key: 'mpp-admission-error',
+        price: '1',
+        paymentProtocol: 'mpp',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      const paidRuntime = runtime as AgentRuntime<{
+        a2a: A2ARuntime;
+        mpp: MppRuntime;
+        payments: PaymentsRuntime;
+      }>;
+      paidRuntime.mpp = {
+        requirements: () => ({
+          required: true,
+          amount: '1',
+          currency: 'usd',
+          intent: 'charge',
+          methods: ['test'],
+        }),
+        authorize: async () => ({
+          authorized: true,
+          receipt: 'thrown-admission-receipt',
+        }),
+      } as unknown as MppRuntime;
+      paidRuntime.payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => ({
+          authorized: true,
+          admit: async () => {
+            throw new Error('payment policy unavailable');
+          },
+        }),
+      } as unknown as PaymentsRuntime;
+
+      const response = await rawHandlers.tasks(
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Payment credential-bearing-request',
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'mpp-admission-error',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        })
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('Payment-Receipt')).toBe(
+        'thrown-admission-receipt'
+      );
+      const access = (await response.json()) as {
+        taskId: string;
+        accessToken: string;
+        status: TaskStatus;
+      };
+      expect(access.status).toBe('cancelled');
+      const taskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${access.taskId}`, {
+          headers: { 'Task-Access-Token': access.accessToken },
+        }),
+        { taskId: access.taskId }
+      );
+      expect(((await taskResponse.json()) as Task).status).toBe('cancelled');
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('cancels admitted work and releases capacity when settlement fails', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      entrypoints.set('settlement-task', {
+        key: 'settlement-task',
+        price: '1',
+        handler: async () => ({ output: { ok: true } }),
+      });
+      runtime.a2a.tasks = createTaskRuntime({
+        store: createDurableTestTaskStore({ maxTasks: 1 }),
+      });
+
+      let failNextSettlement = true;
+      let paymentReserved = false;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => {
+          if (paymentReserved) {
+            return {
+              authorized: false,
+              response: Response.json(
+                {
+                  error: {
+                    code: 'payment_still_reserved',
+                    message: 'The payment reservation was not released',
+                  },
+                },
+                { status: 429 }
+              ),
+            };
+          }
+          return {
+            authorized: true,
+            admit: async () => {
+              paymentReserved = true;
+              return {
+                admitted: true,
+                abort: async () => {
+                  paymentReserved = false;
+                },
+                finalize: async (response: Response) => {
+                  if (response.status < 200 || response.status >= 300) {
+                    paymentReserved = false;
+                    return response;
+                  }
+                  if (failNextSettlement) {
+                    failNextSettlement = false;
+                    paymentReserved = false;
+                    return Response.json(
+                      {
+                        error: {
+                          code: 'settlement_failed',
+                          message: 'Settlement was declined',
+                        },
+                      },
+                      {
+                        status: 402,
+                        headers: { 'X-Payment-Response': 'declined' },
+                      }
+                    );
+                  }
+                  paymentReserved = false;
+                  const settled = new Response(response.body, response);
+                  settled.headers.set('X-Payment-Response', 'settled');
+                  return settled;
+                },
+              };
+            },
+          };
+        },
+      } as unknown as PaymentsRuntime;
+
+      const request = () =>
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'settlement-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        });
+
+      const failed = await rawHandlers.tasks(request());
+      expect(failed.status).toBe(402);
+      expect(failed.headers.get('X-Payment-Response')).toBe('declined');
+
+      const failedList = await rawHandlers.listTasks(
+        new Request('http://localhost/tasks', {
+          headers: { 'Task-Access-Token': TASK_ACCESS_TOKEN },
+        })
+      );
+      const [failedTask] = ((await failedList.json()) as { tasks: Task[] })
+        .tasks;
+      const failedTaskResponse = await rawHandlers.getTask(
+        new Request(`http://localhost/tasks/${failedTask?.taskId}`, {
+          headers: { 'Task-Access-Token': TASK_ACCESS_TOKEN },
+        }),
+        { taskId: failedTask?.taskId ?? '' }
+      );
+      expect(failedTaskResponse.status).toBe(200);
+      expect(((await failedTaskResponse.json()) as Task).status).toBe(
+        'cancelled'
+      );
+
+      const retried = await rawHandlers.tasks(request());
+      expect(retried.status).toBe(200);
+      expect(retried.headers.get('X-Payment-Response')).toBe('settled');
+
+      await runtime.a2a.tasks.close();
+    });
+
+    it('cancels gated work and aborts authorization when settlement throws', async () => {
+      const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
+      let executions = 0;
+      entrypoints.set('throwing-settlement-task', {
+        key: 'throwing-settlement-task',
+        price: '1',
+        handler: async () => {
+          executions += 1;
+          return { output: { ok: true } };
+        },
+      });
+
+      let failNextSettlement = true;
+      let paymentReserved = false;
+      (
+        runtime as AgentRuntime<{
+          a2a: A2ARuntime;
+          payments: PaymentsRuntime;
+        }>
+      ).payments = {
+        requirements: () => ({ required: false }),
+        authorize: async () => ({
+          authorized: true,
+          admit: async () => {
+            paymentReserved = true;
+            return {
+              admitted: true,
+              abort: async () => {
+                paymentReserved = false;
+              },
+              isCommitted: () => false,
+              finalize: async (response: Response) => {
+                if (failNextSettlement) {
+                  failNextSettlement = false;
+                  throw new Error('settlement transport unavailable');
+                }
+                paymentReserved = false;
+                return response;
+              },
+            };
+          },
+        }),
+      } as unknown as PaymentsRuntime;
+
+      const request = () =>
+        new Request('http://localhost/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Task-Access-Token': TASK_ACCESS_TOKEN,
+          },
+          body: JSON.stringify({
+            skillId: 'throwing-settlement-task',
+            message: { role: 'user', content: { text: '{}' } },
+          }),
+        });
+
+      const failed = await rawHandlers.tasks(request());
+      expect(failed.status).toBe(503);
+      expect(await failed.json()).toEqual({
+        error: {
+          code: 'task_execution_failed',
+          message: 'settlement transport unavailable',
+        },
+      });
+      expect(paymentReserved).toBe(false);
+      expect(executions).toBe(0);
+
+      const [failedTask] = (
+        (await (
+          await rawHandlers.listTasks(
+            new Request('http://localhost/tasks', {
+              headers: { 'Task-Access-Token': TASK_ACCESS_TOKEN },
+            })
+          )
+        ).json()) as { tasks: Task[] }
+      ).tasks;
+      expect(failedTask?.status).toBe('cancelled');
+
+      const retried = await rawHandlers.tasks(request());
+      expect(retried.status).toBe(200);
+
+      await runtime.a2a.tasks.close();
+    });
+
     it('finalizes authorization when task capacity reservation fails', async () => {
       const { rawHandlers, runtime, entrypoints } = makeTestHandlers();
       let releaseFirst!: () => void;
@@ -199,7 +1282,7 @@ describe('Task Operations', () => {
         },
       });
       runtime.a2a.tasks = createTaskRuntime({
-        store: createInMemoryTaskStore({ maxTasks: 1 }),
+        store: createDurableTestTaskStore({ maxTasks: 1 }),
       });
       const finalizedStatuses: number[] = [];
       (

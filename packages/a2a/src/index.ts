@@ -20,6 +20,7 @@ export {
   listTasks,
   cancelTask,
   waitForTask,
+  TaskCreationError,
 } from './client';
 export { createA2ARuntime } from './runtime';
 export {

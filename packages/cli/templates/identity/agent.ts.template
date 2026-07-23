@@ -9,6 +9,8 @@ import {
   generateAgentRegistration,
   type AgentRegistrationOptions,
 } from "@lucid-agents/identity";
+import { createPublicClient, http as viemHttp } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 {{TEMPLATE_PRE_SETUP}}
 const selectedServices = [
@@ -89,20 +91,105 @@ const registrationOptions: AgentRegistrationOptions = {
   selectedServices: selectedServices.length > 0 ? selectedServices : undefined,
 };
 
+const autoRegisterIdentity =
+  process.env.IDENTITY_AUTO_REGISTER === "true";
+const identityChainId = Number(process.env.CHAIN_ID);
+const isIdentityMainnet = identityChainId === 1;
+if (
+  autoRegisterIdentity &&
+  isIdentityMainnet &&
+  process.env.IDENTITY_ALLOW_MAINNET_REGISTRATION !== "true"
+) {
+  throw new Error(
+    "[identity-template] Mainnet identity registration requires explicit confirmation. " +
+      "Verify the chain, registry, domain, agent URI, signer, and gas policy, then set " +
+      "IDENTITY_ALLOW_MAINNET_REGISTRATION=true."
+  );
+}
+
+// Identity writes must use the same RPC and chain as registry reads. Prefix
+// the generic identity settings for both supported local signer roles.
+const identityWalletEnv = {
+  ...process.env,
+  ...(process.env.RPC_URL
+    ? {
+        AGENT_WALLET_RPC_URL: process.env.RPC_URL,
+        DEVELOPER_WALLET_RPC_URL: process.env.RPC_URL,
+      }
+    : {}),
+  ...(process.env.CHAIN_ID
+    ? {
+        AGENT_WALLET_CHAIN_ID: process.env.CHAIN_ID,
+        DEVELOPER_WALLET_CHAIN_ID: process.env.CHAIN_ID,
+      }
+    : {}),
+};
+const walletConfig = walletsFromEnv(undefined, identityWalletEnv);
+if (
+  autoRegisterIdentity &&
+  !walletConfig?.developer &&
+  !walletConfig?.agent
+) {
+  throw new Error(
+    "[identity-template] Identity auto-registration requires a configured developer or agent signing wallet."
+  );
+}
+
+if (autoRegisterIdentity && isIdentityMainnet) {
+  const registrationPrivateKey =
+    process.env.DEVELOPER_WALLET_PRIVATE_KEY ??
+    process.env.AGENT_WALLET_PRIVATE_KEY;
+  const rpcUrl = process.env.RPC_URL;
+  if (!registrationPrivateKey || !rpcUrl) {
+    throw new Error(
+      "[identity-template] Mainnet gas preflight requires a local registration private key and RPC_URL."
+    );
+  }
+
+  let registrationAddress: `0x${string}`;
+  try {
+    registrationAddress = privateKeyToAccount(
+      registrationPrivateKey as `0x${string}`
+    ).address;
+  } catch {
+    throw new Error(
+      "[identity-template] Mainnet gas preflight could not derive the registration signer address. Check the configured private key."
+    );
+  }
+
+  let gasBalance: bigint;
+  try {
+    gasBalance = await createPublicClient({
+      transport: viemHttp(rpcUrl),
+    }).getBalance({ address: registrationAddress });
+  } catch {
+    throw new Error(
+      `[identity-template] Mainnet gas preflight could not read the native balance for ${registrationAddress}. Check RPC_URL and CHAIN_ID before registration.`
+    );
+  }
+  if (gasBalance === 0n) {
+    throw new Error(
+      `[identity-template] Mainnet registration signer ${registrationAddress} has no native balance for gas. Fund and recheck this signer before registration.`
+    );
+  }
+}
+
 const agent = await createAgent({
   name: process.env.AGENT_NAME ?? "my-agent",
   version: process.env.AGENT_VERSION ?? "0.1.0",
   description: process.env.AGENT_DESCRIPTION,
 })
-  .use(wallets({ config: walletsFromEnv() }))
+  .use(wallets({ config: walletConfig }))
   .use(payments({ config: paymentsFromEnv() }))
-  .use(identity({
-    config: {
-      ...identityFromEnv(),
-      autoRegister: process.env.IDENTITY_AUTO_REGISTER === "true",
-      registration: registrationOptions,
-    }
-  }))
+  .use(
+    identity({
+      config: {
+        ...identityFromEnv(),
+        autoRegister: autoRegisterIdentity,
+        registration: registrationOptions,
+      },
+    })
+  )
   .use(http())
   .build();
 
@@ -123,14 +210,23 @@ if (identityResult.didRegister) {
   console.log("Transaction:", identityResult.transactionHash);
 
   // IMPORTANT: After registration, you MUST host the ERC-8004 registration file at agentURI
-  const registration = generateAgentRegistration(identityResult, registrationOptions);
+  const registration = generateAgentRegistration(
+    identityResult,
+    registrationOptions
+  );
 
   console.log("\nIMPORTANT: Host this registration file at:");
-  console.log(`   https://${identityResult.domain}/.well-known/agent-registration.json\n`);
+  console.log(
+    `   https://${identityResult.domain}/.well-known/agent-registration.json\n`
+  );
   console.log(JSON.stringify(registration, null, 2));
   console.log("\nWhy? The ERC-8004 registry stores this URL as the agentURI.");
-  console.log("Anyone querying the registry will fetch this file to verify your agent's identity.");
-  console.log("Without hosting this file, your agent's on-chain identity cannot be verified.\n");
+  console.log(
+    "Anyone querying the registry will fetch this file to verify your agent's identity."
+  );
+  console.log(
+    "Without hosting this file, your agent's on-chain identity cannot be verified.\n"
+  );
 } else if (identityResult.trust) {
   console.log("Found existing registration");
   console.log("Agent ID:", identityResult.record?.agentId);

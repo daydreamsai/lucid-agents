@@ -7,6 +7,7 @@ import process, {
   stdout as defaultOutput,
 } from 'node:process';
 import { createInterface } from 'node:readline/promises';
+import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import type { ServiceUiPreset } from '@lucid-agents/types/http';
@@ -17,6 +18,7 @@ import {
   getAdapterDisplayName,
   isAdapterSupported,
 } from './adapters';
+import { validateTemplateConfiguration } from './template-schema';
 
 type CliOptions = {
   install: boolean;
@@ -58,6 +60,7 @@ type PromptApi = {
   input: (params: {
     message: string;
     defaultValue?: string;
+    sensitive?: boolean;
   }) => Promise<string>;
   close?: () => Promise<void> | void;
 };
@@ -82,6 +85,7 @@ type WizardPrompt = {
   defaultValue?: string | boolean;
   choices?: PromptChoice[];
   when?: WizardCondition;
+  sensitive?: boolean;
 };
 
 type WizardConfig = {
@@ -185,6 +189,7 @@ export async function runCli(
     prompt,
     logger,
   });
+  validateTemplateArguments(template, parsed.options.templateArgs);
 
   // Validate adapter exists and is compatible with template
   validateAdapterExists(selectedAdapter);
@@ -202,7 +207,8 @@ export async function runCli(
     template,
   });
 
-  const targetDir = projectName === '.' ? cwd : resolve(cwd, projectName);
+  const targetDir = resolve(cwd, projectName);
+  assertTargetIsNotCurrentWorkingDirectory(targetDir, cwd);
   const projectDirName = basename(targetDir);
   const packageName = toPackageName(projectDirName);
 
@@ -218,6 +224,11 @@ export async function runCli(
     preSuppliedArgs: parsed.options.skipWizard
       ? parsed.options.templateArgs
       : undefined,
+  });
+  await validateTemplateConfiguration(template.path, {
+    AGENT_NAME: projectDirName,
+    PACKAGE_NAME: packageName,
+    ...Object.fromEntries(wizardAnswers),
   });
   const serviceUiPreset = await resolveServiceUiPreset({
     adapter: adapterDefinition,
@@ -238,38 +249,54 @@ export async function runCli(
     parsed.options.deploy &&
     adapterDefinition.deployment?.templateIds.includes(template.id)
   );
-  await copyTemplate(
-    template.path,
-    targetDir,
-    adapterDefinition,
-    includeDeployment
-  );
 
   // Read template.json metadata
   const templateJsonPath = join(template.path, 'template.json');
   const templateJsonRaw = await fs.readFile(templateJsonPath, 'utf8');
   const templateMeta = JSON.parse(templateJsonRaw);
 
-  await applyTemplateTransforms(targetDir, {
-    packageName,
-    replacements,
-    adapter: adapterDefinition,
-    templateRoot: template.path,
-    templateMeta,
-    includeDeployment,
-    serviceUiPreset,
-  });
+  const stagingDir = await createStagingDirectory(targetDir);
+  try {
+    await copyTemplate(
+      template.path,
+      stagingDir,
+      adapterDefinition,
+      includeDeployment
+    );
 
-  await setupEnvironment({
-    targetDir,
-    skipWizard: parsed.options.skipWizard ?? false,
-    wizardAnswers,
-    agentName: projectDirName,
-    template,
-  });
+    await applyTemplateTransforms(stagingDir, {
+      packageName,
+      replacements,
+      adapter: adapterDefinition,
+      templateRoot: template.path,
+      templateMeta,
+      includeDeployment,
+      serviceUiPreset,
+    });
 
-  if (parsed.options.install) {
-    await runInstall(targetDir, logger);
+    await ensureGitignore(stagingDir);
+
+    if (parsed.options.install) {
+      await runInstall(stagingDir, logger);
+    }
+
+    // Dependency lifecycle code must never receive generated secrets. Create
+    // the private environment file only after installation has succeeded.
+    await setupEnvironment({
+      targetDir: stagingDir,
+      skipWizard: parsed.options.skipWizard ?? false,
+      wizardAnswers,
+      agentName: projectDirName,
+      template,
+    });
+
+    await commitStagedProject({
+      stagingDir,
+      targetDir,
+    });
+  } catch (error) {
+    await fs.rm(stagingDir, { recursive: true, force: true });
+    throw error;
   }
 
   const relativeTarget = relative(cwd, targetDir) || '.';
@@ -359,7 +386,13 @@ function parseArgs(args: string[]): ParsedArgs {
       }
     } else if (!arg?.startsWith('-')) {
       positional.push(arg ?? '');
+    } else {
+      throw new Error(`Unknown option "${arg}"`);
     }
+  }
+
+  if (positional.length > 1) {
+    throw new Error('Expected one project directory.');
   }
 
   return { options, target: positional[0] ?? null, showHelp };
@@ -778,10 +811,28 @@ async function collectWizardAnswers(params: {
       const preSupplied = preSuppliedArgs.get(question.key);
       if (question.type === 'confirm') {
         const normalized = preSupplied?.trim().toLowerCase() ?? '';
+        if (
+          !['true', 'yes', 'y', '1', 'false', 'no', 'n', '0'].includes(
+            normalized
+          )
+        ) {
+          throw new Error(
+            `Template argument "${question.key}" must be a boolean value.`
+          );
+        }
         const boolValue = ['true', 'yes', 'y', '1'].includes(normalized);
         answers.set(question.key, boolValue);
       } else {
-        answers.set(question.key, sanitizeAnswerString(preSupplied ?? ''));
+        const value = sanitizeAnswerString(preSupplied ?? '');
+        if (
+          question.type === 'select' &&
+          !question.choices?.some(choice => choice.value === value)
+        ) {
+          throw new Error(
+            `Template argument "${question.key}" must match one of its declared choices.`
+          );
+        }
+        answers.set(question.key, value);
       }
       continue;
     }
@@ -812,6 +863,23 @@ async function collectWizardAnswers(params: {
   applyWizardConstraints(answers);
 
   return answers;
+}
+
+function validateTemplateArguments(
+  template: TemplateDescriptor,
+  supplied: Map<string, string> | undefined
+): void {
+  if (!supplied || supplied.size === 0) {
+    return;
+  }
+  const knownKeys = new Set(
+    (template.wizard?.prompts ?? []).map(prompt => prompt.key)
+  );
+  for (const key of supplied.keys()) {
+    if (!knownKeys.has(key)) {
+      throw new Error(`Unknown template argument "${key}".`);
+    }
+  }
 }
 
 function applyWizardConstraints(answers: WizardAnswers): void {
@@ -890,7 +958,8 @@ async function askWizardPrompt(params: {
       typeof defaultValue === 'string' ? defaultValue : undefined;
     const answer = await promptApi.input({
       message: question.message,
-      defaultValue: defaultString,
+      ...(question.sensitive ? {} : { defaultValue: defaultString }),
+      ...(question.sensitive ? { sensitive: true } : {}),
     });
     return sanitizeAnswerString(answer);
   }
@@ -981,7 +1050,10 @@ function interpolateTemplateString(
 }
 
 function sanitizeAnswerString(value: string): string {
-  return value.replace(/\r/g, '').trim();
+  if (/[\r\n]/u.test(value)) {
+    throw new Error('Wizard values must not contain line breaks.');
+  }
+  return value.trim();
 }
 
 class TemplateError extends Error {
@@ -1271,21 +1343,76 @@ async function assertTemplatePresent(templatePath: string) {
   }
 }
 
-async function assertTargetDirectory(targetDir: string) {
+async function assertTargetDirectory(targetDir: string): Promise<void> {
   try {
-    await fs.mkdir(targetDir, { recursive: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-      throw error;
+    const entries = await fs.readdir(targetDir);
+    if (entries.length > 0) {
+      throw new Error(
+        `Target directory ${targetDir} already exists and is not empty.`
+      );
     }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
   }
+}
 
-  const entries = await fs.readdir(targetDir);
-  const filtered = entries.filter(name => name !== '.DS_Store');
-  if (filtered.length > 0) {
-    throw new Error(
-      `Target directory ${targetDir} already exists and is not empty.`
-    );
+function assertTargetIsNotCurrentWorkingDirectory(
+  targetDir: string,
+  currentWorkingDirectory: string
+): void {
+  let targetsCurrentWorkingDirectory = targetDir === currentWorkingDirectory;
+  if (!targetsCurrentWorkingDirectory && existsSync(targetDir)) {
+    targetsCurrentWorkingDirectory =
+      realpathSync(targetDir) === realpathSync(currentWorkingDirectory);
+  }
+  if (!targetsCurrentWorkingDirectory) {
+    return;
+  }
+  throw new Error(
+    'Scaffolding into the current working directory is not supported because project handoff must be atomic. Choose a new child directory, for example "my-agent".'
+  );
+}
+
+async function createStagingDirectory(targetDir: string): Promise<string> {
+  let stagingParent = dirname(targetDir);
+  while (!existsSync(stagingParent)) {
+    const parent = dirname(stagingParent);
+    if (parent === stagingParent) {
+      throw new Error(`Unable to find a staging parent for ${targetDir}.`);
+    }
+    stagingParent = parent;
+  }
+  return fs.mkdtemp(join(stagingParent, `.${basename(targetDir)}-staging-`));
+}
+
+async function commitStagedProject(params: {
+  stagingDir: string;
+  targetDir: string;
+}): Promise<void> {
+  const { stagingDir, targetDir } = params;
+
+  const createdParents: string[] = [];
+  let candidateParent = dirname(targetDir);
+  while (!existsSync(candidateParent)) {
+    createdParents.push(candidateParent);
+    const parent = dirname(candidateParent);
+    if (parent === candidateParent) {
+      break;
+    }
+    candidateParent = parent;
+  }
+  await fs.mkdir(dirname(targetDir), { recursive: true });
+
+  try {
+    await fs.rename(stagingDir, targetDir);
+  } catch (error) {
+    for (const createdParent of createdParents) {
+      await fs.rmdir(createdParent).catch(() => undefined);
+    }
+    throw error;
   }
 }
 
@@ -1504,7 +1631,52 @@ async function setupEnvironment(params: {
     lines.push(`${prompt.key}=${stringValue}`);
   }
 
-  await fs.writeFile(envPath, lines.join('\n') + '\n', 'utf8');
+  await fs.writeFile(envPath, lines.join('\n') + '\n', {
+    encoding: 'utf8',
+    flag: 'wx',
+    mode: 0o600,
+  });
+  await fs.chmod(envPath, 0o600);
+}
+
+const GENERATED_GITIGNORE_ENTRIES = [
+  '.env',
+  '.env.*',
+  '!.env.example',
+  'node_modules/',
+  'dist/',
+  'coverage/',
+  '.next/',
+  '.output/',
+  '.tanstack/',
+  '.wrangler/',
+] as const;
+
+async function ensureGitignore(targetDir: string): Promise<void> {
+  const ignorePath = join(targetDir, '.gitignore');
+  let existing = '';
+  try {
+    existing = await fs.readFile(ignorePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  const existingLines = new Set(existing.split(/\r?\n/u));
+  const missingEntries = GENERATED_GITIGNORE_ENTRIES.filter(
+    entry => !existingLines.has(entry)
+  );
+  if (missingEntries.length === 0) {
+    return;
+  }
+
+  const prefix = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
+  await fs.writeFile(
+    ignorePath,
+    `${existing}${prefix}${missingEntries.join('\n')}\n`,
+    'utf8'
+  );
 }
 
 async function runInstall(cwd: string, logger: RunLogger) {
@@ -1527,9 +1699,12 @@ async function runInstall(cwd: string, logger: RunLogger) {
         }
       });
     });
-  } catch {
-    logger.warn(
-      'Failed to run `bun install`. Please install dependencies manually.'
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : 'unknown installation error';
+    throw new Error(
+      `Dependency installation failed: ${reason}. Re-run the scaffold with --no-install, then run \`bun install\` in the generated project.`,
+      { cause: error }
     );
   }
 }
@@ -1539,9 +1714,19 @@ function createInteractivePrompt(logger: RunLogger): PromptApi | undefined {
     return undefined;
   }
 
+  let mutePromptOutput = false;
+  const promptOutput = new Writable({
+    write(chunk, _encoding, callback) {
+      if (!mutePromptOutput) {
+        defaultOutput.write(chunk);
+      }
+      callback();
+    },
+  });
   const rl = createInterface({
     input: defaultInput,
-    output: defaultOutput,
+    output: promptOutput,
+    terminal: true,
   });
 
   return {
@@ -1578,7 +1763,18 @@ function createInteractivePrompt(logger: RunLogger): PromptApi | undefined {
         logger.log('Please respond with y or n.');
       }
     },
-    async input({ message, defaultValue = '' }) {
+    async input({ message, defaultValue = '', sensitive = false }) {
+      if (sensitive) {
+        const answerPromise = rl.question(`${message}: `);
+        mutePromptOutput = true;
+        try {
+          const answer = await answerPromise;
+          defaultOutput.write('\n');
+          return answer;
+        } finally {
+          mutePromptOutput = false;
+        }
+      }
       const promptMessage =
         defaultValue && defaultValue.length > 0
           ? `${message} (${defaultValue}): `

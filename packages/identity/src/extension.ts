@@ -1,6 +1,5 @@
 import type {
   AgentManifest,
-  AgentRuntime,
   BuildContext,
   Extension,
 } from '@lucid-agents/types/core';
@@ -9,7 +8,6 @@ import type {
   OASFRecord,
   TrustConfig,
 } from '@lucid-agents/types/identity';
-import type { WalletsRuntime } from '@lucid-agents/types/wallets';
 
 import type { IdentityConfig } from './env';
 import type { AgentIdentity } from './init';
@@ -28,14 +26,6 @@ export type IdentityExtensionRuntime = {
     result?: AgentIdentity;
   };
 };
-
-function hasWallets(
-  runtime: AgentRuntime & Record<string, unknown>
-): runtime is AgentRuntime<{ wallets: WalletsRuntime }> &
-  Record<string, unknown> {
-  const wallets = runtime.wallets as WalletsRuntime | undefined;
-  return Boolean(wallets?.developer || wallets?.agent);
-}
 
 function resolveRequestEndpoint(
   record: OASFRecord,
@@ -59,17 +49,17 @@ export function identity(options?: {
       let identityResult: AgentIdentity | undefined;
       const shouldResolveIdentity =
         !trustConfig &&
-        Boolean(config?.domain || config?.autoRegister !== undefined);
+        Boolean(
+          config?.agentId !== undefined ||
+          config?.domain ||
+          config?.autoRegister === true
+        );
 
       if (shouldResolveIdentity) {
-        if (!hasWallets(ctx.runtime)) {
-          throw new Error(
-            'Identity auto-registration requires a developer or agent wallet. ' +
-              'Install wallets() or provide identity.config.trust.'
-          );
-        }
         identityResult = await createAgentIdentity({
           runtime: ctx.runtime,
+          agentId: config?.agentId,
+          registrationDiscovery: config?.registrationDiscovery,
           domain: config?.domain,
           autoRegister: config?.autoRegister,
           rpcUrl: config?.rpcUrl,

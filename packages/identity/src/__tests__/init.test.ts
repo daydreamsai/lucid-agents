@@ -215,6 +215,275 @@ function createMockRuntime(
 }
 
 describe('createAgentIdentity', () => {
+  it('resolves an explicit existing agent ID without a wallet', async () => {
+    const reads: string[] = [];
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        reads.push(functionName);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://readonly.example.com/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    const result = await createAgentIdentity({
+      agentId: '42',
+      domain: 'readonly.example.com',
+      registryAddress: REGISTRY_ADDRESS,
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      env: {},
+      logger: { info() {}, warn() {} },
+    });
+
+    expect(reads).toEqual(['ownerOf', 'tokenURI']);
+    expect(result.record?.agentId).toBe(42n);
+    expect(result.trust?.registrations?.[0].agentId).toBe('42');
+    expect(result.trust?.registrations?.[0].signature).toBeUndefined();
+    expect(result.status).toContain('Found existing registration');
+  });
+
+  it('fails closed when an existing record belongs to another HTTP origin', async () => {
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://different.example/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    await expect(
+      createAgentIdentity({
+        agentId: 42n,
+        domain: 'readonly.example.com',
+        registryAddress: REGISTRY_ADDRESS,
+        chainId: 84532,
+        rpcUrl: 'http://localhost:8545',
+        env: {},
+        logger: { info() {}, warn() {} },
+      })
+    ).rejects.toThrow(/does not match configured domain/i);
+  });
+
+  it('uses the environment registry address for lookup and returned clients', async () => {
+    const customRegistryAddress =
+      '0x000000000000000000000000000000000000bEEF' as const;
+    const readAddresses: string[] = [];
+    const publicClient: PublicClientLike = {
+      async readContract({
+        address,
+        functionName,
+      }: {
+        address: string;
+        functionName: string;
+      }) {
+        readAddresses.push(address);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://readonly.example.com/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    const result = await createAgentIdentity({
+      domain: 'readonly.example.com',
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      env: {
+        IDENTITY_AGENT_ID: '42',
+        IDENTITY_REGISTRY_ADDRESS: customRegistryAddress,
+      },
+      logger: { info() {}, warn() {} },
+    });
+
+    expect(readAddresses).toEqual([
+      customRegistryAddress,
+      customRegistryAddress,
+    ]);
+    expect(result.clients?.identity.address).toBe(customRegistryAddress);
+  });
+
+  it('uses IDENTITY_REGISTRY_ADDRESS from process.env by default', async () => {
+    const customRegistryAddress =
+      '0x000000000000000000000000000000000000bEEF' as const;
+    const previousRegistryAddress = process.env.IDENTITY_REGISTRY_ADDRESS;
+    process.env.IDENTITY_REGISTRY_ADDRESS = customRegistryAddress;
+    const readAddresses: string[] = [];
+    const publicClient: PublicClientLike = {
+      async readContract({
+        address,
+        functionName,
+      }: {
+        address: string;
+        functionName: string;
+      }) {
+        readAddresses.push(address);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://readonly.example.com/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    try {
+      const result = await createAgentIdentity({
+        agentId: 42n,
+        domain: 'readonly.example.com',
+        chainId: 84532,
+        rpcUrl: 'http://localhost:8545',
+        logger: { info() {}, warn() {} },
+      });
+
+      expect(readAddresses).toEqual([
+        customRegistryAddress,
+        customRegistryAddress,
+      ]);
+      expect(result.clients?.identity.address).toBe(customRegistryAddress);
+    } finally {
+      if (previousRegistryAddress === undefined) {
+        delete process.env.IDENTITY_REGISTRY_ADDRESS;
+      } else {
+        process.env.IDENTITY_REGISTRY_ADDRESS = previousRegistryAddress;
+      }
+    }
+  });
+
+  it('discovers and verifies a domain identity without a wallet by default', async () => {
+    const reads: string[] = [];
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        reads.push(functionName);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://readonly.example.com/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    const result = await createAgentIdentity({
+      domain: 'readonly.example.com',
+      registryAddress: REGISTRY_ADDRESS,
+      chainId: 84532,
+      rpcUrl: 'http://localhost:8545',
+      registrationDiscovery: {
+        fetch: async () =>
+          Response.json({
+            registrations: [
+              {
+                agentId: '42',
+                agentRegistry:
+                  'eip155:84532:0x000000000000000000000000000000000000dead',
+              },
+            ],
+          }),
+      },
+      env: {},
+      logger: { info() {}, warn() {} },
+    });
+
+    expect(result.didRegister).not.toBe(true);
+    expect(reads).toEqual(['ownerOf', 'tokenURI']);
+    expect(result.record?.agentId).toBe(42n);
+    expect(result.trust?.registrations?.[0].agentId).toBe('42');
+    expect(result.clients?.identity).toBeDefined();
+    expect(result.clients?.reputation).toBeDefined();
+    expect(result.status).toContain('Found existing registration');
+    await expect(result.clients?.identity.register()).rejects.toThrow(
+      'Wallet client required'
+    );
+  });
+
+  it('never writes through a configured wallet when registration is omitted or false', async () => {
+    for (const autoRegister of [undefined, false] as const) {
+      const reads: string[] = [];
+      let writes = 0;
+      const publicClient: PublicClientLike = {
+        async readContract({ functionName }: { functionName: string }) {
+          reads.push(functionName);
+          if (functionName === 'ownerOf') {
+            return '0x0000000000000000000000000000000000000007';
+          }
+          if (functionName === 'tokenURI') {
+            return 'https://readonly-with-wallet.example.com/registration.json';
+          }
+          throw new Error(`Unexpected read: ${functionName}`);
+        },
+      };
+      const walletClient = {
+        account: {
+          address: '0x0000000000000000000000000000000000000007' as const,
+          async signMessage() {
+            return '0xsignature' as const;
+          },
+        },
+        async writeContract() {
+          writes += 1;
+          return '0xtxhash' as const;
+        },
+      };
+      currentTestPublicClient = publicClient;
+
+      const result = await createAgentIdentity({
+        runtime: {
+          wallets: {
+            developer: {
+              kind: 'local',
+              connector: {
+                async getWalletMetadata() {
+                  return { address: walletClient.account.address };
+                },
+                async signChallenge() {
+                  return '0xsignature';
+                },
+                async getWalletClient() {
+                  return walletClient;
+                },
+                async getPublicClient() {
+                  return publicClient;
+                },
+              },
+            },
+          },
+        } as any,
+        agentId: 42n,
+        domain: 'readonly-with-wallet.example.com',
+        registryAddress: REGISTRY_ADDRESS,
+        chainId: 84532,
+        rpcUrl: 'http://localhost:8545',
+        ...(autoRegister === undefined ? {} : { autoRegister }),
+        env: {},
+        logger: { info() {}, warn() {} },
+      });
+
+      expect(result.didRegister).not.toBe(true);
+      expect(reads).toEqual(['ownerOf', 'tokenURI']);
+      expect(result.record?.agentId).toBe(42n);
+      expect(writes).toBe(0);
+    }
+  });
+
   it('registers and returns trust config when autoRegister is true', async () => {
     const mockWalletClient = {
       account: {
@@ -303,6 +572,47 @@ describe('createAgentIdentity', () => {
     expect(result.trust).toBeDefined(); // Should have trust config now
   });
 
+  it('fails clearly when auto-registration cannot obtain a wallet client', async () => {
+    const publicClient: PublicClientLike = {
+      async readContract() {
+        throw new Error('identity not found');
+      },
+    };
+    currentTestPublicClient = publicClient;
+
+    await expect(
+      createAgentIdentity({
+        runtime: {
+          wallets: {
+            developer: {
+              kind: 'server',
+              connector: {
+                async getWalletMetadata() {
+                  return {
+                    address: '0x0000000000000000000000000000000000000007',
+                  };
+                },
+                async signChallenge() {
+                  return '0xsignature';
+                },
+                async getWalletClient() {
+                  return undefined;
+                },
+              },
+            },
+          },
+        } as any,
+        domain: 'register.example.com',
+        registryAddress: REGISTRY_ADDRESS,
+        chainId: 84532,
+        rpcUrl: 'http://localhost:8545',
+        autoRegister: true,
+        env: {},
+        logger: { info() {}, warn() {} },
+      })
+    ).rejects.toThrow(/wallet client required for register/i);
+  });
+
   it('returns an identity-free result when registry lookup fails', async () => {
     const publicClient: PublicClientLike = {
       async readContract() {
@@ -342,6 +652,7 @@ describe('createAgentIdentity', () => {
     currentTestPublicClient = publicClient;
     const result = await createAgentIdentity({
       runtime: mockRuntime,
+      agentId: 42n,
       domain: 'fallback.example',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',

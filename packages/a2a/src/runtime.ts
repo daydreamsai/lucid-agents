@@ -71,6 +71,7 @@ export function createA2ARuntime(
     tasks: createTaskRuntime({
       store: taskStore,
       maxRunMs: taskOptions.maxRunMs,
+      admissionLeaseMs: taskOptions.admissionLeaseMs,
     }),
   };
 

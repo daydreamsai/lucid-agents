@@ -1,40 +1,81 @@
 name: Version Packages
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches:
       - master
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-master
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  actions: read
+  contents: read
 
 jobs:
-  release-bot:
-    name: Release Bot
+  verify:
+    name: Verify release authority
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - name: Checkout
+      - name: Checkout the attested master commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: master
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.10
 
+      - name: Verify exact master CI attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TRIGGER_REF: refs/heads/master
+          VERIFIED_CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: bun run scripts/release-policy.ts verify
+
+  release-bot:
+    name: Release Bot
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Reverify exact master CI attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELEASE_TRIGGER_REF: refs/heads/master
+          VERIFIED_CI_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: bun run scripts/release-policy.ts verify
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Build packages
-        run: bun run build:packages
 
       - name: Configure git user
         run: |
@@ -46,11 +87,16 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
 
+      - name: Confirm verified master has not advanced
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run scripts/release-policy.ts verify-master
+
       - name: Create Version PR or Publish
         uses: changesets/action@v1
         with:
           version: bunx changeset version
-          publish: bun run release:publish
+          publish: bun run release:publish:verified
           title: 'Version Packages'
           commit: 'chore: version packages'
         env:

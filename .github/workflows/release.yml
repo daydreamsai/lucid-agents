@@ -3,94 +3,85 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: 'Optional git tag to create (defaults to v<primary version>)'
-        required: false
-        type: string
-      release_name:
-        description: 'Optional release title override'
-        required: false
-        type: string
       dry_run:
-        description: 'Run without committing, tagging, publishing, or creating a release'
+        description: 'Ephemerally version, build, and pack pending changesets without publishing'
         required: false
         type: boolean
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: release-master
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  id-token: write
+  actions: read
+  contents: read
 
 jobs:
   release:
-    name: Publish Release
+    name: Publish committed package versions
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: github.ref_type == 'branch'
+    timeout-minutes: 45
     steps:
-      - name: Checkout
+      - name: Checkout current master
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: master
+
+      - name: Record source commit
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.10
 
+      - name: Verify exact master CI attestation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          RELEASE_TRIGGER_REF: ${{ github.ref }}
+        run: bun run scripts/release-policy.ts verify
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Generate release plan
-        id: plan
         run: |
-          PLAN_PATH="$RUNNER_TEMP/release-plan.json"
+          PLAN_RELATIVE_PATH=".git/lucid-release-plan.json"
+          PLAN_PATH="$GITHUB_WORKSPACE/$PLAN_RELATIVE_PATH"
           NOTES_PATH="$RUNNER_TEMP/release-notes.md"
-          bun run changeset status --json > "$PLAN_PATH"
-          bun run changeset status --output "$NOTES_PATH"
+          bun run changeset status --output "$PLAN_RELATIVE_PATH"
+          bun run scripts/release-plan.ts "$PLAN_PATH" "$NOTES_PATH"
           echo "RELEASE_PLAN_PATH=$PLAN_PATH" >> "$GITHUB_ENV"
-          echo "RELEASE_NOTES_PATH=$NOTES_PATH" >> "$GITHUB_ENV"
-        env:
-          FORCE_COLOR: '1'
 
-      - name: Determine release metadata
-        id: metadata
+      - name: Enforce committed live-release boundary
+        id: mode
         env:
+          DRY_RUN: ${{ inputs.dry_run }}
           PLAN_PATH: ${{ env.RELEASE_PLAN_PATH }}
-          RELEASE_TAG_INPUT: ${{ github.event.inputs.release_tag }}
-          RELEASE_NAME_INPUT: ${{ github.event.inputs.release_name }}
         run: |
           node <<'EOF'
           const fs = require('fs');
-          const planPath = process.env.PLAN_PATH;
-          if (!planPath || !fs.existsSync(planPath)) {
-            console.log('Release plan file not found.');
-            process.exit(0);
+          const plan = JSON.parse(fs.readFileSync(process.env.PLAN_PATH, 'utf8'));
+          const releases = Array.isArray(plan.releases) ? plan.releases : [];
+          const dryRun = process.env.DRY_RUN === 'true';
+
+          if (!dryRun && releases.length > 0) {
+            throw new Error(
+              'Live publishing cannot apply pending changesets. Merge the Version Packages PR, wait for CI on that committed version bump, then run this workflow again.'
+            );
           }
-          const data = JSON.parse(fs.readFileSync(planPath, 'utf8'));
-          const releases = Array.isArray(data.releases) ? data.releases : [];
-          if (!releases.length) {
-            console.log('No pending changesets found. Nothing to release.');
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, 'should_publish=false\n');
-            process.exit(0);
-          }
-          const primary = releases[0];
-          const defaultTag = `v${primary.newVersion}`;
-          const tag = (process.env.RELEASE_TAG_INPUT || '').trim() || defaultTag;
-          const releaseName = (process.env.RELEASE_NAME_INPUT || '').trim() || `Release ${primary.newVersion}`;
-          fs.appendFileSync(process.env.GITHUB_ENV, `RELEASE_TAG=${tag}\n`);
-          fs.appendFileSync(process.env.GITHUB_ENV, `RELEASE_NAME=${releaseName}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_publish=true\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `primary_version=${primary.newVersion}\n`);
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `primary_package=${primary.name}\n`);
+
+          const shouldRun = dryRun ? releases.length > 0 : true;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_run=${shouldRun}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_pending=${releases.length > 0}\n`);
           EOF
 
       - name: Verify npm token
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -100,69 +91,52 @@ jobs:
           fi
 
       - name: Configure npm auth
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
 
       - name: Preflight npm publish access
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bun run scripts/changeset-publish.ts --preflight-only
 
-      - name: Configure git user
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump versions
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
+      - name: Ephemerally bump versions for dry run
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run == true
         run: bun run release:version
 
-      - name: Commit version changes
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
+      - name: Build and inspect every publishable artifact
+        if: steps.mode.outputs.should_run == 'true'
         run: |
-          if git diff --quiet; then
-            echo "No changes produced by release:version step."
-            exit 1
-          fi
-          git add -A
-          git commit -m "chore: release"
+          bun run build:packages
+          bun run scripts/changeset-publish.ts --dry-run
 
-      - name: Create release tag
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          git tag -a "${RELEASE_TAG}" -m "${RELEASE_NAME}"
-
-      - name: Publish packages
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bun run release:publish
-
-      - name: Push release commit and tags
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
-        run: git push --follow-tags origin HEAD:${{ github.ref_name }}
-
-      - name: Publish GitHub release
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          name: ${{ env.RELEASE_NAME }}
-          body_path: ${{ env.RELEASE_NOTES_PATH }}
+      - name: Confirm verified master has not advanced
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run scripts/release-policy.ts verify-master
+
+      - name: Publish committed package versions
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bun run release:publish:verified
 
       - name: Finish dry run
-        if: steps.metadata.outputs.should_publish == 'true' && github.event.inputs.dry_run == 'true'
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run == true
         run: |
-          echo "::notice title=Dry Run::Release plan generated. Skipping versioning, tagging, and publishing."
+          echo "::notice title=Dry Run::Pending changesets were versioned only in the ephemeral checkout; all packages built and npm pack inspected every publishable artifact. Nothing was published."
 
-      - name: No release required
-        if: steps.metadata.outputs.should_publish != 'true'
-        run: echo "::notice title=Release::No pending changesets found."
+      - name: No dry-run release required
+        if: steps.mode.outputs.should_run != 'true' && inputs.dry_run == true
+        run: echo "::notice title=Dry Run::No pending changesets found."
+
+      - name: Finish live publish
+        if: steps.mode.outputs.should_run == 'true' && inputs.dry_run != true
+        run: |
+          echo "::notice title=Release::Published only package versions already committed on the CI-verified master commit."

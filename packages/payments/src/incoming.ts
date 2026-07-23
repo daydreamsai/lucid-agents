@@ -132,6 +132,17 @@ function noOpAdmission(): IncomingPaymentAdmission {
   };
 }
 
+function withSettlementHeaders(
+  response: Response,
+  headers: Record<string, string>
+): Response {
+  const decorated = new Response(response.body, response);
+  for (const [name, value] of Object.entries(headers)) {
+    decorated.headers.set(name, value);
+  }
+  return decorated;
+}
+
 function incomingPoliciesRequireUsdAmount(config: PaymentsConfig): boolean {
   return (config.policyGroups ?? []).some(group => {
     const limits = group.incomingLimits;
@@ -354,6 +365,7 @@ export function createIncomingPaymentAuthorizer(
     const groupsWithTotalReservations = new Set<string>();
     const policyScopes = new Map<string, string>();
     let committed = false;
+    let committedHeaders: Record<string, string> = {};
 
     const releaseOutstanding = async (): Promise<void> => {
       if (committed || !tracker || outstandingReservations.size === 0) return;
@@ -451,6 +463,8 @@ export function createIncomingPaymentAuthorizer(
       admitted: true,
       abort: releaseOutstanding,
       isCommitted: () => committed,
+      recoverCommittedResponse: response =>
+        withSettlementHeaders(response, committedHeaders),
       finalize: async response => {
         if (response.status >= 400) {
           try {
@@ -543,12 +557,13 @@ export function createIncomingPaymentAuthorizer(
             settlement.headers
           );
         }
+        committedHeaders = { ...settlement.headers };
         committed = true;
 
-        const settledResponse = new Response(response.body, response);
-        for (const [name, value] of Object.entries(settlement.headers)) {
-          settledResponse.headers.set(name, value);
-        }
+        const settledResponse = withSettlementHeaders(
+          response,
+          committedHeaders
+        );
 
         if (settlementId && tracker) {
           try {

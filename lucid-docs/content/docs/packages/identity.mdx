@@ -3,15 +3,15 @@ title: '@lucid-agents/identity'
 description: Publish ERC-8004 identity metadata and operate identity and reputation registries.
 icon: Fingerprint
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-23
 product: sdk
 ---
 
 `@lucid-agents/identity` connects a Lucid runtime to ERC-8004 identity and
-reputation registries. It can discover or register an on-chain agent identity,
-add trust metadata to the Agent Card, generate a registration document, and
-publish an OASF capability record.
+reputation registries. It can resolve a known token ID or register an on-chain
+agent identity, add trust metadata to the Agent Card, generate a registration
+document, and publish an OASF capability record.
 
 ERC-8004 is still an Ethereum standards-track **Draft**, not a finalized ERC.
 Identity ownership and reputation events are useful evidence, but they do not
@@ -27,12 +27,12 @@ bun add @lucid-agents/identity @lucid-agents/wallet viem
 
 ## Choose a mode
 
-| Mode                     | Network calls                           | Wallet required     | Use when                                                            |
-| ------------------------ | --------------------------------------- | ------------------- | ------------------------------------------------------------------- |
-| Advertise existing trust | None during build                       | No                  | You already have registry entries and only need Agent Card metadata |
-| Resolve identity         | Registry reads                          | Yes                 | You want to find an existing identity for a domain                  |
-| Auto-register            | Registry reads and a write when missing | Yes, funded for gas | You want the SDK to create an identity when none exists             |
-| Direct registry clients  | Reads and optional writes               | For writes          | You need lifecycle or reputation operations outside runtime build   |
+| Mode                     | Network calls             | Wallet required     | Use when                                                            |
+| ------------------------ | ------------------------- | ------------------- | ------------------------------------------------------------------- |
+| Advertise existing trust | None during build         | No                  | You already have registry entries and only need Agent Card metadata |
+| Read registry            | Registry reads            | No                  | You want to inspect a known agent ID through public RPC             |
+| Auto-register            | Registry write            | Yes, funded for gas | You intentionally want the SDK to create a new identity             |
+| Direct registry clients  | Reads and optional writes | For writes          | You need lifecycle or reputation operations outside runtime build   |
 
 Registration is an on-chain side effect. Keep `autoRegister: false` until the
 chain, domain, registry address, signer, and transaction policy have been
@@ -57,9 +57,9 @@ const runtime = await createAgent({
   .build();
 ```
 
-The identity extension declares a dependency on `wallets`. A developer wallet
-is preferred for registry operations; the agent wallet is a backward-compatible
-fallback.
+The identity extension orders itself after `wallets` when that extension is
+present. A wallet is optional for read-only clients. Auto-registration prefers a
+developer wallet and retains the agent wallet as a backward-compatible fallback.
 
 ## Configure from environment
 
@@ -67,6 +67,7 @@ fallback.
 AGENT_DOMAIN=research.example.com
 RPC_URL=https://your-base-sepolia-rpc.example
 CHAIN_ID=84532
+IDENTITY_AGENT_ID=42
 IDENTITY_AUTO_REGISTER=false
 
 # Optional override. Otherwise the package uses its known deployment for CHAIN_ID.
@@ -78,6 +79,7 @@ IDENTITY_REGISTRY_ADDRESS=0x...
 | Variable                                                                                             | Meaning                                                  |
 | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `AGENT_DOMAIN`                                                                                       | Domain placed in the identity proof and registration URI |
+| `IDENTITY_AGENT_ID`                                                                                  | Optional known token ID; skips domain-document discovery |
 | `RPC_URL`                                                                                            | EVM JSON-RPC endpoint                                    |
 | `CHAIN_ID`                                                                                           | Numeric EVM chain ID                                     |
 | `REGISTER_IDENTITY` or `IDENTITY_AUTO_REGISTER`                                                      | Whether to write a missing registration                  |
@@ -98,6 +100,12 @@ The `IdentityConfig` accepted by the extension is:
 ```typescript
 type IdentityConfig = {
   trust?: TrustConfig;
+  agentId?: bigint | number | string;
+  registrationDiscovery?: {
+    fetch?: IdentityRegistrationFetch;
+    timeoutMs?: number;
+    maxBytes?: number;
+  };
   domain?: string;
   autoRegister?: boolean;
   rpcUrl?: string;
@@ -135,7 +143,7 @@ const identityExtension = identity({
 This mode enriches the Agent Card but does not verify the supplied values at
 startup. Validate them in your release process.
 
-## Resolve or register identity directly
+## Read or register identity directly
 
 `createAgentIdentity()` is the lower-level bootstrap API:
 
@@ -143,7 +151,7 @@ startup. Validate them in your release process.
 import { createAgentIdentity } from '@lucid-agents/identity';
 
 const result = await createAgentIdentity({
-  runtime,
+  agentId: 42n,
   domain: 'research.example.com',
   rpcUrl: process.env.RPC_URL,
   chainId: 84532,
@@ -155,11 +163,7 @@ const result = await createAgentIdentity({
   },
 });
 
-if (!result.record) {
-  throw new Error(`Identity was not resolved: ${result.status}`);
-}
-
-console.log(result.record.agentId, result.status);
+console.log(result.record?.agentId, result.trust, result.status);
 ```
 
 The result can include:
@@ -170,13 +174,35 @@ The result can include:
 - `clients.identity` and `clients.reputation` when clients could be created
 - `registration` and `oasfRecord` when registration options were supplied
 
-Bootstrap is designed to let the agent continue when registry resolution
-fails. It logs a warning and may return no `record` or `clients`; treat those
-fields as the success condition when identity is mandatory.
+Read-only bootstrap is designed to let the agent continue when registry client
+initialization fails. It may return no `record` or `clients`; treat the required
+fields as the success condition when identity is mandatory. Explicit
+auto-registration failures propagate instead of degrading to an identity-free
+result. A domain is not an on-chain ERC-721 lookup key. Instead, domain-only
+bootstrap fetches `/.well-known/agent-registration.json`, requires a
+registration matching the configured namespace, chain, and registry address,
+then passes its `agentId` to `ownerOf` and `tokenURI`. Supply `agentId` or
+`IDENTITY_AGENT_ID` to skip document discovery and verify a known ID directly.
+Both paths populate `record` and unsigned `trust` without a signer.
+Agent IDs must fit the ERC-721 `uint256` range; use a decimal string or bigint
+above JavaScript's safe-integer range.
 
-`createAgentIdentity()` defaults `autoRegister` to `true` when neither an
-option nor environment value is present. Pass the value explicitly in
-production.
+Domain discovery rejects redirects and hard-caps requests at 1500 ms and
+64 KiB. `registrationDiscovery` can inject `fetch` and tighten those bounds.
+Missing, malformed, oversized, ambiguous, or registry-mismatched
+documents do not produce trust.
+
+For an HTTP(S) on-chain `agentURI`, bootstrap fails closed when its origin does
+not match the configured domain. Non-HTTP or malformed URIs cannot establish a
+domain relationship and fail closed unless `agentURI` pins the exact expected
+value. If a configured `agentId` is missing, bootstrap will not auto-register a
+replacement token with a different ID. Remove the ID for an intentional new
+registration.
+
+`createAgentIdentity()` and `identityFromEnv()` default `autoRegister` to
+`false`. Registration occurs only when `autoRegister: true`,
+`REGISTER_IDENTITY=true`, or `IDENTITY_AUTO_REGISTER=true` is explicitly
+configured, and a signing wallet is available.
 
 ## Runtime surface
 
@@ -390,14 +416,14 @@ The package exports:
 
 ## Troubleshooting
 
-| Symptom                                      | Likely cause                                                   | Fix                                                                                |
-| -------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Missing identity configuration error         | Domain, RPC URL, or chain ID is absent                         | Set `AGENT_DOMAIN`, `RPC_URL`, and `CHAIN_ID`, or pass them explicitly             |
-| Build says a wallet is required              | Domain/registration resolution was enabled without `wallets()` | Add a developer or agent wallet, or provide static `trust`                         |
-| Runtime starts but `result.record` is absent | Lookup/registration failed and bootstrap continued             | Inspect warnings, RPC reachability, registry address, funds, and `autoRegister`    |
-| Unsupported chain error                      | The constant exists but no registry deployment is configured   | Use one of the three mapped chains or provide/audit custom clients                 |
-| OASF strict-mode error                       | One or more structured arrays are missing or malformed         | Supply all five string arrays and valid URI values                                 |
-| `result.clients.validation` is undefined     | Validation is intentionally excluded                           | Do not depend on it; use a manually created compatibility client only after review |
+| Symptom                                      | Likely cause                                                 | Fix                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Missing identity configuration error         | Domain, RPC URL, or chain ID is absent                       | Set `AGENT_DOMAIN`, `RPC_URL`, and `CHAIN_ID`, or pass them explicitly               |
+| Build says a wallet is required              | Auto-registration was enabled without a signer               | Add a developer or agent wallet, or disable auto-registration                        |
+| Runtime starts but `result.record` is absent | Registration was disabled or failed                          | Read a known ID with `result.clients.identity.get(id)`, or inspect registration logs |
+| Unsupported chain error                      | The constant exists but no registry deployment is configured | Use one of the three mapped chains or provide/audit custom clients                   |
+| OASF strict-mode error                       | One or more structured arrays are missing or malformed       | Supply all five string arrays and valid URI values                                   |
+| `result.clients.validation` is undefined     | Validation is intentionally excluded                         | Do not depend on it; use a manually created compatibility client only after review   |
 
 See [ERC-8004 protocol support](/docs/protocols/erc-8004) for the precise
 upstream-version and interoperability boundary.

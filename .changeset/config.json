@@ -7,8 +7,7 @@
       "@lucid-agents/core",
       "@lucid-agents/identity",
       "@lucid-agents/payments",
-      "@lucid-agents/cli",
-      "@lucid-agents/api-sdk"
+      "@lucid-agents/cli"
     ]
   ],
   "linked": [],

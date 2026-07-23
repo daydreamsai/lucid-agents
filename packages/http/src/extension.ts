@@ -1,6 +1,7 @@
 import type {
   AgentCardWithEntrypoints,
   SendMessageRequest,
+  PreparedTaskExecution,
   TaskError,
   TaskStatus,
   TaskUpdateEvent,
@@ -30,6 +31,7 @@ import { stream } from './stream';
 import { createSSEStream, type SSEStreamRunnerContext } from './sse';
 import { createAgentRoutePlan } from './route-plan';
 import { createInMemoryHttpIdempotencyStore } from './idempotency';
+import { admitTaskExecution, rejectReservedTask } from './task-admission';
 
 type HttpDependencies = {
   payments?: PaymentsRuntime;
@@ -58,6 +60,7 @@ const TASK_STATUSES = new Set<TaskStatus>([
   'cancelled',
 ]);
 const TASK_ACCESS_HEADER = 'Task-Access-Token';
+const TASK_ADMISSION_TTL_MS = 5 * 60_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -133,6 +136,41 @@ function taskCapabilityUnavailable(): Response {
       },
     },
     { status: 404 }
+  );
+}
+
+function hasMppCredential(
+  request: Request,
+  mppRuntime: MppRuntime | undefined
+): boolean {
+  if (!mppRuntime) return false;
+  if (typeof mppRuntime.hasCredential === 'function') {
+    return mppRuntime.hasCredential(request);
+  }
+  // Fail closed across a temporarily version-skewed MPP runtime: any
+  // Authorization value might contain a comma-separated Payment credential.
+  return Boolean(request.headers.get('Authorization')?.trim());
+}
+
+function hasPaymentReceipt(response: Response): boolean {
+  return Boolean(response.headers.get('Payment-Receipt'));
+}
+
+function taskReservationFailure(error: unknown): Response {
+  return jsonResponse(
+    {
+      error: {
+        code:
+          error instanceof Error && error.name === 'TaskCapacityError'
+            ? 'task_capacity_exhausted'
+            : 'task_creation_failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to reserve task capacity',
+      },
+    },
+    { status: 503 }
   );
 }
 
@@ -362,10 +400,6 @@ export function http(
           }
 
           const { skillId, message, contextId } = requestBody;
-          const taskAccess = readTaskAccessToken(req, { generate: true });
-          if ('response' in taskAccess) return taskAccess.response;
-          const { accessToken } = taskAccess;
-
           const taskEntrypoint = runtime.agent.getEntrypoint(skillId);
           if (!taskEntrypoint) {
             return jsonResponse(
@@ -391,33 +425,146 @@ export function http(
             );
           }
 
-          const authorization = await authorizeEntrypointRequest(
-            req.clone(),
-            taskEntrypoint,
-            'invoke',
-            runtime
-          );
-          if (authorization.authorized === false) {
-            return authorization.response;
-          }
-          let admission: Awaited<ReturnType<typeof authorization.admit>>;
-          try {
-            admission = await authorization.admit();
-          } catch (error) {
+          const paidTask = hasExplicitPrice(taskEntrypoint);
+          const taskAccess = readTaskAccessToken(req, {
+            generate: !paidTask,
+          });
+          if ('response' in taskAccess) return taskAccess.response;
+          const { accessToken } = taskAccess;
+
+          if (paidTask && taskRuntime.durability !== 'durable') {
             return jsonResponse(
               {
                 error: {
-                  code: 'authorization_admission_failed',
+                  code: 'durable_task_store_required',
                   message:
-                    error instanceof Error
-                      ? error.message
-                      : 'Authorization admission failed',
+                    'Paid tasks require a TaskStore with durability="durable" so settlement cannot outlive the task capability.',
                 },
               },
               { status: 503 }
             );
           }
-          if (!admission.admitted) return admission.response;
+
+          const taskId = globalThis.crypto.randomUUID();
+          const reserveBeforeAuthorization =
+            hasMppCredential(req, runtime.mpp) &&
+            runtime.mpp?.requirements(taskEntrypoint, 'invoke').required ===
+              true;
+          let taskReserved = false;
+          let executionClaim: PreparedTaskExecution | undefined;
+          if (reserveBeforeAuthorization) {
+            try {
+              await taskRuntime.reserve({
+                taskId,
+                contextId,
+                accessToken,
+                admissionTtlMs: TASK_ADMISSION_TTL_MS,
+              });
+              taskReserved = true;
+              executionClaim = await taskRuntime.prepare(taskId);
+            } catch (error) {
+              executionClaim?.release();
+              const response = taskReservationFailure(error);
+              return taskReserved
+                ? rejectReservedTask({
+                    runtime: taskRuntime,
+                    taskId,
+                    accessToken,
+                    response,
+                    committed: false,
+                  })
+                : response;
+            }
+          }
+
+          let authorization: Awaited<
+            ReturnType<typeof authorizeEntrypointRequest>
+          >;
+          try {
+            authorization = await authorizeEntrypointRequest(
+              req.clone(),
+              taskEntrypoint,
+              'invoke',
+              runtime
+            );
+          } catch (error) {
+            const response = jsonResponse(
+              {
+                error: {
+                  code: 'authorization_failed',
+                  message:
+                    error instanceof Error
+                      ? error.message
+                      : 'Authorization failed',
+                },
+              },
+              { status: 503 }
+            );
+            return taskReserved
+              ? rejectReservedTask({
+                  runtime: taskRuntime,
+                  taskId,
+                  accessToken,
+                  response,
+                  committed: false,
+                  executionClaim,
+                })
+              : response;
+          }
+          if (authorization.authorized === false) {
+            return taskReserved
+              ? rejectReservedTask({
+                  runtime: taskRuntime,
+                  taskId,
+                  accessToken,
+                  response: authorization.response,
+                  committed: hasPaymentReceipt(authorization.response),
+                  executionClaim,
+                })
+              : authorization.response;
+          }
+          let admission: Awaited<ReturnType<typeof authorization.admit>>;
+          try {
+            admission = await authorization.admit();
+          } catch (error) {
+            const response = authorization.decorate(
+              jsonResponse(
+                {
+                  error: {
+                    code: 'authorization_admission_failed',
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : 'Authorization admission failed',
+                  },
+                },
+                { status: 503 }
+              )
+            );
+            return taskReserved
+              ? rejectReservedTask({
+                  runtime: taskRuntime,
+                  taskId,
+                  accessToken,
+                  response,
+                  committed: hasPaymentReceipt(response),
+                  executionClaim,
+                })
+              : response;
+          }
+          if (!admission.admitted) {
+            const response = authorization.decorate(admission.response);
+            return taskReserved
+              ? rejectReservedTask({
+                  runtime: taskRuntime,
+                  taskId,
+                  accessToken,
+                  response,
+                  committed: hasPaymentReceipt(response),
+                  executionClaim,
+                })
+              : response;
+          }
 
           let rawInput: unknown;
           // Guard: message.content must be an object to use 'in' operator
@@ -459,50 +606,60 @@ export function http(
             rawInput = message.content;
           }
 
-          const taskId = globalThis.crypto.randomUUID();
-
-          try {
-            await taskRuntime.reserve({ taskId, contextId, accessToken });
-          } catch (error) {
-            return admission.finalize(
-              jsonResponse(
-                {
-                  error: {
-                    code:
-                      error instanceof Error &&
-                      error.name === 'TaskCapacityError'
-                        ? 'task_capacity_exhausted'
-                        : 'task_creation_failed',
-                    message:
-                      error instanceof Error
-                        ? error.message
-                        : 'Unable to reserve task capacity',
-                  },
-                },
-                { status: 503 }
+          if (!taskReserved) {
+            try {
+              await taskRuntime.reserve({
+                taskId,
+                contextId,
+                accessToken,
+                admissionTtlMs: TASK_ADMISSION_TTL_MS,
+              });
+              taskReserved = true;
+              executionClaim = await taskRuntime.prepare(taskId);
+            } catch (error) {
+              executionClaim?.release();
+              const response = await admission.finalize(
+                taskReservationFailure(error)
+              );
+              return taskReserved
+                ? rejectReservedTask({
+                    runtime: taskRuntime,
+                    taskId,
+                    accessToken,
+                    response,
+                    committed: admission.isCommitted?.() === true,
+                  })
+                : response;
+            }
+          }
+          if (!executionClaim) {
+            const response = await admission.finalize(
+              taskReservationFailure(
+                new Error('Task execution claim was not prepared')
               )
             );
+            return rejectReservedTask({
+              runtime: taskRuntime,
+              taskId,
+              accessToken,
+              response,
+              committed: admission.isCommitted?.() === true,
+            });
           }
 
-          let taskResponse = jsonResponse({
+          const taskResponse = jsonResponse({
             taskId,
             accessToken,
             status: 'running' as TaskStatus,
           });
-          taskResponse = await admission.finalize(taskResponse);
-          if (taskResponse.status < 200 || taskResponse.status >= 300) {
-            await taskRuntime.cancel(taskId, accessToken);
-            return taskResponse;
-          }
-
-          console.info(
-            '[agent-kit:task] create',
-            `taskId=${taskId}`,
-            `skillId=${skillId}`
-          );
-
-          try {
-            await taskRuntime.execute(taskId, {
+          const executionAdmission = await admitTaskExecution({
+            runtime: taskRuntime,
+            taskId,
+            accessToken,
+            capabilityResponse: taskResponse,
+            authorization: admission,
+            executionClaim,
+            execution: {
               execute: async signal => {
                 const result = await invokeHandler(taskEntrypoint, rawInput, {
                   signal,
@@ -518,24 +675,30 @@ export function http(
                 };
               },
               mapError: taskErrorFrom,
-            });
-          } catch (error) {
-            await taskRuntime.cancel(taskId, accessToken);
-            return jsonResponse(
-              {
-                error: {
-                  code: 'task_execution_failed',
-                  message:
-                    error instanceof Error
-                      ? error.message
-                      : 'Unable to start task execution',
+            },
+            executionErrorResponse: error =>
+              jsonResponse(
+                {
+                  error: {
+                    code: 'task_execution_failed',
+                    message:
+                      error instanceof Error
+                        ? error.message
+                        : 'Unable to start task execution',
+                  },
                 },
-              },
-              { status: 503 }
+                { status: 503 }
+              ),
+          });
+
+          if (executionAdmission.accepted) {
+            console.info(
+              '[agent-kit:task] create',
+              `taskId=${taskId}`,
+              `skillId=${skillId}`
             );
           }
-
-          return taskResponse;
+          return executionAdmission.response;
         },
         getTask: async (req, params) => {
           const taskRuntime = runtime.a2a?.tasks;

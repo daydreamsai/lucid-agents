@@ -72,6 +72,55 @@ describe('validateIdentityConfig', () => {
     ).not.toThrow();
   });
 
+  it('accepts a large base-10 identity agent ID and ignores an empty env value', () => {
+    const requiredEnv = {
+      AGENT_DOMAIN: 'env-agent.example.com',
+      RPC_URL: 'https://rpc.example.com',
+      CHAIN_ID: '84532',
+    };
+
+    expect(() =>
+      validateIdentityConfig(makeOptions({}), {
+        ...requiredEnv,
+        IDENTITY_AGENT_ID: '9007199254740993',
+      })
+    ).not.toThrow();
+    expect(() =>
+      validateIdentityConfig(makeOptions({}), {
+        ...requiredEnv,
+        IDENTITY_AGENT_ID: '',
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects a non-numeric identity agent ID', () => {
+    expect(() =>
+      validateIdentityConfig(
+        makeOptions({
+          agentId: 'not-an-id',
+          domain: 'agent.example.com',
+          rpcUrl: 'https://rpc.example.com',
+          chainId: 84532,
+        }),
+        {}
+      )
+    ).toThrow(/IDENTITY_AGENT_ID.*base-10 integer/);
+  });
+
+  it('rejects an identity agent ID outside the ERC-721 uint256 range', () => {
+    expect(() =>
+      validateIdentityConfig(
+        {
+          domain: 'agent.example.com',
+          rpcUrl: 'https://rpc.example.com',
+          chainId: 84532,
+          agentId: 1n << 256n,
+        },
+        {}
+      )
+    ).toThrow(/IDENTITY_AGENT_ID.*256-bit integer/);
+  });
+
   it('passes strict OASF validation with valid JSON arrays', () => {
     expect(() =>
       validateIdentityConfig(makeOptions({}), {

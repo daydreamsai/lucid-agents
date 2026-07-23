@@ -1,4 +1,4 @@
-name: SDK Watch & Release
+name: SDK Schema Watch
 
 on:
   repository_dispatch:
@@ -6,29 +6,29 @@ on:
   workflow_dispatch:
     inputs:
       openapi_url:
-        description: 'OpenAPI spec URL (optional, uses default if not provided)'
+        description: 'Authorized OpenAPI schema URL'
         required: false
         type: string
 
 concurrency:
-  group: sdk-watch-release
+  group: sdk-schema-review
   cancel-in-progress: false
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
-  regenerate-and-release:
-    name: Regenerate SDK & Release
+  regenerate-and-open-pr:
+    name: Regenerate SDK review
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout
+      - name: Checkout current master
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          ref: master
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -38,70 +38,99 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate SDK
+      - name: Generate SDK with schema provenance
         working-directory: packages/api-sdk
         env:
-          OPENAPI_URL: ${{ inputs.openapi_url || 'https://api-lucid-dev.daydreams.systems/doc' }}
-        run: bun run generate
+          OPENAPI_URL: ${{ inputs.openapi_url || github.event.client_payload.openapi_url || 'https://api-lucid-dev.daydreams.systems/doc' }}
+        run: bun run generate -- --result "$RUNNER_TEMP/sdk-generation-result.json"
 
-      - name: Verify generated SDK
+      - name: Read compatibility result
+        id: generation
+        env:
+          RESULT_PATH: ${{ runner.temp }}/sdk-generation-result.json
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const result = JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'));
+          for (const key of ['classification', 'schemaSha256', 'schemaSource']) {
+            const value = String(result[key] ?? '');
+            if (!value || value.includes('\n')) throw new Error(`Invalid generation result ${key}`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          }
+          const bump = result.recommendedBump == null ? 'none' : String(result.recommendedBump);
+          if (!['none', 'patch', 'minor'].includes(bump)) {
+            throw new Error(`Invalid recommended bump ${bump}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `recommended_bump=${bump}\n`);
+          EOF
+
+      - name: Verify generated SDK and classifier
         working-directory: packages/api-sdk
         run: |
+          bun run test:compatibility
           bun run type-check
           bun run build
 
       - name: Check for SDK changes
-        id: check-changes
-        working-directory: packages/api-sdk
+        id: changes
         run: |
-          if [ -n "$(git status --porcelain src/sdk/)" ]; then
+          if [ -n "$(git status --porcelain -- packages/api-sdk/src/sdk packages/api-sdk/src/openapi-provenance.gen.ts packages/api-sdk/openapi-schema.json packages/api-sdk/openapi-provenance.json)" ]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create changeset
-        if: steps.check-changes.outputs.has_changes == 'true'
+      - name: Create compatibility-aware changeset
+        if: steps.changes.outputs.has_changes == 'true' && steps.generation.outputs.recommended_bump != 'none'
+        env:
+          SDK_BUMP: ${{ steps.generation.outputs.recommended_bump }}
+          SDK_CLASSIFICATION: ${{ steps.generation.outputs.classification }}
+          SDK_SCHEMA_SHA256: ${{ steps.generation.outputs.schemaSha256 }}
         run: |
-          # Check if changeset already exists
-          if ls .changeset/*api-sdk*.md 2>/dev/null; then
-            echo "Changeset already exists, skipping creation"
-          else
-            TIMESTAMP=$(date +%s)
-            CHANGESET_PATH=".changeset/api-sdk-update-${TIMESTAMP}.md"
-            cat > "$CHANGESET_PATH" << 'INNEREOF'
-          ---
-          "@lucid-agents/api-sdk": patch
-          ---
+          node <<'EOF'
+          const fs = require('fs');
+          const bump = process.env.SDK_BUMP;
+          if (!['patch', 'minor'].includes(bump)) {
+            throw new Error(`Refusing automatic changeset for ${bump}`);
+          }
+          const contents = [
+            '---',
+            `"@lucid-agents/api-sdk": ${bump}`,
+            '---',
+            '',
+            `Regenerate the hosted Runtime API client from schema ${process.env.SDK_SCHEMA_SHA256} (${process.env.SDK_CLASSIFICATION}).`,
+            '',
+          ].join('\n');
+          fs.writeFileSync('.changeset/api-sdk-schema-update.md', contents);
+          EOF
 
-          Updated SDK to match latest API specification
-          INNEREOF
-            echo "Created changeset: $CHANGESET_PATH"
-          fi
-
-      - name: Commit SDK changes
-        if: steps.check-changes.outputs.has_changes == 'true'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add packages/api-sdk/src/sdk/ .changeset/
-          git commit -m "chore(api-sdk): regenerate SDK from OpenAPI spec"
-          git push
-
-      - name: Trigger release workflow
-        if: steps.check-changes.outputs.has_changes == 'true'
-        uses: actions/github-script@v7
+      - name: Open or update SDK review pull request
+        if: steps.changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v7
         with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'release.yml',
-              ref: context.ref
-            });
-            console.log('✅ Triggered release workflow');
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/api-sdk-schema
+          base: master
+          delete-branch: true
+          commit-message: 'chore(api-sdk): regenerate from reviewed schema'
+          title: 'chore(api-sdk): review generated schema update'
+          body: |
+            Automated SDK regeneration for review.
+
+            - Schema source: `${{ steps.generation.outputs.schemaSource }}`
+            - SHA-256: `${{ steps.generation.outputs.schemaSha256 }}`
+            - Compatibility: `${{ steps.generation.outputs.classification }}`
+            - Automatic version bump: `${{ steps.generation.outputs.recommended_bump }}`
+
+            Breaking, ambiguous, and first-baseline changes intentionally have no automatic changeset. A reviewer must inspect the provenance report and generated diff, then add the appropriate changeset before merge.
+          add-paths: |
+            packages/api-sdk/src/sdk
+            packages/api-sdk/src/openapi-provenance.gen.ts
+            packages/api-sdk/openapi-schema.json
+            packages/api-sdk/openapi-provenance.json
+            .changeset
 
       - name: No changes detected
-        if: steps.check-changes.outputs.has_changes != 'true'
+        if: steps.changes.outputs.has_changes != 'true'
         run: |
-          echo "::notice title=No Changes::SDK is already up to date with the API specification"
+          echo "::notice title=No Changes::SDK and committed schema provenance already match the authorized specification."

@@ -25,10 +25,10 @@ documented as supported production endpoints.
 Stable:
 
 ```bash
-bun add @lucid-agents/api-sdk@2.5.0
+bun add @lucid-agents/api-sdk@4.2.0
 ```
 
-The current repository package is version `3.0.0` and can be ahead of npm.
+The current repository package is version `4.2.0` and can be ahead of npm.
 Keep it with the matching generated API schema; do not upgrade this client
 independently and assume server compatibility.
 
@@ -121,9 +121,20 @@ Review the generated diff for removed/renamed paths, request/response changes,
 auth changes, new sensitive fields, and query-hook churn. A release should tie
 the generated package version to the schema/server release that produced it.
 
-The repository generator currently contains an internal development fallback
-for maintainers. Consumer and release workflows must not rely on that fallback
-as a public availability promise.
+Generation requires an explicit `OPENAPI_URL`. It records a redacted source
+locator, SHA-256 hash, previous hash, compatibility classification, and
+generator version in `openapi-provenance.json`. The source URL's credentials,
+query parameters, and fragment are never recorded.
+
+The committed OpenAPI snapshot is the compatibility baseline for the next
+generation. Additive changes receive a minor changeset. Breaking, ambiguous,
+or first-baseline changes deliberately receive no automatic changeset and must
+be classified during pull-request review. SDK automation never pushes to
+`master` or starts a release directly.
+
+Published provenance is available as `openApiProvenance` from
+`@lucid-agents/api-sdk/provenance`. The package tarball also contains the full
+`openapi-provenance.json` compatibility report.
 
 ## Open-source SDK versus hosted API client
 

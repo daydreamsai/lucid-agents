@@ -1,0 +1,20 @@
+{
+  "schemaSource": "unrecorded",
+  "schemaSha256": null,
+  "comparedToSha256": null,
+  "compatibility": {
+    "classification": "ambiguous",
+    "recommendedBump": null,
+    "changes": [
+      {
+        "kind": "missing-baseline",
+        "location": "openapi",
+        "message": "The existing generated SDK predates committed schema provenance"
+      }
+    ]
+  },
+  "generator": {
+    "package": "@hey-api/openapi-ts",
+    "version": "0.88.2"
+  }
+}

@@ -22,13 +22,16 @@ import type {
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 
+import type { IdentityAgentId } from './agent-id';
 import { getRegistryAddresses } from './config';
 import {
   bootstrapIdentity,
   type BootstrapIdentityOptions,
   type BootstrapIdentityResult,
   createIdentityRegistryClient,
+  type IdentityRegistrationDiscoveryOptions,
   type IdentityRegistryClient,
+  makeViemClientsFromEnv,
   makeViemClientsFromWallet,
   type PublicClientLike,
   type WalletClientLike,
@@ -107,15 +110,29 @@ export type AgentRegistrationOptions = {
 
 export type CreateAgentIdentityOptions = {
   /**
-   * Agent runtime instance (optional if walletHandle is provided).
-   * If walletHandle is not provided, runtime.wallets.developer is required.
+   * Existing ERC-8004 token ID to resolve directly during initialization.
+   * Falls back to IDENTITY_AGENT_ID. When omitted, read-only bootstrap
+   * discovers an ID through the domain-owned registration document before
+   * verifying it on-chain.
+   */
+  agentId?: IdentityAgentId;
+
+  /**
+   * Optional fetch, timeout, and size controls for domain-owned registration
+   * document discovery when agentId is omitted.
+   */
+  registrationDiscovery?: IdentityRegistrationDiscoveryOptions;
+
+  /**
+   * Optional agent runtime instance.
+   * A developer or agent wallet is required only when autoRegister is true.
    */
   runtime?: AgentRuntime<{ wallets?: WalletsRuntime }>;
 
   /**
    * Optional wallet handle to use for identity operations.
    * Takes precedence over runtime.wallets.developer.
-   * Useful when passing a browser-connected wallet (e.g., thirdweb account).
+   * Required for auto-registration, but not for read-only registry clients.
    */
   walletHandle?: AgentWalletHandle | DeveloperWalletHandle;
 
@@ -127,13 +144,13 @@ export type CreateAgentIdentityOptions = {
 
   /**
    * Whether to automatically register if not found in registry.
-   * Defaults to true.
+   * Defaults to false because registration is an on-chain write.
    */
   autoRegister?: boolean;
 
   /**
    * Chain ID for the ERC-8004 registry.
-   * Falls back to CHAIN_ID env var or defaults to Base Sepolia (84532).
+   * Falls back to CHAIN_ID env var and is otherwise required.
    */
   chainId?: number;
 
@@ -241,13 +258,15 @@ export type AgentIdentity = BootstrapIdentityResult & {
 };
 
 /**
- * Create agent identity with automatic registration and sensible defaults.
+ * Initialize ERC-8004 identity clients with registration disabled by default.
  *
  * This is the recommended way to set up ERC-8004 identity for your agent.
  * It handles:
  * - Viem client creation from environment variables
- * - Automatic registry lookup
- * - Optional auto-registration when not found
+ * - Read-only registry clients when no wallet is configured
+ * - Bounded domain registration-document discovery
+ * - Optional existing-record lookup by explicit agent ID
+ * - Optional, explicit auto-registration
  * - Domain proof signature generation
  * - Creation of registry clients (identity, reputation)
  * - Validation Registry is deprecated and not created by default (see note below)
@@ -256,24 +275,20 @@ export type AgentIdentity = BootstrapIdentityResult & {
  * ```ts
  * import { createAgentIdentity } from "@lucid-agents/identity";
  *
- * // Minimal usage - uses env vars for everything
- * const identity = await createAgentIdentity({ autoRegister: true });
+ * // Read-only bootstrap of an existing identity. IDENTITY_AGENT_ID may be
+ * // used instead of agentId. No signer or registry write is required.
+ * const identity = await createAgentIdentity({
+ *   agentId: 42n,
+ *   domain: "agent.example.com",
+ *   chainId: 84532,
+ *   rpcUrl: "https://sepolia.base.org",
+ * });
+ * console.log("Resolved agent:", identity.record?.agentId);
  *
- * if (identity.trust) {
- *   console.log("Agent registered with ID:", identity.record?.agentId);
- * }
- *
- * // Use registry clients
+ * // Read registry state
  * if (identity.clients) {
- *   // Give feedback to another agent
- *   await identity.clients.reputation.giveFeedback({
- *     toAgentId: 42n,
- *     value: 90,
- *     valueDecimals: 0,
- *     tag1: "reliable",
- *     tag2: "fast",
- *     endpoint: "https://agent.example.com",
- *   });
+ *   const summary = await identity.clients.reputation.getSummary(42n);
+ *   console.log("Feedback count:", summary.count);
  * }
  * ```
  *
@@ -301,11 +316,11 @@ export type AgentIdentity = BootstrapIdentityResult & {
 export async function createAgentIdentity(
   options: CreateAgentIdentityOptions
 ): Promise<AgentIdentity> {
-  validateIdentityConfig(options, options.env);
-
   const {
     runtime,
     walletHandle: explicitWalletHandle,
+    agentId,
+    registrationDiscovery,
     domain,
     chainId,
     registryAddress,
@@ -318,36 +333,47 @@ export async function createAgentIdentity(
     logger,
   } = options;
 
+  const autoRegister = resolveAutoRegister(options, env);
+
   // Prefer explicit walletHandle, then developer wallet, then agent wallet (for backward compatibility)
   const walletHandle =
     explicitWalletHandle ??
     runtime?.wallets?.developer ??
     runtime?.wallets?.agent;
 
-  if (!walletHandle) {
+  if (autoRegister && !walletHandle) {
     throw new Error(
-      'Either walletHandle or runtime.wallets.developer is required for identity operations. ' +
-        'Provide walletHandle directly or configure runtime.wallets.developer in the runtime config.'
+      'Identity auto-registration requires a developer or agent wallet. ' +
+        'Provide walletHandle directly or configure runtime.wallets.developer before setting autoRegister to true.'
     );
   }
 
-  const autoRegister = resolveAutoRegister(options, env);
+  validateIdentityConfig(options, options.env);
 
-  const viemFactory = await makeViemClientsFromWallet({
-    env,
-    rpcUrl,
-    walletHandle,
-  });
+  const viemFactory = walletHandle
+    ? await makeViemClientsFromWallet({
+        env,
+        rpcUrl,
+        walletHandle,
+      })
+    : await makeViemClientsFromEnv({ env, rpcUrl });
 
   const resolvedChainId = resolveRequiredChainId(chainId, env);
+  const resolvedEnv =
+    env ??
+    (typeof process !== 'undefined' && typeof process.env === 'object'
+      ? process.env
+      : {});
   const resolvedRegistryAddress =
     registryAddress ??
-    (typeof env === 'object' && env?.IDENTITY_REGISTRY_ADDRESS
-      ? (env.IDENTITY_REGISTRY_ADDRESS as `0x${string}`)
+    (resolvedEnv.IDENTITY_REGISTRY_ADDRESS
+      ? (resolvedEnv.IDENTITY_REGISTRY_ADDRESS as `0x${string}`)
       : undefined) ??
     getRegistryAddresses(resolvedChainId).IDENTITY_REGISTRY;
 
   const bootstrapOptions: BootstrapIdentityOptions = {
+    agentId,
+    registrationDiscovery,
     domain,
     chainId: resolvedChainId,
     registryAddress: resolvedRegistryAddress,
@@ -432,8 +458,7 @@ export async function createAgentIdentity(
 
       if (vClients?.publicClient) {
         const registryAddresses = getRegistryAddresses(resolvedChainId);
-        const identityAddress =
-          registryAddress ?? registryAddresses.IDENTITY_REGISTRY;
+        const identityAddress = resolvedRegistryAddress;
 
         clients = {
           identity: createIdentityRegistryClient({

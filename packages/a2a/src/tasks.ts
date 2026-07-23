@@ -1,6 +1,7 @@
 import type {
   A2ATaskRuntime,
   ExecuteTaskOptions,
+  PreparedTaskExecution,
   StoredTask,
   Task,
   TaskError,
@@ -66,7 +67,40 @@ export function createInMemoryTaskStore(
     listeners.delete(taskId);
   };
 
+  const reapExpiredAdmissions = (at: number): number => {
+    let reaped = 0;
+    for (const [taskId, record] of tasks) {
+      const admissionExpired =
+        record.admissionExpiresAt !== undefined &&
+        record.admissionExpiresAt <= at &&
+        !record.executionLease;
+      const preparedClaimExpired =
+        record.executionLease?.phase === 'prepared' &&
+        record.executionLease.expiresAt <= at;
+      if (!admissionExpired && !preparedClaimExpired) continue;
+
+      const cancelled: Task = {
+        ...record.task,
+        status: 'cancelled',
+        updatedAt: new Date(at).toISOString(),
+      };
+      tasks.set(taskId, {
+        ...record,
+        task: cancelled,
+        admissionExpiresAt: undefined,
+        executionLease: undefined,
+      });
+      publish(taskId, {
+        type: 'statusUpdate',
+        data: { taskId, status: 'cancelled' },
+      });
+      reaped += 1;
+    }
+    return reaped;
+  };
+
   const purgeExpired = (): void => {
+    reapExpiredAdmissions(now());
     const cutoff = now() - retentionMs;
     for (const [taskId, record] of tasks) {
       const { task } = record;
@@ -95,6 +129,10 @@ export function createInMemoryTaskStore(
   };
 
   return {
+    durability: 'process',
+    async reapExpiredAdmissions(at) {
+      return reapExpiredAdmissions(at);
+    },
     async create(record, event) {
       if (tasks.has(record.task.taskId)) {
         throw new Error(`Task "${record.task.taskId}" already exists`);
@@ -134,6 +172,7 @@ export function createInMemoryTaskStore(
       };
     },
     async claimExecution(taskId, ownerId, expiresAt, claimedAt) {
+      reapExpiredAdmissions(claimedAt);
       purgeExpired();
       const current = tasks.get(taskId);
       if (!current || current.task.status !== 'running') return undefined;
@@ -145,7 +184,43 @@ export function createInMemoryTaskStore(
       }
       tasks.set(taskId, {
         ...current,
-        executionLease: { ownerId, expiresAt },
+        admissionExpiresAt: undefined,
+        executionLease: { ownerId, expiresAt, phase: 'prepared' },
+      });
+      return current.task;
+    },
+    async renewExecutionClaim(taskId, ownerId, expiresAt, claimedAt) {
+      const current = tasks.get(taskId);
+      if (
+        !current ||
+        current.task.status !== 'running' ||
+        current.executionLease?.phase !== 'prepared' ||
+        current.executionLease.ownerId !== ownerId ||
+        current.executionLease.expiresAt <= claimedAt
+      ) {
+        return undefined;
+      }
+      tasks.set(taskId, {
+        ...current,
+        executionLease: { ownerId, expiresAt, phase: 'prepared' },
+      });
+      return current.task;
+    },
+    async activateExecution(taskId, ownerId, expiresAt, activatedAt) {
+      const current = tasks.get(taskId);
+      if (
+        !current ||
+        current.task.status !== 'running' ||
+        current.executionLease?.phase !== 'prepared' ||
+        current.executionLease.ownerId !== ownerId ||
+        current.executionLease.expiresAt <= activatedAt
+      ) {
+        return undefined;
+      }
+      tasks.set(taskId, {
+        ...current,
+        admissionExpiresAt: undefined,
+        executionLease: { ownerId, expiresAt, phase: 'active' },
       });
       return current.task;
     },
@@ -162,6 +237,9 @@ export function createInMemoryTaskStore(
       tasks.set(taskId, {
         ...current,
         task: next,
+        admissionExpiresAt: TERMINAL_STATUSES.has(next.status)
+          ? undefined
+          : current.admissionExpiresAt,
         executionLease: TERMINAL_STATUSES.has(next.status)
           ? undefined
           : current.executionLease,
@@ -189,6 +267,7 @@ export function createInMemoryTaskStore(
 export type CreateTaskRuntimeOptions = {
   store: TaskStore;
   maxRunMs?: number;
+  admissionLeaseMs?: number;
   now?: () => number;
 };
 
@@ -223,11 +302,23 @@ export function createTaskRuntime(
 ): A2ATaskRuntime {
   const now = options.now ?? Date.now;
   const maxRunMs = options.maxRunMs ?? 15 * 60 * 1_000;
+  const admissionLeaseMs = options.admissionLeaseMs ?? 30_000;
   const controllers = new Map<string, AbortController>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  type PreparedClaimState = {
+    taskId: string;
+    ownerId: string;
+    timer?: ReturnType<typeof setTimeout>;
+    released: boolean;
+    lost: boolean;
+  };
+  const preparedClaims = new Map<string, PreparedClaimState>();
 
   if (!Number.isFinite(maxRunMs) || maxRunMs <= 0) {
     throw new Error('maxRunMs must be a positive number');
+  }
+  if (!Number.isFinite(admissionLeaseMs) || admissionLeaseMs <= 0) {
+    throw new Error('admissionLeaseMs must be a positive number');
   }
 
   const timestamp = () => new Date(now()).toISOString();
@@ -237,11 +328,55 @@ export function createTaskRuntime(
     if (timer) clearTimeout(timer);
     timers.delete(taskId);
   };
+  const releasePreparedClaim = (state: PreparedClaimState): void => {
+    state.released = true;
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = undefined;
+    if (preparedClaims.get(state.taskId) === state) {
+      preparedClaims.delete(state.taskId);
+    }
+  };
+  const renewPreparedClaim = async (
+    state: PreparedClaimState
+  ): Promise<void> => {
+    if (state.released || state.lost) {
+      throw new Error(`Task "${state.taskId}" execution claim is no longer held`);
+    }
+    const renewed = await options.store.renewExecutionClaim(
+      state.taskId,
+      state.ownerId,
+      now() + admissionLeaseMs,
+      now()
+    );
+    if (!renewed) {
+      state.lost = true;
+      releasePreparedClaim(state);
+      throw new Error(`Task "${state.taskId}" execution claim expired`);
+    }
+  };
+  const schedulePreparedHeartbeat = (state: PreparedClaimState): void => {
+    const delay = Math.max(1, Math.floor(admissionLeaseMs / 3));
+    state.timer = setTimeout(() => {
+      void renewPreparedClaim(state)
+        .catch(error => {
+          console.error(
+            '[lucid-agents/a2a] Failed to renew prepared task claim',
+            error
+          );
+        })
+        .finally(() => {
+          if (!state.released && !state.lost) {
+            schedulePreparedHeartbeat(state);
+          }
+        });
+    }, delay);
+  };
 
   const getOwnedTask = async (
     taskId: string,
     accessToken: string
   ): Promise<Task | undefined> => {
+    await options.store.reapExpiredAdmissions(now());
     const ownerHash = await hashAccessToken(accessToken);
     const record = await options.store.get(taskId);
     return record?.ownerHash === ownerHash ? record.task : undefined;
@@ -267,8 +402,11 @@ export function createTaskRuntime(
         data: { taskId, status: 'cancelled' },
       }
     );
-    if (transitioned)
+    if (transitioned) {
+      const prepared = preparedClaims.get(taskId);
+      if (prepared) releasePreparedClaim(prepared);
       controllers.get(taskId)?.abort(new Error('Task cancelled'));
+    }
     return transitioned ?? current;
   };
 
@@ -333,8 +471,89 @@ export function createTaskRuntime(
     }
   };
 
+  const activatePrepared = async (
+    state: PreparedClaimState,
+    task: Task,
+    executeOptions: ExecuteTaskOptions
+  ): Promise<Task> => {
+    if (controllers.has(task.taskId)) {
+      throw new Error(`Task "${task.taskId}" is already executing`);
+    }
+    if (state.released || state.lost) {
+      throw new Error(`Task "${task.taskId}" execution claim is no longer held`);
+    }
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = undefined;
+    const activated = await options.store.activateExecution(
+      task.taskId,
+      state.ownerId,
+      now() + maxRunMs,
+      now()
+    );
+    releasePreparedClaim(state);
+    if (!activated) {
+      state.lost = true;
+      throw new Error(`Task "${task.taskId}" execution claim expired`);
+    }
+
+    const controller = new AbortController();
+    controllers.set(task.taskId, controller);
+    timers.set(
+      task.taskId,
+      setTimeout(() => {
+        const timeoutError: TaskError = {
+          code: 'task_timeout',
+          message: `Task exceeded its ${maxRunMs}ms execution limit`,
+        };
+        void options.store
+          .compareAndSet(
+            task.taskId,
+            ['running'],
+            {
+              ...task,
+              status: 'failed',
+              error: timeoutError,
+              updatedAt: timestamp(),
+            },
+            {
+              type: 'error',
+              data: {
+                taskId: task.taskId,
+                status: 'failed',
+                error: timeoutError,
+              },
+            },
+            state.ownerId
+          )
+          .catch(error => {
+            console.error(
+              '[lucid-agents/a2a] Failed to persist task timeout',
+              error
+            );
+          })
+          .finally(() => controller.abort(timeoutError));
+      }, maxRunMs)
+    );
+    void run(task, controller, executeOptions, state.ownerId).catch(error => {
+      console.error(
+        '[lucid-agents/a2a] Failed to persist task execution result',
+        error
+      );
+    });
+    return task;
+  };
+
   const runtime: A2ATaskRuntime = {
+    durability: options.store.durability,
     async reserve(startOptions) {
+      if (
+        startOptions.admissionTtlMs !== undefined &&
+        (!Number.isFinite(startOptions.admissionTtlMs) ||
+          startOptions.admissionTtlMs <= 0)
+      ) {
+        throw new Error('admissionTtlMs must be a positive number');
+      }
+      await options.store.reapExpiredAdmissions(now());
       const createdAt = timestamp();
       const task: Task = {
         taskId: startOptions.taskId,
@@ -347,6 +566,9 @@ export function createTaskRuntime(
         {
           task,
           ownerHash: await hashAccessToken(startOptions.accessToken),
+          ...(startOptions.admissionTtlMs !== undefined
+            ? { admissionExpiresAt: now() + startOptions.admissionTtlMs }
+            : {}),
         },
         {
           type: 'statusUpdate',
@@ -355,15 +577,16 @@ export function createTaskRuntime(
       );
       return task;
     },
-    async execute(taskId, executeOptions) {
-      if (controllers.has(taskId)) {
+    async prepare(taskId): Promise<PreparedTaskExecution> {
+      await options.store.reapExpiredAdmissions(now());
+      if (controllers.has(taskId) || preparedClaims.has(taskId)) {
         throw new Error(`Task "${taskId}" is already executing`);
       }
-      const executionOwnerId = globalThis.crypto.randomUUID();
+      const ownerId = globalThis.crypto.randomUUID();
       const task = await options.store.claimExecution(
         taskId,
-        executionOwnerId,
-        now() + maxRunMs,
+        ownerId,
+        now() + admissionLeaseMs,
         now()
       );
       if (!task) {
@@ -374,53 +597,30 @@ export function createTaskRuntime(
         }
         throw new Error(`Task "${taskId}" is already executing`);
       }
-      const controller = new AbortController();
-      controllers.set(task.taskId, controller);
-      timers.set(
-        task.taskId,
-        setTimeout(() => {
-          const timeoutError: TaskError = {
-            code: 'task_timeout',
-            message: `Task exceeded its ${maxRunMs}ms execution limit`,
-          };
-          void options.store
-            .compareAndSet(
-              task.taskId,
-              ['running'],
-              {
-                ...task,
-                status: 'failed',
-                error: timeoutError,
-                updatedAt: timestamp(),
-              },
-              {
-                type: 'error',
-                data: {
-                  taskId: task.taskId,
-                  status: 'failed',
-                  error: timeoutError,
-                },
-              },
-              executionOwnerId
-            )
-            .catch(error => {
-              console.error(
-                '[lucid-agents/a2a] Failed to persist task timeout',
-                error
-              );
-            })
-            .finally(() => controller.abort(timeoutError));
-        }, maxRunMs)
-      );
-      void run(task, controller, executeOptions, executionOwnerId).catch(
-        error => {
-          console.error(
-            '[lucid-agents/a2a] Failed to persist task execution result',
-            error
-          );
-        }
-      );
-      return task;
+      const state: PreparedClaimState = {
+        taskId,
+        ownerId,
+        released: false,
+        lost: false,
+      };
+      preparedClaims.set(taskId, state);
+      schedulePreparedHeartbeat(state);
+      return {
+        task,
+        renew: () => renewPreparedClaim(state),
+        activate: executeOptions =>
+          activatePrepared(state, task, executeOptions),
+        release: () => releasePreparedClaim(state),
+      };
+    },
+    async execute(taskId, executeOptions) {
+      const prepared = await runtime.prepare(taskId);
+      try {
+        return await prepared.activate(executeOptions);
+      } catch (error) {
+        prepared.release();
+        throw error;
+      }
     },
     async start(startOptions) {
       const task = await runtime.reserve(startOptions);
@@ -429,6 +629,7 @@ export function createTaskRuntime(
     },
     get: getOwnedTask,
     async list(accessToken, filters) {
+      await options.store.reapExpiredAdmissions(now());
       return options.store.list(await hashAccessToken(accessToken), filters);
     },
     async cancel(taskId, accessToken) {
@@ -447,8 +648,12 @@ export function createTaskRuntime(
         controller.abort(new Error('Task runtime closed'));
       }
       for (const timer of timers.values()) clearTimeout(timer);
+      for (const prepared of preparedClaims.values()) {
+        releasePreparedClaim(prepared);
+      }
       controllers.clear();
       timers.clear();
+      preparedClaims.clear();
       await options.store.close?.();
     },
   };

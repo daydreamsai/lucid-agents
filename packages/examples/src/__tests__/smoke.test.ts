@@ -6,7 +6,12 @@
  * Each test group recreates the agent construction inline rather than
  * importing the example files (which have top-level await / start servers).
  */
-import { a2a, waitForTask } from '@lucid-agents/a2a';
+import {
+  a2a,
+  createInMemoryTaskStore,
+  createTaskRuntime,
+  waitForTask,
+} from '@lucid-agents/a2a';
 import { analytics } from '@lucid-agents/analytics';
 import { createAgent } from '@lucid-agents/core';
 import { createAgentApp } from '@lucid-agents/hono';
@@ -16,11 +21,16 @@ import {
   defineServiceUi,
   resolveServiceUi,
 } from '@lucid-agents/http/service-ui';
+import {
+  bootstrapIdentity,
+  type PublicClientLike,
+} from '@lucid-agents/identity';
 import { mpp, tempo } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
 import type {
   A2ARuntime,
   AgentCardWithEntrypoints,
+  TaskStore,
 } from '@lucid-agents/types/a2a';
 import type { AnalyticsRuntime } from '@lucid-agents/types/analytics';
 import { wallets } from '@lucid-agents/wallet';
@@ -82,6 +92,105 @@ describe('Example Smoke Tests', () => {
     process.env.FACILITATOR_URL =
       process.env.FACILITATOR_URL ?? 'https://facilitator.example.com';
     process.env.NETWORK = process.env.NETWORK ?? 'base-sepolia';
+  });
+
+  describe('identity/read-only bootstrap', () => {
+    it('discovers and verifies domain identity into trust without a signer', async () => {
+      let discoveryRequests = 0;
+      const reads: string[] = [];
+      const publicClient = {
+        async readContract({
+          functionName,
+        }: Parameters<PublicClientLike['readContract']>[0]) {
+          reads.push(functionName);
+          if (functionName === 'ownerOf') {
+            return '0x000000000000000000000000000000000000002a';
+          }
+          if (functionName === 'tokenURI') {
+            return 'https://known-agent.example/registration.json';
+          }
+          throw new Error(`Unexpected identity read: ${functionName}`);
+        },
+      } satisfies PublicClientLike;
+
+      const result = await bootstrapIdentity({
+        domain: 'known-agent.example',
+        chainId: 84532,
+        registryAddress: '0x000000000000000000000000000000000000dEaD',
+        publicClient,
+        registrationDiscovery: {
+          fetch: async () => {
+            discoveryRequests += 1;
+            return Response.json({
+              registrations: [
+                {
+                  agentId: '42',
+                  agentRegistry:
+                    'eip155:84532:0x000000000000000000000000000000000000dead',
+                },
+              ],
+            });
+          },
+        },
+      });
+
+      expect(discoveryRequests).toBe(1);
+      expect(reads).toEqual(['ownerOf', 'tokenURI']);
+      expect(result.record?.agentId).toBe(42n);
+      expect(result.signature).toBeUndefined();
+      expect(result.trust?.registrations?.[0]).toMatchObject({
+        agentId: '42',
+        agentRegistry:
+          'eip155:84532:0x000000000000000000000000000000000000dead',
+      });
+    });
+  });
+
+  describe('a2a/two-phase durable task admission', () => {
+    it('prepares, renews, and activates execution through the public contract', async () => {
+      const processStore = createInMemoryTaskStore();
+      expect(processStore.durability).toBe('process');
+
+      // The in-memory implementation is relabelled only for this contract
+      // smoke; production stores must actually persist every operation.
+      const durableContractStore: TaskStore = {
+        ...processStore,
+        durability: 'durable',
+      };
+      const tasks = createTaskRuntime({
+        store: durableContractStore,
+        admissionLeaseMs: 100,
+      });
+      const taskId = 'two-phase-smoke';
+      const accessToken = 'smoke-access-token-0001';
+
+      await tasks.reserve({
+        taskId,
+        accessToken,
+        admissionTtlMs: 1_000,
+      });
+      const prepared = await tasks.prepare(taskId);
+      await prepared.renew();
+      await prepared.activate({
+        execute: async () => ({ output: { admitted: true } }),
+      });
+
+      let settled = await tasks.get(taskId, accessToken);
+      for (
+        let attempt = 0;
+        settled?.status === 'running' && attempt < 20;
+        attempt++
+      ) {
+        await new Promise(resolve => setTimeout(resolve, 1));
+        settled = await tasks.get(taskId, accessToken);
+      }
+      expect(settled).toMatchObject({
+        taskId,
+        status: 'completed',
+        result: { output: { admitted: true } },
+      });
+      await tasks.close();
+    });
   });
 
   describe('http/configurable service storefront', () => {

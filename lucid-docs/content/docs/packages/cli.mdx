@@ -8,9 +8,10 @@ verifiedAt: 2026-07-20
 product: sdk
 ---
 
-The CLI copies a template, applies a framework adapter, writes wizard answers to
-the generated environment, and optionally installs dependencies. It is a project
-generator, not a runtime dependency.
+The CLI validates a template and framework adapter, builds the project in a
+staging directory, writes wizard answers to the generated environment, and
+optionally installs dependencies. It commits the target only after those steps
+succeed. It is a project generator, not a runtime dependency.
 
 ## Usage
 
@@ -57,6 +58,11 @@ has been published to npm.
 Prefer explicit `PAYMENTS_NETWORK=<CAIP-2>` values in automation. The template
 wizard also accepts aliases, but canonical identifiers make logs and provider
 compatibility checks unambiguous.
+
+Secret-marked wizard values are collected without terminal echo or displayed
+defaults. Every generated adapter ignores `.env` while retaining
+`.env.example`. Invalid arguments, generation errors, and failed
+`--install` runs return an error without leaving a partial target directory.
 
 ## Adapters
 

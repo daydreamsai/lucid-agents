@@ -194,7 +194,10 @@ describe('mpp extension configuration', () => {
     if (missingVerifier.authorized) throw new Error('Expected rejection');
     expect(missingVerifier.response.status).toBe(402);
 
-    const verified = await buildRuntime(async () => ({ valid: true }));
+    const verified = await buildRuntime(async () => ({
+      valid: true,
+      receipt: 'unused-receipt',
+    }));
     verified.runtime.activate(paidEntrypoint);
     const malformed = await verified.runtime.authorize(
       new Request('https://agent.test/paid', {
@@ -248,7 +251,10 @@ describe('mpp extension configuration', () => {
   });
 
   it('does not treat the credential source as verifier-attested identity', async () => {
-    const { runtime } = await buildRuntime(async () => ({ valid: true }));
+    const { runtime } = await buildRuntime(async () => ({
+      valid: true,
+      receipt: 'identity-test-receipt',
+    }));
     runtime.activate(paidEntrypoint);
     const requirement = required(runtime);
     const request = authorizedRequest(await challenge(runtime, requirement));
@@ -260,7 +266,115 @@ describe('mpp extension configuration', () => {
       requirement
     );
 
-    expect(accepted).toEqual({ authorized: true });
+    expect(accepted).toEqual({
+      authorized: true,
+      receipt: 'identity-test-receipt',
+    });
+  });
+
+  it('fails closed and consumes a settled credential when a custom verifier omits its receipt', async () => {
+    let verifierCalls = 0;
+    const { runtime } = await buildRuntime(async () => {
+      verifierCalls += 1;
+      return verifierCalls === 1
+        ? { valid: true, receipt: '' }
+        : { valid: true, receipt: 'recovered-custom-receipt' };
+    });
+    runtime.activate(paidEntrypoint);
+    const requirement = required(runtime);
+    const request = authorizedRequest(await challenge(runtime, requirement));
+
+    const missingReceipt = await runtime.authorize(
+      new Request(request),
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+    expect(missingReceipt.authorized).toBe(false);
+    if (missingReceipt.authorized) throw new Error('Expected rejection');
+    expect(missingReceipt.response.status).toBe(503);
+    expect(await missingReceipt.response.text()).toContain(
+      'MPP verifier omitted its receipt'
+    );
+
+    const replayed = await runtime.authorize(
+      new Request(request),
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+    expect(replayed.authorized).toBe(false);
+    if (replayed.authorized) throw new Error('Expected a fresh challenge');
+    expect(replayed.response.status).toBe(402);
+    expect(verifierCalls).toBe(1);
+
+    const recovered = await runtime.authorize(
+      authorizedRequest(replayed.response),
+      paidEntrypoint,
+      'invoke',
+      requirement
+    );
+    expect(recovered).toEqual({
+      authorized: true,
+      receipt: 'recovered-custom-receipt',
+    });
+    expect(verifierCalls).toBe(2);
+  });
+
+  it('rejects unsafe and oversized custom receipt headers before authorization', async () => {
+    for (const unsafeReceipt of [
+      'bad\r\nInjected: yes',
+      'x'.repeat(8 * 1024 + 1),
+      ' padded-receipt ',
+    ]) {
+      let verifierCalls = 0;
+      const { runtime } = await buildRuntime(async () => {
+        verifierCalls += 1;
+        return verifierCalls === 1
+          ? { valid: true, receipt: unsafeReceipt }
+          : { valid: true, receipt: 'safe-retry-receipt' };
+      });
+      runtime.activate(paidEntrypoint);
+      const requirement = required(runtime);
+      const request = authorizedRequest(await challenge(runtime, requirement));
+
+      const rejected = await runtime.authorize(
+        new Request(request),
+        paidEntrypoint,
+        'invoke',
+        requirement
+      );
+      expect(rejected.authorized).toBe(false);
+      if (rejected.authorized) throw new Error('Expected rejection');
+      expect(rejected.response.status).toBe(503);
+      expect(await rejected.response.text()).toContain(
+        'MPP verifier returned an invalid receipt header'
+      );
+
+      const replayed = await runtime.authorize(
+        new Request(request),
+        paidEntrypoint,
+        'invoke',
+        requirement
+      );
+      expect(replayed.authorized).toBe(false);
+      if (replayed.authorized) throw new Error('Expected a fresh challenge');
+      expect(replayed.response.status).toBe(402);
+      expect(verifierCalls).toBe(1);
+
+      expect(
+        await runtime.authorize(
+          authorizedRequest(replayed.response),
+          paidEntrypoint,
+          'invoke',
+          requirement
+        )
+      ).toEqual({
+        authorized: true,
+        receipt: 'safe-retry-receipt',
+      });
+      expect(verifierCalls).toBe(2);
+    }
   });
 
   it('does not enable payment replay from an idempotency header alone', async () => {
@@ -354,7 +468,7 @@ describe('mpp extension configuration', () => {
     });
     const { runtime } = await buildRuntime(async () => {
       await verifying;
-      return { valid: true };
+      return { valid: true, receipt: 'concurrent-receipt' };
     });
     runtime.activate(paidEntrypoint);
     const requirement = required(runtime);
@@ -381,7 +495,10 @@ describe('mpp extension configuration', () => {
   });
 
   it('binds credentials to the challenged entrypoint and mode', async () => {
-    const { runtime } = await buildRuntime(async () => ({ valid: true }));
+    const { runtime } = await buildRuntime(async () => ({
+      valid: true,
+      receipt: 'bound-receipt',
+    }));
     runtime.activate(paidEntrypoint);
     const requirement = required(runtime);
     const request = authorizedRequest(await challenge(runtime, requirement));
@@ -520,7 +637,7 @@ describe('mpp extension configuration', () => {
     const { runtime } = await buildRuntime(async ({ credential }) => {
       verifierCalls += 1;
       return credential.payload.proof === 'client-proof'
-        ? { valid: true }
+        ? { valid: true, receipt: 'client-round-trip-receipt' }
         : { valid: false };
     });
     runtime.activate(paidEntrypoint);

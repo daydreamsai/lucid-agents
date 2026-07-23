@@ -30,7 +30,8 @@
         "key": "AGENT_WALLET_PRIVATE_KEY",
         "type": "input",
         "message": "Agent wallet private key (pays for data)",
-        "defaultValue": ""
+        "defaultValue": "",
+        "sensitive": true
       },
       {
         "key": "PAYMENTS_NETWORK",
@@ -48,4 +49,3 @@
     ]
   }
 }
-

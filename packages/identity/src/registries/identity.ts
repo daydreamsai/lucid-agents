@@ -21,6 +21,7 @@ import type {
   IdentityRegistryWriteFunctionName,
 } from '../abi/types';
 import { IDENTITY_REGISTRY_ABI } from '../abi/types';
+import { type IdentityAgentId, normalizeIdentityAgentId } from '../agent-id';
 import { DEFAULT_NAMESPACE, DEFAULT_TRUST_MODELS } from '../config';
 
 export type IdentityRegistryClientOptions<
@@ -44,10 +45,8 @@ export type IdentityRecord = {
   agentURI: string;
 };
 
-type AgentIdentifierInput = bigint | number | string;
-
 type RegistrationEntryParams = {
-  agentId: AgentIdentifierInput;
+  agentId: IdentityAgentId;
   ownerAddress?: string;
   chainId: number | string;
   namespace?: string;
@@ -66,33 +65,8 @@ type TrustOverridesInput = Partial<
   >
 >;
 
-function normalizeAgentId(agentId: AgentIdentifierInput): string {
-  if (typeof agentId === 'bigint') {
-    if (agentId < 0n) {
-      throw new Error('agentId must be non-negative');
-    }
-    return agentId.toString(10);
-  }
-  if (typeof agentId === 'number') {
-    if (
-      !Number.isFinite(agentId) ||
-      !Number.isInteger(agentId) ||
-      agentId < 0
-    ) {
-      throw new Error('agentId must be a non-negative integer');
-    }
-    if (!Number.isSafeInteger(agentId)) {
-      throw new Error(
-        'agentId number must be a safe integer; use string or bigint for larger values'
-      );
-    }
-    return agentId.toString(10);
-  }
-  const normalized = `${agentId ?? ''}`.trim();
-  if (!normalized) {
-    throw new Error('agentId is required');
-  }
-  return normalized;
+function normalizeAgentId(agentId: IdentityAgentId): string {
+  return normalizeIdentityAgentId(agentId);
 }
 
 function createRegistrationEntry(
@@ -136,25 +110,19 @@ export type IdentityRegistryClient = {
   readonly address: Hex;
   readonly chainId: number;
 
-  get(agentId: bigint | number | string): Promise<IdentityRecord | null>;
-  getAgentWallet(agentId: bigint | number | string): Promise<Hex>;
+  get(agentId: IdentityAgentId): Promise<IdentityRecord | null>;
+  getAgentWallet(agentId: IdentityAgentId): Promise<Hex>;
   getMetadata(
-    agentId: bigint | number | string,
+    agentId: IdentityAgentId,
     key: string
   ): Promise<Uint8Array | null>;
   register(input?: RegisterAgentInput): Promise<RegisterAgentResult>;
-  setAgentURI(
-    agentId: bigint | number | string,
-    agentURI: string
-  ): Promise<Hex>;
+  setAgentURI(agentId: IdentityAgentId, agentURI: string): Promise<Hex>;
   setAgentWallet(input: SetAgentWalletInput): Promise<Hex>;
-  unsetAgentWallet(agentId: bigint | number | string): Promise<Hex>;
-  isAuthorizedOrOwner(
-    spender: Hex,
-    agentId: bigint | number | string
-  ): Promise<boolean>;
+  unsetAgentWallet(agentId: IdentityAgentId): Promise<Hex>;
+  isAuthorizedOrOwner(spender: Hex, agentId: IdentityAgentId): Promise<boolean>;
   setMetadata(
-    agentId: bigint | number | string,
+    agentId: IdentityAgentId,
     key: string,
     value: Uint8Array
   ): Promise<Hex>;
@@ -167,20 +135,16 @@ export type IdentityRegistryClient = {
    * Transfer identity token to another EVM address. Registry is EVM-only; Solana addresses are invalid.
    * Uses safeTransferFrom; signer must be the current owner.
    */
-  transfer(to: Hex, agentId: bigint | number | string): Promise<Hex>;
+  transfer(to: Hex, agentId: IdentityAgentId): Promise<Hex>;
   /**
    * Transfer identity token from one address to another. Signer must be `from` or an approved spender.
    * Registry is EVM-only.
    */
-  transferFrom(
-    from: Hex,
-    to: Hex,
-    agentId: bigint | number | string
-  ): Promise<Hex>;
+  transferFrom(from: Hex, to: Hex, agentId: IdentityAgentId): Promise<Hex>;
   /**
    * Approve an address to transfer the identity token. Owner approves `to`; EVM-only.
    */
-  approve(to: Hex, agentId: bigint | number | string): Promise<Hex>;
+  approve(to: Hex, agentId: IdentityAgentId): Promise<Hex>;
   /**
    * Approve or revoke an operator for all tokens. Owner approves or revokes `operator`; EVM-only.
    */
@@ -188,7 +152,7 @@ export type IdentityRegistryClient = {
   /**
    * Get the approved address for a token (read-only; no wallet required).
    */
-  getApproved(agentId: bigint | number | string): Promise<Hex>;
+  getApproved(agentId: IdentityAgentId): Promise<Hex>;
 };
 
 export type PublicClientLike = {
@@ -222,7 +186,7 @@ export type RegisterAgentResult = {
 };
 
 export type SetAgentWalletInput = {
-  agentId: bigint | number | string;
+  agentId: IdentityAgentId;
   newWallet: Hex;
   deadline: bigint;
   signature: Hex;
@@ -242,10 +206,8 @@ export function createIdentityRegistryClient<
     namespace = 'eip155',
   } = options;
 
-  async function get(
-    agentId: bigint | number | string
-  ): Promise<IdentityRecord | null> {
-    const id = BigInt(agentId);
+  async function get(agentId: IdentityAgentId): Promise<IdentityRecord | null> {
+    const id = BigInt(normalizeAgentId(agentId));
 
     let owner: string;
     try {
@@ -274,10 +236,8 @@ export function createIdentityRegistryClient<
     };
   }
 
-  async function getAgentWallet(
-    agentId: bigint | number | string
-  ): Promise<Hex> {
-    const id = BigInt(agentId);
+  async function getAgentWallet(agentId: IdentityAgentId): Promise<Hex> {
+    const id = BigInt(normalizeAgentId(agentId));
     const wallet = (await publicClient.readContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -289,10 +249,10 @@ export function createIdentityRegistryClient<
   }
 
   async function getMetadata(
-    agentId: bigint | number | string,
+    agentId: IdentityAgentId,
     key: string
   ): Promise<Uint8Array | null> {
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
 
     try {
       const metadata = (await publicClient.readContract({
@@ -382,7 +342,7 @@ export function createIdentityRegistryClient<
   }
 
   async function setMetadata(
-    agentId: bigint | number | string,
+    agentId: IdentityAgentId,
     key: string,
     value: Uint8Array
   ): Promise<Hex> {
@@ -399,7 +359,7 @@ export function createIdentityRegistryClient<
       );
     }
 
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
 
     // Convert Uint8Array to hex string if needed (viem expects hex for bytes type)
     let bytesValue: `0x${string}` | Uint8Array = value;
@@ -437,14 +397,14 @@ export function createIdentityRegistryClient<
   }
 
   async function setAgentURI(
-    agentId: bigint | number | string,
+    agentId: IdentityAgentId,
     agentURI: string
   ): Promise<Hex> {
     if (!walletClient) {
       throw new Error('Wallet client required for setAgentURI');
     }
 
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
 
     const txHash = await walletClient.writeContract({
       address,
@@ -463,7 +423,7 @@ export function createIdentityRegistryClient<
       throw new Error('Wallet client required for setAgentWallet');
     }
 
-    const id = BigInt(input.agentId);
+    const id = BigInt(normalizeAgentId(input.agentId));
     const txHash = await walletClient.writeContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -476,14 +436,12 @@ export function createIdentityRegistryClient<
     return txHash;
   }
 
-  async function unsetAgentWallet(
-    agentId: bigint | number | string
-  ): Promise<Hex> {
+  async function unsetAgentWallet(agentId: IdentityAgentId): Promise<Hex> {
     if (!walletClient) {
       throw new Error('Wallet client required for unsetAgentWallet');
     }
 
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
     const txHash = await walletClient.writeContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -498,10 +456,10 @@ export function createIdentityRegistryClient<
 
   async function isAuthorizedOrOwner(
     spender: Hex,
-    agentId: bigint | number | string
+    agentId: IdentityAgentId
   ): Promise<boolean> {
     const normalizedSpender = normalizeAddress(spender);
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
 
     const result = (await publicClient.readContract({
       address,
@@ -524,10 +482,7 @@ export function createIdentityRegistryClient<
     return result;
   }
 
-  async function transfer(
-    to: Hex,
-    agentId: bigint | number | string
-  ): Promise<Hex> {
+  async function transfer(to: Hex, agentId: IdentityAgentId): Promise<Hex> {
     if (!walletClient) {
       throw new Error('Wallet client required for transfer');
     }
@@ -538,7 +493,7 @@ export function createIdentityRegistryClient<
     if (normalizedTo === ZERO_ADDRESS) {
       throw new Error('invalid hex address: recipient cannot be zero address');
     }
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
     const from = normalizeAddress(walletClient.account.address);
     const txHash = await walletClient.writeContract({
       address,
@@ -553,7 +508,7 @@ export function createIdentityRegistryClient<
   async function transferFrom(
     from: Hex,
     to: Hex,
-    agentId: bigint | number | string
+    agentId: IdentityAgentId
   ): Promise<Hex> {
     if (!walletClient) {
       throw new Error('Wallet client required for transferFrom');
@@ -569,7 +524,7 @@ export function createIdentityRegistryClient<
     if (normalizedTo === ZERO_ADDRESS) {
       throw new Error('invalid hex address: to cannot be zero address');
     }
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
     const txHash = await walletClient.writeContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -580,10 +535,7 @@ export function createIdentityRegistryClient<
     return txHash;
   }
 
-  async function approve(
-    to: Hex,
-    agentId: bigint | number | string
-  ): Promise<Hex> {
+  async function approve(to: Hex, agentId: IdentityAgentId): Promise<Hex> {
     if (!walletClient) {
       throw new Error('Wallet client required for approve');
     }
@@ -594,7 +546,7 @@ export function createIdentityRegistryClient<
     if (normalizedTo === ZERO_ADDRESS) {
       throw new Error('invalid hex address: approved address cannot be zero');
     }
-    const id = BigInt(agentId);
+    const id = BigInt(normalizeAgentId(agentId));
     const txHash = await walletClient.writeContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -629,8 +581,8 @@ export function createIdentityRegistryClient<
     return txHash;
   }
 
-  async function getApproved(agentId: bigint | number | string): Promise<Hex> {
-    const id = BigInt(agentId);
+  async function getApproved(agentId: IdentityAgentId): Promise<Hex> {
+    const id = BigInt(normalizeAgentId(agentId));
     const approved = (await publicClient.readContract({
       address,
       abi: IDENTITY_REGISTRY_ABI,
@@ -734,7 +686,49 @@ export type BootstrapTrustMissingContext = {
   normalizedDomain: string;
 };
 
+/**
+ * Request controls passed to an injected registration-document fetcher.
+ */
+export type IdentityRegistrationFetchInit = {
+  method?: string;
+  headers?: Readonly<Record<string, string>>;
+  redirect?: 'error' | 'follow' | 'manual';
+  signal?: AbortSignal;
+};
+
+export type IdentityRegistrationFetch = (
+  input: string,
+  init?: IdentityRegistrationFetchInit
+) => Promise<Response>;
+
+export type IdentityRegistrationDiscoveryOptions = {
+  /**
+   * Injectable fetch implementation. Defaults to globalThis.fetch.
+   */
+  fetch?: IdentityRegistrationFetch;
+  /**
+   * Maximum time allowed for the well-known document request.
+   * Defaults to, and cannot exceed, 1500 milliseconds.
+   */
+  timeoutMs?: number;
+  /**
+   * Maximum response body size in bytes. Defaults to, and cannot exceed,
+   * 64 KiB.
+   */
+  maxBytes?: number;
+};
+
 export type BootstrapTrustOptions = {
+  /**
+   * Existing ERC-8004 token ID to look up directly. When omitted in read-only
+   * mode, the ID is discovered from the domain registration document.
+   */
+  agentId?: IdentityAgentId;
+  /**
+   * Controls bounded discovery through the domain-owned
+   * `/.well-known/agent-registration.json` document when agentId is omitted.
+   */
+  registrationDiscovery?: IdentityRegistrationDiscoveryOptions;
   domain: string;
   chainId: number;
   registryAddress: Hex;
@@ -769,6 +763,25 @@ export type BootstrapTrustResult = {
 };
 
 /**
+ * Raised when explicit lookup configuration cannot safely identify the
+ * requested on-chain identity.
+ */
+export class IdentityLookupValidationError extends Error {
+  override readonly name = 'IdentityLookupValidationError';
+}
+
+/**
+ * Raised when the domain-owned registration document cannot be fetched or
+ * safely mapped to the configured registry.
+ */
+export class IdentityRegistrationDiscoveryError extends Error {
+  override readonly name = 'IdentityRegistrationDiscoveryError';
+}
+
+const DEFAULT_REGISTRATION_DISCOVERY_TIMEOUT_MS = 1_500;
+const DEFAULT_REGISTRATION_DISCOVERY_MAX_BYTES = 64 * 1024;
+
+/**
  * Constructs the registration URI for an agent's domain
  * Points to /.well-known/agent-registration.json
  */
@@ -778,12 +791,19 @@ export function buildRegistrationURI(domain: string): string {
     throw new Error('domain is required');
   }
 
-  // If domain already has protocol, use it; otherwise assume https
-  const origin = normalized.startsWith('http')
-    ? normalized
-    : `https://${normalized}`;
+  let origin: URL;
+  try {
+    origin = new URL(
+      normalized.includes('://') ? normalized : `https://${normalized}`
+    );
+  } catch {
+    throw new Error('domain must be a valid HTTP(S) origin');
+  }
+  if (origin.protocol !== 'http:' && origin.protocol !== 'https:') {
+    throw new Error('domain must be a valid HTTP(S) origin');
+  }
 
-  return `${origin}/.well-known/agent-registration.json`;
+  return new URL('/.well-known/agent-registration.json', origin).toString();
 }
 
 /**
@@ -791,6 +811,338 @@ export function buildRegistrationURI(domain: string): string {
  */
 export function buildMetadataURI(domain: string): string {
   return buildRegistrationURI(domain);
+}
+
+function resolveHttpOrigin(
+  value: string,
+  assumeHttps: boolean
+): string | undefined {
+  try {
+    const url = new URL(
+      assumeHttps && !value.includes('://') ? `https://${value}` : value
+    );
+    return url.protocol === 'http:' || url.protocol === 'https:'
+      ? url.origin
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveDiscoveryBound(
+  value: number | undefined,
+  maximum: number,
+  name: string
+): number {
+  const resolved = value ?? maximum;
+  if (!Number.isSafeInteger(resolved) || resolved <= 0) {
+    throw new IdentityRegistrationDiscoveryError(
+      `[agent-kit-identity] ${name} must be a positive safe integer.`
+    );
+  }
+  if (resolved > maximum) {
+    throw new IdentityRegistrationDiscoveryError(
+      `[agent-kit-identity] ${name} cannot exceed ${maximum}.`
+    );
+  }
+  return resolved;
+}
+
+function cancelResponseBody(response: Response): void {
+  if (response.body) {
+    void response.body.cancel().catch(() => {});
+  }
+}
+
+async function readBoundedResponseBody(
+  response: Response,
+  maxBytes: number,
+  signal: AbortSignal
+): Promise<string> {
+  const declaredLength = response.headers.get('content-length');
+  if (declaredLength !== null) {
+    const parsedLength = Number(declaredLength);
+    if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      cancelResponseBody(response);
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document exceeds ${maxBytes} bytes.`
+      );
+    }
+  }
+
+  if (!response.body) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document response body is empty.'
+    );
+  }
+
+  const reader = response.body.getReader();
+  let rejectOnAbort: ((reason?: unknown) => void) | undefined;
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    rejectOnAbort = reject;
+  });
+  const onAbort = (): void => {
+    void reader.cancel().catch(() => {});
+    rejectOnAbort?.(
+      signal.reason instanceof IdentityRegistrationDiscoveryError
+        ? signal.reason
+        : new IdentityRegistrationDiscoveryError(
+            '[agent-kit-identity] Registration document request was aborted.'
+          )
+    );
+  };
+  if (signal.aborted) {
+    onAbort();
+  } else {
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let text = '';
+
+  let reading = true;
+  try {
+    while (reading) {
+      const result = await Promise.race([reader.read(), abortPromise]);
+      if (result.done) {
+        reading = false;
+        continue;
+      }
+      totalBytes += result.value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => {});
+        throw new IdentityRegistrationDiscoveryError(
+          `[agent-kit-identity] Registration document exceeds ${maxBytes} bytes.`
+        );
+      }
+      text += decoder.decode(result.value, { stream: true });
+    }
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+
+  return text + decoder.decode();
+}
+
+function resolveRegistrationDocumentAgentId(
+  document: unknown,
+  options: {
+    chainId: number;
+    namespace: string;
+    registryAddress: Hex;
+  }
+): string {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document must be a JSON object.'
+    );
+  }
+
+  const registrations = (document as { registrations?: unknown }).registrations;
+  if (!Array.isArray(registrations)) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document must contain a registrations array.'
+    );
+  }
+
+  const expectedAddress = normalizeAddress(options.registryAddress);
+  const matchingAgentIds = new Set<string>();
+
+  for (const [index, value] of registrations.entries()) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document registrations[${index}] must be an object.`
+      );
+    }
+
+    const entry = value as {
+      agentId?: unknown;
+      agentRegistry?: unknown;
+    };
+    if (
+      !(
+        typeof entry.agentId === 'string' || typeof entry.agentId === 'number'
+      ) ||
+      typeof entry.agentRegistry !== 'string'
+    ) {
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document registrations[${index}] must include agentId and agentRegistry.`
+      );
+    }
+
+    const registryParts = entry.agentRegistry.split(':');
+    if (registryParts.length !== 3) {
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document registrations[${index}].agentRegistry must be a CAIP-10 registry identifier.`
+      );
+    }
+    const [namespace, chainId, address] = registryParts;
+    let normalizedAddress: Hex;
+    try {
+      normalizedAddress = normalizeAddress(address);
+    } catch {
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document registrations[${index}].agentRegistry has an invalid EVM address.`
+      );
+    }
+
+    if (
+      namespace === options.namespace &&
+      chainId === String(options.chainId) &&
+      normalizedAddress === expectedAddress
+    ) {
+      try {
+        matchingAgentIds.add(
+          normalizeIdentityAgentId(entry.agentId as IdentityAgentId)
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new IdentityRegistrationDiscoveryError(
+          `[agent-kit-identity] Registration document registrations[${index}] has an invalid agentId: ${message}`
+        );
+      }
+    }
+  }
+
+  if (matchingAgentIds.size === 0) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document does not contain an identity matching chain and registry address.'
+    );
+  }
+  if (matchingAgentIds.size > 1) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document contains multiple agent IDs for the configured chain and registry address.'
+    );
+  }
+
+  const [agentId] = matchingAgentIds;
+  if (agentId === undefined) {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Registration document did not resolve an agent ID.'
+    );
+  }
+  return agentId;
+}
+
+async function discoverAgentIdFromDomain(options: {
+  normalizedDomain: string;
+  chainId: number;
+  namespace: string;
+  registryAddress: Hex;
+  discovery?: IdentityRegistrationDiscoveryOptions;
+}): Promise<string> {
+  const fetcher = options.discovery?.fetch ?? globalThis.fetch;
+  if (typeof fetcher !== 'function') {
+    throw new IdentityRegistrationDiscoveryError(
+      '[agent-kit-identity] Fetch is required for domain identity discovery.'
+    );
+  }
+
+  const timeoutMs = resolveDiscoveryBound(
+    options.discovery?.timeoutMs,
+    DEFAULT_REGISTRATION_DISCOVERY_TIMEOUT_MS,
+    'registration discovery timeoutMs'
+  );
+  const maxBytes = resolveDiscoveryBound(
+    options.discovery?.maxBytes,
+    DEFAULT_REGISTRATION_DISCOVERY_MAX_BYTES,
+    'registration discovery maxBytes'
+  );
+  const registrationURI = buildRegistrationURI(options.normalizedDomain);
+  const abortController = new AbortController();
+  const timeoutError = new IdentityRegistrationDiscoveryError(
+    `[agent-kit-identity] Registration document request timed out after ${timeoutMs}ms.`
+  );
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(timeoutError);
+      abortController.abort(timeoutError);
+    }, timeoutMs);
+  });
+
+  try {
+    const response = await Promise.race([
+      fetcher(registrationURI, {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+        redirect: 'error',
+        signal: abortController.signal,
+      }),
+      timeoutPromise,
+    ]);
+
+    if (response.redirected) {
+      cancelResponseBody(response);
+      throw new IdentityRegistrationDiscoveryError(
+        '[agent-kit-identity] Registration document redirects are not allowed.'
+      );
+    }
+    if (!response.ok) {
+      cancelResponseBody(response);
+      throw new IdentityRegistrationDiscoveryError(
+        `[agent-kit-identity] Registration document request failed with HTTP ${response.status}.`
+      );
+    }
+
+    const body = await Promise.race([
+      readBoundedResponseBody(response, maxBytes, abortController.signal),
+      timeoutPromise,
+    ]);
+    let document: unknown;
+    try {
+      document = JSON.parse(body);
+    } catch {
+      throw new IdentityRegistrationDiscoveryError(
+        '[agent-kit-identity] Registration document is not valid JSON.'
+      );
+    }
+
+    return resolveRegistrationDocumentAgentId(document, {
+      chainId: options.chainId,
+      namespace: options.namespace,
+      registryAddress: options.registryAddress,
+    });
+  } catch (error) {
+    if (error instanceof IdentityRegistrationDiscoveryError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new IdentityRegistrationDiscoveryError(
+      `[agent-kit-identity] Failed to fetch registration document: ${message}`
+    );
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+}
+
+function assertRecordDomainRelationship(
+  record: IdentityRecord,
+  normalizedDomain: string,
+  expectedAgentURI?: string
+): void {
+  if (expectedAgentURI !== undefined) {
+    if (record.agentURI !== expectedAgentURI) {
+      throw new IdentityLookupValidationError(
+        `[agent-kit-identity] ERC-8004 agent ${record.agentId.toString()} has agentURI ${record.agentURI}, which does not match configured agentURI ${expectedAgentURI}.`
+      );
+    }
+    return;
+  }
+
+  const recordOrigin = resolveHttpOrigin(record.agentURI, false);
+  const domainOrigin = resolveHttpOrigin(normalizedDomain, true);
+  if (!recordOrigin || !domainOrigin) {
+    throw new IdentityLookupValidationError(
+      `[agent-kit-identity] Cannot verify ERC-8004 agent ${record.agentId.toString()} agentURI ${record.agentURI} against configured domain ${normalizedDomain}. Provide the exact agentURI option to pin a non-HTTP identity URI.`
+    );
+  }
+  if (recordOrigin !== domainOrigin) {
+    throw new IdentityLookupValidationError(
+      `[agent-kit-identity] ERC-8004 agent ${record.agentId.toString()} has agentURI origin ${recordOrigin}, which does not match configured domain origin ${domainOrigin}.`
+    );
+  }
 }
 
 export async function bootstrapTrust(
@@ -817,14 +1169,61 @@ export async function bootstrapTrust(
   let transactionHash: Hex | undefined;
   let didRegister = false;
 
-  if (options.onMissing) {
+  if (options.agentId !== undefined) {
+    record = await client.get(normalizeIdentityAgentId(options.agentId));
+    if (record) {
+      assertRecordDomainRelationship(
+        record,
+        normalizedDomain,
+        options.agentURI
+      );
+    }
+  }
+
+  if (!record && options.agentId === undefined && options.onMissing) {
     const handled = await options.onMissing({
       client,
       normalizedDomain,
     });
     if (handled) {
       record = handled;
+      assertRecordDomainRelationship(
+        record,
+        normalizedDomain,
+        options.agentURI
+      );
     }
+  }
+
+  if (
+    !record &&
+    options.agentId === undefined &&
+    !options.onMissing &&
+    !shouldRegister
+  ) {
+    const discoveredAgentId = await discoverAgentIdFromDomain({
+      normalizedDomain,
+      chainId: options.chainId,
+      namespace: options.namespace ?? DEFAULT_NAMESPACE,
+      registryAddress: options.registryAddress,
+      discovery: options.registrationDiscovery,
+    });
+    record = await client.get(discoveredAgentId);
+    if (record) {
+      assertRecordDomainRelationship(
+        record,
+        normalizedDomain,
+        options.agentURI
+      );
+    }
+  }
+
+  if (!record && options.agentId !== undefined && shouldRegister) {
+    throw new IdentityLookupValidationError(
+      `[agent-kit-identity] ERC-8004 agent ${normalizeIdentityAgentId(
+        options.agentId
+      )} was not found. Remove agentId to register a new identity; registration cannot recreate a requested ERC-721 token ID.`
+    );
   }
 
   if (!record && shouldRegister) {
@@ -974,6 +1373,15 @@ export type BootstrapIdentityClientFactory = (params: {
   | Promise<BootstrapIdentityClients | null | undefined>;
 
 export type BootstrapIdentityOptions = {
+  /**
+   * Existing ERC-8004 token ID to resolve directly. Falls back to
+   * IDENTITY_AGENT_ID; when omitted, read-only bootstrap uses domain discovery.
+   */
+  agentId?: IdentityAgentId;
+  /**
+   * Bounded domain registration-document discovery options.
+   */
+  registrationDiscovery?: IdentityRegistrationDiscoveryOptions;
   domain?: string;
   chainId?: number;
   registryAddress?: Hex;
@@ -1000,6 +1408,19 @@ export type BootstrapIdentityResult = BootstrapTrustResult & {
   synthetic?: boolean;
 };
 
+/**
+ * Bootstrap ERC-8004 trust from a domain registration document, explicit token
+ * ID, or intentional registration request.
+ *
+ * A domain is not an on-chain registry lookup key. Read-only bootstrap first
+ * discovers an ID from the bounded domain-owned well-known document unless
+ * `agentId` (or `IDENTITY_AGENT_ID`) provides one directly. It then performs
+ * `ownerOf` and `tokenURI` reads and returns record/trust state without a
+ * signer.
+ *
+ * Read-only transport failures degrade to an empty result. Explicit lookup
+ * validation and registration failures throw.
+ */
 export async function bootstrapIdentity(
   options: BootstrapIdentityOptions = {}
 ): Promise<BootstrapIdentityResult> {
@@ -1024,6 +1445,13 @@ export async function bootstrapIdentity(
   }
 
   const domain = options.domain ?? env.AGENT_DOMAIN;
+  const envAgentId = env.IDENTITY_AGENT_ID?.trim();
+  const agentId =
+    options.agentId ??
+    (envAgentId && envAgentId.length > 0 ? envAgentId : undefined);
+  if (agentId !== undefined) {
+    normalizeIdentityAgentId(agentId);
+  }
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const registryAddress =
     options.registryAddress ??
@@ -1056,10 +1484,17 @@ export async function bootstrapIdentity(
     options.trustOverrides,
     undefined
   );
+  const registrationRequested =
+    options.registerIfMissing ?? env.REGISTER_IDENTITY === 'true';
+  const shouldRegister = Boolean(
+    registrationRequested && !options.skipRegister
+  );
 
   if (domain && registryAddress && publicClient) {
     try {
       const result = await bootstrapTrust({
+        agentId,
+        registrationDiscovery: options.registrationDiscovery,
         domain,
         chainId: resolvedChainId,
         registryAddress,
@@ -1068,8 +1503,7 @@ export async function bootstrapIdentity(
         walletClient,
         signer,
         signatureNonce: options.signatureNonce ?? env.IDENTITY_SIGNATURE_NONCE,
-        registerIfMissing:
-          options.registerIfMissing ?? env.REGISTER_IDENTITY === 'true',
+        registerIfMissing: shouldRegister,
         skipRegister: options.skipRegister,
         trustOverrides: resolvedOverrides,
         agentURI: options.agentURI,
@@ -1083,11 +1517,20 @@ export async function bootstrapIdentity(
         '[agent-kit-identity] identity not found in registry and registration not enabled'
       );
     } catch (error) {
+      if (error instanceof IdentityLookupValidationError || shouldRegister) {
+        throw error;
+      }
       logger.warn(
         '[agent-kit-identity] failed to bootstrap ERC-8004 identity',
         error
       );
     }
+  }
+
+  if (shouldRegister) {
+    throw new Error(
+      '[agent-kit-identity] Identity auto-registration could not initialize writable registry clients.'
+    );
   }
 
   logger.info('[agent-kit-identity] agent will run without ERC-8004 identity');
@@ -1341,7 +1784,8 @@ export async function makeViemClientsFromWallet(
 }
 
 /**
- * @deprecated Use makeViemClientsFromWallet instead. This function is kept for backward compatibility but will be removed.
+ * Create a public-only viem client factory for read-only registry operations.
+ * The returned clients never include a wallet client or signer.
  */
 export async function makeViemClientsFromEnv(
   options: MakeViemClientsFromEnvOptions = {}

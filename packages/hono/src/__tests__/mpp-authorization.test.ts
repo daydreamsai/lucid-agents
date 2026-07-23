@@ -142,7 +142,7 @@ describe('MPP authorization', () => {
             challengeExpirySeconds: 0,
             verifyCredential: async () => {
               verifierCalls += 1;
-              return { valid: true };
+              return { valid: true, receipt: 'expired-test-receipt' };
             },
           },
         })

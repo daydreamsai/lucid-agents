@@ -172,3 +172,30 @@ explicit custom verifier is preserved.
 
 MPP contracts are defined only in `@lucid-agents/types/mpp`; this package does
 not duplicate or re-export them.
+
+## Migrating to this release
+
+`MppRuntime` now requires `hasCredential(request)`. Custom runtime
+implementations must perform only canonical credential detection there; the
+method must not verify or settle a payment. The built-in `mpp()` extension uses
+the same decoder as authorization, including comma-separated `Authorization`
+schemes.
+
+A successful custom `verifyCredential` result must now include a non-empty
+serialized `receipt`:
+
+```ts
+return settled
+  ? { valid: true, receipt: settlement.receipt }
+  : { valid: false, reason: 'Payment was not settled' };
+```
+
+The receipt must already be an exact, legal HTTP header value no larger than
+8 KiB: leading or trailing whitespace, control characters, and oversized
+values are rejected. Once a verifier claims success, an invalid receipt
+consumes that credential and returns a service error rather than retrying the
+verifier, because settlement may already be irreversible.
+
+This is a breaking contract change. Lucid fails closed when a verifier claims
+success without a usable receipt because task admission cannot report a
+coherent post-settlement outcome otherwise.

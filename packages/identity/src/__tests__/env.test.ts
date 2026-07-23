@@ -9,6 +9,20 @@ afterEach(() => {
 });
 
 describe('identityFromEnv', () => {
+  it('defaults registration to disabled when no flag is configured', () => {
+    delete process.env.REGISTER_IDENTITY;
+    delete process.env.IDENTITY_AUTO_REGISTER;
+
+    expect(identityFromEnv().autoRegister).toBe(false);
+  });
+
+  it('reads an explicit existing agent ID without coercing large IDs', () => {
+    process.env.IDENTITY_AGENT_ID = '9007199254740993';
+
+    expect(identityFromEnv().agentId).toBe('9007199254740993');
+    expect(identityFromEnv({ agentId: 42n }).agentId).toBe(42n);
+  });
+
   it('parses strict OASF JSON-array fields when enabled', () => {
     process.env.IDENTITY_INCLUDE_OASF = 'true';
     process.env.IDENTITY_OASF_ENDPOINT =

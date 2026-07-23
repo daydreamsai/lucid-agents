@@ -1,5 +1,8 @@
 import { createAgent } from '@lucid-agents/core';
-import { a2a } from '@lucid-agents/a2a';
+import {
+  a2a as a2aExtension,
+  createInMemoryTaskStore,
+} from '@lucid-agents/a2a';
 import { http } from '@lucid-agents/http';
 import { custom, mpp } from '@lucid-agents/mpp';
 import { payments } from '@lucid-agents/payments';
@@ -7,6 +10,19 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Challenge, Credential } from 'mppx';
 
 import { createAgentApp } from '../app';
+
+const TASK_ACCESS_TOKEN = 'hono-task-access-token-0001';
+
+function a2a() {
+  return a2aExtension({
+    tasks: {
+      store: {
+        ...createInMemoryTaskStore(),
+        durability: 'durable',
+      },
+    },
+  });
+}
 
 function paymentCredential(response: Response): string {
   return Credential.serialize({
@@ -136,7 +152,10 @@ describe('task authorization', () => {
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
-            verifyCredential: async () => ({ valid: true }),
+            verifyCredential: async () => ({
+              valid: true,
+              receipt: 'ambiguous-rail-receipt',
+            }),
           },
         })
       )
@@ -174,9 +193,9 @@ describe('task authorization', () => {
             currency: 'usd',
             verifyCredential: async ({ credential }) => {
               mppVerifications += 1;
-              return {
-                valid: credential.payload.proof === 'test',
-              };
+              return credential.payload.proof === 'test'
+                ? { valid: true, receipt: 'selected-rail-receipt' }
+                : { valid: false };
             },
           },
         })
@@ -198,7 +217,11 @@ describe('task authorization', () => {
     const taskRequest = (skillId: string, headers?: Record<string, string>) =>
       app.request('http://localhost/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
+        headers: {
+          'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
+          ...headers,
+        },
         body: JSON.stringify({
           skillId,
           message: {
@@ -223,7 +246,7 @@ describe('task authorization', () => {
     expect(mppVerifications).toBe(1);
   });
 
-  it('applies incoming sender policies to verified MPP task credentials', async () => {
+  it('returns a terminal capability when policy rejects a verified MPP task', async () => {
     let executions = 0;
     const runtime = await createAgent({
       name: 'mpp-task-policy-test',
@@ -253,6 +276,7 @@ describe('task authorization', () => {
             currency: 'usd',
             verifyCredential: async () => ({
               valid: true,
+              receipt: 'policy-task-receipt',
               payer: '0x0000000000000000000000000000000000000002',
             }),
           },
@@ -275,19 +299,25 @@ describe('task authorization', () => {
     });
     const challenge = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         Authorization: paymentCredential(challenge),
       },
       body,
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Payment-Receipt')).toBe('policy-task-receipt');
+    expect(await response.json()).toMatchObject({ status: 'cancelled' });
     expect(executions).toBe(0);
   });
 
@@ -322,7 +352,10 @@ describe('task authorization', () => {
 
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body: JSON.stringify({
         skillId: 'paid-task',
         message: {
@@ -372,7 +405,10 @@ describe('task authorization', () => {
 
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body: JSON.stringify({
         skillId: 'private-task',
         message: {
@@ -426,13 +462,17 @@ describe('task authorization', () => {
     });
     const challenge = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body: requestBody,
     });
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         Authorization: paymentCredential(challenge),
       },
       body: requestBody,
@@ -441,6 +481,99 @@ describe('task authorization', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Payment-Receipt')).toBe('task-receipt');
     await new Promise(resolve => setTimeout(resolve, 0));
+    expect(executions).toBe(1);
+  });
+
+  it('never admits an MPP task when a custom verifier returns an unsafe receipt', async () => {
+    let executions = 0;
+    let verifierCalls = 0;
+    const runtime = await createAgent({
+      name: 'task-mpp-receipt-test',
+      version: '1.0.0',
+    })
+      .use(http())
+      .use(a2a())
+      .use(
+        mpp({
+          config: {
+            methods: [custom.server('test', {})],
+            currency: 'usd',
+            verifyCredential: async () => {
+              verifierCalls += 1;
+              return verifierCalls === 1
+                ? { valid: true, receipt: 'bad\r\nInjected: yes' }
+                : { valid: true, receipt: 'required-task-receipt' };
+            },
+          },
+        })
+      )
+      .addEntrypoint({
+        key: 'receipt-bound-task',
+        price: '1000',
+        paymentProtocol: 'mpp',
+        handler: async () => {
+          executions += 1;
+          return { output: { ok: true } };
+        },
+      })
+      .build();
+    const { app } = await createAgentApp(runtime);
+    const body = JSON.stringify({
+      skillId: 'receipt-bound-task',
+      message: { role: 'user', content: { text: '{}' } },
+    });
+    const challenge = await app.request('http://localhost/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
+      body,
+    });
+    const authorization = paymentCredential(challenge);
+
+    const invalidReceipt = await app.request('http://localhost/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+        Authorization: authorization,
+      },
+      body,
+    });
+    expect(invalidReceipt.status).toBe(503);
+    expect(invalidReceipt.headers.get('Payment-Receipt')).toBeNull();
+    expect(invalidReceipt.headers.get('Injected')).toBeNull();
+    expect(executions).toBe(0);
+
+    const replayed = await app.request('http://localhost/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+        Authorization: authorization,
+      },
+      body,
+    });
+    expect(replayed.status).toBe(402);
+    expect(verifierCalls).toBe(1);
+    expect(executions).toBe(0);
+
+    const recovered = await app.request('http://localhost/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+        Authorization: paymentCredential(replayed),
+      },
+      body,
+    });
+    expect(recovered.status).toBe(200);
+    expect(recovered.headers.get('Payment-Receipt')).toBe(
+      'required-task-receipt'
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(verifierCalls).toBe(2);
     expect(executions).toBe(1);
   });
 
@@ -482,7 +615,10 @@ describe('task authorization', () => {
 
     const challengeResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const requiredHeader = challengeResponse.headers.get('PAYMENT-REQUIRED');
@@ -507,6 +643,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'PAYMENT-SIGNATURE': paymentPayload,
       },
       body,
@@ -557,7 +694,10 @@ describe('task authorization', () => {
     });
     const challenge = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const signature = x402PaymentSignature(
@@ -569,6 +709,7 @@ describe('task authorization', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
           'PAYMENT-SIGNATURE': signature,
         },
         body,
@@ -621,7 +762,10 @@ describe('task authorization', () => {
     });
     const challenge = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
 
@@ -630,6 +774,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'PAYMENT-SIGNATURE': x402PaymentSignature(challenge, payer),
       },
       body,
@@ -676,7 +821,10 @@ describe('task authorization', () => {
     });
     const challenge = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
 
@@ -685,6 +833,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'PAYMENT-SIGNATURE': x402PaymentSignature(challenge, payer),
       },
       body,
@@ -733,7 +882,10 @@ describe('task authorization', () => {
 
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body: JSON.stringify({
         skillId: 'limited-task',
         message: {
@@ -793,7 +945,10 @@ describe('task authorization', () => {
 
     const challengeResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const challenge = JSON.parse(
@@ -810,6 +965,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'PAYMENT-SIGNATURE': Buffer.from(
           JSON.stringify({
             x402Version: challenge.x402Version,
@@ -825,7 +981,10 @@ describe('task authorization', () => {
 
     const secondResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
 
@@ -879,7 +1038,10 @@ describe('task authorization', () => {
     });
     const challengeResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const challenge = JSON.parse(
@@ -905,6 +1067,7 @@ describe('task authorization', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
           'PAYMENT-SIGNATURE': paymentSignature,
         },
         body,
@@ -962,7 +1125,10 @@ describe('task authorization', () => {
     });
     const challengeResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     const challenge = JSON.parse(
@@ -988,6 +1154,7 @@ describe('task authorization', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
           'PAYMENT-SIGNATURE': paymentSignature,
         },
         body,
@@ -1053,6 +1220,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'SIGN-IN-WITH-X': siwx,
       },
       body: JSON.stringify({
@@ -1114,6 +1282,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'SIGN-IN-WITH-X': 'not-a-credential',
       },
       body,
@@ -1136,6 +1305,7 @@ describe('task authorization', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Task-Access-Token': TASK_ACCESS_TOKEN,
           'SIGN-IN-WITH-X': credential,
         },
         body,
@@ -1192,7 +1362,10 @@ describe('task authorization', () => {
 
     const challengeResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
+      },
       body,
     });
     expect(challengeResponse.status).toBe(402);
@@ -1220,6 +1393,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'PAYMENT-SIGNATURE': paymentPayload,
       },
       body,
@@ -1241,6 +1415,7 @@ describe('task authorization', () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Task-Access-Token': TASK_ACCESS_TOKEN,
         'SIGN-IN-WITH-X': credential,
       },
       body,

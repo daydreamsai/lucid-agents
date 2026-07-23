@@ -67,7 +67,8 @@ export type MppPaymentRequirement =
 export type MppCredentialVerification =
   | {
       valid: true;
-      receipt?: string;
+      /** Non-empty serialized receipt proving successful settlement. */
+      receipt: string;
       /** Verified payer identity used by incoming payment policy checks. */
       payer?: string;
       /** Optional payment network used for SIWX entitlement metadata. */
@@ -146,6 +147,11 @@ export type MppAuthorizationOptions = {
 export type MppRuntime = {
   readonly config: MppConfig;
   readonly isActive: boolean;
+  /**
+   * Decode-only credential presence check owned by the MPP implementation.
+   * This does not verify or authorize payment.
+   */
+  hasCredential: (request: Request) => boolean;
   requirements: (
     entrypoint: EntrypointDef,
     kind: 'invoke' | 'stream'

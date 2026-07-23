@@ -125,7 +125,40 @@ const updateTemplateMetadata = async (
 ) => {
   const metaPath = join(root, id, 'template.json');
   const metadata = await readJson(metaPath);
-  await writeFile(metaPath, JSON.stringify(update(metadata), null, 2), 'utf8');
+  const updatedMetadata = update(metadata);
+  await writeFile(metaPath, JSON.stringify(updatedMetadata, null, 2), 'utf8');
+
+  const schemaPath = join(root, id, 'template.schema.json');
+  const schema = (await readJson(schemaPath)) as {
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+  const prompts = (
+    (
+      updatedMetadata.wizard as
+        | { prompts?: Array<{ key?: string; type?: string } | null> }
+        | undefined
+    )?.prompts ?? []
+  ).filter(
+    (prompt): prompt is { key: string; type?: string } =>
+      typeof prompt?.key === 'string'
+  );
+  const promptKeys = new Set(prompts.map(prompt => prompt.key));
+  schema.properties = {
+    AGENT_NAME: schema.properties.AGENT_NAME ?? { type: 'string' },
+    ...Object.fromEntries(
+      prompts.map(prompt => [
+        prompt.key,
+        schema.properties[prompt.key] ?? {
+          type: prompt.type === 'confirm' ? 'boolean' : 'string',
+        },
+      ])
+    ),
+  };
+  schema.required = (schema.required ?? []).filter(
+    key => key === 'AGENT_NAME' || promptKeys.has(key)
+  );
+  await writeFile(schemaPath, JSON.stringify(schema, null, 2), 'utf8');
 };
 
 describe('create-agent-kit CLI', () => {
@@ -1000,7 +1033,7 @@ describe('create-agent-kit CLI', () => {
         '--AGENT_DESCRIPTION=Custom AI agent for testing',
         '--AGENT_VERSION=2.0.0',
         '--PAYMENTS_RECEIVABLE_ADDRESS=0x1234567890123456789012345678901234567890',
-        '--PAYMENTS_NETWORK=ethereum-mainnet',
+        '--PAYMENTS_NETWORK=base-sepolia',
         '--DEVELOPER_WALLET_PRIVATE_KEY=0xabcdef',
       ],
       {
@@ -1020,7 +1053,7 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain(
       'PAYMENTS_RECEIVABLE_ADDRESS=0x1234567890123456789012345678901234567890'
     );
-    expect(envFile).toContain('PAYMENTS_NETWORK=ethereum-mainnet');
+    expect(envFile).toContain('PAYMENTS_NETWORK=base-sepolia');
     expect(envFile).toContain('DEVELOPER_WALLET_PRIVATE_KEY=0xabcdef');
   });
 
@@ -1154,6 +1187,7 @@ describe('create-agent-kit CLI', () => {
         '--AGENT_DOMAIN=agent.example.com',
         '--RPC_URL=https://sepolia.base.org',
         '--CHAIN_ID=84532',
+        '--IDENTITY_AGENT_ID=42',
         '--IDENTITY_AUTO_REGISTER=false',
         '--IDENTITY_INCLUDE_A2A=true',
         '--IDENTITY_A2A_ENDPOINT=https://agent.example.com/.well-known/agent-card.json',
@@ -1190,6 +1224,7 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).toContain('AGENT_DOMAIN=agent.example.com');
     expect(envFile).toContain('RPC_URL=https://sepolia.base.org');
     expect(envFile).toContain('CHAIN_ID=84532');
+    expect(envFile).toContain('IDENTITY_AGENT_ID=42');
     expect(envFile).toContain('IDENTITY_AUTO_REGISTER=false');
     expect(envFile).toContain('IDENTITY_INCLUDE_A2A=true');
     expect(envFile).toContain(
@@ -1222,7 +1257,7 @@ describe('create-agent-kit CLI', () => {
     expect(dependencies['@lucid-agents/payments']).toBeDefined();
   });
 
-  it('omits gated OASF fields when OASF is disabled', async () => {
+  it('generates safe testnet identity defaults without a signer', async () => {
     const cwd = await createTempDir();
     const { logger } = createLogger();
 
@@ -1236,8 +1271,33 @@ describe('create-agent-kit CLI', () => {
 
     const projectDir = join(cwd, 'identity-default-agent');
     const envFile = await readFile(join(projectDir, '.env'), 'utf8');
+    const agentSource = await readFile(
+      join(projectDir, 'src/lib/agent.ts'),
+      'utf8'
+    );
+    const exampleEnv = await readFile(
+      join(getRepoTemplatePath('identity'), '.env.example'),
+      'utf8'
+    );
 
-    expect(envFile).toContain('IDENTITY_INCLUDE_OASF=false');
+    for (const expected of [
+      'RPC_URL=https://sepolia.base.org',
+      'CHAIN_ID=84532',
+      'IDENTITY_AGENT_ID=',
+      'IDENTITY_AUTO_REGISTER=false',
+      'PAYMENTS_NETWORK=base-sepolia',
+      'IDENTITY_INCLUDE_A2A=false',
+      'IDENTITY_INCLUDE_OASF=false',
+    ]) {
+      expect(envFile).toContain(expected);
+      expect(exampleEnv).toContain(expected);
+    }
+    expect(envFile).not.toContain('AGENT_WALLET_TYPE=local');
+    expect(envFile).not.toContain('AGENT_WALLET_PRIVATE_KEY=');
+    expect(envFile).not.toContain('DEVELOPER_WALLET_PRIVATE_KEY=');
+    expect(envFile).not.toContain('IDENTITY_ALLOW_MAINNET_REGISTRATION=true');
+    expect(envFile).not.toContain('IDENTITY_A2A_ENDPOINT=');
+    expect(envFile).not.toContain('IDENTITY_A2A_VERSION=');
     expect(envFile).not.toContain('IDENTITY_OASF_ENDPOINT=');
     expect(envFile).not.toContain('IDENTITY_OASF_VERSION=');
     expect(envFile).not.toContain('IDENTITY_OASF_AUTHORS_JSON=');
@@ -1245,6 +1305,22 @@ describe('create-agent-kit CLI', () => {
     expect(envFile).not.toContain('IDENTITY_OASF_DOMAINS_JSON=');
     expect(envFile).not.toContain('IDENTITY_OASF_MODULES_JSON=');
     expect(envFile).not.toContain('IDENTITY_OASF_LOCATORS_JSON=');
+    expect(
+      exampleEnv
+        .split('\n')
+        .filter(line => !line.trimStart().startsWith('#'))
+        .join('\n')
+    ).not.toContain('IDENTITY_OASF_ENDPOINT=');
+    expect(agentSource).toContain('AGENT_WALLET_RPC_URL: process.env.RPC_URL');
+    expect(agentSource).toContain(
+      'AGENT_WALLET_CHAIN_ID: process.env.CHAIN_ID'
+    );
+    expect(agentSource).toContain(
+      'DEVELOPER_WALLET_RPC_URL: process.env.RPC_URL'
+    );
+    expect(agentSource).toContain(
+      'DEVELOPER_WALLET_CHAIN_ID: process.env.CHAIN_ID'
+    );
   });
 
   it('AGENTS.md and template.schema.json are copied to generated project', async () => {
@@ -1333,6 +1409,7 @@ describe('create-agent-kit CLI', () => {
         '--template=identity',
         '--non-interactive',
         '--IDENTITY_AUTO_REGISTER=true',
+        `--AGENT_WALLET_PRIVATE_KEY=0x${'1'.repeat(64)}`,
       ],
       {
         cwd,
@@ -1344,6 +1421,10 @@ describe('create-agent-kit CLI', () => {
     const envFile = await readFile(join(projectDir, '.env'), 'utf8');
 
     expect(envFile).toContain('IDENTITY_AUTO_REGISTER=true');
+    expect(envFile).toContain('IDENTITY_ALLOW_MAINNET_REGISTRATION=false');
+    expect(envFile).toContain('AGENT_WALLET_TYPE=local');
+    expect(envFile).toContain('AGENT_WALLET_PRIVATE_KEY=');
+    expect(envFile).not.toContain('DEVELOPER_WALLET_PRIVATE_KEY=');
   });
 
   it('handles actual boolean types from confirm questions correctly', async () => {
@@ -1352,28 +1433,28 @@ describe('create-agent-kit CLI', () => {
     const { logger } = createLogger();
 
     // Create a template with a confirm-type question
-    const templatePath = join(templateRoot, 'test-confirm');
-    const templateJson = await readJson(join(templatePath, 'template.json'));
-    templateJson.wizard = {
-      prompts: [
-        {
-          key: 'ENABLE_FEATURE',
-          type: 'confirm',
-          message: 'Enable feature?',
-          defaultValue: true,
+    await updateTemplateMetadata(
+      templateRoot,
+      'test-confirm',
+      templateJson => ({
+        ...templateJson,
+        wizard: {
+          prompts: [
+            {
+              key: 'ENABLE_FEATURE',
+              type: 'confirm',
+              message: 'Enable feature?',
+              defaultValue: true,
+            },
+            {
+              key: 'ANOTHER_FEATURE',
+              type: 'confirm',
+              message: 'Another feature?',
+              defaultValue: false,
+            },
+          ],
         },
-        {
-          key: 'ANOTHER_FEATURE',
-          type: 'confirm',
-          message: 'Another feature?',
-          defaultValue: false,
-        },
-      ],
-    };
-    await writeFile(
-      join(templatePath, 'template.json'),
-      JSON.stringify(templateJson, null, 2),
-      'utf8'
+      })
     );
 
     // Test with boolean false via wizard (simulates what happens with confirm types)

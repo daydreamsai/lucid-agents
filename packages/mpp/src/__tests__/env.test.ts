@@ -32,7 +32,10 @@ afterEach(() => {
 
 describe('mppFromEnv', () => {
   it('preserves an explicitly supplied credential verifier', () => {
-    const verifyCredential = async () => ({ valid: true as const });
+    const verifyCredential = async () => ({
+      valid: true as const,
+      receipt: 'environment-verifier-receipt',
+    });
 
     const config = mppFromEnv({
       methods: [custom.server('test', {})],

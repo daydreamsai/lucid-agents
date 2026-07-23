@@ -29,7 +29,7 @@
     "IDENTITY_INCLUDE_A2A": {
       "type": "boolean",
       "description": "Include an A2A-labeled service entry in registration services[]. This metadata label does not make the generated project A2A v1 conformant.",
-      "default": true
+      "default": false
     },
     "IDENTITY_A2A_ENDPOINT": {
       "type": "string",
@@ -134,7 +134,7 @@
     "PAYMENTS_NETWORK": {
       "type": "string",
       "description": "Wizard network alias. The generated runtime normalizes supported aliases; use the canonical CAIP-2 identifier when editing production configuration.",
-      "default": "ethereum",
+      "default": "base-sepolia",
       "enum": [
         "ethereum",
         "base",
@@ -169,7 +169,7 @@
     "RPC_URL": {
       "type": "string",
       "description": "Blockchain RPC endpoint URL for on-chain operations",
-      "default": "https://eth.llamarpc.com",
+      "default": "https://sepolia.base.org",
       "format": "uri",
       "examples": [
         "https://eth.llamarpc.com",
@@ -179,25 +179,47 @@
     },
     "CHAIN_ID": {
       "type": "string",
-      "description": "Blockchain network chain ID",
-      "default": "1",
-      "examples": ["1", "8453", "84532"]
+      "description": "ERC-8004 registry chain ID supported by this release",
+      "default": "84532",
+      "pattern": "^[1-9][0-9]*$",
+      "enum": ["1", "11155111", "84532"],
+      "examples": ["1", "11155111", "84532"]
+    },
+    "IDENTITY_AGENT_ID": {
+      "type": "string",
+      "description": "Existing ERC-8004 token ID to resolve directly during read-only startup. Leave empty to discover an ID through AGENT_DOMAIN/.well-known/agent-registration.json.",
+      "default": "",
+      "pattern": "^$|^[0-9]+$",
+      "examples": ["42", ""]
     },
     "IDENTITY_AUTO_REGISTER": {
       "type": "boolean",
-      "description": "Auto-register agent on ERC-8004 identity registry at startup",
-      "default": true
+      "description": "Auto-register the agent on the ERC-8004 identity registry at startup. This submits an on-chain transaction and is disabled by default.",
+      "default": false
+    },
+    "IDENTITY_ALLOW_MAINNET_REGISTRATION": {
+      "type": "boolean",
+      "description": "Required additional acknowledgement before auto-registration can submit a transaction on Ethereum mainnet (CHAIN_ID=1).",
+      "default": false
+    },
+    "AGENT_WALLET_TYPE": {
+      "type": "string",
+      "description": "Signer type emitted when identity auto-registration is enabled by the scaffold wizard.",
+      "default": "local",
+      "enum": ["local"]
     },
     "AGENT_WALLET_PRIVATE_KEY": {
       "type": "string",
       "description": "Server-only local agent-wallet key used to sign ERC-8004 registration transactions when auto-registration is enabled.",
       "default": "",
+      "pattern": "^$|^0x[0-9a-fA-F]{64}$",
       "examples": ["0x...", ""]
     },
     "DEVELOPER_WALLET_PRIVATE_KEY": {
       "type": "string",
       "description": "Optional server-only developer-wallet key for application-owned contract interactions. It is separate from the agent identity signer.",
       "default": "",
+      "pattern": "^$|^0x[0-9a-fA-F]{64}$",
       "examples": ["0x...", ""]
     }
   },
@@ -209,5 +231,54 @@
     "RPC_URL",
     "CHAIN_ID"
   ],
-  "notes": "The current wizard defaults IDENTITY_AUTO_REGISTER to true, so review it before first start. On-chain auto-registration requires an AGENT_WALLET_PRIVATE_KEY (or another configured agent-wallet signer) with sufficient gas on CHAIN_ID. Payment receiving and DEVELOPER_WALLET_PRIVATE_KEY are separate concerns."
+  "allOf": [
+    {
+      "if": {
+        "required": ["IDENTITY_AUTO_REGISTER"],
+        "properties": {
+          "IDENTITY_AUTO_REGISTER": { "const": true }
+        }
+      },
+      "then": {
+        "required": ["AGENT_WALLET_TYPE"],
+        "properties": {
+          "AGENT_WALLET_TYPE": { "const": "local" }
+        },
+        "anyOf": [
+          {
+            "required": ["AGENT_WALLET_PRIVATE_KEY"],
+            "properties": {
+              "AGENT_WALLET_PRIVATE_KEY": {
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              }
+            }
+          },
+          {
+            "required": ["DEVELOPER_WALLET_PRIVATE_KEY"],
+            "properties": {
+              "DEVELOPER_WALLET_PRIVATE_KEY": {
+                "pattern": "^0x[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": ["IDENTITY_AUTO_REGISTER", "CHAIN_ID"],
+        "properties": {
+          "IDENTITY_AUTO_REGISTER": { "const": true },
+          "CHAIN_ID": { "const": "1" }
+        }
+      },
+      "then": {
+        "required": ["IDENTITY_ALLOW_MAINNET_REGISTRATION"],
+        "properties": {
+          "IDENTITY_ALLOW_MAINNET_REGISTRATION": { "const": true }
+        }
+      }
+    }
+  ],
+  "notes": "The default project uses Base Sepolia (CHAIN_ID=84532), leaves IDENTITY_AGENT_ID empty for bounded domain-document discovery, and keeps IDENTITY_AUTO_REGISTER=false, so the wizard neither requests nor emits a signer secret and startup cannot perform an on-chain write. Set IDENTITY_AGENT_ID to resolve a known ERC-8004 token directly. Enabling registration emits AGENT_WALLET_TYPE=local and prompts for AGENT_WALLET_PRIVATE_KEY; a separate DEVELOPER_WALLET_PRIVATE_KEY remains an advanced manual configuration. Local signers are bound to the same RPC_URL and CHAIN_ID used for identity registry reads. Ethereum mainnet (CHAIN_ID=1) additionally requires IDENTITY_ALLOW_MAINNET_REGISTRATION=true and a successful signer-address/native-gas-balance preflight after the chain, registry, domain, agent URI, and transaction policy have been reviewed. Supported registry chains are Ethereum, Ethereum Sepolia, and Base Sepolia. Payment receiving is a separate concern."
 }

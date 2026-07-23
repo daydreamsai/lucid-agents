@@ -235,6 +235,14 @@ Important invariants:
 - Invoke commits only after successful application output. Streams and tasks
   commit when the server successfully admits the asynchronous work because the
   HTTP response is already live/accepted at that boundary.
+- An initial MPP challenge does not reserve task capacity. Credential-bearing
+  MPP requests reserve durable task state before verification may commit.
+  Credential-bearing MPP and admitted x402 work hold a renewable `prepared`
+  execution claim through settlement, then atomically activate it before the
+  handler or execution timeout starts. Uncommitted failures terminalize
+  reserved state; after any irreversible settlement, later execution-start or
+  accounting errors preserve the receipt and a queryable terminal task
+  capability.
 - Invalid input, failed invoke output/handlers, failed admission, or failed
   settlement releases outstanding or staged capacity. Recording errors after a
   successful settlement retain the staged batch and therefore fail closed.
@@ -273,13 +281,14 @@ through the `Task-Access-Token` header. A token is 20–256 characters; the stor
 receives only its SHA-256 hash. Unknown tasks and tasks owned by another token
 are intentionally indistinguishable.
 
-`TaskStore` is an injectable persistence port with atomic execution claims,
-fenced `compareAndSet` state transitions, and subscription delivery. A worker
-claims a running task with an expiring owner lease before executing it. Another
-worker may recover an expired lease, while the stale owner is prevented from
-publishing a terminal result. Worker shutdown aborts local handlers but leaves
-durable running records recoverable rather than cancelling them. The default
-`createInMemoryTaskStore()`:
+`TaskStore` is an injectable persistence port with admission expiry, two-phase
+execution claims, fenced `compareAndSet` state transitions, and subscription
+delivery. A worker first claims a running task with an expiring `prepared`
+lease, renews it while authorization finalizes, and atomically activates it
+before execution. Another worker may recover an expired active lease, while the
+stale owner is prevented from publishing a terminal result. Worker shutdown
+aborts local handlers but leaves durable running records recoverable rather
+than cancelling them. The default `createInMemoryTaskStore()`:
 
 - bounds the number of retained tasks;
 - expires terminal tasks after a retention window;
@@ -287,8 +296,19 @@ durable running records recoverable rather than cancelling them. The default
 - isolates subscriptions by owner hash;
 - supports a bounded execution timeout.
 
-Production deployments that need restart survival must inject a durable store.
-Agent cards only advertise task capabilities when the A2A task runtime exists.
+Paid tasks require a store declaring `durability: 'durable'` and are rejected
+before authorization when only the process-local default is configured. They
+also require a caller-supplied task access token so the recovery capability is
+known before settlement; the A2A client generates and sends one automatically.
+
+This admission protocol makes every in-process HTTP response coherent. It does
+not claim a distributed transaction between an external settlement provider
+and the task database across abrupt process death. Durable deployments combine
+provider idempotency and receipt reconciliation with persisted invocation data
+and an execution dispatcher that can reclaim expired active leases.
+Durable stores must reap abandoned admissions and expired prepared claims
+before enforcing capacity. Agent cards only advertise task capabilities when
+the A2A task runtime exists.
 
 ## Scheduler guarantees
 

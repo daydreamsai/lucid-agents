@@ -125,6 +125,36 @@ Invoke finalization follows the handler result. Streaming and task requests
 finalize when their asynchronous work is successfully admitted, since their
 HTTP response is already live or accepted at that point.
 
+Task creation has an additional ordering guarantee. An initial MPP challenge
+does not reserve task capacity; a credential-bearing MPP request reserves its
+durable task before verification can commit. HTTP then holds a renewable
+`prepared` execution claim while finalizing x402 or MPP settlement and
+atomically activates it before starting the handler or its timeout.
+Uncommitted failures terminalize reserved state and release payment policy
+capacity. Once a rail commits, any later execution-start or accounting failure
+returns the receipt with a queryable terminal task capability.
+
+Paid task creation requires a task store that truthfully declares
+`durability: 'durable'`; the default process-local A2A store is accepted only
+for free tasks. It also requires a caller-supplied `Task-Access-Token`, ensuring
+the payer knows the recovery capability before authorization begins; the A2A
+`sendMessage()` client supplies one automatically. These checks happen before
+payment authorization. The client also sends an `Idempotency-Key`, returns
+settlement headers on success, and exposes both keys plus any task/settlement
+evidence through `TaskCreationError` when a response is interrupted or
+non-successful.
+
+The two-phase task transaction covers all HTTP response paths in a running
+worker. It cannot atomically commit an external payment provider and a task
+database across abrupt process loss. Production payment verifiers must
+deduplicate settlement with the caller's `Idempotency-Key` and provide receipt
+reconciliation; multi-worker hosts must persist invocation data needed to
+resume an expired active task lease.
+
+Task creation is not target-side idempotent. The idempotency header is a
+settlement-deduplication input for payment verifiers; clients must list or
+otherwise reconcile durable task state before retrying a creation request.
+
 If both x402 and MPP are installed, every priced entrypoint must set
 `paymentProtocol: 'x402' | 'mpp'`. An auth-only entrypoint requires an enabled
 SIWX payments runtime. These conditions are validated when the entrypoint is

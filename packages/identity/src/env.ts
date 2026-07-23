@@ -1,10 +1,19 @@
 import type { TrustConfig } from '@lucid-agents/types/identity';
 
+import type { IdentityAgentId } from './agent-id';
 import type { AgentRegistrationOptions, RegistrationServiceName } from './init';
+import type { IdentityRegistrationDiscoveryOptions } from './registries/identity';
 import { parseBoolean, parseOASFStructuredConfigFromEnv } from './validation';
 
 export type IdentityConfig = {
   trust?: TrustConfig;
+  /**
+   * Existing ERC-8004 token ID to resolve directly. When omitted, read-only
+   * bootstrap discovers an ID through the domain registration document.
+   */
+  agentId?: IdentityAgentId;
+  /** Optional bounds and fetch injection for domain registration discovery. */
+  registrationDiscovery?: IdentityRegistrationDiscoveryOptions;
   domain?: string;
   autoRegister?: boolean;
   rpcUrl?: string;
@@ -41,6 +50,7 @@ function parseSelectedServices(
  *
  * Reads from:
  * - AGENT_DOMAIN - Agent domain (required for registration)
+ * - IDENTITY_AGENT_ID - Existing ERC-8004 token ID to look up (optional)
  * - REGISTER_IDENTITY or IDENTITY_AUTO_REGISTER - Auto-register if not found (defaults to false)
  * - RPC_URL - Blockchain RPC URL (required)
  * - CHAIN_ID - Chain ID for ERC-8004 registry (required)
@@ -57,19 +67,20 @@ export function identityFromEnv(
       : ({} as Record<string, string | undefined>);
 
   const domain = configOverrides?.domain ?? env.AGENT_DOMAIN;
+  const envAgentId = env.IDENTITY_AGENT_ID?.trim();
+  const agentId =
+    configOverrides?.agentId ?? (envAgentId ? envAgentId : undefined);
   const rpcUrl = configOverrides?.rpcUrl ?? env.RPC_URL;
   const chainId =
     configOverrides?.chainId ??
     (env.CHAIN_ID ? parseInt(env.CHAIN_ID) : undefined);
 
   // Parse autoRegister from environment (support both REGISTER_IDENTITY and IDENTITY_AUTO_REGISTER)
-  let autoRegister: boolean | undefined = configOverrides?.autoRegister;
+  let autoRegister = configOverrides?.autoRegister;
   if (autoRegister === undefined) {
     const registerIdentityEnv =
       env.REGISTER_IDENTITY ?? env.IDENTITY_AUTO_REGISTER;
-    if (registerIdentityEnv !== undefined) {
-      autoRegister = parseBoolean(registerIdentityEnv);
-    }
+    autoRegister = parseBoolean(registerIdentityEnv);
   }
 
   const selectedServices = parseSelectedServices(env);
@@ -96,6 +107,8 @@ export function identityFromEnv(
 
   return {
     trust: configOverrides?.trust,
+    agentId,
+    registrationDiscovery: configOverrides?.registrationDiscovery,
     domain,
     autoRegister,
     rpcUrl,

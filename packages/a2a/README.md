@@ -81,7 +81,7 @@ const access = await agent.a2a.client.sendMessage(card, 'summarize', {
   text: 'Long text',
 });
 
-// access = { taskId, accessToken, status: 'running' }
+// access = { taskId, accessToken, status, idempotencyKey, settlement? }
 const task = await agent.a2a.client.getTask(card, access);
 ```
 
@@ -89,8 +89,28 @@ Keep `accessToken` secret. Every read, cancellation, listing, and subscription
 requires it. The server persists only its SHA-256 hash, and a request made with a
 different token cannot distinguish the task from a missing task.
 
+`sendMessage()` sends caller-known access and idempotency keys even when you do
+not provide them. A successful result returns both keys plus any
+`Payment-Receipt`, `Payment-Response`, or `X-Payment-Response` evidence. If the
+network fails, the response is malformed, or the server returns non-2xx, it
+throws `TaskCreationError` with the same keys, response details, any parsed task
+capability, and settlement evidence:
+
 ```ts
-import { waitForTask } from '@lucid-agents/a2a';
+import { TaskCreationError, waitForTask } from '@lucid-agents/a2a';
+
+try {
+  await agent.a2a.client.sendMessage(card, 'summarize', input);
+} catch (error) {
+  if (!(error instanceof TaskCreationError)) throw error;
+
+  // Reconcile durable task state before deciding whether to retry.
+  const possiblyCreated = await agent.a2a.client.listTasks(
+    card,
+    error.accessToken
+  );
+  console.log(possiblyCreated.tasks, error.settlement);
+}
 
 const completed = await waitForTask(agent.a2a.client, card, access, 30_000);
 
@@ -107,7 +127,10 @@ const owned = await agent.a2a.client.listTasks(card, access.accessToken, {
 ```
 
 Pass `options.accessToken` to `sendMessage` when several tasks should belong to
-the same owner and be returned by one `listTasks` call.
+the same owner and be returned by one `listTasks` call. Pass
+`options.idempotencyKey` to reuse a payment-provider deduplication key. Task
+creation itself is not target-side idempotent: after an interrupted response,
+list/reconcile the durable task before retrying.
 
 ## HTTP task contract
 
@@ -116,20 +139,42 @@ HTTP+JSON operation contract.
 
 With the default empty base path, `@lucid-agents/http` exposes:
 
-| Operation        | Route                          | Access token          |
-| ---------------- | ------------------------------ | --------------------- |
-| Create           | `POST /tasks`                  | supplied or generated |
-| List owned tasks | `GET /tasks`                   | required              |
-| Read             | `GET /tasks/:taskId`           | required              |
-| Cancel           | `POST /tasks/:taskId/cancel`   | required              |
-| Subscribe (SSE)  | `GET /tasks/:taskId/subscribe` | required              |
+| Operation        | Route                          | Access token                         |
+| ---------------- | ------------------------------ | ------------------------------------ |
+| Create           | `POST /tasks`                  | supplied for paid; optional for free |
+| List owned tasks | `GET /tasks`                   | required                             |
+| Read             | `GET /tasks/:taskId`           | required                             |
+| Cancel           | `POST /tasks/:taskId/cancel`   | required                             |
+| Subscribe (SSE)  | `GET /tasks/:taskId/subscribe` | required                             |
 
 The token is transported in `Task-Access-Token`. A configured HTTP base path is
-also used by these routes and is preserved in agent-card interfaces.
+also used by these routes and is preserved in agent-card interfaces. Paid task
+creation requires the caller to supply this token so the capability is known
+before settlement begins; `sendMessage()` does this automatically. Free task
+creation may continue to use a server-generated token.
 
-Task creation uses the same authorization gate as direct invoke and stream. A
-priced or auth-only entrypoint is verified before a task is reserved, and x402
-settlement is finalized before background execution is admitted.
+Task creation uses the same authorization gate as direct invoke and stream. An
+initial MPP challenge does not consume task capacity. A credential-bearing MPP
+request pre-reserves durable task state before verification can settle it.
+Unclaimed admission records carry an expiry that every `TaskStore` must reap
+before enforcing capacity, so a crashed verifier cannot strand a slot forever.
+The runtime holds a renewable `prepared` execution claim while authorization
+finalizes, then atomically activates that claim before starting the handler and
+its execution timeout. Once any rail is irreversible, a later execution-start
+or accounting failure returns its receipt with a queryable terminal task
+capability instead of discarding either.
+
+Paid tasks fail closed with `durable_task_store_required` when the configured
+store declares `durability: 'process'`. This includes the default in-memory
+store. Free tasks continue to work with the portable default.
+
+These guarantees cover every response path within a running worker. An external
+payment rail and a task database cannot form one distributed transaction across
+abrupt process loss. Production verifiers must therefore use the caller's
+idempotency key for settlement deduplication and support provider-side receipt
+reconciliation. The caller-known task token lets clients recover the durable
+task even if the creation response is interrupted; `TaskCreationError` exposes
+both generated recovery keys when that happens.
 
 ## Storage and state transitions
 
@@ -154,12 +199,19 @@ const agent = await createAgent({ name: 'worker', version: '1.0.0' })
   .build();
 ```
 
-The store contract uses both atomic execution claims and fenced
-`compareAndSet` transitions:
+The store contract uses two-phase execution claims and fenced `compareAndSet`
+transitions:
 
-- `claimExecution(taskId, ownerId, expiresAt, now)` may claim a running task
-  only when it has no live lease;
-- an expired lease may be recovered by another worker;
+- `durability` must truthfully declare whether records and leases survive a
+  process restart;
+- `reapExpiredAdmissions(now)` must terminalize abandoned reservations and
+  expired `prepared` claims before capacity is enforced;
+- `claimExecution(...)` creates a `prepared` lease only when no live lease
+  exists;
+- `renewExecutionClaim(...)` extends only the current owner's live `prepared`
+  lease;
+- `activateExecution(...)` atomically changes that lease to `active`;
+- an expired `active` lease may be recovered by another worker;
 - terminal writes pass `executionOwnerId`, so a stale worker cannot overwrite
   the recovery worker's result;
 - `create` and every state transition must be durable before returning;
@@ -172,6 +224,28 @@ both claim and transition operations. `runtime.close()` closes the task runtime
 and injected store. It aborts local handlers without marking durable running
 tasks cancelled; their leases remain recoverable by another worker.
 
+## Migrating a custom `TaskStore`
+
+This release intentionally changes the public task-store contract. Existing
+stores must:
+
+1. add `durability: 'durable'` only when task records and lease mutations
+   survive worker restarts, otherwise use `'process'`;
+2. persist `StoredTask.admissionExpiresAt` and the execution-lease `phase`;
+3. implement atomic `reapExpiredAdmissions`, `renewExecutionClaim`, and
+   `activateExecution` operations with the ownership checks described above;
+4. treat `claimExecution` as preparation, not permission to run the handler.
+
+Clients should also handle every `TaskStatus` in `SendMessageResponse.status`.
+After an irreversible payment, admission failure can return a durable terminal
+capability (`failed`, `cancelled`, or `completed`) rather than a fabricated
+`running` response.
+
+The store persists task state and leases, not JavaScript handler closures. A
+multi-worker host that recovers an expired active lease must call
+`execute(taskId, options)` with the original durable invocation payload and
+execution callback.
+
 ## Standalone utilities
 
 ```ts
@@ -182,6 +256,7 @@ import {
   invokeAgent,
   streamAgent,
   sendMessage,
+  TaskCreationError,
   getTask,
   listTasks,
   cancelTask,

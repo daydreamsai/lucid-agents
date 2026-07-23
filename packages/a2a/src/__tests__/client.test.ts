@@ -13,6 +13,7 @@ import {
   sendMessage,
   streamAgent,
   subscribeTask,
+  TaskCreationError,
   waitForTask,
 } from '../client';
 
@@ -374,6 +375,7 @@ describe('fetchAndInvoke', () => {
 
 describe('task client route contract', () => {
   const accessToken = 'client-task-access-token-0001';
+  const idempotencyKey = 'client-task-idempotency-key-0001';
   const card: AgentCardWithEntrypoints = {
     name: 'path-agent',
     version: '1.0.0',
@@ -422,7 +424,8 @@ describe('task client route contract', () => {
     const fetchImpl = mockFetch as unknown as typeof fetch;
 
     const access = await sendMessage(card, 'echo', {}, fetchImpl, {
-      accessToken,
+      accessToken: `  ${accessToken}  `,
+      idempotencyKey,
     });
     await getTask(card, access, fetchImpl);
     await listTasks(card, accessToken, { status: 'running' }, fetchImpl);
@@ -441,6 +444,145 @@ describe('task client route contract', () => {
         request => request.headers.get('Task-Access-Token') === accessToken
       )
     ).toBe(true);
+    expect(requests[0]?.headers.get('Idempotency-Key')).toBe(idempotencyKey);
+    expect(access.idempotencyKey).toBe(idempotencyKey);
+  });
+
+  it('surfaces settlement evidence on a successful task creation', async () => {
+    const fetchImpl = mock(async () =>
+      Response.json(
+        {
+          taskId: 'settled-task-1',
+          accessToken,
+          status: 'running',
+        },
+        {
+          headers: {
+            'Payment-Receipt': 'mpp-task-receipt',
+            'PAYMENT-RESPONSE': 'x402-task-response',
+          },
+        }
+      )
+    ) as unknown as typeof fetch;
+
+    const result = await sendMessage(card, 'echo', {}, fetchImpl, {
+      accessToken,
+      idempotencyKey,
+    });
+
+    expect(result).toEqual({
+      taskId: 'settled-task-1',
+      accessToken,
+      status: 'running',
+      idempotencyKey,
+      settlement: {
+        paymentReceipt: 'mpp-task-receipt',
+        paymentResponse: 'x402-task-response',
+      },
+    });
+  });
+
+  it('retains generated recovery keys when the task request is interrupted', async () => {
+    let requestHeaders: Headers | undefined;
+    const fetchImpl = mock(
+      async (_input: string | URL | Request, init?: RequestInit) => {
+        requestHeaders = new Headers(init?.headers);
+        throw new Error('connection reset');
+      }
+    ) as unknown as typeof fetch;
+
+    let failure: unknown;
+    try {
+      await sendMessage(card, 'echo', {}, fetchImpl);
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(TaskCreationError);
+    const creationError = failure as TaskCreationError;
+    expect(creationError.accessToken.length).toBeGreaterThanOrEqual(20);
+    expect(creationError.idempotencyKey.length).toBeGreaterThanOrEqual(20);
+    expect(requestHeaders?.get('Task-Access-Token')).toBe(
+      creationError.accessToken
+    );
+    expect(requestHeaders?.get('Idempotency-Key')).toBe(
+      creationError.idempotencyKey
+    );
+    expect((creationError.cause as Error).message).toBe('connection reset');
+  });
+
+  it('retains a terminal capability and settlement evidence on non-2xx responses', async () => {
+    const fetchImpl = mock(async () =>
+      Response.json(
+        {
+          error: { code: 'task_terminalization_failed' },
+          taskId: 'durable-terminal-task',
+          accessToken,
+          status: 'cancelled',
+        },
+        {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: {
+            'Payment-Receipt': 'recoverable-mpp-receipt',
+            'X-Payment-Response': 'recoverable-x402-response',
+          },
+        }
+      )
+    ) as unknown as typeof fetch;
+
+    let failure: unknown;
+    try {
+      await sendMessage(card, 'echo', {}, fetchImpl, {
+        accessToken,
+        idempotencyKey,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(TaskCreationError);
+    const creationError = failure as TaskCreationError;
+    expect(creationError.accessToken).toBe(accessToken);
+    expect(creationError.idempotencyKey).toBe(idempotencyKey);
+    expect(creationError.taskId).toBe('durable-terminal-task');
+    expect(creationError.taskStatus).toBe('cancelled');
+    expect(creationError.settlement).toEqual({
+      paymentReceipt: 'recoverable-mpp-receipt',
+      xPaymentResponse: 'recoverable-x402-response',
+    });
+    expect(creationError.response?.status).toBe(503);
+    expect(creationError.responseStatus).toBe(503);
+    expect(creationError.body).toMatchObject({
+      error: { code: 'task_terminalization_failed' },
+      taskId: 'durable-terminal-task',
+    });
+  });
+
+  it('retains recovery keys when a Fetch returns a disturbed response', async () => {
+    const disturbed = Response.json({
+      taskId: 'disturbed-task',
+      accessToken,
+      status: 'running',
+    });
+    await disturbed.text();
+    const fetchImpl = mock(async () => disturbed) as unknown as typeof fetch;
+
+    let failure: unknown;
+    try {
+      await sendMessage(card, 'echo', {}, fetchImpl, {
+        accessToken,
+        idempotencyKey,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(TaskCreationError);
+    const creationError = failure as TaskCreationError;
+    expect(creationError.accessToken).toBe(accessToken);
+    expect(creationError.idempotencyKey).toBe(idempotencyKey);
+    expect(creationError.responseStatus).toBe(200);
   });
 });
 

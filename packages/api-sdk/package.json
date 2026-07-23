@@ -32,11 +32,17 @@
       "import": "./dist/sdk/@tanstack/react-query.gen.js",
       "default": "./dist/sdk/@tanstack/react-query.gen.js"
     },
+    "./provenance": {
+      "types": "./dist/provenance.d.ts",
+      "import": "./dist/provenance.js",
+      "default": "./dist/provenance.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "openapi-provenance.json"
   ],
   "publishConfig": {
     "access": "public"
@@ -45,6 +51,7 @@
     "build": "tsup",
     "clean": "rm -rf dist",
     "generate": "bun run codegen.ts",
+    "test:compatibility": "bun test tests",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {},

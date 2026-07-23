@@ -28,6 +28,7 @@ import { decodeMppCredential } from './middleware';
 
 const MAX_OUTSTANDING_CHALLENGES = 10_000;
 const CONTENT_RESPONSE_MARKER = 'x-lucid-mpp-content-response';
+const MAX_RECEIPT_HEADER_BYTES = 8 * 1024;
 
 type NativeServerIntent = Method.AnyServer;
 type RuntimeRail = {
@@ -64,6 +65,30 @@ type NativePaymentResult =
 type NativeHandlerFactory = (
   options: Record<string, unknown>
 ) => (request: Request) => Promise<NativePaymentResult>;
+
+function normalizeReceiptHeader(value: string | undefined): string {
+  if (!value?.trim()) {
+    throw new Error('MPP verifier omitted its receipt');
+  }
+  const receipt = value;
+  if (
+    receipt !== receipt.trim() ||
+    new TextEncoder().encode(receipt).byteLength > MAX_RECEIPT_HEADER_BYTES ||
+    /[\u0000-\u001f\u007f]/u.test(receipt)
+  ) {
+    throw new Error('MPP verifier returned an invalid receipt header');
+  }
+  const headers = new Headers();
+  try {
+    headers.set('Payment-Receipt', receipt);
+  } catch {
+    throw new Error('MPP verifier returned an invalid receipt header');
+  }
+  if (headers.get('Payment-Receipt') !== receipt) {
+    throw new Error('MPP verifier returned an invalid receipt header');
+  }
+  return receipt;
+}
 
 function entrypointRequiresPayment(entrypoint: EntrypointDef): boolean {
   if (entrypoint.paymentProtocol === 'x402') return false;
@@ -449,6 +474,9 @@ async function createMppRuntime(
     get isActive() {
       return isActive;
     },
+    hasCredential(request: Request) {
+      return decodeMppCredential(request) !== null;
+    },
     requirements,
     activate(entrypoint: EntrypointDef) {
       if (!isActive && entrypointRequiresPayment(entrypoint)) isActive = true;
@@ -557,33 +585,14 @@ async function createMppRuntime(
             ),
           } as const;
         }
+        let verification: Awaited<ReturnType<typeof config.verifyCredential>>;
         try {
-          const verification = await config.verifyCredential({
+          verification = await config.verifyCredential({
             request,
             entrypoint,
             kind,
             requirement,
             credential,
-          });
-          if (verification.valid === false) {
-            rejectChallenge(credential);
-            return {
-              authorized: false,
-              response:
-                verification.response?.clone() ??
-                challengeWithCustomVerifier(
-                  selected,
-                  requirement,
-                  entrypoint,
-                  kind
-                ),
-            } as const;
-          }
-          return completeChallenge(credential, {
-            authorized: true,
-            ...(verification.receipt ? { receipt: verification.receipt } : {}),
-            ...(verification.payer ? { payer: verification.payer } : {}),
-            ...(verification.network ? { network: verification.network } : {}),
           });
         } catch (error) {
           releaseChallengeClaim(credential);
@@ -596,24 +605,71 @@ async function createMppRuntime(
             ),
           } as const;
         }
+        if (verification.valid === false) {
+          rejectChallenge(credential);
+          return {
+            authorized: false,
+            response:
+              verification.response?.clone() ??
+              challengeWithCustomVerifier(
+                selected,
+                requirement,
+                entrypoint,
+                kind
+              ),
+          } as const;
+        }
+        let receipt: string;
+        try {
+          receipt = normalizeReceiptHeader(verification.receipt);
+        } catch (error) {
+          // valid:true asserts that settlement succeeded. Consume this
+          // credential so an invalid receipt cannot trigger a second charge.
+          rejectChallenge(credential);
+          return {
+            authorized: false,
+            response: configurationResponse(
+              `MPP verification failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            ),
+          } as const;
+        }
+        return completeChallenge(credential, {
+          authorized: true,
+          receipt,
+          ...(verification.payer ? { payer: verification.payer } : {}),
+          ...(verification.network ? { network: verification.network } : {}),
+        });
       }
 
+      let result: NativePaymentResult;
       try {
-        const result = await nativeHandler(selected, requirement)(request);
-        if (result.status === 402) {
-          rejectChallenge(credential);
-          const challenge = Challenge.fromResponse(result.challenge);
-          rememberChallenge(challenge, entrypoint, kind);
-          return { authorized: false, response: result.challenge } as const;
-        }
-
+        result = await nativeHandler(selected, requirement)(request);
+      } catch (error) {
+        releaseChallengeClaim(credential);
+        return {
+          authorized: false,
+          response: configurationResponse(
+            `MPP verification failed: ${error instanceof Error ? error.message : String(error)}`
+          ),
+        } as const;
+      }
+      if (result.status === 402) {
+        rejectChallenge(credential);
+        const challenge = Challenge.fromResponse(result.challenge);
+        rememberChallenge(challenge, entrypoint, kind);
+        return { authorized: false, response: result.challenge } as const;
+      }
+      try {
         const marker = new Response(null, {
           status: 299,
           headers: { [CONTENT_RESPONSE_MARKER]: 'true' },
         });
         const receiptResponse = result.withReceipt(marker);
-        const receipt = receiptResponse.headers.get('Payment-Receipt');
-        if (!receipt) throw new Error('MPP verifier omitted its receipt');
+        const receipt = normalizeReceiptHeader(
+          receiptResponse.headers.get('Payment-Receipt') ?? undefined
+        );
         const handled = receiptResponse.headers.has(CONTENT_RESPONSE_MARKER)
           ? undefined
           : receiptResponse;
@@ -623,7 +679,9 @@ async function createMppRuntime(
           ...(handled ? { handled } : {}),
         });
       } catch (error) {
-        releaseChallengeClaim(credential);
+        // status:200 means the native rail accepted the payment. Consume this
+        // credential if receipt construction fails to prevent re-settlement.
+        rejectChallenge(credential);
         return {
           authorized: false,
           response: configurationResponse(

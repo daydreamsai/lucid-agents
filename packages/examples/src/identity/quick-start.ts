@@ -1,8 +1,8 @@
 /**
  * Quick Start Example - ERC-8004 Agent Identity
  *
- * This example shows the simplest way to register your agent on the
- * ERC-8004 registry using environment variables.
+ * This example shows how to resolve an existing identity read-only or
+ * explicitly register a new agent using environment variables.
  *
  * Prerequisites:
  * 1. Create a .env file with required variables (see .env.example)
@@ -10,11 +10,34 @@
  */
 
 import { createAgent } from '@lucid-agents/core';
-import { createAgentIdentity, registerAgent } from '@lucid-agents/identity';
+import {
+  type AgentIdentity,
+  createAgentIdentity,
+  type CreateAgentIdentityOptions,
+  registerAgent,
+} from '@lucid-agents/identity';
 import { wallets, walletsFromEnv } from '@lucid-agents/wallet';
 
-async function main() {
-  console.log('ERC-8004 Agent Identity - Quick Start\n');
+type IdentityOperation = (
+  options: CreateAgentIdentityOptions
+) => Promise<AgentIdentity>;
+
+export type IdentityQuickStartOptions = {
+  env?: Record<string, string | undefined>;
+  lookupIdentity?: IdentityOperation;
+  registerIdentity?: IdentityOperation;
+  log?: (...values: unknown[]) => void;
+};
+
+export async function runIdentityQuickStart(
+  options: IdentityQuickStartOptions = {}
+): Promise<void> {
+  const env = options.env ?? process.env;
+  const lookupIdentity = options.lookupIdentity ?? createAgentIdentity;
+  const registerIdentity = options.registerIdentity ?? registerAgent;
+  const log = options.log ?? console.log;
+
+  log('ERC-8004 Agent Identity - Quick Start\n');
 
   // Create a minimal runtime with wallet configuration
   const agent = await createAgent({
@@ -22,72 +45,67 @@ async function main() {
     version: '1.0.0',
     description: 'Quick start example agent',
   })
-    .use(wallets({ config: walletsFromEnv() }))
+    .use(wallets({ config: walletsFromEnv(undefined, env) }))
     .build();
 
-  // Example 1: Simple registration with env vars
-  console.log('Example 1: Simple Registration');
-  console.log('Using environment variables for configuration...\n');
+  // Example 1: Read-only domain discovery or direct ID lookup
+  log('Example 1: Existing Identity Lookup');
+  log('Using environment variables for configuration...\n');
 
-  const identity = await createAgentIdentity({
+  const identity = await lookupIdentity({
     runtime: agent,
-    autoRegister: true,
+    agentId: env.IDENTITY_AGENT_ID,
+    autoRegister: false,
+    env,
   });
 
-  console.log('Status:', identity.status);
+  log('Status:', identity.status);
 
-  if (identity.didRegister) {
-    console.log('Agent registered successfully!');
-    console.log('Transaction:', identity.transactionHash);
-    console.log(
-      '\nNext step: Host your metadata at:',
-      `https://${identity.domain}/.well-known/agent-registration.json`
-    );
-  } else if (identity.trust) {
-    console.log('Found existing registration');
-    console.log('Agent ID:', identity.record?.agentId);
+  if (identity.record) {
+    log('Found existing registration');
+    log('Agent ID:', identity.record.agentId);
   } else {
-    console.log('No on-chain identity (agent will run without it)');
+    log(
+      'No identity resolved. Publish a matching domain registration document, set IDENTITY_AGENT_ID, or use the explicit registration flow.'
+    );
   }
 
-  // Example 2: Explicit registration
-  console.log('\n\nExample 2: Explicit Registration');
-  console.log('Forcing registration with registerAgent()...\n');
-
-  const registration = await registerAgent({
-    runtime: agent,
-    domain: 'my-agent.example.com',
-  });
-
-  console.log('Status:', registration.status);
-  if (registration.didRegister) {
-    console.log('Registered!');
-    console.log('TX:', registration.transactionHash);
+  if (env.IDENTITY_AUTO_REGISTER !== 'true') {
+    log(
+      '\nRegistration skipped. Set IDENTITY_AUTO_REGISTER=true and AGENT_DOMAIN to run the single explicit write example.'
+    );
+    return;
   }
 
-  // Example 3: Custom configuration
-  console.log('\n\nExample 3: Custom Configuration');
-  console.log('Using custom trust models and overrides...\n');
+  const domain = env.AGENT_DOMAIN?.trim();
+  if (!domain) {
+    throw new Error(
+      'AGENT_DOMAIN is required when IDENTITY_AUTO_REGISTER=true'
+    );
+  }
 
-  const customIdentity = await createAgentIdentity({
+  // Example 2: Explicit, opt-in registration with custom trust metadata.
+  log('\n\nExample 2: Explicit Registration');
+  const registration = await registerIdentity({
     runtime: agent,
-    domain: 'custom-agent.example.com',
-    autoRegister: true,
+    domain,
     trustModels: ['feedback', 'tee-attestation'],
     trustOverrides: {
-      feedbackDataUri: 'https://custom-agent.example.com/feedback.json',
+      feedbackDataUri: `https://${domain}/feedback.json`,
     },
+    env,
   });
 
-  console.log('Status:', customIdentity.status);
-  if (customIdentity.trust) {
-    console.log('Trust models:', customIdentity.trust.trustModels);
-    console.log('Feedback URI:', customIdentity.trust.feedbackDataUri);
+  log('Status:', registration.status);
+  if (registration.didRegister) {
+    log('Registered!');
+    log('TX:', registration.transactionHash);
   }
-
-  console.log(
-    '\nDone! Check the full-integration example for usage with agent-kit.'
-  );
 }
 
-main().catch(console.error);
+if (import.meta.main) {
+  runIdentityQuickStart().catch(error => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

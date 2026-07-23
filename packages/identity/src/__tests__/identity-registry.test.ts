@@ -9,6 +9,7 @@ import {
   buildTrustConfigFromIdentity,
   createIdentityRegistryClient,
   type IdentityRecord,
+  type IdentityRegistrationFetch,
   makeViemClientsFromEnv,
   makeViemClientsFromWallet,
   type PublicClientLike,
@@ -40,6 +41,12 @@ describe('buildRegistrationURI', () => {
     expect(buildRegistrationURI('  Agent.Example.COM  ')).toBe(
       'https://agent.example.com/.well-known/agent-registration.json'
     );
+  });
+
+  it('uses the configured origin rather than appending to a path', () => {
+    expect(
+      buildRegistrationURI('https://Agent.Example.COM/some/path?ignored=true')
+    ).toBe('https://agent.example.com/.well-known/agent-registration.json');
   });
 });
 
@@ -109,6 +116,26 @@ describe('createIdentityRegistryClient', () => {
 
     const record = await client.get(999n);
     expect(record).toBeNull();
+  });
+
+  it('rejects lossy or out-of-range agent IDs before an RPC read', async () => {
+    let reads = 0;
+    const client = createIdentityRegistryClient({
+      address: REGISTRY_ADDRESS,
+      chainId: 84532,
+      publicClient: {
+        async readContract() {
+          reads += 1;
+          throw new Error('must not read an invalid ID');
+        },
+      },
+    });
+
+    await expect(client.get(Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow(
+      /safe integer/i
+    );
+    await expect(client.get(1n << 256n)).rejects.toThrow(/256-bit integer/i);
+    expect(reads).toBe(0);
   });
 
   it('registers agent with agentURI', async () => {
@@ -961,6 +988,548 @@ describe('signAgentDomainProof', () => {
 });
 
 describe('bootstrapTrust', () => {
+  it('discovers a domain registration document and verifies its agent ID on-chain', async () => {
+    const fetches: string[] = [];
+    let fetchInit: Parameters<IdentityRegistrationFetch>[1];
+    const reads: string[] = [];
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        reads.push(functionName);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://example.com/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const result = await bootstrapTrust({
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient,
+      walletClient,
+      registrationDiscovery: {
+        fetch: async (input, init) => {
+          fetches.push(String(input));
+          fetchInit = init;
+          return Response.json({
+            registrations: [
+              {
+                agentId: '42',
+                agentRegistry:
+                  'eip155:84532:0x000000000000000000000000000000000000dead',
+              },
+            ],
+          });
+        },
+      },
+    });
+
+    expect(fetches).toEqual([
+      'https://example.com/.well-known/agent-registration.json',
+    ]);
+    expect(fetchInit?.method).toBe('GET');
+    expect(fetchInit?.redirect).toBe('error');
+    expect(fetchInit?.signal).toBeInstanceOf(AbortSignal);
+    expect(new Headers(fetchInit?.headers).get('accept')).toBe(
+      'application/json'
+    );
+    expect(reads).toEqual(['ownerOf', 'tokenURI']);
+    expect(writes).toBe(0);
+    expect(result.record?.agentId).toBe(42n);
+    expect(result.trust?.registrations?.[0].agentId).toBe('42');
+  });
+
+  it('fails closed when domain discovery does not match the configured registry', async () => {
+    let reads = 0;
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract() {
+        reads += 1;
+        throw new Error('must not read an untrusted ID');
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    await expect(
+      bootstrapTrust({
+        domain: 'example.com',
+        chainId: 84532,
+        registryAddress: REGISTRY_ADDRESS,
+        publicClient,
+        walletClient,
+        registrationDiscovery: {
+          fetch: async () =>
+            Response.json({
+              registrations: [
+                {
+                  agentId: '42',
+                  agentRegistry:
+                    'eip155:1:0x000000000000000000000000000000000000dead',
+                },
+                {
+                  agentId: '43',
+                  agentRegistry:
+                    'eip155:84532:0x000000000000000000000000000000000000beef',
+                },
+              ],
+            }),
+        },
+      })
+    ).rejects.toThrow(/matching chain and registry address/i);
+    expect(reads).toBe(0);
+    expect(writes).toBe(0);
+  });
+
+  it('does not trust a discovered ID that is absent from the registry', async () => {
+    const reads: string[] = [];
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        reads.push(functionName);
+        throw new Error('ERC721NonexistentToken');
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const result = await bootstrapTrust({
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient,
+      walletClient,
+      registrationDiscovery: {
+        fetch: async () =>
+          Response.json({
+            registrations: [
+              {
+                agentId: '42',
+                agentRegistry:
+                  'eip155:84532:0x000000000000000000000000000000000000dead',
+              },
+            ],
+          }),
+      },
+    });
+
+    expect(reads).toEqual(['ownerOf']);
+    expect(writes).toBe(0);
+    expect(result.record).toBeNull();
+    expect(result.trust).toBeUndefined();
+  });
+
+  it('bounds registration-document size and fetch duration', async () => {
+    const baseOptions = {
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient: {
+        async readContract() {
+          throw new Error('must not read before trusted discovery');
+        },
+      } satisfies PublicClientLike,
+    };
+
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          maxBytes: 16,
+          fetch: async () =>
+            new Response('{"registrations":[]}', {
+              headers: { 'content-length': '20' },
+            }),
+        },
+      })
+    ).rejects.toThrow(/exceeds.*16 bytes/i);
+
+    const streamedBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(17)));
+        controller.close();
+      },
+    });
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          maxBytes: 16,
+          fetch: async () => new Response(streamedBody),
+        },
+      })
+    ).rejects.toThrow(/exceeds.*16 bytes/i);
+
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          timeoutMs: 10,
+          fetch: async () => new Promise<Response>(() => {}),
+        },
+      })
+    ).rejects.toThrow(/timed out/i);
+
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          timeoutMs: 1_501,
+          fetch: async () => {
+            throw new Error('must reject unsafe bounds before fetching');
+          },
+        },
+      })
+    ).rejects.toThrow(/timeoutMs cannot exceed 1500/i);
+
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          maxBytes: 65_537,
+          fetch: async () => {
+            throw new Error('must reject unsafe bounds before fetching');
+          },
+        },
+      })
+    ).rejects.toThrow(/maxBytes cannot exceed 65536/i);
+
+    const stalledBody = new ReadableStream<Uint8Array>({
+      pull: async () => new Promise<void>(() => {}),
+    });
+    await expect(
+      bootstrapTrust({
+        ...baseOptions,
+        registrationDiscovery: {
+          timeoutMs: 10,
+          fetch: async () => new Response(stalledBody),
+        },
+      })
+    ).rejects.toThrow(/timed out/i);
+  });
+
+  it('fails closed for malformed or ambiguous registration documents', async () => {
+    let reads = 0;
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract() {
+        reads += 1;
+        throw new Error('must not read an untrusted ID');
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+    const options = {
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient,
+      walletClient,
+    };
+
+    await expect(
+      bootstrapTrust({
+        ...options,
+        registrationDiscovery: {
+          fetch: async () => new Response('{not-json'),
+        },
+      })
+    ).rejects.toThrow(/not valid JSON/i);
+
+    await expect(
+      bootstrapTrust({
+        ...options,
+        registrationDiscovery: {
+          fetch: async () => Response.json({}),
+        },
+      })
+    ).rejects.toThrow(/registrations array/i);
+
+    const redirectedResponse = Response.json({
+      registrations: [
+        {
+          agentId: '42',
+          agentRegistry:
+            'eip155:84532:0x000000000000000000000000000000000000dead',
+        },
+      ],
+    });
+    Object.defineProperty(redirectedResponse, 'redirected', { value: true });
+    await expect(
+      bootstrapTrust({
+        ...options,
+        registrationDiscovery: {
+          fetch: async () => redirectedResponse,
+        },
+      })
+    ).rejects.toThrow(/redirects are not allowed/i);
+
+    await expect(
+      bootstrapTrust({
+        ...options,
+        registrationDiscovery: {
+          fetch: async () =>
+            Response.json({
+              registrations: [
+                {
+                  agentId: Number.MAX_SAFE_INTEGER + 1,
+                  agentRegistry:
+                    'eip155:84532:0x000000000000000000000000000000000000dead',
+                },
+              ],
+            }),
+        },
+      })
+    ).rejects.toThrow(/safe integer/i);
+
+    await expect(
+      bootstrapTrust({
+        ...options,
+        registrationDiscovery: {
+          fetch: async () =>
+            Response.json({
+              registrations: [
+                {
+                  agentId: '42',
+                  agentRegistry:
+                    'eip155:84532:0x000000000000000000000000000000000000dead',
+                },
+                {
+                  agentId: '43',
+                  agentRegistry:
+                    'eip155:84532:0x000000000000000000000000000000000000dead',
+                },
+              ],
+            }),
+        },
+      })
+    ).rejects.toThrow(/multiple agent IDs/i);
+
+    expect(reads).toBe(0);
+    expect(writes).toBe(0);
+  });
+
+  it('reads an explicit agent ID and builds unsigned trust without writing', async () => {
+    const reads: string[] = [];
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        reads.push(functionName);
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://example.com/custom-registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    const result = await bootstrapTrust({
+      agentId: '42',
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient,
+      walletClient,
+    });
+
+    expect(reads).toEqual(['ownerOf', 'tokenURI']);
+    expect(writes).toBe(0);
+    expect(result.record).toEqual({
+      agentId: 42n,
+      owner: '0x0000000000000000000000000000000000000007',
+      agentURI: 'https://example.com/custom-registration.json',
+    });
+    expect(result.signature).toBeUndefined();
+    expect(result.trust?.registrations?.[0]).toMatchObject({
+      agentId: '42',
+      agentRegistry: 'eip155:84532:0x000000000000000000000000000000000000dead',
+    });
+    expect(result.trust?.registrations?.[0].signature).toBeUndefined();
+  });
+
+  it('rejects an explicit record whose HTTP origin does not match the domain', async () => {
+    let writes = 0;
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return 'https://different.example/registration.json';
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    await expect(
+      bootstrapTrust({
+        agentId: 42n,
+        domain: 'example.com',
+        chainId: 84532,
+        registryAddress: REGISTRY_ADDRESS,
+        publicClient,
+        walletClient,
+      })
+    ).rejects.toThrow(/does not match configured domain/i);
+    expect(writes).toBe(0);
+  });
+
+  it.each([
+    'ipfs://bafy-existing-registration',
+    'not a valid registration URI',
+  ])(
+    'rejects an uncomparable on-chain agent URI unless it is explicitly pinned: %s',
+    async agentURI => {
+      const publicClient: PublicClientLike = {
+        async readContract({ functionName }: { functionName: string }) {
+          if (functionName === 'ownerOf') {
+            return '0x0000000000000000000000000000000000000007';
+          }
+          if (functionName === 'tokenURI') {
+            return agentURI;
+          }
+          throw new Error(`Unexpected read: ${functionName}`);
+        },
+      };
+
+      await expect(
+        bootstrapTrust({
+          agentId: 42n,
+          domain: 'example.com',
+          chainId: 84532,
+          registryAddress: REGISTRY_ADDRESS,
+          publicClient,
+        })
+      ).rejects.toThrow(/cannot verify.*configured domain/i);
+    }
+  );
+
+  it('accepts a non-HTTP agent URI only when the caller pins it exactly', async () => {
+    const agentURI = 'ipfs://bafy-existing-registration';
+    const publicClient: PublicClientLike = {
+      async readContract({ functionName }: { functionName: string }) {
+        if (functionName === 'ownerOf') {
+          return '0x0000000000000000000000000000000000000007';
+        }
+        if (functionName === 'tokenURI') {
+          return agentURI;
+        }
+        throw new Error(`Unexpected read: ${functionName}`);
+      },
+    };
+
+    const result = await bootstrapTrust({
+      agentId: 42n,
+      agentURI,
+      domain: 'example.com',
+      chainId: 84532,
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient,
+    });
+
+    expect(result.record?.agentURI).toBe(agentURI);
+    expect(result.trust?.registrations?.[0].agentId).toBe('42');
+  });
+
+  it('never registers a replacement when an explicit agent ID is missing', async () => {
+    let reads = 0;
+    let writes = 0;
+    let missingFallbacks = 0;
+    const publicClient: PublicClientLike = {
+      async readContract() {
+        reads += 1;
+        throw new Error('ERC721NonexistentToken');
+      },
+    };
+    const walletClient = {
+      account: {
+        address: '0x0000000000000000000000000000000000000007' as const,
+      },
+      async writeContract() {
+        writes += 1;
+        return '0xtxhash' as const;
+      },
+    } as WalletClientLike;
+
+    await expect(
+      bootstrapTrust({
+        agentId: 42n,
+        domain: 'example.com',
+        chainId: 84532,
+        registryAddress: REGISTRY_ADDRESS,
+        publicClient,
+        walletClient,
+        registerIfMissing: true,
+        onMissing: () => {
+          missingFallbacks += 1;
+          return {
+            agentId: 43n,
+            owner: '0x0000000000000000000000000000000000000007' as const,
+            agentURI: 'https://example.com/registration.json',
+          };
+        },
+      })
+    ).rejects.toThrow(/remove agentId to register a new identity/i);
+    expect(reads).toBe(1);
+    expect(missingFallbacks).toBe(0);
+    expect(writes).toBe(0);
+  });
+
   it('registers agent when registerIfMissing is true', async () => {
     let registeredAgentURI: string | undefined;
 
@@ -1121,6 +1690,7 @@ describe('bootstrapIdentity', () => {
     };
 
     const result = await bootstrapIdentity({
+      agentId: 42n,
       domain: 'fallback.example',
       registryAddress: REGISTRY_ADDRESS,
       rpcUrl: 'http://localhost:8545',
@@ -1132,6 +1702,37 @@ describe('bootstrapIdentity', () => {
       chainId: 84532,
     });
 
+    expect(result.trust).toBeUndefined();
+  });
+
+  it('honors skipRegister as a read-only override', async () => {
+    let writes = 0;
+    const result = await bootstrapIdentity({
+      agentId: 42n,
+      domain: 'fallback.example',
+      registryAddress: REGISTRY_ADDRESS,
+      publicClient: {
+        async readContract() {
+          throw new Error('ERC721NonexistentToken');
+        },
+      },
+      walletClient: {
+        account: {
+          address: '0x0000000000000000000000000000000000000007' as const,
+        },
+        async writeContract() {
+          writes += 1;
+          return '0xtxhash' as const;
+        },
+      },
+      chainId: 84532,
+      registerIfMissing: true,
+      skipRegister: true,
+      logger: { info() {}, warn() {} },
+    });
+
+    expect(writes).toBe(0);
+    expect(result.record).toBeUndefined();
     expect(result.trust).toBeUndefined();
   });
 });

@@ -53,3 +53,21 @@ Keep provider execution, environment allowlisting, redaction, confirmation,
 and public-origin verification in `@lucid-agents/deploy`. Generated adapters
 must continue delegating requests to the canonical HTTP runtime and must not
 grow provider-specific paywalls or route registries.
+
+## Scaffold safety
+
+- Mark secret wizard inputs with `sensitive: true`; the interactive prompt
+  suppresses terminal echo and does not render secret defaults.
+- Keep generated `.env` files in the shared ignore policy for every adapter.
+- Keep `template.json` prompts and `template.schema.json` aligned. The CLI
+  validates resolved context and wizard values against the schema before it
+  creates a staging directory.
+- Preserve owner-only `0600` permissions on generated `.env` files.
+- Build and optionally install in the staging directory. Do not write directly
+  into the final target before validation succeeds.
+- Reject `.` and other paths that resolve to the current working directory;
+  atomic handoff requires a distinct target directory.
+- Treat installation failure as scaffold failure. Do not report a partially
+  installed project as successfully created.
+- Test failures through `runCli()` and the generated filesystem rather than
+  private copy or prompt helpers.

@@ -71,15 +71,60 @@ appear in OASF without maintaining a second registry.
 `identityFromEnv(overrides)` reads:
 
 - `AGENT_DOMAIN`
+- `IDENTITY_AGENT_ID`
 - `REGISTER_IDENTITY` or `IDENTITY_AUTO_REGISTER`
 - `RPC_URL`
 - `CHAIN_ID`
 - `IDENTITY_*` service and OASF fields
 
-Registration needs a signing wallet. If the extension must resolve or register
-identity and neither a developer nor agent wallet is installed, build fails
-closed. For a read-only deployment, provide a precomputed `trust` configuration
-instead:
+Registration defaults to disabled. With a domain, RPC URL, and chain ID, the
+extension can initialize read-only registry clients without a wallet. When
+`agentId`/`IDENTITY_AGENT_ID` is omitted, it fetches the domain-owned
+`/.well-known/agent-registration.json`, requires exactly one registration for
+the configured chain and registry address, then verifies that ID through
+`ownerOf` and `tokenURI`. This is document discovery followed by on-chain
+verification, not an unsupported ERC-721 domain reverse lookup.
+
+```ts
+const agent = await createAgent({
+  name: 'registry-reader',
+  version: '1.0.0',
+})
+  .use(
+    identity({
+      config: identityFromEnv({
+        domain: 'agent.example',
+        rpcUrl: process.env.RPC_URL,
+        chainId: 84532,
+      }),
+    })
+  )
+  .build();
+
+const record = agent.identity?.result?.record;
+```
+
+Domain discovery rejects redirects and hard-caps the request at 1500 ms and
+64 KiB. `registrationDiscovery` can inject `fetch` or tighten either cap.
+Malformed, oversized, ambiguous, or registry-mismatched documents contribute no
+identity. Set `agentId` to skip document discovery and directly verify a known
+token. Both paths populate unsigned trust without a signer and cannot submit a
+transaction without a wallet.
+
+For HTTP(S) `agentURI` records, bootstrap requires the URI origin to match
+`domain`. A non-HTTP or malformed URI cannot prove a domain relationship and
+fails closed unless a low-level caller pins the exact expected value with
+`agentURI`.
+
+Set `autoRegister: true` explicitly to allow registration. That mode fails
+closed unless a developer or agent signing wallet is installed. If an explicit
+`agentId` is not found, bootstrap does not register a replacement token; remove
+`agentId` for an intentional new registration. Registration client and
+transaction failures propagate instead of being converted into an
+identity-free result.
+
+To advertise a known identity without any network calls during build, provide a
+precomputed `trust` configuration:
 
 ```ts
 .use(identity({
@@ -140,24 +185,30 @@ initialization yourself:
 import { createAgentIdentity } from '@lucid-agents/identity';
 
 const result = await createAgentIdentity({
-  runtime: agentWithWallets,
+  agentId: process.env.IDENTITY_AGENT_ID,
   domain: 'agent.example',
-  autoRegister: true,
+  autoRegister: false,
   chainId: 84532,
   rpcUrl: process.env.RPC_URL,
 });
+
+console.log(result.record?.agentId, result.trust);
 ```
 
 You may instead pass a wallet handle directly. The returned result includes:
 
-- lookup/registration status and transaction hash;
+- initialization/registration status and transaction hash;
 - the identity record when found or registered;
 - identity and reputation clients; validation is not created by default;
 - trust metadata for an agent card;
 - the resolved domain and whether this call registered the identity.
 
+`agentId` accepts a uint256-compatible non-negative number, bigint, or base-10
+string. Prefer a string or bigint above JavaScript's safe-integer range.
+
 `registerAgent(options)` is the explicit auto-register convenience helper, and
 `getTrustConfig(result)` extracts trust metadata for non-extension integrations.
+Both `registerAgent()` and `autoRegister: true` require a signing wallet.
 
 ## Registry clients
 

@@ -315,6 +315,11 @@ export type IncomingPaymentAdmission =
       abort: () => Promise<void>;
       /** Whether payment settlement has become irreversible. */
       isCommitted?: () => boolean;
+      /**
+       * Reapply immutable settlement metadata to a fallback response after an
+       * unexpected error occurs after commitment.
+       */
+      recoverCommittedResponse?: (response: Response) => Response;
       /** Settle and account for the payment against the application response. */
       finalize: (response: Response) => Promise<Response>;
     };

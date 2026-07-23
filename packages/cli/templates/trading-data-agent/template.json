@@ -34,7 +34,8 @@
         "key": "PAYMENTS_FACILITATOR_AUTH",
         "type": "input",
         "message": "Facilitator auth token (optional; legacy fallback: DREAMS_AUTH_TOKEN)",
-        "defaultValue": ""
+        "defaultValue": "",
+        "sensitive": true
       },
       {
         "key": "PAYMENTS_NETWORK",
@@ -77,6 +78,7 @@
         "type": "input",
         "message": "Stripe secret key (required for Stripe destination mode)",
         "defaultValue": "",
+        "sensitive": true,
         "when": {
           "key": "PAYMENTS_DESTINATION",
           "equals": "stripe"

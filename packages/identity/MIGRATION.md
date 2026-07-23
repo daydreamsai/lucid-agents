@@ -2,6 +2,43 @@
 
 This guide helps you migrate your code from the previous ERC-8004 implementation to the January 2026 specification update.
 
+## Read-only bootstrap default
+
+Identity initialization no longer treats an omitted registration flag as
+permission to write. `createAgentIdentity()` and `identityFromEnv()` now default
+`autoRegister` to `false`.
+
+To resolve an existing identity during bootstrap, either host a registration
+document at:
+
+```text
+https://agent.example.com/.well-known/agent-registration.json
+```
+
+with a registration entry matching the configured chain and registry address,
+or provide the ERC-8004 token ID directly:
+
+```typescript
+const identity = await createAgentIdentity({
+  agentId: 42n, // or IDENTITY_AGENT_ID=42
+  domain: 'agent.example.com',
+  chainId: 84532,
+  rpcUrl: process.env.RPC_URL,
+});
+```
+
+The domain path performs a bounded document fetch to discover `agentId`; both
+paths then call `ownerOf` and `tokenURI` and populate `record` and `trust`
+without a signer. This replaces the previous implied domain-to-token lookup,
+which the ERC-721 registry does not provide. For HTTP(S) records, the on-chain
+`agentURI` origin must match the configured domain. Pin an exact `agentURI` when
+using the low-level API to resolve a non-HTTP identity URI.
+
+For an intentional new registration, omit `agentId`, configure a writable
+developer or agent wallet, and set `autoRegister: true` (or
+`IDENTITY_AUTO_REGISTER=true`). Registration setup and transaction failures now
+throw instead of returning an identity-free result.
+
 ## Overview
 
 The January 2026 spec update introduces breaking changes to align with the latest ERC-8004 standard:

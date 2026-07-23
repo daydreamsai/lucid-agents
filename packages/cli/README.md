@@ -136,15 +136,27 @@ such as `AGENT_WALLET_PRIVATE_KEY` and `DEVELOPER_WALLET_PRIVATE_KEY`; a generic
 3. Unspecified answers fall back to `defaultValue` in the template's
    `template.json`.
 4. Conditional prompts are included only when their `when` rule matches.
-5. Stripe destination mode forces the generated payment network to Base.
-6. UI-capable adapters select a storefront preset and write the typed root
+5. Sensitive inputs are collected without terminal echo and do not display a
+   default value.
+6. Stripe destination mode forces the generated payment network to Base.
+7. UI-capable adapters select a storefront preset and write the typed root
    `service-ui.config.ts` file.
-7. Adapter files and template sections are composed into the project.
-8. `.env` and `.env.example` are generated; template metadata is removed.
-9. Dependencies are installed only with `--install`.
+8. The resolved context and wizard answers must satisfy the template's
+   `template.schema.json`; invalid versions, URLs, networks, and conditional
+   safety requirements fail before staging begins.
+9. Adapter files and template sections are composed in a staging directory.
+10. `.env` and `.env.example` are generated, `.env` is written with owner-only
+    `0600` permissions and gitignored, and template metadata is removed.
+11. Dependencies are installed only with `--install`.
+12. The completed staging directory replaces the empty target only after every
+    requested step succeeds.
 
-The target directory must be empty. If no project name is supplied, the CLI
-derives one from the selected template.
+The target directory must be absent or empty. Invalid arguments, generation
+errors, and dependency-install failures leave it unchanged and return a
+failure. Scaffolding directly into the current working directory (`.` or an
+equivalent path) is rejected because it cannot use the same atomic directory
+handoff; choose a new child directory instead. If no project name is supplied,
+the CLI derives one from the selected template.
 
 ## Generated project contract
 
@@ -223,7 +235,9 @@ export type { PromptApi, RunLogger } from '@lucid-agents/cli';
 - **Target exists:** choose an empty directory; the CLI does not merge into an
   existing tree.
 - **Generated install fails:** inspect package versions before running
-  `bun install`; do not mix Stable and Next packages.
+  `bun install`; do not mix Stable and Next packages. A failed `--install`
+  leaves no partial project, so rerun with `--no-install` when you need to
+  inspect or repair dependency resolution manually.
 - **Priced route is free:** confirm the entrypoint has an explicit price and
   the matching payment extension/configuration is installed.
 - **Identity registration fails:** identity uses an EVM developer/agent signer

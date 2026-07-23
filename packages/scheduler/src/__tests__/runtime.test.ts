@@ -75,6 +75,7 @@ function createTestRuntime(
       taskId: 'task-1',
       accessToken: 'scheduler-task-access-token-0001',
       status: 'running' as const,
+      idempotencyKey: 'scheduler-task-idempotency-key-0001',
     })),
     getTask: mock(async () => ({
       taskId: 'task-1',
@@ -87,6 +88,7 @@ function createTestRuntime(
       taskId: 'task-1',
       accessToken: 'scheduler-task-access-token-0001',
       status: 'running' as const,
+      idempotencyKey: 'scheduler-task-idempotency-key-0001',
     })),
     listTasks: mock(async () => ({ tasks: [] })),
     cancelTask: mock(async () => ({
@@ -103,7 +105,11 @@ function createTestRuntime(
     fetchCardWithEntrypoints: fetchAgentCard,
     client: mockA2AClient,
     tasks: {
+      durability: 'process',
       reserve: mock(async () => {
+        throw new Error('not used');
+      }),
+      prepare: mock(async () => {
         throw new Error('not used');
       }),
       execute: mock(async () => {

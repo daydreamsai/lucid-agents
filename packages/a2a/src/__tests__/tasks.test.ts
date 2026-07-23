@@ -110,6 +110,137 @@ describe('A2A task state machine', () => {
     await runtime.close();
   });
 
+  it('reaps an abandoned admission before enforcing capacity after restart', async () => {
+    let now = 1_000;
+    const base = createInMemoryTaskStore({
+      maxTasks: 1,
+      now: () => now,
+    });
+    const durableStore: TaskStore = {
+      ...base,
+      durability: 'durable',
+      close() {
+        // Simulate a durable store surviving the worker that reserved capacity.
+      },
+    };
+    const first = createTaskRuntime({
+      store: durableStore,
+      now: () => now,
+    });
+    await first.reserve({
+      taskId: 'abandoned-admission',
+      accessToken: ACCESS_TOKEN,
+      admissionTtlMs: 100,
+    });
+    await first.close();
+
+    now += 101;
+    const restarted = createTaskRuntime({
+      store: durableStore,
+      now: () => now,
+    });
+    await restarted.reserve({
+      taskId: 'replacement-admission',
+      accessToken: ACCESS_TOKEN,
+      admissionTtlMs: 100,
+    });
+
+    expect(
+      await restarted.get('abandoned-admission', ACCESS_TOKEN)
+    ).toBeUndefined();
+    expect(
+      (await restarted.get('replacement-admission', ACCESS_TOKEN))?.status
+    ).toBe('running');
+    await restarted.close();
+  });
+
+  it('clears admission expiry when execution is claimed', async () => {
+    let now = 1_000;
+    const store = createInMemoryTaskStore({ maxTasks: 2, now: () => now });
+    const runtime = createTaskRuntime({ store, now: () => now });
+    await runtime.reserve({
+      taskId: 'claimed-admission',
+      accessToken: ACCESS_TOKEN,
+      admissionTtlMs: 100,
+    });
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    await runtime.execute('claimed-admission', {
+      execute: async () => {
+        await blocked;
+        return { output: true };
+      },
+    });
+
+    now += 101;
+    await store.reapExpiredAdmissions(now);
+    expect((await runtime.get('claimed-admission', ACCESS_TOKEN))?.status).toBe(
+      'running'
+    );
+    release();
+    await tick();
+    await runtime.close();
+  });
+
+  it('never prepares an admission after its durable expiry', async () => {
+    let now = 1_000;
+    const store = createInMemoryTaskStore({ maxTasks: 1, now: () => now });
+    const runtime = createTaskRuntime({ store, now: () => now });
+    await runtime.reserve({
+      taskId: 'expired-admission',
+      accessToken: ACCESS_TOKEN,
+      admissionTtlMs: 100,
+    });
+
+    now += 101;
+    await expect(runtime.prepare('expired-admission')).rejects.toThrow(
+      'is not running'
+    );
+    expect((await runtime.get('expired-admission', ACCESS_TOKEN))?.status).toBe(
+      'cancelled'
+    );
+    await runtime.close();
+  });
+
+  it('heartbeats a prepared claim while authorization is in flight', async () => {
+    const base = createInMemoryTaskStore({ maxTasks: 1 });
+    const store: TaskStore = {
+      ...base,
+      durability: 'durable',
+    };
+    const runtime = createTaskRuntime({
+      store,
+      admissionLeaseMs: 15,
+    });
+    await runtime.reserve({
+      taskId: 'slow-authorization',
+      accessToken: ACCESS_TOKEN,
+      admissionTtlMs: 5,
+    });
+    const prepared = await runtime.prepare('slow-authorization');
+
+    await new Promise(resolve => setTimeout(resolve, 45));
+    await expect(
+      runtime.reserve({
+        taskId: 'concurrent-capacity-probe',
+        accessToken: ACCESS_TOKEN,
+        admissionTtlMs: 5,
+      })
+    ).rejects.toBeInstanceOf(TaskCapacityError);
+
+    await prepared.renew();
+    await prepared.activate({
+      execute: async () => ({ output: 'after-settlement' }),
+    });
+    await tick();
+    expect(
+      (await runtime.get('slow-authorization', ACCESS_TOKEN))?.result
+    ).toEqual({ output: 'after-settlement' });
+    await runtime.close();
+  });
+
   it('expires terminal tasks after the retention window', async () => {
     let now = 1_000;
     const store = createInMemoryTaskStore({
@@ -245,6 +376,7 @@ describe('A2A task state machine', () => {
     const base = createInMemoryTaskStore({ maxTasks: 10, now: () => now });
     const durableStore: TaskStore = {
       ...base,
+      durability: 'durable',
       close() {
         // A durable store outlives an individual worker runtime.
       },

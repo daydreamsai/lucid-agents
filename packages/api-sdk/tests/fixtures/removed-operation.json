@@ -1,0 +1,42 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Runtime API",
+    "version": "2.0.0"
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "CreateAgent": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active"]
+          }
+        }
+      },
+      "Agent": {
+        "type": "object",
+        "required": ["id", "name", "status"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active"]
+          }
+        }
+      }
+    }
+  }
+}
