@@ -88,6 +88,100 @@ describe('Tempo session descriptor', () => {
     ).toThrow('minimum <= suggested <= maximum');
   });
 
+  test('validates display amounts and session bootstrap configuration', () => {
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        decimals: -1,
+      })
+    ).toThrow('decimals must be a safe integer from 0-255');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        amount: 'invalid',
+      })
+    ).toThrow('amount must be a non-negative decimal');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        amount: '0.0000001',
+      })
+    ).toThrow('amount exceeds configured currency precision');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        amount: '0',
+      })
+    ).toThrow('amount must be greater than zero');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        deposit: {
+          minimum: '0.0001',
+          suggested: '0.01',
+          maximum: '1',
+        },
+      })
+    ).toThrow('amount <= minimum');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        bootstrap: true,
+      })
+    ).toThrow('bootstrap requires a resolveChannelId callback');
+  });
+
+  test('requires positive settlement thresholds', () => {
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: {},
+      })
+    ).toThrow('requires at least one threshold');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: { units: 0 },
+      })
+    ).toThrow('settlement units must be positive');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: { units: 1.5 },
+      })
+    ).toThrow('settlement units must be positive');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: { intervalMs: 0 },
+      })
+    ).toThrow('settlement intervalMs must be positive');
+
+    expect(() =>
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: { amount: '0' },
+      })
+    ).toThrow('settlement amount must be positive');
+
+    expect(
+      tempo.session({
+        ...baseConfig,
+        settlementSchedule: { amount: '0.000001' },
+      })
+    ).toMatchObject({
+      implementation: 'tempo-session',
+    });
+  });
+
   test('coexists with Tempo charge and selects the session unit amount', () => {
     const config = {
       methods: [
