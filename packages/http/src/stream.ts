@@ -70,6 +70,29 @@ export async function stream(
   }
   const streamHandler = entrypoint.stream;
 
+  if (runtime.mpp?.credentialPurpose?.(req) === 'management') {
+    const managementAuthorization = await authorizeEntrypointRequest(
+      req.clone(),
+      entrypoint,
+      'stream',
+      runtime,
+      options?.auth
+    );
+    if (managementAuthorization.authorized === false) {
+      return managementAuthorization.response;
+    }
+    return jsonResponse(
+      {
+        error: {
+          code: 'mpp_management_not_handled',
+          message:
+            'Verified MPP management credentials must produce a protocol response.',
+        },
+      },
+      { status: 500 }
+    );
+  }
+
   let input: unknown;
   try {
     const rawBody = await readJson(req.clone());

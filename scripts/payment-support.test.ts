@@ -18,7 +18,7 @@ describe('generated payment support matrix', () => {
     const source = validatePaymentSupportMatrix(matrixSource);
     expect(source.sdkVersions).toEqual({
       x402: '2.19.0',
-      mppx: '0.8.13',
+      mppx: '0.8.14',
     });
     expect(await readFile(paymentSupportMatrixPath, 'utf8')).toBe(
       renderPaymentSupportMatrix(source)

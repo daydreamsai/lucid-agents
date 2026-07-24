@@ -7,6 +7,11 @@ export type MppPaymentIntent = 'charge' | 'session';
 export type MppPaymentOperation = 'invoke' | 'stream' | 'task';
 export type MppPaymentMethod = string;
 
+/** Resolve a viem client for a Tempo chain without coupling Lucid to a transport. */
+export type TempoClientResolver = (parameters: {
+  chainId?: number;
+}) => Client | Promise<Client>;
+
 export type TempoServerConfig = {
   currency: string;
   recipient: string;
@@ -14,6 +19,8 @@ export type TempoServerConfig = {
   decimals?: number;
   chainId?: number;
   testnet?: boolean;
+  /** Override Tempo RPC/client resolution, including deterministic local nodes. */
+  getClient?: TempoClientResolver;
 };
 
 /** Viem account accepted by the native Tempo session verifier. */
@@ -73,7 +80,7 @@ export type TempoSessionServerConfig = {
   ) => string | undefined | Promise<string | undefined>;
   settlementSchedule?: TempoSessionSettlementSchedule;
   onSettlement?: (event: TempoSessionSettlementEvent) => void | Promise<void>;
-  getClient: (parameters: { chainId?: number }) => Client | Promise<Client>;
+  getClient: TempoClientResolver;
   channelStateTtlMs?: number;
   minVoucherDelta?: string;
   escrowContract?: `0x${string}`;
@@ -639,6 +646,11 @@ export type MppOpenApiComponents = MppOpenApiDocument['components'];
 export type MppRuntime = {
   readonly config: MppConfig;
   readonly isActive: boolean;
+  /**
+   * Decode-only request purpose classified by the configured MPP rail.
+   * This never verifies or authorizes a credential.
+   */
+  credentialPurpose: (request: Request) => 'management' | 'content' | undefined;
   /**
    * Decode-only credential presence check owned by the MPP implementation.
    * This does not verify or authorize payment.

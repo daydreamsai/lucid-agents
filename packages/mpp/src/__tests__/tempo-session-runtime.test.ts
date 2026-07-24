@@ -121,6 +121,57 @@ test('task requirements retain custom sessions while excluding native Tempo sess
   });
 });
 
+test('classifies Tempo management credentials without treating content vouchers as management', async () => {
+  const runtime = await buildTaskSessionRuntime();
+  const entrypoint: EntrypointDef = {
+    key: 'session-purpose',
+    price: '1',
+    metadata: { mpp: { intent: 'session', methods: ['tempo'] } },
+  };
+  runtime.activate(entrypoint);
+  const requirement = runtime.requirements(entrypoint, 'invoke');
+  const challenged = await runtime.authorize(
+    new Request('https://agent.test/session-purpose', { method: 'POST' }),
+    entrypoint,
+    'invoke',
+    requirement
+  );
+  if (challenged.authorized) throw new Error('expected challenge');
+  const challenge = Challenge.fromResponse(challenged.response);
+  const requestFor = (
+    action: 'open' | 'topUp' | 'voucher' | 'close',
+    body?: string
+  ) =>
+    new Request('https://agent.test/session-purpose', {
+      method: 'POST',
+      headers: {
+        Authorization: Credential.serialize({
+          challenge,
+          payload: { action },
+        }),
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body } : {}),
+    });
+
+  expect(runtime.credentialPurpose(requestFor('topUp'))).toBe('management');
+  expect(runtime.credentialPurpose(requestFor('close'))).toBe('management');
+  expect(runtime.credentialPurpose(requestFor('open'))).toBe('content');
+  expect(runtime.credentialPurpose(requestFor('voucher'))).toBe('management');
+  expect(
+    runtime.credentialPurpose(
+      requestFor('voucher', JSON.stringify({ input: { prompt: 'hello' } }))
+    )
+  ).toBe('content');
+  expect(
+    runtime.credentialPurpose(
+      new Request('https://agent.test/session-purpose', {
+        headers: { Authorization: 'Bearer unrelated' },
+      })
+    )
+  ).toBeUndefined();
+});
+
 test('native Tempo stream authorization exposes a durable session meter', async () => {
   const store = createInMemoryTempoSessionStore();
   const salt = `0x${'11'.repeat(32)}` as Hex;

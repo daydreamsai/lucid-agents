@@ -124,6 +124,29 @@ export async function invoke(
     return errorResponse('not_implemented', 501);
   }
 
+  if (runtime.mpp?.credentialPurpose?.(req) === 'management') {
+    const managementAuthorization = await authorizeEntrypointRequest(
+      req.clone(),
+      entrypoint,
+      'invoke',
+      runtime,
+      options?.auth
+    );
+    if (managementAuthorization.authorized === false) {
+      return managementAuthorization.response;
+    }
+    return jsonResponse(
+      {
+        error: {
+          code: 'mpp_management_not_handled',
+          message:
+            'Verified MPP management credentials must produce a protocol response.',
+        },
+      },
+      { status: 500 }
+    );
+  }
+
   let rawInput: unknown;
   try {
     const rawBody = await readJson(req.clone());

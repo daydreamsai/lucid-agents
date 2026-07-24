@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "sdkVersions": {
     "x402": "2.19.0",
-    "mppx": "0.8.13"
+    "mppx": "0.8.14"
   },
   "rows": [
     {
@@ -80,7 +80,7 @@
     {
       "id": "mpp-tempo-charge",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "tempo / charge",
       "network": "Tempo mainnet or testnet",
       "buyer": "Via `mppx/client` intent",
@@ -98,7 +98,7 @@
     {
       "id": "mpp-tempo-session",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "tempo / session",
       "network": "Tempo mainnet or testnet",
       "buyer": "Via `mppx/client` session intent",
@@ -116,7 +116,7 @@
     {
       "id": "mpp-stripe-charge",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "stripe / charge",
       "network": "Stripe Business Network",
       "buyer": "Via `mppx/client` intent",
@@ -134,7 +134,7 @@
     {
       "id": "mpp-evm-charge",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "evm / charge (x402 exact compatible)",
       "network": "Configured EVM chain ID",
       "buyer": "MPP EVM or compatible x402 exact client",
@@ -152,7 +152,7 @@
     {
       "id": "mpp-evm-session",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "evm / session",
       "network": "Configured EVM chain ID",
       "buyer": "No Lucid-native session client",
@@ -170,7 +170,7 @@
     {
       "id": "mpp-custom",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "custom / charge or session",
       "network": "Application-defined",
       "buyer": "Application or compatible `mppx` method",
@@ -188,7 +188,7 @@
     {
       "id": "mpp-lightning",
       "protocol": "MPP",
-      "sdk": "mppx 0.8.13",
+      "sdk": "mppx 0.8.14",
       "scheme": "lightning / custom",
       "network": "Lightning",
       "buyer": "Application-defined",

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createPaymentTracker } from '../payment-tracker';
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
@@ -824,6 +824,13 @@ describe('PaymentTracker', () => {
       await storageWithoutAgent.clear();
     });
 
+    afterEach(async () => {
+      await Promise.all([
+        trackerWithAgent.close(),
+        trackerWithoutAgent.close(),
+      ]);
+    });
+
     it('should track outgoing payments per agent', async () => {
       // Record payment for agent
       await trackerWithAgent.recordOutgoing('group1', 'global', 1000n);
@@ -907,6 +914,7 @@ describe('PaymentTracker', () => {
       // Agent 2 should see 0 (no payments yet)
       const total2 = await tracker2.getOutgoingTotal('shared-group', 'global');
       expect(total2).toBe(0n);
+      await tracker2.close();
     });
 
     it('coordinates incoming reservations across Postgres clients', async () => {

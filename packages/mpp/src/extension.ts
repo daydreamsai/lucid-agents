@@ -205,6 +205,12 @@ function boundedTempoSessionStore(
     if (!value || typeof value !== 'object') return;
     const deposit = (value as { deposit?: unknown }).deposit;
     if (typeof deposit !== 'bigint') return;
+    if ((value as { finalized?: unknown }).finalized === true) {
+      if (deposit !== 0n) {
+        throw new Error('Finalized Tempo session deposit must be zero');
+      }
+      return;
+    }
     if (deposit < minimum || deposit > maximum) {
       throw new Error(
         `Tempo session deposit must be between ${minimum} and ${maximum} base units`
@@ -272,7 +278,9 @@ async function materializeRails(config: MppConfig): Promise<{
         currency: value.currency,
         recipient: value.recipient,
         decimals: value.decimals ?? 6,
+        ...(value.chainId !== undefined ? { chainId: value.chainId } : {}),
         ...(value.testnet !== undefined ? { testnet: value.testnet } : {}),
+        ...(value.getClient ? { getClient: value.getClient } : {}),
       };
       // Materialize charge explicitly. Session configuration has a separate
       // lifecycle and must not make a charge-only merchant initialize it.
@@ -1203,6 +1211,26 @@ async function createMppRuntime(
     },
     get isActive() {
       return isActive;
+    },
+    credentialPurpose(request: Request) {
+      const credential = decodeMppCredential(request);
+      if (!credential) return undefined;
+      const selected = rails.find(
+        rail =>
+          rail.descriptor.name === credential.challenge.method &&
+          credential.challenge.intent === 'session'
+      );
+      if (
+        selected &&
+        resolveMppMethodImplementation(selected.descriptor) ===
+          'tempo-session' &&
+        (credential.payload.action === 'topUp' ||
+          credential.payload.action === 'close' ||
+          (credential.payload.action === 'voucher' && request.body === null))
+      ) {
+        return 'management';
+      }
+      return 'content';
     },
     hasCredential(request: Request) {
       return (

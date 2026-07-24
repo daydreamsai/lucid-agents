@@ -15,6 +15,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Challenge, Credential, Method, PaymentRequest, z } from 'mppx';
+import type { Client } from 'viem';
 
 import { mpp } from '../extension';
 import { createInMemoryMppChallengeStore } from '../in-memory-challenge-store';
@@ -1396,6 +1397,40 @@ describe('mpp extension configuration', () => {
     expect(paymentChallenge.method).toBe('tempo');
     expect(paymentChallenge.intent).toBe('charge');
     await expectNativeCredentialRejection(slice.mpp, requirement, response);
+  });
+
+  it('forwards the configured Tempo chain and client resolver to mppx', async () => {
+    const requestedChainIds: Array<number | undefined> = [];
+    const getClient = ({ chainId }: { chainId?: number }) => {
+      requestedChainIds.push(chainId);
+      return { chain: { id: 31318 } } as Client;
+    };
+    const extension = mpp({
+      config: {
+        methods: [
+          tempo.server({
+            chainId: 31318,
+            currency: '0x20c0000000000000000000000000000000000000',
+            recipient: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+            getClient,
+          }),
+        ],
+        currency: 'usd',
+        defaultIntent: 'charge',
+        secretKey: nativeSecretKey,
+      },
+    });
+    const slice = await extension.build(buildContext);
+    if (!slice.mpp) throw new Error('Expected MPP runtime');
+    slice.mpp.activate(paidEntrypoint);
+
+    const response = await challenge(slice.mpp, required(slice.mpp));
+    const paymentChallenge = Challenge.fromResponse(response);
+
+    expect(requestedChainIds).toEqual([31318]);
+    expect(paymentChallenge.request.methodDetails).toMatchObject({
+      chainId: 31318,
+    });
   });
 
   it('binds native charge challenges to POST bodies and routes', async () => {

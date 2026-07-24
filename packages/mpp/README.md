@@ -7,7 +7,7 @@ authorization gate. Native EVM charges also accept compatible x402 v2 exact
 credentials without installing or configuring a second Lucid x402 seller.
 
 MPP is compatible with the July `draft-httpauth-payment-00` Internet-Draft, not
-an IETF standard. This package uses `mppx` 0.8.13 and implements a Lucid HTTP
+an IETF standard. This package uses `mppx` 0.8.14 and implements a Lucid HTTP
 subset; it does not provide every MPP transport, discovery mechanism, rail,
 subscription, or session feature.
 
@@ -46,6 +46,19 @@ const agent = await createAgent({ name: 'merchant', version: '1.0.0' })
 native mppx charge methods. They validate the echoed HMAC challenge, credential
 schema, payment, and settlement before Lucid runs the entrypoint. Stripe also
 requires its Business Network profile:
+
+Tempo charge accepts an explicit `chainId` and viem `getClient` resolver. Use
+them together to select a private, local, or otherwise non-default Tempo RPC
+without leaking transport ownership outside the MPP extension:
+
+```ts
+tempo.server({
+  chainId: 31318,
+  currency: '0x20c0000000000000000000000000000000000000',
+  recipient: merchantAccount.address,
+  getClient: ({ chainId }) => getTempoClient(chainId),
+});
+```
 
 ```ts
 stripe.server({
@@ -101,6 +114,23 @@ Streaming uses the same channel and emits standard receipt and voucher-needed
 events while charging delivered units. The configured maximum deposit bounds
 the accounting reservation; final accounting is reconciled to delivered
 units.
+
+### Native Tempo end-to-end test
+
+The required CI lane runs a public `mppx` buyer through Lucid's Hono HTTP
+surface and a real, digest-pinned Tempo development node. It verifies native
+charge settlement and the complete TIP-1034 session lifecycle, including
+invoke, SSE, top-up, SQLite restart/resume, and cooperative close:
+
+```sh
+bun run scripts/tempo-localnet.ts -- \
+  bun test ./packages/examples/src/__tests__/tempo-localnet.e2e.ts
+```
+
+The orchestrator accepts only a loopback HTTP RPC with Tempo development chain
+ID `1337`, attests the reviewed image source revision, redacts credentials from
+diagnostics, and removes its exact container on success or failure. It does not
+use a public RPC or cloud faucet.
 
 An EVM descriptor names the EIP-3009 chain, token, recipient, precision, and
 exactly one settlement strategy:

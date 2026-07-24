@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 import { createPaymentTracker } from '../payment-tracker';
 import type { PaymentStorage } from '../payment-storage';
@@ -42,10 +42,19 @@ describeWithDb('Multi-Agent Payment Isolation', () => {
   });
 
   afterEach(async () => {
-    await storageAgentA.clear();
-    await storageAgentB.clear();
-    await storageAgentC.clear();
-    await storageNoAgent.clear();
+    try {
+      await storageAgentA.clear();
+      await storageAgentB.clear();
+      await storageAgentC.clear();
+      await storageNoAgent.clear();
+    } finally {
+      await Promise.all([
+        storageAgentA.close?.(),
+        storageAgentB.close?.(),
+        storageAgentC.close?.(),
+        storageNoAgent.close?.(),
+      ]);
+    }
   });
 
   describe('Payment isolation', () => {
