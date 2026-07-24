@@ -4,6 +4,7 @@ import type {
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 import type { PaymentsRuntime } from '@lucid-agents/types/payments';
+import { createPublicClient, http as viemHttp } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
@@ -304,7 +305,12 @@ export async function createRuntimePaymentContext(
     try {
       // Create account from private key
       const account = privateKeyToAccount(options.privateKey as Hex);
-      const signer = toClientEvmSigner(account);
+      const publicClient = options.batchSettlement?.rpcUrl
+        ? createPublicClient({
+            transport: viemHttp(options.batchSettlement.rpcUrl),
+          })
+        : undefined;
+      const signer = toClientEvmSigner(account, publicClient);
 
       // Create x402 client and register the network
       const client = new x402Client();

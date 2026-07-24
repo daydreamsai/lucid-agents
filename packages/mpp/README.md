@@ -188,6 +188,124 @@ performs an externally visible settlement must also deduplicate it with the
 request's `Idempotency-Key`. Policy reservations and Lucid accounting happen
 only after the request wins a new target-side claim.
 
+### Custom verifier conformance
+
+Provider integrations can run the reusable, runner-agnostic suite from the
+dedicated testing subpath:
+
+```ts
+import { custom } from '@lucid-agents/mpp';
+import {
+  runCustomMppHttpConformance,
+  runCustomMppVerifierConformance,
+  type CustomMppConformanceCredentialFactory,
+  type CustomMppConformanceCredentialInspector,
+} from '@lucid-agents/mpp/conformance';
+
+const credentialFor: CustomMppConformanceCredentialFactory = async context => {
+  const credential = await providerTestCredentials.create(context);
+  return {
+    payload: credential.payload,
+    source: credential.source,
+  };
+};
+const inspectCredential: CustomMppConformanceCredentialInspector = (
+  credential,
+  context
+) =>
+  normalizeActualProviderClaim(credential.payload, credential.source, context);
+
+const report = await runCustomMppVerifierConformance({
+  method: custom.server('acme-pay', { recipient: 'merchant-42' }),
+  amount: '0.01',
+  currency: 'usd',
+  verifier: acmeVerifier,
+  credentialFor,
+  inspectCredential,
+  expected: {
+    receipt: value => value.startsWith('provider-test-'),
+    payer: 'did:example:test-buyer',
+    network: 'acme:test',
+  },
+  caseTimeoutMs: 5_000,
+});
+
+expect(report.passed).toBe(true);
+```
+
+The required `inspectCredential` adapter maps each actual provider payload to
+the public valid/invalid, issued/other, required/other, current/expired, and
+settled/unsettled vocabulary. It is trusted test code: parse the unsigned claim
+and verify its signature directly, and never infer evidence from
+`context.scenario`. The runner checks that projection against the named scenario
+and rejects duplicate serialized payload/source pairs. Create independent cases
+for authenticity, challenge, intent, amount, currency, recipient, method,
+payer, expiry, and unsettled state. Challenge and intent fixtures should
+otherwise carry valid provider signatures over the tampered claims; one generic
+malformed credential does not prove those checks.
+
+Every provider fixture and verifier call is bounded by `caseTimeoutMs` (five
+seconds by default, at most sixty seconds). On verifier timeout the runner
+aborts the verifier request signal and Lucid consumes the ambiguous credential.
+Providers must honor that signal where possible and still deduplicate durable
+settlement, because an external operation may complete after local timeout.
+Run the suite only against an isolated test account: it exercises successful
+settlement, retries, and ambiguous failures.
+
+To verify the full public transport lifecycle, supply isolated service adapters
+for success, handler failure, and settlement failure:
+
+```ts
+const httpReport = await runCustomMppHttpConformance({
+  serviceFor: scenario => createProviderTestService({ scenario }),
+  expected: {
+    receipt: value => value.startsWith('provider-test-'),
+    successfulAccountingCount: 2,
+    successfulAccountingTotal: '20000',
+  },
+  forbiddenResponseFragments: [process.env.PROVIDER_TEST_SECRET!],
+});
+```
+
+Each service adapter sends its own protected invoke/stream requests, creates
+valid, invalid-authenticity, expired, and wrong-context credentials from the
+returned challenge, and reports normalized handler, settlement, accounting, and
+live/staged reservation counters. The runner verifies 402 negotiation,
+successful receipts, exactly-once invoke and stream accounting, handler
+non-invocation for rejected credentials, paid handler failure behavior, provider
+timeout fencing, redacted settlement failure, zero leaked reservations, and
+replay without a second settlement. Every failure body and every response
+header, including `Payment-Receipt`, is scanned for each required non-empty
+`forbiddenResponseFragments` marker. This lets any provider run the same public
+HTTP checks without depending on Hono, Lucid internals, or the bundled reference
+method.
+
+The verifier owns credential authenticity and validity checks, verifies all
+challenge and payer fields before settlement, and returns only a durable,
+non-secret receipt. An externally visible settlement must be idempotent under
+the validated `Idempotency-Key` (falling back to the challenge ID for
+single-use credentials). Provider timeouts and exceptions are ambiguous:
+Lucid consumes the credential to preserve at-most-once settlement, while the
+provider must retain enough durable state to reconcile the outcome.
+
+Production replay recovery requires a stable challenge secret and durable
+challenge store shared by every replica. Provider settlement deduplication must
+also be durable; the conformance runner's process-local harness is not a
+production storage recommendation. Never put API keys, raw credentials,
+signatures, request bodies, provider exception text, or settlement secrets in
+receipts, logs, conformance reports, or discovery metadata.
+
+Before advertising a custom method as E2E verified, retain the passing
+conformance report, protected invoke and streaming results, redacted receipt
+and accounting evidence, SDK version, provider sandbox/network, execution
+date, and documented limitations. A passing descriptor/conformance run proves
+the custom extension contract, not a native implementation of the underlying
+payment rail.
+
+`lightning.server()` remains a custom descriptor governed by these same rules.
+This suite does not claim native Lightning settlement or node interoperability;
+that requires a separately scoped regtest integration and product contract.
+
 ## Wire and replay contract
 
 Challenges are standard responses. A priced operation configured with multiple

@@ -20,6 +20,7 @@ import type {
   VerifiedIncomingPayment,
 } from '@lucid-agents/types/payments';
 import type { AgentAuthContext, SIWxConfig } from '@lucid-agents/types/siwx';
+import { decodePaymentRequiredHeader as decodeOfficialPaymentRequiredHeader } from '@x402/core/http';
 import { createPublicClient, http } from 'viem';
 import type { EVMMessageVerifier } from '@x402/extensions/sign-in-with-x';
 
@@ -62,6 +63,25 @@ import {
 } from './batch-settlement';
 
 const MAX_CACHED_X402_SERVERS = 128;
+const BATCH_CORRECTIVE_CHALLENGE_ERRORS = new Set([
+  'invalid_batch_settlement_evm_cumulative_amount_mismatch',
+  'invalid_batch_settlement_evm_cumulative_below_claimed',
+]);
+
+function hasBatchCorrectiveChallenge(response: Response): boolean {
+  const paymentRequiredHeader = response.headers.get('PAYMENT-REQUIRED');
+  if (!paymentRequiredHeader) return false;
+  try {
+    const error = decodeOfficialPaymentRequiredHeader(
+      paymentRequiredHeader
+    ).error;
+    return (
+      typeof error === 'string' && BATCH_CORRECTIVE_CHALLENGE_ERRORS.has(error)
+    );
+  } catch {
+    return false;
+  }
+}
 
 class X402ProviderError extends Error {
   constructor(cause: unknown) {
@@ -1257,11 +1277,13 @@ export function createIncomingPaymentAuthorizer(
       if (result.type === 'payment-error') {
         const response = responseFromInstructions(result.response);
         const responseBody = await response.clone().text();
+        const hasCorrectiveChallenge = hasBatchCorrectiveChallenge(response);
         if (
           response.status >= 500 ||
           ((request.headers.has('PAYMENT-SIGNATURE') ||
             request.headers.has('X-PAYMENT')) &&
-            (!responseBody.trim() || responseBody.trim() === '{}'))
+            (!responseBody.trim() || responseBody.trim() === '{}') &&
+            !hasCorrectiveChallenge)
         ) {
           return {
             authorized: false,

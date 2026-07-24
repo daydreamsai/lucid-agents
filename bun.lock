@@ -213,6 +213,7 @@
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
         "@lucid-dreams/agent-auth": "^0.2.24",
+        "@x402/evm": "catalog:",
         "mppx": "catalog:",
         "thirdweb": "^5.113.0",
         "viem": "catalog:",

@@ -24,6 +24,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./conformance": {
+      "types": "./dist/conformance.d.ts",
+      "import": "./dist/conformance.js",
+      "default": "./dist/conformance.js"
+    },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
       "import": "./dist/storage/sqlite.js",

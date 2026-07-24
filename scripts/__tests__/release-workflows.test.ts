@@ -41,6 +41,7 @@ describe('release workflow policy', () => {
       'static_checks',
       'tests',
       'examples_e2e',
+      'payment_e2e',
       'generated_projects',
       'browser_smoke',
       'runtime_compatibility',

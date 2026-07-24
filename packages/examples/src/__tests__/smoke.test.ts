@@ -30,6 +30,7 @@ import {
   type PublicClientLike,
 } from '@lucid-agents/identity';
 import { evm, mpp, tempo } from '@lucid-agents/mpp';
+import { runCustomMppVerifierConformance } from '@lucid-agents/mpp/conformance';
 import { createSQLiteTempoSessionStore } from '@lucid-agents/mpp/storage/sqlite';
 import {
   type BatchChannelStorage,
@@ -1277,6 +1278,12 @@ describe('Example Smoke Tests', () => {
   // =========================================================================
   // 5. mpp/mpp-paid-service
   // =========================================================================
+  describe('mpp/custom-verifier-conformance', () => {
+    it('publishes the provider-facing conformance runner', () => {
+      expect(runCustomMppVerifierConformance).toBeFunction();
+    });
+  });
+
   describe('mpp/mpp-paid-service', () => {
     let app: { fetch: (req: Request) => Response | Promise<Response> };
 
