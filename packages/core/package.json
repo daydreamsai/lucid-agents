@@ -1,6 +1,6 @@
 {
   "name": "@lucid-agents/core",
-  "version": "4.2.0",
+  "version": "5.0.0",
   "description": "Protocol-neutral typed runtime kernel for Lucid agents",
   "repository": {
     "type": "git",

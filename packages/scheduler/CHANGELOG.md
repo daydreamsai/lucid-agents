@@ -1,5 +1,16 @@
 # @lucid-agents/scheduler
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [4757f1b]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+  - @lucid-agents/types@3.0.0
+
 ## 0.3.1
 
 ### Patch Changes
