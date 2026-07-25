@@ -77,6 +77,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build packages
+        run: bun run build:packages
+
       - name: Configure git user
         run: |
           git config user.name "github-actions[bot]"
