@@ -90,6 +90,19 @@ describe('release workflow policy', () => {
   test('release bot runs only after successful master CI', () => {
     const workflow = readWorkflow('release-bot.yml');
     const source = workflowSource('release-bot.yml');
+    const releaseBot = workflow.jobs?.['release-bot'] as
+      | { steps?: WorkflowStep[] }
+      | undefined;
+    const steps = releaseBot?.steps ?? [];
+    const installIndex = steps.findIndex(
+      step => step.run === 'bun install --frozen-lockfile'
+    );
+    const buildIndex = steps.findIndex(
+      step => step.run === 'bun run build:packages'
+    );
+    const changesetsIndex = steps.findIndex(
+      step => step.uses === 'changesets/action@v1'
+    );
 
     expect(workflow.on).toEqual({
       workflow_run: {
@@ -102,6 +115,9 @@ describe('release workflow policy', () => {
       "github.event.workflow_run.conclusion == 'success'"
     );
     expect(source).toContain('publish: bun run release:publish:verified');
+    expect(installIndex).toBeGreaterThan(-1);
+    expect(buildIndex).toBeGreaterThan(installIndex);
+    expect(changesetsIndex).toBeGreaterThan(buildIndex);
   });
 
   test('manual dry runs version, build, and inspect package artifacts', () => {
