@@ -1,5 +1,31 @@
 # @lucid-agents/cli
 
+## 5.0.0
+
+### Patch Changes
+
+- d169013: Add explicit native Tempo session descriptors, durable atomic SQLite and
+  Postgres channel stores, invoke billing, and transport-neutral stream
+  metering with backpressure-aware receipt and voucher-needed events. Reserve the
+  verified session ceiling in shared payment policies, then finalize exactly once
+  with delivered atomic usage on completion, failure, or cancellation. Keep
+  generated TanStack payment runtimes behind a compiled server-function boundary.
+- 4757f1b: Make project generation transactional, reject invalid wizard input before
+  writing output, protect generated environment files, keep their secrets out of
+  dependency installation, mask sensitive prompts, and fail cleanly when
+  dependency installation does not complete. Failed scaffolds now include a
+  secret-free rerun command after cleaning their staging output. Make the
+  identity template boot read-only on Base Sepolia with payment receiving
+  disabled until a complete destination is supplied, bind registration signers
+  to the selected identity RPC and chain, reject unsupported registry networks,
+  and require explicit signer and Ethereum-mainnet registration opt-ins.
+- Updated dependencies [4757f1b]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+  - @lucid-agents/types@3.0.0
+
 ## 4.2.0
 
 ### Minor Changes

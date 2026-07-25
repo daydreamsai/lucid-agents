@@ -1,5 +1,11 @@
 # @lucid-agents/api-sdk
 
+## 4.3.0
+
+### Minor Changes
+
+- 4757f1b: Record OpenAPI schema provenance and compatibility for generated SDK updates, and release the hosted client independently from runtime packages.
+
 ## 4.2.0
 
 ## 4.1.0

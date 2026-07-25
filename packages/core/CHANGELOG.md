@@ -1,5 +1,16 @@
 # @lucid-agents/core
 
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [4757f1b]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+  - @lucid-agents/types@3.0.0
+
 ## 4.2.0
 
 ## 4.1.0

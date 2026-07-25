@@ -1,5 +1,26 @@
 # @lucid-agents/identity
 
+## 5.0.0
+
+### Major Changes
+
+- 4757f1b: Default ERC-8004 identity initialization to read-only, discover existing IDs
+  through bounded domain-owned registration documents or explicit token IDs,
+  validate token IDs consistently as uint256 values, allow registry clients
+  without a wallet, and require an explicit opt-in plus signer for registration.
+  Runnable identity examples are read-only by default or require a separate
+  write-example acknowledgement before submitting registry transactions.
+
+### Patch Changes
+
+- Updated dependencies [4757f1b]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+- Updated dependencies [d169013]
+  - @lucid-agents/types@3.0.0
+  - @lucid-agents/wallet@0.6.6
+
 ## 4.2.0
 
 ## 4.1.0
