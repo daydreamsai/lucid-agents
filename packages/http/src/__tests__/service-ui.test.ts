@@ -60,15 +60,20 @@ describe('service UI configuration', () => {
       colorScheme: 'light',
       tokens: {
         colors: {
-          canvas: '#F4F0E8',
-          surface: '#FFFCF5',
-          text: '#1D201E',
-          accent: '#1859C9',
+          canvas: '#F7F8FA',
+          surface: '#FFFFFF',
+          text: '#111827',
+          accent: '#145BCC',
         },
         fonts: {
-          display: ['Instrument Serif', 'Iowan Old Style', 'Georgia', 'serif'],
+          display: [
+            'Avenir Next',
+            'Segoe UI',
+            'Helvetica Neue',
+            'Arial',
+            'sans-serif',
+          ],
           body: [
-            'Source Sans 3',
             'Avenir Next',
             'Segoe UI',
             'Helvetica Neue',
@@ -171,9 +176,9 @@ describe('service UI configuration', () => {
       resolveServiceUi({ preset: 'folio' })
     );
 
-    expect(css).toContain('--service-canvas: #F4F0E8;');
+    expect(css).toContain('--service-canvas: #F7F8FA;');
     expect(css).toContain(
-      '--service-display: "Instrument Serif", "Iowan Old Style", "Georgia", serif;'
+      '--service-display: "Avenir Next", "Segoe UI", "Helvetica Neue", "Arial", sans-serif;'
     );
     expect(css).toContain('[data-service-ui-preset="folio"] h1');
     expect(css).toContain('.endpoint-table');

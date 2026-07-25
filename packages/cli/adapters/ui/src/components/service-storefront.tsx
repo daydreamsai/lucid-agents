@@ -124,7 +124,7 @@ export function ServiceStorefront({
                           {row.description}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Payment method">
                         <span className="payment-method">
                           {row.paymentMethod}
                         </span>
@@ -134,7 +134,7 @@ export function ServiceStorefront({
                           </span>
                         ) : null}
                       </td>
-                      <td className="endpoint-price">
+                      <td className="endpoint-price" data-label="Price">
                         {row.operation.price ?? 'Free'}
                       </td>
                     </tr>
