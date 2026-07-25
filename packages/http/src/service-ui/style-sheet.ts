@@ -33,18 +33,19 @@ body {
   min-width: 320px;
   background: var(--service-canvas);
   color: var(--service-text);
-  font: 15px/1.5 var(--service-body);
+  font: 15px/1.55 var(--service-body);
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 .service-page {
-  width: min(960px, 100%);
+  width: min(1180px, 100%);
   margin: 0 auto;
-  padding: 48px 32px 28px;
+  padding: 40px clamp(24px, 5vw, 64px) 24px;
 }
 
 .service-header {
-  padding-bottom: 32px;
+  padding-bottom: 28px;
   border-bottom: 1px solid var(--service-border);
 }
 
@@ -84,26 +85,29 @@ h2 {
 }
 
 h1 {
-  margin-top: 10px;
-  font-size: clamp(30px, 5vw, 44px);
-  line-height: 1.08;
-  letter-spacing: -0.035em;
+  max-width: 920px;
+  margin-top: 12px;
+  font-size: clamp(32px, 4.2vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 
 h2 {
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.3;
+  letter-spacing: -0.015em;
 }
 
 .service-purpose {
-  max-width: 680px;
-  margin: 12px 0 0;
+  max-width: 720px;
+  margin: 10px 0 0;
   color: var(--service-text-muted);
   font-size: 16px;
 }
 
 .endpoint-directory {
-  padding: 32px 0 40px;
+  padding: 28px 0 36px;
 }
 
 .directory-heading {
@@ -111,31 +115,32 @@ h2 {
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .directory-heading > span {
   color: var(--service-text-muted);
   font: 12px/1.4 var(--service-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .endpoint-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--service-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--service-surface);
 }
 
 .endpoint-table {
   width: 100%;
-  min-width: 640px;
+  min-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .endpoint-table th,
 .endpoint-table td {
-  padding: 15px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--service-border);
   text-align: left;
   vertical-align: top;
@@ -145,16 +150,16 @@ h2 {
   color: var(--service-text-muted);
   background: var(--service-surface-raised);
   font: 600 11px/1.4 var(--service-mono);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .endpoint-table th:first-child {
-  width: 62%;
+  width: 64%;
 }
 
 .endpoint-table th:nth-child(2) {
-  width: 23%;
+  width: 21%;
 }
 
 .endpoint-table th:last-child {
@@ -166,34 +171,36 @@ h2 {
 }
 
 .endpoint-name {
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.35;
 }
 
 .endpoint-address {
   display: flex;
   align-items: baseline;
-  gap: 9px;
-  margin-top: 5px;
+  gap: 8px;
+  margin-top: 4px;
   min-width: 0;
 }
 
 .endpoint-address > span {
   flex: none;
   color: var(--service-accent);
-  font: 700 11px/1.4 var(--service-mono);
+  font: 700 11px/1.5 var(--service-mono);
 }
 
 .endpoint-address code {
   min-width: 0;
   color: var(--service-text);
-  font: 12px/1.5 var(--service-mono);
+  font: 12px/1.55 var(--service-mono);
   overflow-wrap: anywhere;
 }
 
 .endpoint-description,
 .payment-network {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--service-text-muted);
   font-size: 13px;
 }
@@ -201,6 +208,7 @@ h2 {
 .payment-method,
 .endpoint-price {
   font: 600 13px/1.5 var(--service-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .endpoint-price {
@@ -208,9 +216,9 @@ h2 {
 }
 
 .empty-state {
-  padding: 28px;
+  padding: 32px;
   border: 1px solid var(--service-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--service-surface);
 }
 
@@ -223,7 +231,7 @@ h2 {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  padding-top: 20px;
+  padding-top: 18px;
   border-top: 1px solid var(--service-border);
   color: var(--service-text-muted);
   font: 11px/1.4 var(--service-mono);
@@ -237,21 +245,99 @@ h2 {
 
 @media (max-width: 680px) {
   .service-page {
-    padding: 28px 16px 20px;
+    padding: 24px 16px 20px;
   }
 
   .service-header {
     padding-bottom: 24px;
   }
 
+  h1 {
+    font-size: clamp(28px, 9vw, 36px);
+    line-height: 1.08;
+  }
+
+  .service-purpose {
+    font-size: 15px;
+  }
+
   .endpoint-directory {
-    padding-block: 24px 32px;
+    padding-block: 24px 28px;
   }
 
   .endpoint-table-wrap {
     margin-inline: -16px;
     border-inline: 0;
     border-radius: 0;
+    overflow-x: visible;
+  }
+
+  .endpoint-table {
+    min-width: 0;
+  }
+
+  .endpoint-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .endpoint-table tbody,
+  .endpoint-table tr,
+  .endpoint-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .endpoint-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px 20px;
+    padding: 18px;
+    border-bottom: 1px solid var(--service-border);
+  }
+
+  .endpoint-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .endpoint-table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .endpoint-table td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .endpoint-table td:nth-child(2),
+  .endpoint-table td:last-child {
+    display: grid;
+    gap: 3px;
+  }
+
+  .endpoint-table td:last-child {
+    justify-items: end;
+    text-align: right;
+  }
+
+  .endpoint-table td:nth-child(2)::before,
+  .endpoint-table td:last-child::before {
+    content: attr(data-label);
+    color: var(--service-text-muted);
+    font: 600 10px/1.4 var(--service-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .payment-network {
+    margin-top: 0;
   }
 
   .service-footer {
@@ -268,23 +354,40 @@ h2 {
 export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
   dossier: `[data-service-ui-preset="dossier"] {
   font-family: var(--service-mono);
+}
+
+[data-service-ui-preset="dossier"] .endpoint-table-wrap {
+  border-radius: 8px;
 }`,
   folio: `[data-service-ui-preset="folio"] h1 {
-  font-size: clamp(36px, 6vw, 54px);
-  font-weight: 500;
+  font-size: clamp(34px, 4.4vw, 48px);
+  font-weight: 650;
 }
 
 [data-service-ui-preset="folio"] .endpoint-table-wrap,
 [data-service-ui-preset="folio"] .empty-state {
-  border-radius: 2px;
+  border-radius: 12px;
 }`,
   console: `[data-service-ui-preset="console"] {
-  width: min(1080px, 100%);
-  font-family: var(--service-mono);
+  width: min(1240px, 100%);
+}
+
+[data-service-ui-preset="console"] h1 {
+  font-size: clamp(30px, 3.8vw, 42px);
 }
 
 [data-service-ui-preset="console"] .endpoint-table th,
 [data-service-ui-preset="console"] .endpoint-table td {
-  padding-block: 12px;
+  padding-block: 13px;
+}
+
+@media (max-width: 680px) {
+  [data-service-ui-preset="console"] .endpoint-table tr {
+    padding-block: 16px;
+  }
+
+  [data-service-ui-preset="console"] .endpoint-table td {
+    padding-block: 0;
+  }
 }`,
 };

@@ -148,7 +148,7 @@ export async function renderLandingPage({
                                 ${row.description}
                               </div>
                             </td>
-                            <td>
+                            <td data-label="Payment method">
                               <span class="payment-method"
                                 >${row.paymentMethod}</span
                               >
@@ -158,7 +158,7 @@ export async function renderLandingPage({
                                   >`
                                 : ''}
                             </td>
-                            <td class="endpoint-price">
+                            <td class="endpoint-price" data-label="Price">
                               ${row.operation.price ?? 'Free'}
                             </td>
                           </tr>`

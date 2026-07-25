@@ -85,13 +85,13 @@ bun -e '
 
 "${PWCLI[@]}" resize 390 844 >/dev/null
 "${PWCLI[@]}" reload >/dev/null
-STATIC_MOBILE="$("${PWCLI[@]}" --raw eval "() => { const wrap = document.querySelector('.endpoint-table-wrap'); const table = document.querySelector('.endpoint-table'); return JSON.stringify({ width: innerWidth, rows: table?.querySelectorAll('tbody tr').length ?? -1, overflow: wrap ? getComputedStyle(wrap).overflowX : '', bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, tableWidth: table?.getBoundingClientRect().width ?? 0 }) }")"
+STATIC_MOBILE="$("${PWCLI[@]}" --raw eval "() => { const table = document.querySelector('.endpoint-table'); const details = Array.from(table?.querySelectorAll('.payment-method, .endpoint-price') ?? []); return JSON.stringify({ width: innerWidth, rows: table?.querySelectorAll('tbody tr').length ?? -1, bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, tableWidth: table?.getBoundingClientRect().width ?? 0, detailsVisible: details.every(node => { const rect = node.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth; }) }) }")"
 printf '%s\n' "$STATIC_MOBILE" >static-mobile.json
 bun -e '
   let state = JSON.parse(await Bun.file("static-mobile.json").text());
   if (typeof state === "string") state = JSON.parse(state);
-  if (state.width !== 390 || state.rows < 6 || state.overflow !== "auto") throw new Error("portable mobile endpoint table was not readable");
-  if (state.bodyOverflow || state.tableWidth < 640) throw new Error("portable mobile endpoint table was not contained by its scroller");
+  if (state.width !== 390 || state.rows < 6 || !state.detailsVisible) throw new Error("portable mobile endpoint details were not readable");
+  if (state.bodyOverflow || state.tableWidth > state.width) throw new Error("portable mobile endpoint records overflowed the viewport");
 '
 
 kill "$SERVER_PID" >/dev/null 2>&1 || true
@@ -109,7 +109,7 @@ GENERATED_ROOT="$(tr -d '\n' <"$GENERATED_ROOT_FILE")"
 
 THEMES=(dossier folio console)
 SCHEMES=(dark light dark)
-CANVASES=("rgb(11, 13, 12)" "rgb(244, 240, 232)" "rgb(7, 17, 26)")
+CANVASES=("rgb(11, 13, 12)" "rgb(247, 248, 250)" "rgb(7, 17, 26)")
 
 for index in "${!THEMES[@]}"; do
   THEME="${THEMES[$index]}"
@@ -155,13 +155,13 @@ for index in "${!THEMES[@]}"; do
 
   "${PWCLI[@]}" resize 390 844 >/dev/null
   "${PWCLI[@]}" reload >/dev/null
-  REACT_MOBILE="$("${PWCLI[@]}" --raw eval "() => { const wrap = document.querySelector('.endpoint-table-wrap'); const table = document.querySelector('.endpoint-table'); return JSON.stringify({ rows: table?.querySelectorAll('tbody tr').length ?? -1, overflow: wrap ? getComputedStyle(wrap).overflowX : '', bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, tableWidth: table?.getBoundingClientRect().width ?? 0 }) }")"
+  REACT_MOBILE="$("${PWCLI[@]}" --raw eval "() => { const table = document.querySelector('.endpoint-table'); const details = Array.from(table?.querySelectorAll('.payment-method, .endpoint-price') ?? []); return JSON.stringify({ width: innerWidth, rows: table?.querySelectorAll('tbody tr').length ?? -1, bodyOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth, tableWidth: table?.getBoundingClientRect().width ?? 0, detailsVisible: details.every(node => { const rect = node.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth; }) }) }")"
   printf '%s\n' "$REACT_MOBILE" >"react-$THEME-mobile.json"
   THEME="$THEME" bun -e '
     const theme = Bun.env.THEME;
     let state = JSON.parse(await Bun.file(`react-${theme}-mobile.json`).text());
     if (typeof state === "string") state = JSON.parse(state);
-    if (state.rows < 6 || state.overflow !== "auto" || state.bodyOverflow || state.tableWidth < 640) throw new Error(`${theme} mobile endpoint table was not contained by its scroller`);
+    if (state.rows < 6 || !state.detailsVisible || state.bodyOverflow || state.tableWidth > state.width) throw new Error(`${theme} mobile endpoint records were not fully visible`);
   '
 
   "${PWCLI[@]}" snapshot >"react-$THEME-snapshot.log"

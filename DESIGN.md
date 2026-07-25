@@ -82,11 +82,11 @@ Every renderer consumes the same resolved semantic tokens and emits the same
 information regions. Presets change composition and visual tone, not service
 semantics:
 
-| Preset    | Posture                | Scheme | Layout character                              |
-| --------- | ---------------------- | ------ | --------------------------------------------- |
-| `dossier` | Quiet technical record | Dark   | Existing 320px offering rail and mono density |
-| `folio`   | Editorial field guide  | Light  | Large serif identity and card-like contracts  |
-| `console` | Dense operator console | Dark   | Compact grid and high-information scan lines  |
+| Preset    | Posture                | Scheme | Layout character                                  |
+| --------- | ---------------------- | ------ | ------------------------------------------------- |
+| `dossier` | Quiet technical record | Dark   | Monospaced identity and restrained record density |
+| `folio`   | Editorial field guide  | Light  | Cool, spacious catalog with crisp type hierarchy  |
+| `console` | Dense operator console | Dark   | Compact grid and high-information scan lines      |
 
 The root `service-ui.config.ts` is the single user-owned configuration file.
 `defineServiceUi()` gives it contextual types; `resolveServiceUi()` validates it
@@ -132,12 +132,11 @@ signature material.
 
 ## Responsive and accessible behavior
 
-- Dossier uses a 320px desktop rail; Folio and Console use their own responsive
-  grid while preserving the same semantic reading order.
-- Between 768px and 1199px, the rail compacts and the workspace remains primary.
-- Below 768px, selecting an offering drills into its workspace.
-- Below 480px, code editors become edge-to-edge and the primary action remains
-  reachable in a sticky action row.
+- Desktop presets use a wide endpoint directory with stable method, payment,
+  and price alignment.
+- Below 680px, each table row becomes a complete record while preserving table
+  semantics, so payment method, network, and price remain visible without
+  horizontal scrolling.
 - Controls provide a minimum 44px target.
 - Body copy starts at 16px and auxiliary labels at 12px.
 - Selection is represented in the URL and invocation state remains in memory.

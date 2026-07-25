@@ -150,7 +150,7 @@ describe('renderLandingPage', () => {
   it('applies every preset and safe font stylesheet through the same renderer', async () => {
     for (const [preset, colorScheme, canvas] of [
       ['dossier', 'dark', '#0B0D0C'],
-      ['folio', 'light', '#F4F0E8'],
+      ['folio', 'light', '#F7F8FA'],
       ['console', 'dark', '#07111A'],
     ] as const) {
       const page = await render(card, { ok: true }, { preset });
