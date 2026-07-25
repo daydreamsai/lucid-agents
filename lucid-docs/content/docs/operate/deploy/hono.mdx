@@ -3,8 +3,8 @@ title: Deploy with Hono
 description: Run the canonical Lucid route plan as a long-lived Fetch-native Bun service.
 icon: Server
 status: next
-verifiedVersion: 0.10.0
-verifiedAt: 2026-07-21
+verifiedVersion: 1.0.1
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -123,8 +123,8 @@ filesystem read-only except for explicit persistent paths.
 - Multiple replicas need shared Postgres payment/SIWX state plus custom shared
   HTTP idempotency, task, and scheduler stores.
 - The package ships no durable task or scheduler implementation.
-- MPP challenge/replay state is process-local in this release; sticky routing
-  does not make it restart-safe.
+- MPP services must inject the Postgres challenge store for shared replicas;
+  process-local defaults are for development only.
 
 Run migrations in a separate deployment job or one elected instance before
 readiness. Do not let every replica race destructive migrations at startup.

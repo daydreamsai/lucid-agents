@@ -760,6 +760,8 @@ The SIWX nonce storage API uses `consumeNonce()` as an atomic operation that che
 
 ## See Also
 
+- [Every x402 payment method](../lucid-docs/content/docs/examples/x402-payment-methods.mdx) - Exact EVM/Solana, upto, batch settlement, SIWX, reconciliation, and Stripe destination tutorial
+- [Every MPP payment method](../lucid-docs/content/docs/examples/mpp-payment-methods.mdx) - Tempo charge/session, Stripe, EVM, custom, and Lightning tutorial
 - [Wallets Documentation](./WALLETS.md) - Wallet configuration for payments
 - [Core Documentation](../packages/core/README.md) - Agent runtime basics
 - [x402 Protocol](https://github.com/paywithx402) - Payment protocol specification

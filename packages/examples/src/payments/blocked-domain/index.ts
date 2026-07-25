@@ -80,4 +80,4 @@ console.log(
   `   Payment address: ${agent.payments?.config.payTo} (address is OK)`
 );
 console.log(`   - /entrypoints/test-endpoint/invoke - $0.01 per call`);
-console.log(`   - /.well-known/agent.json - Agent manifest`);
+console.log(`   - /.well-known/agent-card.json - Agent Card`);

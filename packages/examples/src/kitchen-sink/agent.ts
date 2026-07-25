@@ -80,7 +80,7 @@ export async function createKitchenSinkAgent(
     )
     // 6. Scheduler — manages recurring A2A jobs; payments are optional
     .use(scheduler())
-    // 7. AP2 (Agent-to-Person Protocol) — adds AP2 extension to the agent manifest;
+    // 7. AP2 (Agent Payments Protocol) — adds AP2 extension to the agent manifest;
     //    'merchant' is the valid role for an agent that accepts payments
     .use(ap2({ roles: ['merchant'] }));
 

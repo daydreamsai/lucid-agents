@@ -3,8 +3,8 @@ title: Environment variables
 description: Exact server-side variables read by Lucid helpers, including precedence, aliases, and application-owned configuration.
 icon: FileKey
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -171,14 +171,14 @@ Read by `mppFromEnv()` from `@lucid-agents/mpp`. Explicit overrides win. If an
 explicit `methods` array is present, environment method construction is
 skipped.
 
-| Variable               | Default                   | Meaning                                                                                                                                |
-| ---------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `MPP_METHOD`           | `tempo`                   | One or more comma-separated method names. The helper builds only `tempo` and `stripe`; custom methods are code-only.                   |
-| `MPP_CURRENCY`         | `usd`                     | Default display currency.                                                                                                              |
-| `MPP_DEFAULT_INTENT`   | `charge`                  | `charge` or `session`.                                                                                                                 |
-| `MPP_CHALLENGE_EXPIRY` | `300`                     | Challenge lifetime in seconds.                                                                                                         |
-| `MPP_SECRET_KEY`       | Per-process generated key | HMAC key used by built-in `mppx` verification. Set a stable secret deliberately, but note that challenge state is still process-local. |
-| `MPP_REALM`            | Agent name                | Payment-Auth realm.                                                                                                                    |
+| Variable               | Default                   | Meaning                                                                                                                           |
+| ---------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `MPP_METHOD`           | `tempo`                   | One or more comma-separated method names. The helper builds only `tempo` and `stripe`; custom methods are code-only.              |
+| `MPP_CURRENCY`         | `usd`                     | Default display currency.                                                                                                         |
+| `MPP_DEFAULT_INTENT`   | `charge`                  | `charge` or `session`.                                                                                                            |
+| `MPP_CHALLENGE_EXPIRY` | `300`                     | Challenge lifetime in seconds.                                                                                                    |
+| `MPP_SECRET_KEY`       | Per-process generated key | HMAC key used by built-in `mppx` verification. Set one stable secret for every worker and pair it with a durable challenge store. |
+| `MPP_REALM`            | Agent name                | Payment-Auth realm.                                                                                                               |
 
 Tempo requires `MPP_TEMPO_CURRENCY` and `MPP_TEMPO_RECIPIENT`; the recipient
 falls back to `PAYMENTS_RECEIVABLE_ADDRESS`. `MPP_TEMPO_CHAIN_ID` is optional.

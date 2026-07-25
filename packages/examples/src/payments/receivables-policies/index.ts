@@ -142,7 +142,7 @@ const server = Bun.serve({
 });
 
 console.log(
-  `Receivables policies agent ready at http://${server.hostname}:${server.port}/.well-known/agent.json`
+  `Receivables policies agent ready at http://${server.hostname}:${server.port}/.well-known/agent-card.json`
 );
 
 if (agent.payments?.policyGroups) {

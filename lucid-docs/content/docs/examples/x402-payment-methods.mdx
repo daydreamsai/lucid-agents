@@ -1,0 +1,166 @@
+---
+title: Every x402 payment method
+description: Build and inspect exact EVM/Solana, upto, batch-settlement, SIWX, reconciliation, and Stripe destination examples.
+icon: CreditCard
+status: next
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-25
+product: sdk
+---
+
+Build one merchant that exposes every x402 seller method released by the current
+Lucid workspace. You will create real invoke, Server-Sent Events (SSE), and paid
+task challenges without needing a funded wallet for the inspection steps.
+
+The compiled source is
+[`packages/examples/src/payment-methods/x402.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/payment-methods/x402.ts).
+Use the repository checkout for this Next tutorial:
+
+```bash
+git clone https://github.com/daydreamsai/lucid-agents.git
+cd lucid-agents
+bun install
+bun run build:packages
+```
+
+## 1. Choose the operation and settlement model
+
+| Entrypoint       | Method                  | Operations        | Use it when                                                                    |
+| ---------------- | ----------------------- | ----------------- | ------------------------------------------------------------------------------ |
+| `exact-report`   | exact on EVM and Solana | invoke, SSE, task | The price is known before fulfillment and the buyer may select either network. |
+| `metered-report` | upto on EVM             | invoke only       | The buyer authorizes a ceiling and the handler reports actual usage.           |
+| `batch-report`   | batch-settlement on EVM | invoke, SSE, task | Repeated calls should use cumulative off-chain channel vouchers.               |
+| `member-profile` | SIWX auth-only          | invoke            | Wallet control, not payment, gates the operation.                              |
+| `member-report`  | exact plus SIWX         | invoke            | A verified payer may later reuse an entitlement.                               |
+
+The same source also exports `createX402StripeDestinationExample()`. It creates
+a Base-mainnet deposit address for each challenge and must not be confused with
+the MPP Stripe charge method.
+
+## 2. Configure the merchant
+
+Import the tested factory and inject provider and persistence capabilities:
+
+```typescript title="src/x402-service.ts"
+import type { TaskStore } from '@lucid-agents/types/a2a';
+import { createSQLiteBatchChannelStorage } from '@lucid-agents/payments/storage/batch-sqlite';
+import {
+  sqlitePaymentStorageFactory,
+  sqliteSIWxStorageFactory,
+} from '@lucid-agents/payments/storage/sqlite';
+import { createX402PaymentMethodsExample } from '../../packages/examples/src/payment-methods/x402';
+
+declare const durableTaskStore: TaskStore;
+declare const offerReceiptIssuer: Parameters<
+  typeof createX402PaymentMethodsExample
+>[0]['offerReceiptIssuer'];
+
+const service = await createX402PaymentMethodsExample({
+  evm: {
+    network: 'eip155:84532',
+    payTo: process.env.EVM_RECEIVABLE_ADDRESS as `0x${string}`,
+    asset: process.env.EVM_TOKEN_ADDRESS as `0x${string}`,
+    exactFacilitatorUrl: process.env.EXACT_FACILITATOR_URL!,
+    uptoFacilitatorUrl: process.env.UPTO_FACILITATOR_URL!,
+    batchFacilitatorUrl: process.env.BATCH_FACILITATOR_URL!,
+  },
+  solana: {
+    network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+    payTo: process.env.SOLANA_RECEIVABLE_ADDRESS!,
+    asset: process.env.SOLANA_TOKEN_ADDRESS!,
+    facilitatorUrl: process.env.SOLANA_FACILITATOR_URL!,
+  },
+  siwxOrigin: 'https://agent.example.com',
+  paymentStorage: {
+    type: 'sqlite',
+    sqlite: { dbPath: '.data/payments.db' },
+  },
+  paymentStorageFactory: sqlitePaymentStorageFactory,
+  siwxStorage: {
+    type: 'sqlite',
+    sqlite: { dbPath: '.data/siwx.db' },
+  },
+  siwxStorageFactory: sqliteSIWxStorageFactory,
+  taskStore: durableTaskStore,
+  batchSettlement: {
+    mode: 'production',
+    storage: createSQLiteBatchChannelStorage('.data/x402-channels.db'),
+  },
+  offerReceiptIssuer,
+});
+
+Bun.serve({ port: 3000, fetch: service.app.fetch });
+```
+
+Each facilitator must advertise the requested scheme, network, and asset from
+its `/supported` endpoint. Solana exact is a seller capability; Lucid's built-in
+paid Fetch buyer registers EVM mechanisms only.
+
+## 3. Inspect each challenge
+
+Start the service, then call an operation without a payment credential:
+
+```bash
+curl -i http://localhost:3000/entrypoints/exact-report/invoke \
+  -H 'content-type: application/json' \
+  --data '{"input":{"prompt":"payment method audit"}}'
+
+curl -i http://localhost:3000/entrypoints/metered-report/invoke \
+  -H 'content-type: application/json' \
+  --data '{"input":{"units":2}}'
+
+curl -i http://localhost:3000/entrypoints/batch-report/stream \
+  -H 'accept: text/event-stream' \
+  -H 'content-type: application/json' \
+  --data '{"input":{"prompt":"streamed report"}}'
+```
+
+All three return `402` before fulfillment. Decode `PAYMENT-REQUIRED` only in a
+safe local inspection tool. Confirm that exact advertises both ordered offers,
+upto advertises its ceiling, and batch advertises `batch-settlement`.
+
+Paid tasks additionally require a caller-known `Task-Access-Token` and an
+application-owned durable `TaskStore`. Without a durable store, Lucid fails
+closed with `durable_task_store_required`; it never silently downgrades to a
+free or process-local paid task.
+
+## Upto settlement and reconciliation
+
+The metered handler reports the atomic amount actually consumed:
+
+```typescript
+return {
+  output: result,
+  payment: {
+    actualAmount: String(unitsConsumed * 1_000),
+    asset: tokenAddress,
+  },
+};
+```
+
+The amount may be zero but cannot exceed the authorized ceiling. Payment
+Identifier ties the request to its idempotency key, Bazaar projects discovery,
+and the optional issuer signs official offer/receipt extensions without
+exposing private-key material through configuration or discovery.
+
+## Verify the tutorial contract
+
+Run the deterministic contracts:
+
+```bash
+bun test packages/examples/src/__tests__/payment-method-examples.test.ts
+bun test packages/examples/src/__tests__/smoke.test.ts
+bun test packages/examples/src/__tests__/x402-batch-lifecycle.test.ts
+```
+
+Those proofs live in:
+
+- `packages/examples/src/__tests__/payment-method-examples.test.ts`
+- `packages/examples/src/__tests__/smoke.test.ts`
+- `packages/examples/src/__tests__/x402-batch-lifecycle.test.ts`
+
+They prove challenge/discovery shape, signed offline exact and upto settlement,
+and the restart/race/claim/refund batch lifecycle. They do not prove funded
+public-chain settlement, a Solana buyer, or a production facilitator account.
+Continue with [durable storage](/docs/operate/durable-storage) and the
+[production checklist](/docs/operate/production-checklist).

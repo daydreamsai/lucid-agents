@@ -119,18 +119,18 @@ runtime.addEntrypoint({
 
 ## Defaults that matter in production
 
-| Surface                           | Current default                         | Production implication                                                             |
-| --------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- |
-| HTTP service page                 | Dossier preset, static on Hono/Express  | Set `servicePage: false` if public discovery is not intended.                      |
-| HTTP base path                    | Empty                                   | Set it before publishing cards or reverse-proxy routes.                            |
-| HTTP invoke idempotency           | Enabled, bounded in-memory store        | Inject a durable atomic store for multiple replicas.                               |
-| HTTP in-progress claim            | 15 minutes                              | Size it above the longest supported invoke or claims can expire mid-run.           |
-| HTTP completed-response retention | 24 hours                                | Align client retry windows and data-retention policy.                              |
-| Payment/SIWX storage              | In-memory when no store is supplied     | Use shipped SQLite/Postgres factories or a custom port as topology requires.       |
-| MPP challenge key                 | Generated per process when absent       | Set a secret explicitly, while recognizing challenge state is still process-local. |
-| MPP challenge state               | Bounded process-local map               | Route retries to the same process or do not scale this path horizontally yet.      |
-| Lucid tasks                       | Bounded in-memory store unless injected | Supply a durable task store before relying on task recovery.                       |
-| Scheduler store                   | Bounded in-memory implementation        | Implement the scheduler store port for durable/multi-instance workers.             |
+| Surface                           | Current default                         | Production implication                                                              |
+| --------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------- |
+| HTTP service page                 | Dossier preset, static on Hono/Express  | Set `servicePage: false` if public discovery is not intended.                       |
+| HTTP base path                    | Empty                                   | Set it before publishing cards or reverse-proxy routes.                             |
+| HTTP invoke idempotency           | Enabled, bounded in-memory store        | Inject a durable atomic store for multiple replicas.                                |
+| HTTP in-progress claim            | 15 minutes                              | Size it above the longest supported invoke or claims can expire mid-run.            |
+| HTTP completed-response retention | 24 hours                                | Align client retry windows and data-retention policy.                               |
+| Payment/SIWX storage              | In-memory when no store is supplied     | Use shipped SQLite/Postgres factories or a custom port as topology requires.        |
+| MPP challenge key                 | Generated per process when absent       | Set one stable high-entropy secret for every worker.                                |
+| MPP challenge state               | Bounded process-local map               | Inject the shipped SQLite/Postgres adapter or a custom atomic store for production. |
+| Lucid tasks                       | Bounded in-memory store unless injected | Supply a durable task store before relying on task recovery.                        |
+| Scheduler store                   | Bounded in-memory implementation        | Implement the scheduler store port for durable/multi-instance workers.              |
 
 See [Durable storage](/docs/operate/durable-storage) for the exact support
 matrix and [Payment lifecycle](/docs/build/payment-model) for commit timing.

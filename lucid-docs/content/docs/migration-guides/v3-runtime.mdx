@@ -3,8 +3,8 @@ title: Lucid Agents v3 runtime migration
 description: Move from adapter-owned application behavior to extension-owned runtime contracts.
 icon: ArrowRight
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -93,10 +93,10 @@ import { createPostgresPaymentStorage } from '@lucid-agents/payments/storage/pos
 import { createSQLitePaymentStorage } from '@lucid-agents/payments/storage/sqlite';
 ```
 
-Only payment and SIWX have shipped SQLite/Postgres factories. HTTP
-idempotency, Lucid tasks, and scheduler state require custom durable ports;
-current MPP challenge state is process-local. Do not translate a v2 database
-setting into a fictional v3 adapter.
+Payment, SIWX, x402 batch channels, MPP challenges, and Tempo sessions have
+shipped SQLite/Postgres adapters. HTTP idempotency, Lucid tasks, and scheduler
+state still require custom durable ports. Do not translate a v2 database
+setting into an adapter that the owning package does not export.
 
 ## Review protocol changes separately
 

@@ -3,6 +3,13 @@
 Bidirectional x402 payments, SIWX authentication, payment policies, and payment
 tracking for Lucid Agents.
 
+For a complete, executable seller example covering exact EVM/Solana, upto,
+batch settlement, SIWX, reconciliation extensions, and Stripe destination mode,
+see
+[`packages/examples/src/payment-methods/x402.ts`](../examples/src/payment-methods/x402.ts).
+The matching walkthrough is
+[Every x402 payment method](../../lucid-docs/content/docs/examples/x402-payment-methods.mdx).
+
 ## Install
 
 ```bash

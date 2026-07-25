@@ -6,7 +6,7 @@
  *   4. Streaming entrypoints
  *   5. Standard entrypoints
  *
- * Run with: bun run examples/full-agent.ts
+ * Run with: bun run packages/examples/src/core/full-agent.ts
  *
  * Environment variables (all optional):
  *   PAYMENTS_FACILITATOR_URL     - x402 facilitator selected by the operator

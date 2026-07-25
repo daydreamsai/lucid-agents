@@ -700,6 +700,7 @@ bun run dev
 A pull request is not considered complete unless it includes:
 
 - **E2E example smoke test** - If the PR adds or modifies SDK surface area (new extensions, entrypoints, or config patterns), add a corresponding smoke test in `packages/examples/src/__tests__/smoke.test.ts`. Smoke tests verify that agents build, servers boot, agent cards are valid, and entrypoints respond correctly — all without external services. Run `bun test packages/examples/src/__tests__/` to confirm.
+- **Tutorial parity** - Every new or materially changed runnable example must have a corresponding tutorial under `lucid-docs/content/docs/`. The tutorial must link to the repository source and executable proof, state prerequisites and production boundaries, and be added to the appropriate `meta.json` navigation. When an example represents a payment-support-matrix row, add its tutorial to `packages/examples/src/payment-methods/coverage.ts`; CI verifies that the example, tutorial, and proof remain one-to-one.
 - **Documentation** - Update relevant documentation: `AGENTS.md` for architecture/patterns, package-level `README.md` files for usage, and inline JSDoc for public APIs. If you add a new package or extension, add it to the directory structure and dependency diagram sections.
 
 ## Release Process with Changesets

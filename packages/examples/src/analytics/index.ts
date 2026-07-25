@@ -279,7 +279,7 @@ const server = Bun.serve({
 });
 
 console.log(
-  `Analytics agent ready at http://${server.hostname}:${server.port}/.well-known/agent.json`
+  `Analytics agent ready at http://${server.hostname}:${server.port}/.well-known/agent-card.json`
 );
 console.log('\nAvailable analytics entrypoints:');
 console.log('  - /entrypoints/summary/invoke - Get payment summary');

@@ -11,6 +11,13 @@ an IETF standard. This package uses `mppx` 0.8.14 and implements a Lucid HTTP
 subset; it does not provide every MPP transport, discovery mechanism, rail,
 subscription, or session feature.
 
+For focused, executable factories covering native Tempo, Stripe, and EVM
+charges, custom/Lightning descriptors, method negotiation, and Tempo sessions,
+see
+[`packages/examples/src/payment-methods/mpp.ts`](../examples/src/payment-methods/mpp.ts).
+The matching walkthrough is
+[Every MPP payment method](../../lucid-docs/content/docs/examples/mpp-payment-methods.mdx).
+
 ## Built-in payment methods
 
 ```ts

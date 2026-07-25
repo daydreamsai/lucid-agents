@@ -6,7 +6,7 @@
  *
  * Prerequisites:
  * 1. Create a .env file with required variables (see .env.example)
- * 2. Run: bun run examples/quick-start.ts
+ * 2. Run: bun run packages/examples/src/identity/quick-start.ts
  */
 
 import { createAgent } from '@lucid-agents/core';

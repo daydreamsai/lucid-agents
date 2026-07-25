@@ -6,6 +6,8 @@
     "core",
     "a2a",
     "---Payments---",
+    "x402-payment-methods",
+    "mpp-payment-methods",
     "stripe-destination-mode",
     "mpp-paid-service",
     "scheduler",

@@ -3,37 +3,40 @@ title: MPP compatibility
 description: Lucid's Next-only Payment-Auth integration and its boundary from the wider MPP draft.
 icon: Banknote
 status: next
-verifiedVersion: 0.2.0
-verifiedAt: 2026-07-21
+verifiedVersion: 2.0.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
 The formal Machine Payments Protocol artifact is
-[`draft-ryan-httpauth-payment-01`](https://datatracker.ietf.org/doc/draft-ryan-httpauth-payment/),
+[`draft-httpauth-payment-00`](https://paymentauth.org/draft-httpauth-payment-00),
 an active **individual Internet-Draft**. It is not an IETF standard or an IETF
 endorsement. Implementations can be operational while the protocol still
 changes.
 
-`@lucid-agents/mpp` is a Next-only integration built on `mppx` 0.4.11. It protects
-Lucid invoke, stream, and task admission with Payment-Auth credentials.
+`@lucid-agents/mpp` uses pinned `mppx` 0.8.14. It protects Lucid invoke, stream,
+and task admission with Payment-Auth credentials and implements the HTTP subset
+listed below.
 
 ## Support matrix
 
-| Capability                                 | Lucid status                     | Detail                                                                            |
-| ------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------- |
-| HTTP `402` + `WWW-Authenticate: Payment`   | Supported                        | Standard challenge emitted through `mppx`                                         |
-| `Authorization: Payment`                   | Supported                        | Credential decoded and verified before admission                                  |
-| `Payment-Receipt`                          | Supported                        | Added after successful authorization/response                                     |
-| Tempo                                      | Charge supported                 | Native `mppx` charge; session requires a custom verifier                          |
-| Stripe                                     | Supported                        | Native `mppx` method with Business Network ID                                     |
-| Custom method                              | Supported with verifier          | Application owns signature, amount, recipient, settlement, and payer verification |
-| Lightning descriptor                       | Descriptor only without verifier | Fails closed without an application verifier                                      |
-| Outbound HTTP client                       | Supported                        | Payment-aware Fetch from native `mppx/client` intents                             |
-| Shared Lucid incoming policies             | Supported                        | Requires verified payer/network for identity-scoped rules                         |
-| Durable challenge/replay store             | Not implemented                  | Registry is process-local                                                         |
-| OpenAPI discovery                          | Not implemented                  | No MPP discovery document from Lucid                                              |
-| MCP/JSON-RPC or WebSocket transport        | Not implemented                  | Lucid binding is HTTP entrypoint routes                                           |
-| Every MPP rail, subscription, or extension | Not implemented                  | Do not infer support from the protocol name                                       |
+| Capability                                | Lucid status                     | Detail                                                                                      |
+| ----------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| HTTP `402` + `WWW-Authenticate: Payment`  | Supported                        | Standard challenge emitted through `mppx`                                                   |
+| `Authorization: Payment`                  | Supported                        | Credential verified before admission                                                        |
+| `Payment-Receipt`                         | Supported                        | Added after successful authorization/response                                               |
+| Tempo charge                              | Native                           | Invoke, fixed-admission SSE, and paid tasks                                                 |
+| Tempo TIP-1034 session                    | Native                           | One-unit invoke and delivered-unit SSE; tasks intentionally unsupported                     |
+| Stripe charge                             | Native                           | Requires Stripe Business Network secret/profile                                             |
+| EVM/x402-compatible charge                | Native                           | EIP-3009 verification with facilitator or application settlement                            |
+| Custom method                             | Supported with verifier          | Application owns signature, amount, recipient, settlement, payer, and any session semantics |
+| Lightning descriptor                      | Descriptor only without verifier | Fails closed without an application verifier                                                |
+| Outbound HTTP client                      | Supported                        | Payment-aware Fetch from native `mppx/client` intents                                       |
+| Method negotiation                        | Supported                        | Client can select an advertised method with `Accept-Payment`                                |
+| OpenAPI discovery                         | Supported                        | Canonical payment offers project onto invoke/stream operations                              |
+| Durable challenge/replay store            | Supported                        | SQLite/Postgres adapters and custom atomic store port                                       |
+| MCP/JSON-RPC or WebSocket transport       | Not implemented                  | Lucid binding is HTTP entrypoint routes                                                     |
+| Subscription and every upstream extension | Not implemented                  | Do not infer support from the protocol name                                                 |
 
 ## Wire and trust boundary
 
@@ -44,23 +47,20 @@ WWW-Authenticate: Payment id="...", realm="...", method="tempo", intent="charge"
 Authorization: Payment <base64url-credential>
 ```
 
-Native Tempo/Stripe methods delegate verification to `mppx`. A custom method
-is only a descriptor until `verifyCredential()` cryptographically verifies the
-signature, bound request, amount, currency, recipient, method, settlement, and
-claimed payer. `decodeMppCredential()` is decode-only and never authorizes a
-request.
+Native Tempo, Stripe, and EVM methods delegate verification to `mppx`. A custom
+method is only a descriptor until `verifyCredential()` cryptographically
+verifies the signature, bound request, amount, currency, recipient, method,
+settlement, and claimed payer. Decode-only logic never authorizes a request.
 
 ## Replay, idempotency, and storage
 
-Challenge IDs are short-lived, target-bound, and consumed before asynchronous
-verification, preventing concurrent replay in one process. However, the
-outstanding-challenge/replay registry is not durable or shared. Even with a
-stable `MPP_SECRET_KEY`, a restart loses outstanding challenges and multiple
-workers need sticky routing.
-
-For a production multi-instance service, this is a known limitation—not a
-configuration detail. Do not claim restart-safe MPP replay protection until a
-shared atomic store is implemented and tested.
+Challenge IDs are short-lived, target/body-bound, leased before asynchronous
+verification, renewed while verification runs, and fenced before consumption.
+The default store is bounded process memory. Production services inject the
+SQLite or Postgres `challengeStore` adapter, or a custom atomic implementation,
+so replay recovery survives restarts and coordinates workers. A stable
+`MPP_SECRET_KEY` remains required so another worker can validate the same
+challenge.
 
 If a custom verifier performs settlement, it must deduplicate the external
 side effect with the request's `Idempotency-Key`. Lucid's target replay and
@@ -88,14 +88,16 @@ external settlement.
 - Keep Stripe/Tempo server secrets out of outbound client bundles.
 - Test concurrent replay, restart between challenge/retry, wrong-body retry,
   provider timeout, receipt recovery, and custom-verifier idempotency.
-- Describe sticky routing and process-local replay state in the runbook.
+- Test the selected durable challenge and Tempo session stores under restart
+  and concurrent lease recovery.
 
 ## Choosing x402 or MPP
 
-Choose MPP only when its credential/intent model and one implemented verifier
-match the counterparty. Choose x402 `exact` for Lucid's documented on-chain
-per-call path. The protocols both use HTTP `402`, but their wire credentials and
+Choose MPP when its credential/intent model and one implemented native or custom
+verifier match the counterparty. Choose x402 exact, upto, or batch settlement
+for the documented facilitator-backed paths. MPP EVM charge can accept a
+compatible x402 exact retry, but the general protocols' credentials and
 receipts are not interchangeable.
 
-See the complete [MPP package reference](/docs/packages/mpp). The package is
-not part of the Stable npm channel.
+Start with [every MPP payment method](/docs/examples/mpp-payment-methods), then
+use the complete [MPP package reference](/docs/packages/mpp).

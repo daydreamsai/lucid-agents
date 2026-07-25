@@ -688,7 +688,7 @@ const server = Bun.serve({
 });
 
 console.log(
-  `Policy agent ready at http://${server.hostname}:${server.port}/.well-known/agent.json`
+  `Policy agent ready at http://${server.hostname}:${server.port}/.well-known/agent-card.json`
 );
 
 // Display policy information if available

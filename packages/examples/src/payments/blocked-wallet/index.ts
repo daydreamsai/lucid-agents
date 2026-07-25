@@ -77,4 +77,4 @@ console.log(`   BLOCKED BY: Wallet address in blockedRecipients list`);
 console.log(`   Payment address: ${agent.payments?.config.payTo} (BLOCKED)`);
 console.log(`   Domain: http://localhost:${port} (domain is OK)`);
 console.log(`   - /entrypoints/test-endpoint/invoke - $0.01 per call`);
-console.log(`   - /.well-known/agent.json - Agent manifest`);
+console.log(`   - /.well-known/agent-card.json - Agent Card`);
