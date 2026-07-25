@@ -5,7 +5,12 @@ import {
 } from '@lucid-agents/a2a';
 import { http } from '@lucid-agents/http';
 import { custom, mpp } from '@lucid-agents/mpp';
-import { payments } from '@lucid-agents/payments';
+import {
+  buildSIWxHeaderValue,
+  parseSIWxExtension,
+  payments,
+  type SIWxPayload,
+} from '@lucid-agents/payments';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { Challenge, Credential } from 'mppx';
 
@@ -29,6 +34,25 @@ function paymentCredential(response: Response): string {
     challenge: Challenge.fromResponse(response),
     payload: { proof: 'test' },
   });
+}
+
+function siwxCredential(
+  uri: string,
+  address: string,
+  nonce = `tasknonce${Date.now()}${Math.floor(Math.random() * 1_000_000)}`
+): string {
+  const payload: SIWxPayload = {
+    domain: new URL(uri).host,
+    address,
+    uri,
+    version: '1',
+    chainId: 'eip155:84532',
+    type: 'eip191',
+    nonce,
+    issuedAt: new Date().toISOString(),
+    signature: '0xtest-signature',
+  };
+  return buildSIWxHeaderValue({ ...payload });
 }
 
 function x402PaymentSignature(
@@ -149,6 +173,7 @@ describe('task authorization', () => {
       )
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -188,6 +213,7 @@ describe('task authorization', () => {
       )
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -271,6 +297,7 @@ describe('task authorization', () => {
       )
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -386,6 +413,7 @@ describe('task authorization', () => {
             storage: { type: 'in-memory' },
             siwx: {
               enabled: true,
+              origin: 'http://localhost',
               storage: { type: 'in-memory' },
               verify: { skipSignatureVerification: true },
             },
@@ -432,6 +460,7 @@ describe('task authorization', () => {
       .use(a2a())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -495,6 +524,7 @@ describe('task authorization', () => {
       .use(a2a())
       .use(
         mpp({
+          allowInsecureHttpForDevelopment: true,
           config: {
             methods: [custom.server('test', {})],
             currency: 'usd',
@@ -1188,6 +1218,7 @@ describe('task authorization', () => {
             storage: { type: 'in-memory' },
             siwx: {
               enabled: true,
+              origin: 'http://localhost',
               storage: { type: 'in-memory' },
               verify: { skipSignatureVerification: true },
             },
@@ -1204,17 +1235,7 @@ describe('task authorization', () => {
       })
       .build();
     const { app } = await createAgentApp(runtime);
-    const siwx = Buffer.from(
-      JSON.stringify({
-        domain: 'localhost',
-        address: walletAddress,
-        uri: 'http://localhost/tasks',
-        version: '1',
-        chainId: 'eip155:84532',
-        nonce: `task-siwx-${Date.now()}`,
-        issuedAt: new Date().toISOString(),
-      })
-    ).toString('base64');
+    const siwx = siwxCredential('http://localhost/tasks', walletAddress);
 
     const response = await app.request('http://localhost/tasks', {
       method: 'POST',
@@ -1254,6 +1275,7 @@ describe('task authorization', () => {
             storage: { type: 'in-memory' },
             siwx: {
               enabled: true,
+              origin: 'http://localhost',
               storage: { type: 'in-memory' },
               verify: { skipSignatureVerification: true },
             },
@@ -1289,17 +1311,10 @@ describe('task authorization', () => {
     });
     expect(malformedResponse.status).toBe(401);
 
-    const credential = Buffer.from(
-      JSON.stringify({
-        domain: 'localhost',
-        address: '0x1234567890abcdef1234567890abcdef12345678',
-        uri: 'http://localhost/tasks',
-        version: '1',
-        chainId: 'eip155:84532',
-        nonce: `task-replay-${Date.now()}`,
-        issuedAt: new Date().toISOString(),
-      })
-    ).toString('base64');
+    const credential = siwxCredential(
+      'http://localhost/tasks',
+      '0x1234567890abcdef1234567890abcdef12345678'
+    );
     const authenticatedRequest = () =>
       app.request('http://localhost/tasks', {
         method: 'POST',
@@ -1335,6 +1350,7 @@ describe('task authorization', () => {
             storage: { type: 'in-memory' },
             siwx: {
               enabled: true,
+              origin: 'http://localhost',
               storage: { type: 'in-memory' },
               verify: { skipSignatureVerification: true },
             },
@@ -1369,7 +1385,10 @@ describe('task authorization', () => {
       body,
     });
     expect(challengeResponse.status).toBe(402);
-    expect(challengeResponse.headers.get('X-SIWX-EXTENSION')).toBeTruthy();
+    const siwxExtension = await parseSIWxExtension(challengeResponse);
+    expect(siwxExtension).toBeDefined();
+    expect(siwxExtension?.info.domain).toBe('localhost');
+    expect(challengeResponse.headers.get('X-SIWX-EXTENSION')).toBeNull();
     const challenge = JSON.parse(
       Buffer.from(
         challengeResponse.headers.get('PAYMENT-REQUIRED')!,
@@ -1400,17 +1419,7 @@ describe('task authorization', () => {
     });
     expect(paidResponse.status).toBe(200);
 
-    const credential = Buffer.from(
-      JSON.stringify({
-        domain: 'localhost',
-        address: payer,
-        uri: 'http://localhost/tasks',
-        version: '1',
-        chainId: 'eip155:84532',
-        nonce: `task-entitlement-${Date.now()}`,
-        issuedAt: new Date().toISOString(),
-      })
-    ).toString('base64');
+    const credential = siwxCredential('http://localhost/tasks', payer);
     const reuseResponse = await app.request('http://localhost/tasks', {
       method: 'POST',
       headers: {

@@ -289,6 +289,11 @@ export type AgentHttpHandlers = {
   entrypoints: (req: Request) => Promise<Response>;
 
   /**
+   * Canonical OpenAPI 3.1 discovery document.
+   */
+  openapi: (req: Request) => Promise<Response>;
+
+  /**
    * Agent manifest/card endpoint handler.
    */
   manifest: (req: Request) => Promise<Response>;
@@ -350,6 +355,7 @@ export type AgentHttpHandlers = {
 export type AgentHttpRouteId =
   | 'health'
   | 'entrypoints'
+  | 'openapi'
   | 'manifest'
   | 'legacyManifest'
   | 'oasf'

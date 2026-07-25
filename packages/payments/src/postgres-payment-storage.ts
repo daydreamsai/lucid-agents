@@ -2,12 +2,18 @@ import { Pool, type PoolClient } from 'pg';
 import type {
   PaymentRecord,
   PaymentDirection,
+  PaymentReservationAdjustment,
+  PaymentSettlementAdjustment,
 } from '@lucid-agents/types/payments';
 import type { PaymentStorage } from './payment-storage';
 import type {
   PaymentAccountingRecord,
   PaymentLimitReservation,
   PaymentLimitReservationResult,
+} from './payment-storage';
+import {
+  indexPaymentReservationAdjustments,
+  indexPaymentSettlementAdjustments,
 } from './payment-storage';
 
 /**
@@ -523,7 +529,8 @@ export class PostgresPaymentStorage implements PaymentStorage {
 
   async stagePaymentSettlement(
     reservationIds: readonly string[],
-    records: readonly PaymentAccountingRecord[] = []
+    records: readonly PaymentAccountingRecord[] = [],
+    adjustments: readonly PaymentReservationAdjustment[] = []
   ): Promise<string | undefined> {
     if (
       new Set(reservationIds).size !== reservationIds.length ||
@@ -531,6 +538,10 @@ export class PostgresPaymentStorage implements PaymentStorage {
     ) {
       return undefined;
     }
+    const adjustedAmounts = indexPaymentReservationAdjustments(
+      reservationIds,
+      adjustments
+    );
     if (!this.schemaInitialized) await this.initSchema();
     const client = await this.pool.connect();
     try {
@@ -579,13 +590,23 @@ export class PostgresPaymentStorage implements PaymentStorage {
         }
         reservations.push(row);
       }
+      reservations.forEach((row, index) => {
+        const adjusted = adjustedAmounts.get(sortedIds[index]!);
+        if (adjusted !== undefined && adjusted > BigInt(row.amount)) {
+          throw new Error(
+            'Payment reservation adjustment exceeds reserved amount'
+          );
+        }
+      });
 
       const entries = [
-        ...reservations.map(row => ({
+        ...reservations.map((row, index) => ({
           groupName: row.group_name,
           scope: row.scope,
           direction: row.direction,
-          amount: row.amount,
+          amount: (
+            adjustedAmounts.get(sortedIds[index]!) ?? BigInt(row.amount)
+          ).toString(),
         })),
         ...records.map(record => ({
           ...record,
@@ -642,6 +663,87 @@ export class PostgresPaymentStorage implements PaymentStorage {
       }
       await client.query('COMMIT');
       return settlementId;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async adjustPaymentSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<boolean> {
+    const indexed = indexPaymentSettlementAdjustments(adjustments);
+    if (!this.schemaInitialized) await this.initSchema();
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = this.agentId
+        ? await client.query(
+            `SELECT group_name, scope, direction, amount
+             FROM payment_settlement_entries
+             WHERE settlement_id = $1 AND agent_id = $2 FOR UPDATE`,
+            [settlementId, this.agentId]
+          )
+        : await client.query(
+            `SELECT group_name, scope, direction, amount
+             FROM payment_settlement_entries
+             WHERE settlement_id = $1 AND agent_id IS NULL FOR UPDATE`,
+            [settlementId]
+          );
+      const rows = result.rows as Array<{
+        group_name: string;
+        scope: string;
+        direction: PaymentDirection;
+        amount: string;
+      }>;
+      if (rows.length === 0) {
+        await client.query('COMMIT');
+        return false;
+      }
+      const matched = new Set<string>();
+      for (const row of rows) {
+        const key = JSON.stringify([row.group_name, row.scope, row.direction]);
+        const amount = indexed.get(key);
+        if (amount === undefined) continue;
+        if (amount > BigInt(row.amount)) {
+          throw new Error(
+            'Payment settlement adjustment exceeds staged amount'
+          );
+        }
+        matched.add(key);
+      }
+      if (matched.size !== indexed.size) {
+        throw new Error('Payment settlement adjustment scope was not staged');
+      }
+      for (const adjustment of adjustments) {
+        const parameters = [
+          adjustment.amount.toString(),
+          settlementId,
+          adjustment.groupName,
+          adjustment.scope,
+          adjustment.direction,
+        ];
+        if (this.agentId) {
+          await client.query(
+            `UPDATE payment_settlement_entries SET amount = $1
+             WHERE settlement_id = $2 AND group_name = $3 AND scope = $4
+               AND direction = $5 AND agent_id = $6`,
+            [...parameters, this.agentId]
+          );
+        } else {
+          await client.query(
+            `UPDATE payment_settlement_entries SET amount = $1
+             WHERE settlement_id = $2 AND group_name = $3 AND scope = $4
+               AND direction = $5 AND agent_id IS NULL`,
+            parameters
+          );
+        }
+      }
+      await client.query('COMMIT');
+      return true;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

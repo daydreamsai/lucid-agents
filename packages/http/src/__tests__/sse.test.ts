@@ -2,6 +2,96 @@ import { describe, expect, it } from 'bun:test';
 import { createSSEStream, writeSSE } from '../sse';
 
 describe('createSSEStream', () => {
+  it('applies consumer backpressure before accepting the next event', async () => {
+    let secondAccepted = false;
+    const response = createSSEStream(async ctx => {
+      await ctx.write({ event: 'message', data: 'first' });
+      await ctx.write({ event: 'message', data: 'second' });
+      secondAccepted = true;
+      await ctx.close();
+    });
+    const reader = response.body!.getReader();
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(secondAccepted).toBe(false);
+
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: first'
+    );
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(secondAccepted).toBe(true);
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: second'
+    );
+  });
+
+  it('releases every capacity waiter when the consumer pulls', async () => {
+    let waitersAreBlocked!: () => void;
+    const blocked = new Promise<void>(resolve => {
+      waitersAreBlocked = resolve;
+    });
+    let waitersReleased!: () => void;
+    const released = new Promise<void>(resolve => {
+      waitersReleased = resolve;
+    });
+    const response = createSSEStream(async ctx => {
+      await ctx.write({ event: 'message', data: 'first' });
+      const firstWaiter = ctx.ready();
+      const secondWaiter = ctx.ready();
+      waitersAreBlocked();
+      await Promise.all([firstWaiter, secondWaiter]);
+      waitersReleased();
+      await ctx.write({ event: 'message', data: 'second' });
+      await ctx.close();
+    });
+
+    await blocked;
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: first'
+    );
+
+    const outcome = await Promise.race([
+      released.then(() => 'released'),
+      new Promise<'timed-out'>(resolve => {
+        setTimeout(() => resolve('timed-out'), 50);
+      }),
+    ]);
+    expect(outcome).toBe('released');
+    expect(new TextDecoder().decode((await reader.read()).value)).toContain(
+      'data: second'
+    );
+  });
+
+  it('aborts the runner when the client cancels the response body', async () => {
+    let observedAbort = false;
+    const response = createSSEStream(async ctx => {
+      await ctx.write({ event: 'message', data: 'first' });
+      if (ctx.signal.aborted) {
+        observedAbort = true;
+        return;
+      }
+      await new Promise<void>(resolve => {
+        ctx.signal.addEventListener(
+          'abort',
+          () => {
+            observedAbort = true;
+            resolve();
+          },
+          { once: true }
+        );
+      });
+    });
+    const reader = response.body!.getReader();
+
+    await reader.read();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await reader.cancel('client disconnected');
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(observedAbort).toBe(true);
+  });
+
   it('should create a valid Response with SSE headers', () => {
     const response = createSSEStream(ctx => {
       ctx.close();

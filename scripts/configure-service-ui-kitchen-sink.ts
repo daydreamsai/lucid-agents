@@ -57,6 +57,7 @@ import {
         facilitatorUrl: "https://facilitator.example.test",
         siwx: {
           enabled: true,
+          origin: "https://agent.example.test",
           storage: { type: "in-memory" },
           verify: { skipSignatureVerification: true },
         },

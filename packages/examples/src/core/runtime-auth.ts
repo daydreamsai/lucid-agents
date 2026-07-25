@@ -211,7 +211,7 @@ function createMockAuthApi(port: number): ServerHandle {
 async function main() {
   if (typeof Bun === 'undefined') {
     throw new Error(
-      'This example must run on Bun (bun run examples/runtime-auth.ts)'
+      'This example must run on Bun (bun run packages/examples/src/core/runtime-auth.ts)'
     );
   }
 

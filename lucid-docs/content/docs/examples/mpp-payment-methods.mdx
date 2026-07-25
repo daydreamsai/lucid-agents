@@ -1,0 +1,180 @@
+---
+title: Every MPP payment method
+description: Build and inspect native Tempo, Stripe, EVM, custom, Lightning, and Tempo session payment paths.
+icon: Banknote
+status: next
+verifiedVersion: 2.0.0
+verifiedAt: 2026-07-25
+product: sdk
+---
+
+Build one HTTP Payment Authentication (MPP) merchant with a route for each
+released Lucid method. You will inspect real Payment challenges, select a method
+with `Accept-Payment`, and separate one-shot charges from metered Tempo
+TIP-1034 sessions.
+
+The compiled source is
+[`packages/examples/src/payment-methods/mpp.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/payment-methods/mpp.ts).
+The reusable application-verifier reference is
+[`packages/examples/src/mpp/custom-verifier-reference.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/examples/src/mpp/custom-verifier-reference.ts).
+
+## 1. Choose the method
+
+| Method                 | Lucid verification                   | Operations                                | External requirement                             |
+| ---------------------- | ------------------------------------ | ----------------------------------------- | ------------------------------------------------ |
+| Tempo charge           | Native `mppx`                        | invoke, SSE, task                         | Tempo account and asset                          |
+| Tempo TIP-1034 session | Native `mppx` session                | invoke, metered SSE                       | Signing server account and durable channel store |
+| Stripe charge          | Native `mppx`                        | invoke, SSE, task                         | Stripe Business Network profile                  |
+| EVM charge             | Native `mppx`; x402 exact compatible | invoke, SSE, task                         | EIP-3009 token metadata and settlement strategy  |
+| Custom charge/session  | Application verifier                 | invoke, SSE, task where the method allows | Complete verifier and idempotent settlement      |
+| Lightning              | Descriptor plus application verifier | invoke, SSE, task                         | Application-owned node integration               |
+
+Lightning is not a native settlement implementation. Native EVM exposes charge,
+not session. Build an EVM session only as a custom method whose application owns
+channel state, verification, durability, and settlement.
+
+## 2. Configure charge methods
+
+Inject every method and a stable challenge secret:
+
+```typescript title="src/mpp-charges.ts"
+import type { TaskStore } from '@lucid-agents/types/a2a';
+import { createMppChargeMethodsExample } from '../../packages/examples/src/payment-methods/mpp';
+
+declare const durableTaskStore: TaskStore;
+declare const durableChallengeStore: NonNullable<
+  Parameters<typeof createMppChargeMethodsExample>[0]['challengeStore']
+>;
+declare const verifyCustomCredential: Parameters<
+  typeof createMppChargeMethodsExample
+>[0]['verifyCustomCredential'];
+
+const service = await createMppChargeMethodsExample({
+  tempo: {
+    currency: process.env.MPP_TEMPO_CURRENCY!,
+    recipient: process.env.MPP_TEMPO_RECIPIENT!,
+  },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY!,
+    networkId: process.env.MPP_STRIPE_NETWORK_ID!,
+  },
+  evm: {
+    chainId: 8453,
+    currency: process.env.EVM_TOKEN_ADDRESS as `0x${string}`,
+    recipient: process.env.EVM_RECEIVABLE_ADDRESS as `0x${string}`,
+    decimals: 6,
+    authorization: { name: 'USD Coin', version: '2' },
+    settlement: {
+      type: 'facilitator',
+      facilitator: process.env.FACILITATOR_URL!,
+    },
+  },
+  custom: {
+    name: 'acme-pay',
+    config: { merchantId: process.env.ACME_MERCHANT_ID! },
+  },
+  lightning: {
+    nodeUrl: process.env.LIGHTNING_NODE_URL!,
+  },
+  verifyCustomCredential,
+  secretKey: process.env.MPP_SECRET_KEY!,
+  challengeStore: durableChallengeStore,
+  taskStore: durableTaskStore,
+});
+
+Bun.serve({ port: 3000, fetch: service.app.fetch });
+```
+
+The injected verifier is the complete trust boundary for custom and Lightning
+descriptors. It must verify authenticity, challenge binding, amount, currency,
+recipient, method, payer, expiry, and settlement. Decode-only logic is never a
+verifier.
+
+## 3. Inspect and negotiate challenges
+
+Call a method-specific route:
+
+```bash
+curl -i http://localhost:3000/entrypoints/stripe-charge/invoke \
+  -H 'content-type: application/json' \
+  --data '{"input":{"prompt":"provider report"}}'
+```
+
+The unpaid response is `402` with `WWW-Authenticate: Payment`, method `stripe`,
+and intent `charge`. To choose from the multi-method route:
+
+```bash
+curl -i http://localhost:3000/entrypoints/charge-any/invoke \
+  -H 'accept-payment: evm/charge' \
+  -H 'content-type: application/json' \
+  --data '{"input":{"prompt":"choose EVM"}}'
+```
+
+Invoke and SSE settle one charge before fulfillment. Paid tasks require the
+same durable task-store contract as x402: the caller supplies its recovery token
+before authorization, and process-local stores fail closed.
+
+## 4. Add the Tempo session separately
+
+Sessions have different accounting and durability semantics:
+
+```typescript title="src/tempo-session.ts"
+import { createSQLiteTempoSessionStore } from '@lucid-agents/mpp/storage/sqlite';
+import { createTempoSessionExample } from '../../packages/examples/src/payment-methods/mpp';
+
+const service = await createTempoSessionExample({
+  session: {
+    mode: 'production',
+    account: merchantAccount,
+    chainId: 4217,
+    currency: process.env.MPP_TEMPO_CURRENCY as `0x${string}`,
+    recipient: merchantAccount.address,
+    decimals: 6,
+    amount: '0.001',
+    unitType: 'chunk',
+    deposit: {
+      minimum: '0.001',
+      suggested: '0.10',
+      maximum: '1.00',
+    },
+    store: createSQLiteTempoSessionStore('.data/tempo-sessions.db'),
+    getClient: ({ chainId }) => getTempoClient(chainId),
+  },
+  secretKey: process.env.MPP_SECRET_KEY!,
+  challengeStore: durableChallengeStore,
+});
+```
+
+Invoke deducts one configured unit. SSE reserves a bounded deposit ceiling,
+charges delivered units, emits receipt/voucher control events, and may request
+a refreshed voucher. Tempo sessions do not support Lucid task admission in this
+release.
+
+## Verify the tutorial contract
+
+Run the offline and real-node contracts:
+
+```bash
+bun test packages/examples/src/__tests__/payment-method-examples.test.ts
+bun test packages/examples/src/__tests__/smoke.test.ts
+bun test packages/examples/src/__tests__/custom-mpp-conformance.e2e.test.ts
+bun run scripts/tempo-localnet.ts -- \
+  bun test packages/examples/src/__tests__/tempo-localnet.e2e.ts
+```
+
+Those proofs live in:
+
+- `packages/examples/src/__tests__/payment-method-examples.test.ts`
+- `packages/examples/src/__tests__/smoke.test.ts`
+- `packages/examples/src/__tests__/custom-mpp-conformance.e2e.test.ts`
+- `packages/examples/src/__tests__/tempo-localnet.e2e.ts`
+
+The pinned Tempo test executes real charge and TIP-1034 transactions against an
+official local development node. Stripe challenge/discovery is deterministic,
+but live settlement still needs an isolated Business Network sandbox. Lightning
+needs a separately scoped node or regtest interoperability suite before making
+a native settlement claim.
+
+Continue with [MPP compatibility](/docs/protocols/mpp),
+[durable storage](/docs/operate/durable-storage), and the
+[production checklist](/docs/operate/production-checklist).

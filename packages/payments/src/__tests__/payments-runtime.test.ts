@@ -1,6 +1,7 @@
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type { PaymentsConfig } from '@lucid-agents/types/payments';
 import { describe, expect, it, spyOn } from 'bun:test';
+import { encodePaymentRequiredHeader } from '@x402/core/http';
 
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import {
@@ -113,6 +114,172 @@ describe('payments runtime behavior', () => {
     ).toBe(config);
   });
 
+  it('activates explicit exact offers without a legacy price', () => {
+    const runtime = createPaymentsRuntime(config)!;
+    const entrypoint: EntrypointDef = {
+      key: 'multi-offer',
+      paymentProtocol: 'x402',
+      x402: {
+        offers: [
+          {
+            scheme: 'exact',
+            network: 'eip155:84532',
+            price: '0.01',
+            payTo: '0x0000000000000000000000000000000000000002',
+            facilitatorUrl: 'https://evm-facilitator.example',
+          },
+          {
+            scheme: 'exact',
+            network: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+            price: {
+              amount: '2000',
+              asset: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            },
+            payTo: '11111111111111111111111111111111',
+            facilitatorUrl: 'https://svm-facilitator.example',
+          },
+        ],
+      },
+    };
+
+    runtime.activate(entrypoint);
+    const requirement = runtime.requirements(entrypoint, 'invoke');
+
+    expect(runtime.isActive).toBe(true);
+    expect(requirement).toEqual(
+      expect.objectContaining({
+        required: true,
+        price: '0.01',
+        network: 'eip155:84532',
+        payTo: '0x0000000000000000000000000000000000000002',
+        facilitatorUrl: 'https://evm-facilitator.example',
+        offers: entrypoint.x402?.offers,
+      })
+    );
+  });
+
+  it('activates released upto offers for invoke-only entrypoints', async () => {
+    const runtime = createPaymentsRuntime(config)!;
+    const metered: EntrypointDef = {
+      key: 'metered',
+      paymentProtocol: 'x402',
+      x402: {
+        offers: [
+          {
+            scheme: 'upto',
+            network: 'eip155:84532',
+            maximum: '1',
+          },
+        ],
+      },
+    };
+
+    runtime.activate(metered);
+    expect(runtime.requirements(metered, 'invoke')).toMatchObject({
+      required: true,
+      price: '1',
+      offers: metered.x402?.offers,
+    });
+    expect(() => runtime.requirements(metered, 'stream')).toThrow(
+      'upto only supports invoke operations'
+    );
+    expect(() => runtime.requirements(metered, 'task')).toThrow(
+      'upto only supports invoke operations'
+    );
+    await runtime.close();
+  });
+
+  it('rejects upto activation when the entrypoint exposes streaming', () => {
+    const runtime = createPaymentsRuntime(config)!;
+    expect(() =>
+      runtime.activate({
+        key: 'metered-stream',
+        paymentProtocol: 'x402',
+        stream: async () => ({ usage: {} }),
+        x402: {
+          offers: [
+            {
+              scheme: 'upto',
+              network: 'eip155:84532',
+              maximum: '1',
+            },
+          ],
+        },
+      })
+    ).toThrow('upto only supports invoke operations');
+  });
+
+  it('rejects ambiguous facilitators for the same scheme and network', () => {
+    const runtime = createPaymentsRuntime(config)!;
+
+    expect(() =>
+      runtime.activate({
+        key: 'ambiguous',
+        paymentProtocol: 'x402',
+        x402: {
+          offers: [
+            {
+              scheme: 'exact',
+              network: 'eip155:84532',
+              price: '0.01',
+              facilitatorUrl: 'https://facilitator-a.example',
+            },
+            {
+              scheme: 'exact',
+              network: 'eip155:84532',
+              price: '0.02',
+              facilitatorUrl: 'https://facilitator-b.example',
+            },
+          ],
+        },
+      })
+    ).toThrow('x402 offers for exact on eip155:84532 must use one facilitator');
+  });
+
+  it('uses config offers only for entrypoints that opt into x402', () => {
+    const offerConfig: PaymentsConfig = {
+      ...config,
+      offers: [
+        {
+          scheme: 'exact',
+          network: 'eip155:8453',
+          price: '0.25',
+          payTo: '0x0000000000000000000000000000000000000003',
+          facilitatorUrl: 'https://base-facilitator.example',
+        },
+      ],
+    };
+    const runtime = createPaymentsRuntime(offerConfig)!;
+    const paid: EntrypointDef = { key: 'paid', price: '99' };
+
+    runtime.activate(paid);
+
+    expect(runtime.requirements(paid, 'invoke')).toEqual(
+      expect.objectContaining({
+        required: true,
+        price: '0.25',
+        network: 'eip155:8453',
+        offers: offerConfig.offers,
+      })
+    );
+    expect(runtime.requirements({ key: 'free' }, 'invoke')).toEqual({
+      required: false,
+    });
+    expect(
+      resolvePaymentRequirement(
+        { key: 'explicit', paymentProtocol: 'x402' },
+        'invoke',
+        offerConfig
+      )
+    ).toEqual(
+      expect.objectContaining({
+        required: true,
+        price: '0.25',
+        offers: offerConfig.offers,
+      })
+    );
+  });
+
   it('resolves payment requirements and produces x402 responses', async () => {
     const paid: EntrypointDef = { key: 'paid', price: '1' };
 
@@ -157,7 +324,10 @@ describe('payments runtime behavior', () => {
       {
         ...config,
         policyGroups: [{ name: 'daily' }],
-        siwx: { enabled: true },
+        siwx: {
+          enabled: true,
+          origin: 'https://agent.example.com',
+        },
       },
       'agent-1',
       (_storageConfig, agentId) => {
@@ -199,6 +369,77 @@ describe('payments runtime behavior', () => {
     expect(siwxCloses).toBe(1);
   });
 
+  it('keeps the public runtime paid fetch on the exact EVM buyer', async () => {
+    const runtime = createPaymentsRuntime(config)!;
+    const originalFetch = globalThis.fetch;
+    const paymentSignatures: Array<string | null> = [];
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const request = new Request(input, init);
+      paymentSignatures.push(request.headers.get('PAYMENT-SIGNATURE'));
+      if (paymentSignatures.length === 1) {
+        return new Response(null, {
+          status: 402,
+          headers: {
+            'PAYMENT-REQUIRED': encodePaymentRequiredHeader({
+              x402Version: 2,
+              accepts: [
+                {
+                  scheme: 'exact',
+                  network: 'eip155:84532',
+                  amount: '1000',
+                  payTo: config.payTo,
+                  maxTimeoutSeconds: 300,
+                  asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7c',
+                  extra: { name: 'USDC', version: '2' },
+                },
+              ],
+              resource: {
+                url: 'https://seller.example/invoke',
+                description: 'Paid invocation',
+                mimeType: 'application/json',
+              },
+            }),
+          },
+        });
+      }
+      return new Response('paid');
+    }) as typeof globalThis.fetch;
+
+    try {
+      const paidFetch = await runtime.getFetchWithPayment(
+        {
+          wallets: {
+            agent: {
+              kind: 'local',
+              connector: {
+                getWalletMetadata: async () => ({
+                  address: '0xb308ed39d67D0d4BAe5BC2FAEF60c66BBb6AE429',
+                }),
+                signChallenge: async () => '0xdeadbeef',
+                supportsCaip2: async () => true,
+              },
+            },
+          },
+          payments: runtime,
+        } as never,
+        'base-sepolia'
+      );
+      const response = await paidFetch?.('https://seller.example/invoke', {
+        method: 'POST',
+      });
+
+      expect(response?.status).toBe(200);
+      expect(paymentSignatures[0]).toBeNull();
+      expect(paymentSignatures[1]).toBeTruthy();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await runtime.close();
+    }
+  });
+
   it('returns no runtime when payments are disabled and wraps factory failures', () => {
     expect(createPaymentsRuntime(undefined)).toBeUndefined();
     expect(createPaymentsRuntime(false)).toBeUndefined();
@@ -209,7 +450,13 @@ describe('payments runtime behavior', () => {
     ).toThrow('Failed to initialize payment storage: storage offline');
     expect(() =>
       createPaymentsRuntime(
-        { ...config, siwx: { enabled: true } },
+        {
+          ...config,
+          siwx: {
+            enabled: true,
+            origin: 'https://agent.example.com',
+          },
+        },
         undefined,
         () => createInMemoryPaymentStorage(),
         () => {

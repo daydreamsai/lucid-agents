@@ -119,4 +119,4 @@ console.log(`   - /entrypoints/process/invoke - $0.05 per call`);
 console.log(
   `   - /entrypoints/expensive/invoke - $0.15 per call (should be blocked)`
 );
-console.log(`   - /.well-known/agent.json - Agent manifest`);
+console.log(`   - /.well-known/agent-card.json - Agent Card`);

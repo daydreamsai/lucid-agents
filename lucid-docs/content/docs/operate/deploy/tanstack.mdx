@@ -3,8 +3,8 @@ title: Deploy with TanStack Start
 description: Deploy a generated storefront or headless Nitro server while keeping payment authority server-side.
 icon: Layers
 status: next
-verifiedVersion: 0.8.0
-verifiedAt: 2026-07-21
+verifiedVersion: 1.0.1
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -14,10 +14,10 @@ entrypoint execution or payment verification into a loader/component.
 
 ## Choose a variant
 
-| Variant             | Includes                                                     | Use when                                                   |
-| ------------------- | ------------------------------------------------------------ | ---------------------------------------------------------- |
-| `tanstack-ui`       | SSR endpoint table derived from the public service model     | Humans need a quick directory of endpoints and prices      |
-| `tanstack-headless` | API routes and minimal directory page                        | The service is machine-facing and UI is deployed elsewhere |
+| Variant             | Includes                                                 | Use when                                                   |
+| ------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| `tanstack-ui`       | SSR endpoint table derived from the public service model | Humans need a quick directory of endpoints and prices      |
+| `tanstack-headless` | API routes and minimal directory page                    | The service is machine-facing and UI is deployed elsewhere |
 
 ## Generate from the Next workspace
 
@@ -107,7 +107,7 @@ still scale instances independently. In every case:
 - SQLite needs persistent local disk and a compatible single-host topology;
 - run scheduler and recoverable task execution in explicit long-lived workers;
 - bound database pools and provider concurrency per instance;
-- treat MPP replay/challenge state as process-local in this release.
+- inject the shared Postgres MPP challenge store before scaling paid routes.
 
 The package ships only memory stores for tasks and schedules. Implement and
 test their durable ports rather than naming a database without an adapter.

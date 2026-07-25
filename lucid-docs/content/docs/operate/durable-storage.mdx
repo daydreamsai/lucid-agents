@@ -3,8 +3,8 @@ title: Use durable storage
 description: Preserve payment, entitlement, idempotency, task, and schedule invariants across restarts and replicas.
 icon: Database
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -14,15 +14,17 @@ durability is a correctness property, not merely a database connection.
 
 ## Storage support matrix
 
-| State                                             | Default               | Shipped durable implementation          | Injection point                    |
-| ------------------------------------------------- | --------------------- | --------------------------------------- | ---------------------------------- |
-| Payment records, reservations, staged settlements | In memory             | SQLite and Postgres                     | `payments({ storageFactory })`     |
-| SIWX nonces and entitlements                      | In memory             | SQLite and Postgres                     | `payments({ siwxStorageFactory })` |
-| HTTP invoke idempotency                           | Bounded in memory     | None                                    | `http({ idempotency: { store } })` |
-| Lucid owned tasks and execution leases            | Bounded in memory     | None                                    | `a2a({ tasks: { store } })`        |
-| Scheduler hires/jobs/leases                       | In memory             | None                                    | `scheduler({ store })`             |
-| MPP outstanding challenges/replay                 | Process-local         | None; no injected store in this release | Not available                      |
-| Analytics                                         | Reads payment tracker | Same durability as payment storage      | `analytics()`                      |
+| State                                             | Default               | Shipped durable implementation     | Injection point                       |
+| ------------------------------------------------- | --------------------- | ---------------------------------- | ------------------------------------- |
+| Payment records, reservations, staged settlements | In memory             | SQLite and Postgres                | `payments({ storageFactory })`        |
+| SIWX nonces and entitlements                      | In memory             | SQLite and Postgres                | `payments({ siwxStorageFactory })`    |
+| x402 batch seller channels                        | Development memory    | SQLite and Postgres                | `payments({ batchSettlement })`       |
+| HTTP invoke idempotency                           | Bounded in memory     | None                               | `http({ idempotency: { store } })`    |
+| Lucid owned tasks and execution leases            | Bounded in memory     | None                               | `a2a({ tasks: { store } })`           |
+| Scheduler hires/jobs/leases                       | In memory             | None                               | `scheduler({ store })`                |
+| MPP outstanding challenges/replay                 | Process-local         | SQLite and Postgres                | `mpp({ config: { challengeStore } })` |
+| Tempo TIP-1034 session channels                   | Development memory    | SQLite and Postgres                | `tempo.session({ store })`            |
+| Analytics                                         | Reads payment tracker | Same durability as payment storage | `analytics()`                         |
 
 Do not tell operators to “use the SQLite/Postgres task or scheduler store.”
 Those implementations do not ship. Applications must implement and contract-

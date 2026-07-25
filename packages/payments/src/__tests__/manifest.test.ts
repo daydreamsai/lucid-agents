@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import type { AgentCardWithEntrypoints } from '@lucid-agents/types/a2a';
+import type {
+  AgentCardWithEntrypoints,
+  PaymentMethod,
+} from '@lucid-agents/types/a2a';
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import { z } from 'zod';
 
@@ -78,7 +81,7 @@ describe('createAgentCardWithPayments', () => {
     expect(enhanced).not.toBe(baseCard);
     expect(enhanced.payments).toBeDefined();
     expect(Array.isArray(enhanced.payments)).toBe(true);
-    expect(enhanced.payments).toHaveLength(1);
+    expect(enhanced.payments).toHaveLength(3);
   });
 
   it('is immutable - original card unchanged', () => {
@@ -99,6 +102,8 @@ describe('createAgentCardWithPayments', () => {
 
     expect(enhanced.entrypoints.echo.pricing).toBeDefined();
     expect(enhanced.entrypoints.echo.pricing?.invoke).toBe('1000');
+    expect(enhanced.entrypoints.echo.payment_protocol).toBe('x402');
+    expect(enhanced.entrypoints.echo.network).toBe('eip155:84532');
 
     expect(enhanced.entrypoints.stream.pricing).toBeDefined();
     expect(enhanced.entrypoints.stream.pricing?.invoke).toBe('2000');
@@ -134,6 +139,78 @@ describe('createAgentCardWithPayments', () => {
       (payment?.extensions as { x402?: { facilitatorUrl?: string } })?.x402
         ?.facilitatorUrl
     ).toBe(paymentsConfig.facilitatorUrl);
+  });
+
+  it('projects explicit token, upto, and batch offers from the canonical resolver', () => {
+    const asset = '0x0000000000000000000000000000000000000010';
+    const explicitEntrypoint: EntrypointDef = {
+      key: 'echo',
+      description: 'Echo endpoint',
+      paymentProtocol: 'x402',
+      x402: {
+        offers: [
+          {
+            scheme: 'exact',
+            network: 'eip155:8453',
+            facilitatorUrl: 'https://exact.example',
+            price: { amount: '1000', asset },
+          },
+          {
+            scheme: 'upto',
+            network: 'eip155:84532',
+            facilitatorUrl: 'https://upto.example',
+            maximum: { amount: '2500', asset },
+          },
+          {
+            scheme: 'batch-settlement',
+            network: 'eip155:84532',
+            facilitatorUrl: 'https://batch.example',
+            maximum: { amount: '5000', asset },
+          },
+        ],
+      },
+      handler: async () => ({ output: { ok: true } }),
+    };
+
+    const enhanced = createAgentCardWithPayments(baseCard, paymentsConfig, [
+      explicitEntrypoint,
+    ]);
+
+    expect(enhanced.entrypoints.echo.pricing?.invoke).toBe('1000');
+    expect(enhanced.entrypoints.echo.payment_protocol).toBe('x402');
+    expect(enhanced.entrypoints.echo.network).toBeUndefined();
+    expect(
+      enhanced.payments.map(
+        payment => (payment as PaymentMethod).extensions?.x402
+      )
+    ).toEqual([
+      {
+        scheme: 'exact',
+        network: 'eip155:8453',
+        facilitatorUrl: 'https://exact.example',
+        payTo: paymentsConfig.payTo,
+        price: { amount: '1000', asset },
+      },
+      {
+        scheme: 'upto',
+        network: 'eip155:84532',
+        facilitatorUrl: 'https://upto.example',
+        payTo: paymentsConfig.payTo,
+        maximum: { amount: '2500', asset },
+      },
+      {
+        scheme: 'batch-settlement',
+        network: 'eip155:84532',
+        facilitatorUrl: 'https://batch.example',
+        payTo: paymentsConfig.payTo,
+        maximum: { amount: '5000', asset },
+      },
+    ]);
+    expect(
+      enhanced.payments.map(
+        payment => (payment as PaymentMethod).priceModel?.default
+      )
+    ).toEqual(['1000', '2500', '5000']);
   });
 
   it('omits static payee in stripe mode and marks dynamic payee resolution', () => {

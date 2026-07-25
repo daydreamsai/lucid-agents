@@ -1,13 +1,14 @@
 import type { EntrypointDef } from '@lucid-agents/types/core';
 import type {
   EntrypointMppConfig,
+  EvmServerConfig,
   MppPaymentIntent,
   MppPaymentMethod,
   MppServerMethod,
   StripeServerConfig,
   TempoServerConfig,
 } from '@lucid-agents/types/mpp';
-import { Challenge, PaymentRequest } from 'mppx';
+import { Challenge } from 'mppx';
 
 /** A standards-compliant Payment-Auth challenge emitted on the wire. */
 export type MppWireChallenge = Challenge.Challenge<Record<string, unknown>>;
@@ -20,6 +21,8 @@ export type ChallengeBuildOptions = {
   realm?: string;
   description?: string;
   expirySeconds?: number;
+  digest?: string;
+  meta?: Record<string, string>;
 };
 
 /** Challenge objects plus their HTTP response representation. */
@@ -35,38 +38,11 @@ function generateChallengeId(): string {
   throw new Error('MPP requires Web Crypto randomUUID support');
 }
 
-function escapeHeaderValue(value: string): string {
-  return (
-    value
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/[\r\n]/g, '')
-      // eslint-disable-next-line no-control-regex
-      .replace(/[^\x20-\x7E]/g, '')
-  );
+function sanitizeDescription(value: string | undefined): string | undefined {
+  return value?.replace(/[\u0000-\u001f\u007f]/g, ' ');
 }
 
-function serializeChallenge(challenge: MppWireChallenge): string {
-  const parts = [
-    `id="${escapeHeaderValue(challenge.id)}"`,
-    `realm="${escapeHeaderValue(challenge.realm)}"`,
-    `method="${escapeHeaderValue(challenge.method)}"`,
-    `intent="${escapeHeaderValue(challenge.intent)}"`,
-    `request="${PaymentRequest.serialize(challenge.request)}"`,
-  ];
-  if (challenge.description) {
-    parts.push(`description="${escapeHeaderValue(challenge.description)}"`);
-  }
-  if (challenge.digest) {
-    parts.push(`digest="${escapeHeaderValue(challenge.digest)}"`);
-  }
-  if (challenge.expires) {
-    parts.push(`expires="${escapeHeaderValue(challenge.expires)}"`);
-  }
-  return `Payment ${parts.join(', ')}`;
-}
-
-function baseUnits(amount: string, decimals: number): string {
+export function mppBaseUnits(amount: string, decimals: number): string {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
     throw new Error(`Invalid MPP currency decimals: ${decimals}`);
   }
@@ -103,7 +79,7 @@ function methodRequest(
     const methodDetails: Record<string, unknown> = {};
     if (config.chainId !== undefined) methodDetails.chainId = config.chainId;
     return {
-      amount: baseUnits(amount, config.decimals ?? 6),
+      amount: mppBaseUnits(amount, config.decimals ?? 6),
       currency,
       recipient: config.recipient,
       expires,
@@ -114,13 +90,28 @@ function methodRequest(
   if (method.implementation === 'stripe') {
     const config = method.config as StripeServerConfig;
     return {
-      amount: baseUnits(amount, config.decimals ?? 2),
+      amount: mppBaseUnits(amount, config.decimals ?? 2),
       currency,
       expires,
       methodDetails: {
         networkId: config.networkId,
         paymentMethodTypes: config.paymentMethodTypes ?? ['card'],
         ...(config.metadata ? { metadata: config.metadata } : {}),
+      },
+    };
+  }
+
+  if (method.implementation === 'evm') {
+    const config = method.config as EvmServerConfig;
+    return {
+      amount: mppBaseUnits(amount, config.decimals),
+      currency,
+      recipient: config.recipient,
+      expires,
+      methodDetails: {
+        chainId: config.chainId,
+        credentialTypes: ['authorization'],
+        decimals: config.decimals,
       },
     };
   }
@@ -145,6 +136,8 @@ export function buildChallengeSet(
     realm = 'Lucid Agent',
     description,
     expirySeconds = 300,
+    digest,
+    meta,
   } = options;
   const expires = new Date(Date.now() + expirySeconds * 1000).toISOString();
   const challenges = methods.map(method =>
@@ -154,8 +147,10 @@ export function buildChallengeSet(
       method: methodName(method),
       intent,
       request: methodRequest(method, amount, currency, expires),
-      description,
+      description: sanitizeDescription(description),
+      digest,
       expires,
+      meta,
     })
   ) as MppWireChallenge[];
 
@@ -164,7 +159,7 @@ export function buildChallengeSet(
     'Content-Type': 'application/problem+json; charset=utf-8',
   });
   for (const challenge of challenges) {
-    headers.append('WWW-Authenticate', serializeChallenge(challenge));
+    headers.append('WWW-Authenticate', Challenge.serialize(challenge));
   }
 
   return {

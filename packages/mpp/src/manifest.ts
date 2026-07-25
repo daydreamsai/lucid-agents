@@ -5,7 +5,33 @@ import type {
   ManifestEntrypoint,
 } from '@lucid-agents/types/core';
 import type { MppConfig } from '@lucid-agents/types/mpp';
-import { resolveEntrypointPrice } from './challenge';
+import { resolveMppOffers, type MppResolvedOffer } from './openapi';
+
+function paymentMethodForOffer(offer: MppResolvedOffer): PaymentMethod {
+  const { challengeAmount: _challengeAmount, ...publicOffer } = offer;
+  return {
+    method: 'mpp',
+    network: 'mpp',
+    priceModel: {
+      default: publicOffer.amount ?? offer.challengeAmount,
+    },
+    extensions: {
+      mpp: publicOffer,
+    },
+  };
+}
+
+function addPaymentMethod(
+  payments: PaymentMethod[],
+  seen: Set<string>,
+  offer: MppResolvedOffer
+): void {
+  const payment = paymentMethodForOffer(offer);
+  const key = JSON.stringify(payment);
+  if (seen.has(key)) return;
+  seen.add(key);
+  payments.push(payment);
+}
 
 /**
  * Creates a new Agent Card with MPP payment metadata.
@@ -19,6 +45,12 @@ export function buildManifestWithMpp(
 ): AgentManifest {
   const entrypointList = Array.from(entrypoints);
   const entrypointsWithPricing: AgentManifest['entrypoints'] = {};
+  const payments: PaymentMethod[] = [
+    ...((card.payments ?? []) as PaymentMethod[]),
+  ];
+  const seenPayments = new Set(
+    payments.map(payment => JSON.stringify(payment))
+  );
 
   for (const [key, entrypoint] of Object.entries(card.entrypoints)) {
     const entrypointDef = entrypointList.find(e => e.key === key);
@@ -27,10 +59,12 @@ export function buildManifestWithMpp(
       continue;
     }
 
-    const invP = resolveEntrypointPrice(entrypointDef, 'invoke');
-    const strP = entrypointDef.stream
-      ? resolveEntrypointPrice(entrypointDef, 'stream')
+    const invokeOffers = resolveMppOffers(config, entrypointDef, 'invoke');
+    const streamOffers = entrypointDef.stream
+      ? resolveMppOffers(config, entrypointDef, 'stream')
       : undefined;
+    const invP = invokeOffers[0]?.challengeAmount;
+    const strP = streamOffers?.[0]?.challengeAmount;
 
     const manifestEntry: ManifestEntrypoint = {
       ...entrypoint,
@@ -42,36 +76,23 @@ export function buildManifestWithMpp(
       if (strP) pricing.stream = strP;
       manifestEntry.pricing = pricing;
     }
+    if (invokeOffers.length > 0 || (streamOffers?.length ?? 0) > 0) {
+      manifestEntry.payment_protocol ??= 'mpp';
+    }
 
     entrypointsWithPricing[key] = manifestEntry;
+
+    for (const offer of invokeOffers) {
+      addPaymentMethod(payments, seenPayments, offer);
+    }
+    for (const offer of streamOffers ?? []) {
+      addPaymentMethod(payments, seenPayments, offer);
+    }
   }
-
-  // Build MPP payment methods array
-  const payments: PaymentMethod[] = config.methods.map(method => {
-    const methodCurrency = (method.config as { currency?: unknown }).currency;
-    return {
-      method: `mpp` as const,
-      network: 'mpp',
-      extensions: {
-        mpp: {
-          method: method.name,
-          intent: config.defaultIntent ?? 'charge',
-          currency:
-            typeof methodCurrency === 'string'
-              ? methodCurrency
-              : (config.currency ?? 'usd'),
-          ...(config.session ? { session: config.session } : {}),
-        },
-      },
-    };
-  });
-
-  // Merge with existing payments (don't overwrite x402 if present)
-  const existingPayments = card.payments ?? [];
 
   return {
     ...card,
     entrypoints: entrypointsWithPricing,
-    payments: [...existingPayments, ...payments],
+    payments,
   };
 }

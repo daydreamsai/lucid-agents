@@ -1,10 +1,21 @@
 import { privateKeyToAccount, type LocalAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
+import {
+  BatchSettlementEvmScheme,
+  type RefundOptions as BatchSettlementRefundOptions,
+} from '@x402/evm/batch-settlement/client';
+import { UptoEvmScheme } from '@x402/evm/upto/client';
+import type { SettleResponse } from '@x402/core/types';
 import type { Hex } from './crypto';
+import type { BatchSettlementBuyerOptions } from './batch-settlement';
 
 export type WrappedFetch = typeof fetch & {
   preconnect?: () => Promise<void>;
+  refundBatchChannel?: (
+    url: string,
+    options?: BatchSettlementRefundOptions
+  ) => Promise<SettleResponse>;
 };
 
 export type X402Account = LocalAccount;
@@ -25,12 +36,15 @@ export type CreateX402FetchOptions = {
   fetchImpl?: typeof fetch;
   /** Networks to register. Defaults to all supported EVM networks. */
   networks?: string[];
+  /** Enable cumulative batch vouchers and optionally inject durable storage. */
+  batchSettlement?: BatchSettlementBuyerOptions;
 };
 
 export const createX402Fetch = ({
   account,
   fetchImpl,
   networks,
+  batchSettlement,
 }: CreateX402FetchOptions): WrappedFetch => {
   if (!account) {
     throw new Error('[agent-kit-payments] createX402Fetch requires an account');
@@ -47,6 +61,9 @@ export const createX402Fetch = ({
   // Create x402 client and register networks
   const client = new x402Client();
   const networksToRegister = networks ?? Object.keys(SUPPORTED_EVM_NETWORKS);
+  const batchSettlementScheme = batchSettlement
+    ? new BatchSettlementEvmScheme(signer, batchSettlement)
+    : undefined;
 
   for (const network of networksToRegister) {
     const caip2Id =
@@ -61,6 +78,13 @@ export const createX402Fetch = ({
       caip2Id as `${string}:${string}`,
       new ExactEvmScheme(signer)
     );
+    client.register(
+      caip2Id as `${string}:${string}`,
+      new UptoEvmScheme(signer)
+    );
+    if (batchSettlementScheme) {
+      client.register(caip2Id as `${string}:${string}`, batchSettlementScheme);
+    }
   }
 
   console.info(
@@ -119,6 +143,14 @@ export const createX402Fetch = ({
     },
     {
       preconnect: async () => {},
+      ...(batchSettlementScheme
+        ? {
+            refundBatchChannel: (
+              url: string,
+              options?: BatchSettlementRefundOptions
+            ) => batchSettlementScheme.refund(url, options),
+          }
+        : {}),
     }
   );
   return wrappedFetch;

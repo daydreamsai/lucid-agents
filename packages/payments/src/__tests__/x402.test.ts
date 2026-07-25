@@ -1,5 +1,14 @@
 import { describe, expect, it, spyOn } from 'bun:test';
 import { privateKeyToAccount } from 'viem/accounts';
+import {
+  decodePaymentSignatureHeader,
+  encodePaymentRequiredHeader,
+  encodePaymentResponseHeader,
+} from '@x402/core/http';
+import type {
+  BatchSettlementClientContext,
+  ClientChannelStorage,
+} from '@x402/evm/batch-settlement/client';
 
 import { accountFromPrivateKey, createX402Fetch } from '../x402';
 
@@ -51,6 +60,235 @@ describe('createX402Fetch network registration', () => {
 
     expect(calls).toHaveLength(3);
     expect(info).toHaveBeenCalled();
+    info.mockRestore();
+  });
+
+  it('preserves a POST Request body when retrying with payment', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    const bodies: string[] = [];
+    const signatures: Array<string | null> = [];
+    const fetchImpl = Object.assign(
+      async (request: RequestInfo | URL, init?: RequestInit) => {
+        const received = new Request(request, init);
+        bodies.push(await received.text());
+        signatures.push(received.headers.get('PAYMENT-SIGNATURE'));
+
+        if (signatures.length === 1) {
+          return new Response(null, {
+            status: 402,
+            headers: {
+              'PAYMENT-REQUIRED': encodePaymentRequiredHeader({
+                x402Version: 2,
+                accepts: [
+                  {
+                    scheme: 'exact',
+                    network: 'eip155:84532',
+                    amount: '1000',
+                    payTo: account.address,
+                    maxTimeoutSeconds: 300,
+                    asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7c',
+                    extra: { name: 'USDC', version: '2' },
+                  },
+                ],
+                resource: {
+                  url: 'https://example.com/paid',
+                  description: 'Paid JSON endpoint',
+                  mimeType: 'application/json',
+                },
+              }),
+            },
+          });
+        }
+
+        return new Response('paid', { status: 200 });
+      },
+      { preconnect: (_url: string | URL) => undefined }
+    ) satisfies typeof fetch;
+    const paidFetch = createX402Fetch({
+      account,
+      networks: ['base-sepolia'],
+      fetchImpl,
+    });
+    const body = JSON.stringify({ prompt: 'preserve this body' });
+
+    const response = await paidFetch(
+      new Request('https://example.com/paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(bodies).toEqual([body, body]);
+    expect(signatures[0]).toBeNull();
+    expect(signatures[1]).toBeTruthy();
+    info.mockRestore();
+  });
+
+  it('registers the released EVM upto buyer and signs its ceiling', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    const signatures: Array<string | null> = [];
+    const fetchImpl = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const received = new Request(input, init);
+        signatures.push(received.headers.get('PAYMENT-SIGNATURE'));
+        if (signatures.length === 1) {
+          return new Response(null, {
+            status: 402,
+            headers: {
+              'PAYMENT-REQUIRED': encodePaymentRequiredHeader({
+                x402Version: 2,
+                accepts: [
+                  {
+                    scheme: 'upto',
+                    network: 'eip155:84532',
+                    amount: '1000',
+                    payTo: account.address,
+                    maxTimeoutSeconds: 300,
+                    asset: '0x036cbd53842c5426634e7929541ec2318f3dcf7c',
+                    extra: {
+                      name: 'USDC',
+                      version: '2',
+                      assetTransferMethod: 'permit2',
+                      facilitatorAddress:
+                        '0x0000000000000000000000000000000000000001',
+                    },
+                  },
+                ],
+                resource: {
+                  url: 'https://example.com/metered',
+                  description: 'Metered endpoint',
+                  mimeType: 'application/json',
+                },
+              }),
+            },
+          });
+        }
+        return new Response('paid', { status: 200 });
+      },
+      { preconnect: (_url: string | URL) => undefined }
+    ) satisfies typeof fetch;
+    const paidFetch = createX402Fetch({
+      account,
+      networks: ['base-sepolia'],
+      fetchImpl,
+    });
+
+    expect((await paidFetch('https://example.com/metered')).status).toBe(200);
+    expect(signatures[0]).toBeNull();
+    expect(signatures[1]).toBeTruthy();
+    info.mockRestore();
+  });
+
+  it('continues cumulative vouchers across buyer restarts with injected storage', async () => {
+    const info = spyOn(console, 'info').mockImplementation(() => undefined);
+    const channels = new Map<string, BatchSettlementClientContext>();
+    const storage: ClientChannelStorage = {
+      get: async key => channels.get(key),
+      set: async (key, value) => {
+        channels.set(key, structuredClone(value));
+      },
+      delete: async key => {
+        channels.delete(key);
+      },
+    };
+    const payloads: Array<Record<string, unknown>> = [];
+    const requirements = {
+      scheme: 'batch-settlement',
+      network: 'eip155:84532' as const,
+      amount: '1000',
+      payTo: '0x0000000000000000000000000000000000000001',
+      maxTimeoutSeconds: 300,
+      asset: '0x036cbd53842c5426634e7929541ec2318f3dcf7c',
+      extra: {
+        name: 'USDC',
+        version: '2',
+        receiverAuthorizer: '0x0000000000000000000000000000000000000002',
+        withdrawDelay: 900,
+      },
+    };
+    const paymentRequired = () =>
+      new Response(null, {
+        status: 402,
+        headers: {
+          'PAYMENT-REQUIRED': encodePaymentRequiredHeader({
+            x402Version: 2,
+            accepts: [requirements],
+            resource: {
+              url: 'https://example.com/batched',
+              description: 'Batched endpoint',
+              mimeType: 'application/json',
+            },
+          }),
+        },
+      });
+    const fetchImpl = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const signature = request.headers.get('PAYMENT-SIGNATURE');
+        if (!signature) return paymentRequired();
+
+        const decoded = decodePaymentSignatureHeader(signature);
+        payloads.push(decoded.payload);
+        const voucher = decoded.payload.voucher as {
+          channelId: string;
+          maxClaimableAmount: string;
+        };
+        return new Response('paid', {
+          status: 200,
+          headers: {
+            'PAYMENT-RESPONSE': encodePaymentResponseHeader({
+              success: true,
+              payer: account.address,
+              transaction: `0x${'12'.repeat(32)}`,
+              network: 'eip155:84532',
+              amount: requirements.amount,
+              extra: {
+                channelState: {
+                  channelId: voucher.channelId,
+                  chargedCumulativeAmount: voucher.maxClaimableAmount,
+                  balance: '5000',
+                  totalClaimed: '0',
+                },
+              },
+            }),
+          },
+        });
+      },
+      { preconnect: (_url: string | URL) => undefined }
+    ) satisfies typeof fetch;
+
+    const firstProcess = createX402Fetch({
+      account,
+      networks: ['base-sepolia'],
+      fetchImpl,
+      batchSettlement: { storage },
+    });
+    expect(firstProcess.refundBatchChannel).toBeFunction();
+    expect((await firstProcess('https://example.com/batched')).status).toBe(
+      200
+    );
+
+    const restartedProcess = createX402Fetch({
+      account,
+      networks: ['base-sepolia'],
+      fetchImpl,
+      batchSettlement: { storage },
+    });
+    expect((await restartedProcess('https://example.com/batched')).status).toBe(
+      200
+    );
+
+    expect(payloads.map(payload => payload.type)).toEqual([
+      'deposit',
+      'voucher',
+    ]);
+    expect(
+      (payloads[1]!.voucher as { maxClaimableAmount: string })
+        .maxClaimableAmount
+    ).toBe('2000');
+    expect(channels.size).toBe(1);
     info.mockRestore();
   });
 

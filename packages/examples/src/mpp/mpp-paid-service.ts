@@ -8,8 +8,8 @@ import { z } from 'zod';
  * MPP Paid Service Agent
  *
  * Demonstrates Machine Payments Protocol (MPP) integration with Lucid Agents.
- * MPP supports multiple payment methods (tempo, stripe, lightning, card)
- * via standard HTTP 402 challenges — unlike x402 which is blockchain-only.
+ * Lucid has native Tempo, Stripe, and EVM charge implementations. Custom and
+ * Lightning descriptors require an application verifier.
  *
  * Run: bun run packages/examples/src/mpp/mpp-paid-service.ts
  *
@@ -30,6 +30,7 @@ const agent = await createAgent({
   .use(http())
   .use(
     mpp({
+      allowInsecureHttpForDevelopment: true,
       config: {
         // Accept Tempo stablecoin payments
         methods: [
@@ -210,13 +211,11 @@ console.log(
 );
 console.log('Endpoints:');
 console.log('  GET  /                                  → Landing page');
-console.log('  GET  /.well-known/agent.json            → Agent manifest');
+console.log('  GET  /.well-known/agent-card.json       → Agent Card');
 console.log('  POST /entrypoints/health/invoke          → Free health check');
 console.log('  POST /entrypoints/summarize/invoke       → $0.01 (MPP charge)');
 console.log('  POST /entrypoints/analyze/invoke          → $0.05 (MPP charge)');
-console.log(
-  '  POST /entrypoints/analyze/stream          → $0.02 (MPP session)'
-);
+console.log('  POST /entrypoints/analyze/stream          → $0.02 (MPP charge)');
 console.log(
   '  POST /entrypoints/premium-generate/invoke → $1.00 (MPP charge)\n'
 );

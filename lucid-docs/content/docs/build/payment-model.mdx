@@ -3,14 +3,15 @@ title: Choose a payment model
 description: Select a charging contract and understand Lucid's authorization, fulfillment, settlement, and recovery transaction.
 icon: Scale
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 4.2.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
-Choose a model whose price and settlement point are knowable before Lucid must
-commit the HTTP operation. Lucid currently supports fixed prices; it does not
-turn unknown usage into metered settlement automatically.
+Choose a model whose authorization ceiling, settlement point, and fulfilled
+usage can be reconciled before Lucid commits the HTTP operation. Fixed charges
+are the simplest model; x402 upto and Tempo sessions add bounded metering with
+different operation support.
 
 ## Select the commercial contract
 
@@ -18,10 +19,11 @@ turn unknown usage into metered settlement automatically.
 | --------------------------------------------- | -------------------------- | ----------------------------------------------------------------------- |
 | Deterministic request with a known price      | x402 v2 `exact`            | The buyer sees the full charge before fulfillment                       |
 | Invoke and stream have different fixed prices | `{ invoke, stream }` price | Each operation advertises one exact amount                              |
-| Credential-backed charge or session           | Next-only MPP              | Use only with one implemented Tempo, Stripe, or custom verifier         |
+| Credential-backed one-shot charge              | MPP charge                 | Tempo, Stripe, EVM, or a complete custom verifier                       |
+| Metered Tempo channel                          | MPP Tempo session          | One-unit invoke or delivered-unit SSE; not Lucid tasks                  |
 | Long-running fixed-price work                 | Lucid owned task           | Payment commits when the task is accepted, before background completion |
-| Unknown usage before completion               | Bounded fixed tier         | Lucid does not expose x402 `upto` settlement                            |
-| Many payments settled together                | Not supported              | Batch settlement is an upstream x402 capability, not a Lucid feature    |
+| Unknown invoke usage under a ceiling          | x402 `upto`                | Handler reports atomic actual usage no greater than the accepted ceiling |
+| Repeated EVM payments settled together        | x402 `batch-settlement`    | Cumulative vouchers reduce per-request on-chain settlement              |
 
 Prices are decimal strings. For the current x402 policy tracker, `"0.01"`
 means one cent in the six-decimal USD/USDC accounting model. Do not use a
@@ -100,8 +102,9 @@ A disconnect or later `run-end: failed` does not rewind the already accepted
 and settled operation.
 
 Price a stream for admission or a bounded service result, not for an unbounded
-number of chunks. Lucid does not implement x402 `upto` or post-hoc usage
-settlement.
+number of chunks. x402 `upto` is invoke-only. For delivered-unit SSE metering,
+use a Tempo TIP-1034 session with an explicit deposit ceiling and durable
+session store.
 
 ### Owned task
 
@@ -166,6 +169,7 @@ idempotency key, run/task ID, verified payer, entrypoint/mode, policy
 reservations, staged settlement ID, facilitator/chain evidence, response code,
 and fulfillment outcome—without recording credentials or private keys.
 
-Continue with [receive x402 payments](/docs/build/receive-x402),
+Continue with [every x402 payment method](/docs/examples/x402-payment-methods),
+[every MPP payment method](/docs/examples/mpp-payment-methods),
 [retries and idempotency](/docs/buy/retries-idempotency), and
 [durable storage](/docs/operate/durable-storage).

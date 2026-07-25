@@ -3,8 +3,8 @@ title: Errors
 description: Machine-readable HTTP errors, retry decisions, and ambiguous payment outcomes.
 icon: CircleAlert
 status: next
-verifiedVersion: 3.0.0
-verifiedAt: 2026-07-21
+verifiedVersion: 3.1.0
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -80,7 +80,7 @@ handling around them.
 | `settlement_failed`                  | `402` or `503` | Settlement was rejected definitively (`402`) or settlement execution threw (`503`).    | Distinguish rejection from unknown submission outcome before any retry.                          |
 | `payment_recording_failed`           |          `503` | Settlement may have succeeded but accounting or SIWX entitlement persistence failed.   | Treat as potentially paid; reconcile, do not submit a new credential automatically.              |
 | `mpp_configuration_error`            |          `503` | MPP methods or verifier configuration cannot serve the challenge.                      | Operator action.                                                                                 |
-| `mpp_verification_in_progress`       |          `409` | The same process-local MPP challenge is already being verified.                        | Back off; use the same validated idempotency key where supported.                                |
+| `mpp_verification_in_progress`       |          `409` | The same MPP challenge is already leased for verification.                             | Back off; use the same validated idempotency key where supported.                                |
 
 Facilitators and upstream payment libraries may return additional structured
 errors. Preserve their status and correlation data internally, but do not

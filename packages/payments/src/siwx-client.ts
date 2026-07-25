@@ -1,6 +1,19 @@
-import { buildSIWxMessage, type SIWxPayload } from './siwx-verify';
-import { decodeBase64Utf8, encodeBase64Utf8 } from './base64';
+import { decodePaymentRequiredHeader } from '@x402/core/http';
+import {
+  SIGN_IN_WITH_X,
+  createSIWxMessage,
+  encodeSIWxHeader,
+  type CompleteSIWxInfo,
+  type SIWxExtension,
+  type SIWxPayload,
+} from '@x402/extensions/sign-in-with-x';
 
+/**
+ * Legacy Lucid signer interface retained for source compatibility.
+ *
+ * New integrations may also use the official x402 SIWX signer helpers
+ * directly; this adapter keeps existing Lucid wallet integrations working.
+ */
 export type SIWxSigner = {
   signMessage: (message: string) => Promise<string>;
   getAddress: () => Promise<string>;
@@ -11,76 +24,55 @@ export type SIWxClientConfig = {
   signer?: SIWxSigner;
 };
 
-/**
- * Check if an authorization or payment response includes a SIWX declaration.
- * Checks both the X-SIWX-EXTENSION header and the response body.
- * Note: this clones the response to read the body, so the original remains consumable.
- */
-export async function hasSIWxExtension(response: Response): Promise<boolean> {
-  const siwxHeader = response.headers.get('X-SIWX-EXTENSION');
-  if (siwxHeader) return true;
-
-  try {
-    const body = await response.clone().json();
-    if (body?.error?.siwx) return true;
-    if (body?.extensions?.siwx) return true;
-  } catch {
-    // not JSON
-  }
-
-  return false;
-}
-
-/**
- * Parse a SIWX extension from an authorization or payment response.
- * Checks the X-SIWX-EXTENSION header first, then falls back to the response body.
- */
-export async function parseSIWxExtension(
-  response: Response
-): Promise<Record<string, unknown> | undefined> {
-  // Check header first
-  const siwxHeader = response.headers.get('X-SIWX-EXTENSION');
-  if (siwxHeader) {
-    try {
-      return JSON.parse(decodeBase64Utf8(siwxHeader)) as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      // fall through
-    }
-  }
-
-  // Check body
-  try {
-    const body = await response.clone().json();
-    if (body?.error?.siwx) return body.error.siwx as Record<string, unknown>;
-    if (body?.extensions?.siwx)
-      return body.extensions.siwx as Record<string, unknown>;
-  } catch {
-    // not JSON
-  }
-
-  return undefined;
-}
-
-/**
- * Build a SIWX header value from a signed payload.
- */
-export function buildSIWxHeaderValue(payload: Record<string, unknown>): string {
-  return encodeBase64Utf8(JSON.stringify(payload));
-}
-
-/**
- * Create a SIWX-aware fetch wrapper.
- * When a 401 or 402 response includes a SIWX extension, the wrapper attempts
- * to sign and retry. A 402 without SIWX continues to the payment wrapper.
- */
 type FetchFn = (
   input: RequestInfo | URL,
   init?: RequestInit
 ) => Promise<Response>;
 
+/** Check for an official SIWX extension declaration. */
+export async function hasSIWxExtension(response: Response): Promise<boolean> {
+  return (await parseSIWxExtension(response)) !== undefined;
+}
+
+/**
+ * Parse the official SIWX declaration from the standard x402
+ * `PAYMENT-REQUIRED` header, with the equivalent body field as a fallback.
+ */
+export async function parseSIWxExtension(
+  response: Response
+): Promise<SIWxExtension | undefined> {
+  const paymentRequired = response.headers.get('PAYMENT-REQUIRED');
+  if (paymentRequired) {
+    try {
+      const decoded = decodePaymentRequiredHeader(paymentRequired);
+      const extension = decoded.extensions?.[SIGN_IN_WITH_X];
+      if (isSIWxExtension(extension)) return extension;
+    } catch {
+      // Fall through to a JSON body for auth-only and non-x402 transports.
+    }
+  }
+
+  try {
+    const body = (await response.clone().json()) as unknown;
+    if (!isRecord(body) || !isRecord(body.extensions)) return undefined;
+    const extension = body.extensions[SIGN_IN_WITH_X];
+    return isSIWxExtension(extension) ? extension : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** @deprecated Prefer `encodeSIWxHeader` from the official x402 extension. */
+export function buildSIWxHeaderValue(payload: Record<string, unknown>): string {
+  return encodeSIWxHeader(payload as SIWxPayload);
+}
+
+/**
+ * Add SIWX authentication to one 401 or 402 challenge/retry cycle.
+ *
+ * The declaration and payload use the official x402 SIWX format. Auth-only
+ * routes retain Lucid's 401 behavior; paid routes use the standard 402 flow.
+ */
 export function wrapFetchWithSIWx(
   baseFetch: FetchFn,
   signer: SIWxSigner
@@ -89,43 +81,55 @@ export function wrapFetchWithSIWx(
     input: RequestInfo | URL,
     init?: RequestInit
   ): Promise<Response> => {
-    const response = await baseFetch(input, init);
+    const request = new Request(input, init);
+    const retryRequest = request.clone();
+    const response = await baseFetch(request);
 
-    // Auth-only SIWX uses 401; combined SIWX and payment uses 402.
     if (response.status !== 401 && response.status !== 402) return response;
 
-    // Check for SIWX extension
-    const siwxExt = await parseSIWxExtension(response);
-    if (!siwxExt) return response; // No SIWX, let payment flow handle it
+    const extension = await parseSIWxExtension(response);
+    if (!extension) return response;
+    if (retryRequest.headers.has('SIGN-IN-WITH-X')) {
+      throw new Error('SIWX authentication already attempted');
+    }
 
-    // Build SIWX payload
-    const address = await signer.getAddress();
-    const chainId = await signer.getChainId();
-
-    const payload: Record<string, unknown> = {
-      domain: siwxExt.domain,
-      address,
-      uri: siwxExt.uri,
-      version: (siwxExt.version as string) ?? '1',
-      chainId,
-      nonce: siwxExt.nonce,
-      issuedAt: (siwxExt.issuedAt as string) ?? new Date().toISOString(),
-      ...(siwxExt.expirationTime
-        ? { expirationTime: siwxExt.expirationTime }
-        : {}),
-      ...(siwxExt.statement ? { statement: siwxExt.statement } : {}),
-    };
-
-    // Sign the payload
-    const signature = await signer.signMessage(
-      buildSIWxMessage(payload as unknown as SIWxPayload)
+    const [address, chainId] = await Promise.all([
+      signer.getAddress(),
+      signer.getChainId(),
+    ]);
+    const supportedChain = extension.supportedChains.find(
+      chain => chain.chainId === chainId
     );
-    payload.signature = signature;
+    if (!supportedChain) return response;
 
-    // Retry with SIWX header
-    const headers = new Headers(init?.headers);
-    headers.set('SIGN-IN-WITH-X', buildSIWxHeaderValue(payload));
-
-    return baseFetch(input, { ...init, headers });
+    const completeInfo: CompleteSIWxInfo = {
+      ...extension.info,
+      chainId: supportedChain.chainId,
+      type: supportedChain.type,
+      signatureScheme: supportedChain.signatureScheme,
+    };
+    const signature = await signer.signMessage(
+      createSIWxMessage(completeInfo, address)
+    );
+    const payload: SIWxPayload = {
+      ...completeInfo,
+      address,
+      signature,
+    };
+    retryRequest.headers.set('SIGN-IN-WITH-X', encodeSIWxHeader(payload));
+    return baseFetch(retryRequest);
   };
+}
+
+function isSIWxExtension(value: unknown): value is SIWxExtension {
+  return (
+    isRecord(value) &&
+    isRecord(value.info) &&
+    Array.isArray(value.supportedChains) &&
+    isRecord(value.schema)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

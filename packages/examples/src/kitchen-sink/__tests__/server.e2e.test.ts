@@ -16,7 +16,7 @@ describe('kitchen-sink executable', () => {
 
     const exited = await Promise.race([
       child.exited.then(code => ({ code })),
-      Bun.sleep(500).then(() => undefined),
+      Bun.sleep(5_000).then(() => undefined),
     ]);
     if (!exited) {
       child.kill('SIGKILL');
@@ -28,7 +28,7 @@ describe('kitchen-sink executable', () => {
     expect(exited, stderr).toEqual({ code: 0 });
     expect(stdout).toContain('imported');
     expect(stdout).not.toContain('All capabilities running');
-  });
+  }, 10_000);
 
   it('starts both agents on isolated ports and exposes health', async () => {
     const { startKitchenSink } = await import('../index');

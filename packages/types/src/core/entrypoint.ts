@@ -1,7 +1,11 @@
 import type { Network } from './network';
 import { z } from 'zod';
 
-import type { EntrypointPrice } from '../payments';
+import type {
+  EntrypointPaymentSettlement,
+  EntrypointPrice,
+  EntrypointX402Config,
+} from '../payments';
 import type { StreamPushEnvelope, StreamResult } from '../http';
 import type { SIWxEntrypointConfig } from '../siwx';
 import type { AgentContext, Usage } from './context';
@@ -26,6 +30,8 @@ export type EntrypointHandler<
   output: TOutput extends z.ZodTypeAny ? z.infer<TOutput> : unknown;
   usage?: Usage;
   model?: string;
+  /** Actual payment amount for a usage-metered invocation. */
+  payment?: EntrypointPaymentSettlement;
 }>;
 
 /**
@@ -61,6 +67,8 @@ export type EntrypointDef<
   /** Required when both x402 and MPP extensions are installed. */
   paymentProtocol?: PaymentProtocol;
   network?: Network;
+  /** Explicit x402 offer selection. Legacy price/network fields remain valid. */
+  x402?: EntrypointX402Config;
   handler?: EntrypointHandler<TInput, TOutput, TRuntime>;
   stream?: EntrypointStreamHandler<TInput, TRuntime>;
   metadata?: Record<string, unknown>;

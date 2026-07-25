@@ -1,28 +1,30 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { createServerFn } from '@tanstack/react-start';
 
-async function loadPublicAgentCard() {
-  'use server';
-  const { handlers } = await import('@/lib/agent');
-  const response = await handlers.manifest({
-    request: new Request(
-      'http://agent.local/api/agent/.well-known/agent-card.json'
-    ),
-  });
-  if (!response.ok) throw new Error('Agent Card unavailable');
-  const card = (await response.json()) as {
-    name?: string;
-    description?: string;
-    version?: string;
-  };
-  return {
-    name: card.name ?? 'Agent API',
-    description: card.description ?? 'Headless agent API',
-    version: card.version,
-  };
-}
+const loadPublicAgentCard = createServerFn({ method: 'GET' }).handler(
+  async () => {
+    const { handlers } = await import('@/lib/agent');
+    const response = await handlers.manifest({
+      request: new Request(
+        'http://agent.local/api/agent/.well-known/agent-card.json'
+      ),
+    });
+    if (!response.ok) throw new Error('Agent Card unavailable');
+    const card = (await response.json()) as {
+      name?: string;
+      description?: string;
+      version?: string;
+    };
+    return {
+      name: card.name ?? 'Agent API',
+      description: card.description ?? 'Headless agent API',
+      version: card.version,
+    };
+  }
+);
 
 export const Route = createFileRoute('/')({
-  loader: loadPublicAgentCard,
+  loader: () => loadPublicAgentCard(),
   component: ApiDirectory,
 });
 

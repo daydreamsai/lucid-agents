@@ -36,6 +36,13 @@ export function createAgentRoutePlan({
       handle: request => handlers.entrypoints(request),
     },
     {
+      id: 'openapi',
+      method: 'GET',
+      path: at('/openapi.json'),
+      params: [],
+      handle: request => handlers.openapi(request),
+    },
+    {
       id: 'invoke',
       method: 'POST',
       path: at('/entrypoints/:key/invoke'),

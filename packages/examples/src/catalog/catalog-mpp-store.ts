@@ -59,6 +59,7 @@ const agent = await createAgent({
   .use(http())
   .use(
     mpp({
+      allowInsecureHttpForDevelopment: true,
       config: {
         methods: [
           tempo.server({
@@ -110,7 +111,7 @@ console.log(
 );
 console.log('Endpoints:');
 console.log('  GET  /                           -> Landing page');
-console.log('  GET  /.well-known/agent.json     -> Agent manifest');
+console.log('  GET  /.well-known/agent-card.json -> Agent Card');
 console.log('');
 
 // List all catalog-generated routes with prices

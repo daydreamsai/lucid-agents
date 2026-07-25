@@ -87,6 +87,34 @@ describe('shared execution authorization', () => {
     expect(x402Result.response.status).toBe(503);
   });
 
+  it('fails closed when an explicit x402 offer has no payments runtime', async () => {
+    const entrypoint: EntrypointDef = {
+      key: 'explicit-x402-offer',
+      paymentProtocol: 'x402',
+      x402: {
+        offers: [
+          {
+            scheme: 'exact',
+            network: 'eip155:8453',
+            price: '0.01',
+            payTo: '0x0000000000000000000000000000000000000001',
+          },
+        ],
+      },
+    };
+
+    const result = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/explicit-x402-offer/invoke'),
+      entrypoint,
+      'invoke',
+      runtimeWith(entrypoint)
+    );
+
+    expect(result.authorized).toBe(false);
+    if (result.authorized) throw new Error('Expected a missing-rail response');
+    expect(result.response.status).toBe(503);
+  });
+
   it('resolves an MPP challenge once and passes it into verification', async () => {
     const requirement: MppPaymentRequirement = {
       required: true,
@@ -142,6 +170,16 @@ describe('shared execution authorization', () => {
         authorized: true,
         payer: '0xverified',
         network: 'eip155:84532',
+        responseHeaders: {
+          'PAYMENT-RESPONSE': 'x402-compatible-receipt',
+          'Set-Cookie': 'must-not-propagate=true',
+        },
+        payment: {
+          amount: '2500000',
+          currency: '0x20c0000000000000000000000000000000000000',
+          intent: 'charge',
+          method: 'tempo',
+        },
       }),
     } as unknown as MppRuntime;
     let receivedPayment: Parameters<PaymentsRuntime['authorize']>[3];
@@ -156,6 +194,12 @@ describe('shared execution authorization', () => {
         receivedPayment = payment;
         return {
           authorized: true,
+          reconciliation: {
+            paymentIdentifier: 'payment-id-000000000001',
+            extensions: {
+              'payment-identifier': { id: 'payment-id-000000000001' },
+            },
+          },
           admit: async () => ({
             admitted: true,
             abort: async () => {},
@@ -178,19 +222,209 @@ describe('shared execution authorization', () => {
     );
 
     expect(result.authorized).toBe(true);
+    if (result.authorized) {
+      expect(result.reconciliation?.paymentIdentifier).toBe(
+        'payment-id-000000000001'
+      );
+      expect(result.subject).toBe('payment:eip155:84532:0xverified');
+      const decorated = result.decorate(Response.json({ ok: true }));
+      expect(decorated.headers.get('PAYMENT-RESPONSE')).toBe(
+        'x402-compatible-receipt'
+      );
+      expect(decorated.headers.get('Set-Cookie')).toBeNull();
+    }
     expect(receivedPayment).toEqual({
       protocol: 'mpp',
       payer: '0xverified',
-      amount: '2.5',
-      currency: 'usd',
+      amount: '2500000',
+      currency: '0x20c0000000000000000000000000000000000000',
       network: 'eip155:84532',
+    });
+  });
+
+  it('accounts a verified Tempo session invoke as its settled one-shot charge', async () => {
+    const requirement: MppPaymentRequirement = {
+      required: true,
+      amount: '0.001',
+      currency: '0x20c0000000000000000000000000000000000000',
+      intent: 'session',
+      methods: ['tempo'],
+    };
+    const mpp = {
+      requirements: () => requirement,
+      authorize: async () => ({
+        authorized: true,
+        receipt: 'tempo-session-invoke-receipt',
+        payer: '0xverified',
+        network: 'eip155:42431',
+        payment: {
+          amount: '0.001',
+          currency: '0x20c0000000000000000000000000000000000000',
+          intent: 'session',
+          method: 'tempo',
+        },
+        accounting: { intent: 'charge' },
+      }),
+    } as unknown as MppRuntime;
+    let receivedPayment: Parameters<PaymentsRuntime['authorize']>[3];
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async (
+        _request: Request,
+        _entrypoint: EntrypointDef,
+        _kind: 'invoke' | 'stream',
+        payment: Parameters<PaymentsRuntime['authorize']>[3]
+      ) => {
+        receivedPayment = payment;
+        if (payment?.intent === 'session' && !payment.maximumAmount) {
+          return {
+            authorized: false,
+            response: Response.json(
+              {
+                error: {
+                  code: 'payment_configuration_error',
+                  message:
+                    'Verified MPP sessions require a positive atomic maximumAmount.',
+                },
+              },
+              { status: 503 }
+            ),
+          } as const;
+        }
+        return {
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => response,
+          }),
+        } as const;
+      },
+    } as unknown as PaymentsRuntime;
+    const entrypoint: EntrypointDef = {
+      key: 'tempo-session-invoke',
+      price: '0.001',
+      paymentProtocol: 'mpp',
+      metadata: { mpp: { intent: 'session', methods: ['tempo'] } },
+    };
+
+    const authorization = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/tempo-session-invoke/invoke'),
+      entrypoint,
+      'invoke',
+      runtimeWith(entrypoint, { mpp, payments })
+    );
+
+    expect(authorization.authorized).toBe(true);
+    expect(receivedPayment).toEqual({
+      protocol: 'mpp',
+      payer: '0xverified',
+      amount: '0.001',
+      currency: '0x20c0000000000000000000000000000000000000',
+      network: 'eip155:42431',
+      intent: 'charge',
+    });
+  });
+
+  it('passes the MPP-owned session accounting ceiling without deriving it from the meter', async () => {
+    const requirement: MppPaymentRequirement = {
+      required: true,
+      amount: '1',
+      currency: 'usd',
+      intent: 'session',
+      methods: ['tempo'],
+    };
+    const mpp = {
+      requirements: () => requirement,
+      authorize: async () => ({
+        authorized: true,
+        receipt: 'tempo-session-stream-receipt',
+        payment: {
+          amount: '7',
+          currency: 'usd',
+          intent: 'session',
+          method: 'tempo',
+        },
+        accounting: {
+          intent: 'session',
+          reference: 'verified-accounting-channel',
+          maximumAmount: '700',
+        },
+        sessionMeter: {
+          channelId:
+            '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          unitType: 'chunk',
+          unitAmount: '1',
+          maximumAmount: '999',
+          charge: async () => ({
+            status: 'unavailable',
+            reason: 'closed',
+            problem: {
+              type: 'about:blank',
+              title: 'closed',
+              status: 402,
+              detail: 'closed',
+            },
+          }),
+          receipt: async () => {
+            throw new Error('not used');
+          },
+          cancel: async () => {},
+        },
+      }),
+    } as unknown as MppRuntime;
+    let receivedPayment: Parameters<PaymentsRuntime['authorize']>[3];
+    const payments = {
+      requirements: () => ({ required: false }),
+      authorize: async (
+        _request: Request,
+        _entrypoint: EntrypointDef,
+        _kind: 'invoke' | 'stream',
+        payment: Parameters<PaymentsRuntime['authorize']>[3]
+      ) => {
+        receivedPayment = payment;
+        return {
+          authorized: true,
+          admit: async () => ({
+            admitted: true,
+            abort: async () => {},
+            finalize: async (response: Response) => response,
+          }),
+        } as const;
+      },
+    } as unknown as PaymentsRuntime;
+    const entrypoint: EntrypointDef = {
+      key: 'tempo-session-stream',
+      price: { stream: '1' },
+      paymentProtocol: 'mpp',
+      metadata: { mpp: { intent: 'session', methods: ['tempo'] } },
+    };
+
+    const authorization = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/tempo-session-stream/stream'),
+      entrypoint,
+      'stream',
+      runtimeWith(entrypoint, { mpp, payments })
+    );
+
+    expect(authorization.authorized).toBe(true);
+    expect(receivedPayment).toEqual({
+      protocol: 'mpp',
+      amount: '7',
+      currency: 'usd',
+      intent: 'session',
+      reference: 'verified-accounting-channel',
+      maximumAmount: '700',
     });
   });
 
   it('short-circuits protocol-managed MPP requests before entrypoint admission', async () => {
     const handled = new Response(null, {
       status: 204,
-      headers: { 'Payment-Receipt': 'channel-opened' },
+      headers: {
+        'Cache-Control': 'public, max-age=60',
+        'Payment-Receipt': 'channel-opened',
+      },
     });
     const mpp = {
       requirements: () => ({
@@ -215,7 +449,57 @@ describe('shared execution authorization', () => {
       runtimeWith(entrypoint, { mpp })
     );
 
-    expect(result).toEqual({ authorized: false, response: handled });
+    expect(result.authorized).toBe(false);
+    if (result.authorized) throw new Error('Expected a managed response');
+    expect(result.response.headers.get('Payment-Receipt')).toBe(
+      'channel-opened'
+    );
+    expect(result.response.headers.get('Cache-Control')).toBe(
+      'max-age=60, private'
+    );
+  });
+
+  it('marks ordinary MPP receipt responses private without dropping cache directives', async () => {
+    const mpp = {
+      requirements: () => ({
+        required: true,
+        amount: '1',
+        currency: 'usd',
+        intent: 'charge',
+        methods: ['test'],
+      }),
+      authorize: async () => ({
+        authorized: true,
+        receipt: 'paid-charge',
+      }),
+    } as unknown as MppRuntime;
+    const entrypoint: EntrypointDef = {
+      key: 'receipt-cache',
+      price: '1',
+      paymentProtocol: 'mpp',
+    };
+    const authorization = await authorizeEntrypointRequest(
+      new Request('https://agent.test/entrypoints/receipt-cache/invoke'),
+      entrypoint,
+      'invoke',
+      runtimeWith(entrypoint, { mpp })
+    );
+
+    expect(authorization.authorized).toBe(true);
+    if (!authorization.authorized) throw new Error('Expected authorization');
+    const admission = await authorization.admit();
+    expect(admission.admitted).toBe(true);
+    if (!admission.admitted) throw new Error('Expected admission');
+    const response = await admission.finalize(
+      new Response('ok', {
+        headers: { 'Cache-Control': 'max-age=120, immutable' },
+      })
+    );
+
+    expect(response.headers.get('Payment-Receipt')).toBe('paid-charge');
+    expect(response.headers.get('Cache-Control')).toBe(
+      'max-age=120, immutable, private'
+    );
   });
 
   it('reuses a verified SIWX entitlement before challenging an MPP route', async () => {
@@ -321,7 +605,7 @@ describe('shared execution authorization', () => {
     expect(finalizedStatuses).toEqual([500]);
   });
 
-  it('rejects malformed invoke JSON without executing and finalizes the failure', async () => {
+  it('rejects malformed invoke JSON before authorization or execution', async () => {
     const finalizedStatuses: number[] = [];
     let executed = false;
     const payments = {
@@ -358,10 +642,10 @@ describe('shared execution authorization', () => {
 
     expect(response.status).toBe(400);
     expect(executed).toBe(false);
-    expect(finalizedStatuses).toEqual([400]);
+    expect(finalizedStatuses).toEqual([]);
   });
 
-  it('rejects invalid stream input before starting work and finalizes the failure', async () => {
+  it('rejects invalid stream input before authorization or execution', async () => {
     const finalizedStatuses: number[] = [];
     let executed = false;
     const payments = {
@@ -399,7 +683,7 @@ describe('shared execution authorization', () => {
 
     expect(response.status).toBe(400);
     expect(executed).toBe(false);
-    expect(finalizedStatuses).toEqual([400]);
+    expect(finalizedStatuses).toEqual([]);
   });
 });
 
@@ -408,6 +692,7 @@ describe('canonical route plan', () => {
   const handlers = {
     health: response,
     entrypoints: response,
+    openapi: response,
     manifest: response,
     oasf: response,
     favicon: response,
@@ -432,6 +717,9 @@ describe('canonical route plan', () => {
       true
     );
     expect(routes.map(route => route.path)).toContain('/api/agent/tasks');
+    expect(routes.map(route => route.path)).toContain(
+      '/api/agent/openapi.json'
+    );
   });
 
   it('does not advertise task routes without the A2A capability', () => {

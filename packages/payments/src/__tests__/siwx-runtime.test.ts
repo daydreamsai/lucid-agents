@@ -10,6 +10,7 @@ const baseConfig: PaymentsConfig = {
   network: 'eip155:84532',
   payTo: '0x1234567890abcdef1234567890abcdef12345678' as `0x${string}`,
 };
+const publicOrigin = 'https://agent.example.com';
 
 describe('SIWX Runtime Configuration', () => {
   describe('createPaymentsRuntime', () => {
@@ -25,6 +26,7 @@ describe('SIWX Runtime Configuration', () => {
         ...baseConfig,
         siwx: {
           enabled: true,
+          origin: publicOrigin,
           defaultStatement: 'Sign in to reuse access.',
           storage: { type: 'in-memory' },
         },
@@ -52,6 +54,7 @@ describe('SIWX Runtime Configuration', () => {
         ...baseConfig,
         siwx: {
           enabled: true,
+          origin: publicOrigin,
         },
       };
       const runtime = createPaymentsRuntime(config);
@@ -63,10 +66,50 @@ describe('SIWX Runtime Configuration', () => {
         ...baseConfig,
         siwx: {
           enabled: true,
+          origin: publicOrigin,
           storage: { type: 'postgres' },
         },
       };
       expect(() => createPaymentsRuntime(config)).toThrow('siwxStorageFactory');
+    });
+
+    it('requires a configured public origin when SIWX is enabled', () => {
+      expect(() =>
+        createPaymentsRuntime({
+          ...baseConfig,
+          siwx: { enabled: true },
+        })
+      ).toThrow('SIWX public origin is required');
+    });
+
+    it('requires HTTPS for non-local SIWX origins', () => {
+      expect(() =>
+        createPaymentsRuntime({
+          ...baseConfig,
+          siwx: { enabled: true, origin: 'http://agent.example.com' },
+        })
+      ).toThrow('must use HTTPS');
+    });
+
+    it('allows an explicit localhost development origin', () => {
+      const runtime = createPaymentsRuntime({
+        ...baseConfig,
+        siwx: { enabled: true, origin: 'http://localhost:3000' },
+      });
+
+      expect(runtime?.siwxConfig?.origin).toBe('http://localhost:3000');
+    });
+
+    it('rejects origins containing a path, query, or fragment', () => {
+      expect(() =>
+        createPaymentsRuntime({
+          ...baseConfig,
+          siwx: {
+            enabled: true,
+            origin: 'https://agent.example.com/api?tenant=test',
+          },
+        })
+      ).toThrow('must not include a path, query, or fragment');
     });
 
     it('requires an explicit platform adapter for SQLite payment storage', () => {
@@ -133,7 +176,11 @@ describe('SIWX Runtime Configuration', () => {
     it('should activate runtime for auth-only entrypoint', () => {
       const config: PaymentsConfig = {
         ...baseConfig,
-        siwx: { enabled: true, storage: { type: 'in-memory' } },
+        siwx: {
+          enabled: true,
+          origin: publicOrigin,
+          storage: { type: 'in-memory' },
+        },
       };
       const runtime = createPaymentsRuntime(config);
       expect(runtime!.isActive).toBe(false);
@@ -146,7 +193,11 @@ describe('SIWX Runtime Configuration', () => {
     it('should activate runtime for priced entrypoint with SIWX', () => {
       const config: PaymentsConfig = {
         ...baseConfig,
-        siwx: { enabled: true, storage: { type: 'in-memory' } },
+        siwx: {
+          enabled: true,
+          origin: publicOrigin,
+          storage: { type: 'in-memory' },
+        },
       };
       const runtime = createPaymentsRuntime(config);
 

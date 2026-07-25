@@ -41,12 +41,39 @@ describe('release workflow policy', () => {
       'static_checks',
       'tests',
       'examples_e2e',
+      'payment_e2e',
+      'tempo_e2e',
       'generated_projects',
       'browser_smoke',
       'runtime_compatibility',
       'skill_integrity',
       'docs',
     ]);
+  });
+
+  test('CI runs the Tempo localnet lifecycle behind the required gate', () => {
+    const workflow = readWorkflow('ci.yml');
+    const job = workflow.jobs?.tempo_e2e as
+      | {
+          env?: Record<string, string>;
+          steps?: WorkflowStep[];
+          'timeout-minutes'?: number;
+        }
+      | undefined;
+    const source = workflowSource('ci.yml');
+
+    expect(job?.['timeout-minutes']).toBe(20);
+    expect(job?.env?.TEMPO_E2E_CONTAINER_NAME).toContain('lucid-tempo-e2e-ci-');
+    expect(source).toContain(
+      'bun run scripts/tempo-localnet.ts -- bun test ./packages/examples/src/__tests__/tempo-localnet.e2e.ts'
+    );
+    expect(
+      job?.steps?.some(
+        step =>
+          step.if === 'always()' &&
+          step.run?.includes('docker rm --force "$TEMPO_E2E_CONTAINER_NAME"')
+      )
+    ).toBe(true);
   });
 
   test('manual and bot releases share a lock and verify CI authority', () => {

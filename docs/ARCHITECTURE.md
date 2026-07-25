@@ -141,6 +141,7 @@ The route plan contains:
 | Agent card                   | `GET {basePath}/.well-known/agent-card.json`       |
 | Legacy card alias            | `GET {basePath}/.well-known/agent.json`            |
 | OASF                         | `GET {basePath}/.well-known/oasf-record.json`      |
+| OpenAPI                      | `GET {basePath}/openapi.json`                      |
 | Tasks, when A2A is installed | `POST/GET {basePath}/tasks` and task member routes |
 
 The agent-card compatibility routes generated at a framework root call the
@@ -254,16 +255,38 @@ Important invariants:
 policies, payment tracking, SIWX, and payment-aware Fetch construction. Adapters
 only invoke the authorization contract exposed through HTTP.
 
+The payments runtime compiles legacy price configuration and explicit
+entrypoint `x402.offers` into one ordered offer registry. Scheme and facilitator
+registries validate each offer independently; unsupported declarations fail
+explicitly rather than falling through to a different network. The same
+canonical entrypoint and offer set projects into `PAYMENT-REQUIRED`, Bazaar,
+OpenAPI, and the Agent Card.
+
+Official x402 extensions remain payments-owned. SIWX challenges are bound to an
+operator-configured public origin, never request `Host`/`Forwarded` data.
+Payment Identifier is verified as invoke correlation metadata and must equal
+the HTTP idempotency key, but payer identity still comes only from verified
+payment or SIWX credentials. Signed offers and receipts receive an injected
+issuer capability; signing keys are not runtime discovery data.
+
+`upto` reserves its ceiling before invoke execution and receives actual usage
+out-of-band from the validated handler result. Batch settlement keeps channel
+state behind an atomic storage port; production mode requires a durable SQLite
+or Postgres implementation so cumulative vouchers and pending requests recover
+across restarts.
+
 The portable default is isolated in-memory payment and SIWX storage. Durable or
 platform-specific code must be selected explicitly:
 
-| Import                                    | Purpose                              | Platform        |
-| ----------------------------------------- | ------------------------------------ | --------------- |
-| `@lucid-agents/payments`                  | portable runtime + in-memory storage | Web/Node/Bun    |
-| `@lucid-agents/payments/node`             | environment-driven Node factories    | Node/Bun        |
-| `@lucid-agents/payments/storage/sqlite`   | SQLite factories                     | Bun/Node server |
-| `@lucid-agents/payments/storage/postgres` | Postgres factories                   | Node/Bun server |
-| `@lucid-agents/payments/providers/stripe` | Stripe PAYTO resolution              | Node/Bun server |
+| Import                                          | Purpose                                   | Platform        |
+| ----------------------------------------------- | ----------------------------------------- | --------------- |
+| `@lucid-agents/payments`                        | portable runtime + in-memory storage      | Web/Node/Bun    |
+| `@lucid-agents/payments/node`                   | environment-driven Node factories         | Node/Bun        |
+| `@lucid-agents/payments/storage/sqlite`         | payment/SIWX SQLite factories             | Bun/Node server |
+| `@lucid-agents/payments/storage/postgres`       | payment/SIWX Postgres factories           | Node/Bun server |
+| `@lucid-agents/payments/storage/batch-sqlite`   | durable batch channel storage             | Bun/Node server |
+| `@lucid-agents/payments/storage/batch-postgres` | distributed durable batch channel storage | Node/Bun server |
+| `@lucid-agents/payments/providers/stripe`       | Stripe PAYTO resolution                   | Node/Bun server |
 
 Postgres and Stripe are optional peer dependencies. The portable root import
 must not statically load `bun:sqlite`, `pg`, Stripe, or Node-only globals.

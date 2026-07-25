@@ -1,5 +1,11 @@
 export { http } from './extension';
 export { createAgentRoutePlan } from './route-plan';
+export {
+  buildOpenApiDocument,
+  projectX402OpenApiPayment,
+  type BuildOpenApiDocumentOptions,
+  type OpenApiPaymentProjection,
+} from './openapi';
 export type { HttpExtensionOptions } from '@lucid-agents/types/http';
 export type { AgentHttpHandlers } from '@lucid-agents/types/http';
 export { invoke, invokeHandler } from './invoke';
@@ -27,6 +33,7 @@ export type {
 export {
   createSSEStream,
   writeSSE,
+  type SSEStreamOptions,
   type SSEStreamRunner,
   type SSEStreamRunnerContext,
   type SSEWriteOptions,

@@ -42,31 +42,30 @@ describe('RateLimiter', () => {
       expect(count2).toBe(1);
     });
 
-    it('should clean up expired entries automatically', async () => {
+    it('should clean up expired entries automatically', () => {
       const maxPayments = 1;
-      const windowMs = 1; // 1ms window
+      const windowMs = 1;
+      const originalNow = Date.now;
+      let now = 1_000;
+      Date.now = () => now;
 
-      // Record payment
-      limiter.recordPayment('group1');
+      try {
+        limiter.recordPayment('group1');
 
-      // Immediately check - payment should block (still within window)
-      const result1 = limiter.checkLimit('group1', maxPayments, windowMs);
-      expect(result1.allowed).toBe(false);
-      expect(result1.reason).toContain('Rate limit exceeded');
+        const result1 = limiter.checkLimit('group1', maxPayments, windowMs);
+        expect(result1.allowed).toBe(false);
+        expect(result1.reason).toContain('Rate limit exceeded');
+        expect(limiter.getCurrentCount('group1', windowMs)).toBe(1);
 
-      // Verify count is 1 (payment is still within window)
-      expect(limiter.getCurrentCount('group1', windowMs)).toBe(1);
+        now += windowMs + 1;
 
-      // Wait for the window to expire (wait 2ms to be safe)
-      await new Promise(resolve => setTimeout(resolve, 2));
-
-      // Check again - should allow because entry was cleaned up
-      const result2 = limiter.checkLimit('group1', maxPayments, windowMs);
-      expect(result2.allowed).toBe(true);
-      expect(result2.reason).toBeUndefined();
-
-      // Verify count is 0 after cleanup
-      expect(limiter.getCurrentCount('group1', windowMs)).toBe(0);
+        const result2 = limiter.checkLimit('group1', maxPayments, windowMs);
+        expect(result2.allowed).toBe(true);
+        expect(result2.reason).toBeUndefined();
+        expect(limiter.getCurrentCount('group1', windowMs)).toBe(0);
+      } finally {
+        Date.now = originalNow;
+      }
     });
 
     it('should return current count correctly', () => {
@@ -230,4 +229,3 @@ describe('RateLimiter', () => {
     });
   });
 });
-

@@ -17,7 +17,7 @@
  *    - CHAIN_ID=84532
  *    - AGENT_WALLET_PRIVATE_KEY=0x...
  *    - IDENTITY_RUN_WRITE_EXAMPLE=true
- * 4. Run: bun run examples/full-integration.ts
+ * 4. Run: bun run packages/examples/src/identity/full-integration.ts
  */
 
 import { createAgent } from '@lucid-agents/core';

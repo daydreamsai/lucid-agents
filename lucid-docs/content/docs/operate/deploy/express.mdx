@@ -3,8 +3,8 @@ title: Deploy with Express
 description: Bridge Node request/response streams to Lucid's canonical Fetch handlers without consuming payment bodies twice.
 icon: Server
 status: next
-verifiedVersion: 0.6.0
-verifiedAt: 2026-07-21
+verifiedVersion: 1.0.1
+verifiedAt: 2026-07-25
 product: sdk
 ---
 
@@ -131,7 +131,7 @@ The same rules as other adapters apply:
 - SQLite is a one-persistent-host option for payment/SIWX only;
 - multiple replicas need shared Postgres payment/SIWX and custom durable
   idempotency/task/scheduler ports;
-- MPP challenge/replay state remains process-local;
+- MPP replicas need the shared Postgres challenge store;
 - scheduler timers and recoverable tasks belong in long-lived workers with
   correct shared leases.
 

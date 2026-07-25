@@ -9,8 +9,8 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - **@lucid-agents/core** - Protocol-agnostic agent runtime with extension system
 - **@lucid-agents/http** - HTTP extension for request/response handling
 - **@lucid-agents/identity** - ERC-8004 identity and trust layer
-- **@lucid-agents/payments** - x402 payment utilities
-- **@lucid-agents/mpp** - MPP challenge and credential-verification runtime
+- **@lucid-agents/payments** - x402 exact, upto, batch-settlement, SIWX, and accounting runtime
+- **@lucid-agents/mpp** - MPP challenge, charge, and durable Tempo session runtime
 - **@lucid-agents/wallet** - Wallet SDK for agent and developer wallets
 - **@lucid-agents/a2a** - A2A Protocol client for agent-to-agent communication
 - **@lucid-agents/ap2** - AP2 (Agent Payments Protocol) extension
@@ -54,8 +54,8 @@ The framework uses an extension-based architecture where features are added via 
 
 - **http** (`@lucid-agents/http`) - HTTP request/response handling, streaming, SSE
 - **wallets** (`@lucid-agents/wallet`) - Wallet management for agents
-- **payments** (`@lucid-agents/payments`) - x402 payment verification and pricing
-- **mpp** (`@lucid-agents/mpp`) - Standard MPP challenges with native Tempo/Stripe or custom credential verification
+- **payments** (`@lucid-agents/payments`) - x402 multi-offer verification, settlement, SIWX, and accounting
+- **mpp** (`@lucid-agents/mpp`) - Standard MPP challenges with native Tempo charge/session, Stripe charge, EVM/x402 charge, or custom verification
 - **identity** (`@lucid-agents/identity`) - ERC-8004 on-chain identity and trust
 - **a2a** (`@lucid-agents/a2a`) - Agent-to-agent communication protocol
 - **ap2** (`@lucid-agents/ap2`) - Agent Payments Protocol extension
@@ -106,14 +106,15 @@ Response (JSON or SSE)
 3. **Zod for validation** - Schema-first approach for input/output
 4. **Server-Sent Events for streaming** - Standard SSE for real-time responses
 5. **ERC-8004 for identity** - On-chain agent identity and reputation
-6. **x402 for payments** - HTTP-native payment protocol supporting both EVM and Solana networks
+6. **Current payment SDK cohorts** - One exact x402 release cohort and one exact `mppx` release are pinned and checked in CI
 7. **One route and authorization contract** - Adapters do not own paywalls or duplicate registries
 8. **Bounded state with durable ports** - Portable in-memory defaults; explicit SQLite/Postgres/task stores
 9. **Provider-owned deployment tooling** - Deployment commands consume a versioned allowlist manifest and reuse canonical adapter handlers
 
 ### Supported Payment Networks
 
-The framework supports payment receiving on multiple blockchain networks:
+The framework supports x402 receiving on multiple blockchain networks. MPP
+additionally supports native Tempo charge and session methods plus EVM charge:
 
 **EVM Networks:**
 
@@ -699,6 +700,7 @@ bun run dev
 A pull request is not considered complete unless it includes:
 
 - **E2E example smoke test** - If the PR adds or modifies SDK surface area (new extensions, entrypoints, or config patterns), add a corresponding smoke test in `packages/examples/src/__tests__/smoke.test.ts`. Smoke tests verify that agents build, servers boot, agent cards are valid, and entrypoints respond correctly — all without external services. Run `bun test packages/examples/src/__tests__/` to confirm.
+- **Tutorial parity** - Every new or materially changed runnable example must have a corresponding tutorial under `lucid-docs/content/docs/`. The tutorial must link to the repository source and executable proof, state prerequisites and production boundaries, and be added to the appropriate `meta.json` navigation. When an example represents a payment-support-matrix row, add its tutorial to `packages/examples/src/payment-methods/coverage.ts`; CI verifies that the example, tutorial, and proof remain one-to-one.
 - **Documentation** - Update relevant documentation: `AGENTS.md` for architecture/patterns, package-level `README.md` files for usage, and inline JSDoc for public APIs. If you add a new package or extension, add it to the directory structure and dependency diagram sections.
 
 ## Release Process with Changesets
@@ -1008,7 +1010,24 @@ Express-specific `createAgentApp()` implementation. Bridges Node requests/respon
 
 ### packages/payments/src/incoming.ts
 
-Fetch-native x402/SIWX verification, verified-sender policies, atomic reservations, settlement, and recording.
+Fetch-native x402/SIWX verification, offer selection, verified-sender policies,
+atomic ceiling reservations, settlement, and actual-amount recording.
+
+### packages/mpp/src/extension.ts
+
+MPP challenge negotiation and verification, native Tempo charge/session,
+Stripe charge, EVM/x402 charge, replay recovery, and receipt decoration.
+
+### packages/mpp/src/challenge-store.ts
+
+Challenge issue/lease/consume contract. SQLite and Postgres implementations are
+published from the MPP storage subpaths; production durability requires a stable
+challenge secret.
+
+### packages/mpp/src/tempo-session-store.ts
+
+Atomic Tempo session channel contract and in-memory implementation. Production
+session servers require a durable SQLite or Postgres store.
 
 ### packages/a2a/src/tasks.ts
 

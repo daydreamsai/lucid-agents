@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { createAgent } from '@lucid-agents/core';
 import { http } from '@lucid-agents/http';
-import { payments } from '@lucid-agents/payments';
+import {
+  buildSIWxHeaderValue,
+  parseSIWxExtension,
+  payments,
+  type SIWxPayload,
+} from '@lucid-agents/payments';
 import { createTanStackRuntime } from '../runtime';
 
 const meta = {
@@ -90,6 +95,7 @@ describe('createTanStackRuntime', () => {
             storage: { type: 'in-memory' },
             siwx: {
               enabled: true,
+              origin: 'https://agent.test',
               storage: { type: 'in-memory' },
               verify: { skipSignatureVerification: true },
             },
@@ -120,17 +126,16 @@ describe('createTanStackRuntime', () => {
     expect(unauthorized.status).toBe(401);
 
     const address = '0x1234567890abcdef1234567890abcdef12345678';
-    const credential = Buffer.from(
-      JSON.stringify({
-        domain: 'agent.test',
-        address,
-        uri: url,
-        version: '1',
-        chainId: 'eip155:84532',
-        nonce: `tanstack-${Date.now()}`,
-        issuedAt: new Date().toISOString(),
-      })
-    ).toString('base64');
+    const extension = await parseSIWxExtension(unauthorized);
+    expect(extension).toBeDefined();
+    const chain = extension!.supportedChains[0]!;
+    const payload: SIWxPayload = {
+      ...extension!.info,
+      ...chain,
+      address,
+      signature: '0xtest-signature',
+    };
+    const credential = buildSIWxHeaderValue({ ...payload });
     const authorized = await handlers.invoke({
       request: new Request(url, {
         method: 'POST',

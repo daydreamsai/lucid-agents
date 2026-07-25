@@ -5,6 +5,10 @@ import type {
 } from '@lucid-agents/types/core';
 import type { AgentAuthContext } from '@lucid-agents/types/siwx';
 import type { HttpIdempotencyStore } from '@lucid-agents/types/http';
+import type {
+  EntrypointPaymentSettlement,
+  IncomingPaymentFinalizeOptions,
+} from '@lucid-agents/types/payments';
 import { ZodValidationError } from '@lucid-agents/types/core';
 
 import { errorResponse, extractInput, jsonResponse, readJson } from './utils';
@@ -27,6 +31,8 @@ export type InvokeResult = {
     total_tokens?: number;
   };
   model?: string;
+  /** Out-of-band actual usage for metered payment settlement. */
+  payment?: EntrypointPaymentSettlement;
 };
 
 export type InvokeOptions = {
@@ -96,6 +102,7 @@ export async function invokeHandler(
     output,
     usage: result.usage,
     model: result.model,
+    payment: result.payment,
   };
 }
 
@@ -115,6 +122,47 @@ export async function invoke(
   }
   if (!entrypoint.handler) {
     return errorResponse('not_implemented', 501);
+  }
+
+  if (runtime.mpp?.credentialPurpose?.(req) === 'management') {
+    const managementAuthorization = await authorizeEntrypointRequest(
+      req.clone(),
+      entrypoint,
+      'invoke',
+      runtime,
+      options?.auth
+    );
+    if (managementAuthorization.authorized === false) {
+      return managementAuthorization.response;
+    }
+    return jsonResponse(
+      {
+        error: {
+          code: 'mpp_management_not_handled',
+          message:
+            'Verified MPP management credentials must produce a protocol response.',
+        },
+      },
+      { status: 500 }
+    );
+  }
+
+  let rawInput: unknown;
+  try {
+    const rawBody = await readJson(req.clone());
+    rawInput = extractInput(rawBody);
+    parseInput(entrypoint, rawInput);
+  } catch (err) {
+    if (err instanceof ZodValidationError && err.kind === 'input') {
+      return jsonResponse(
+        { error: { code: 'invalid_input', issues: err.issues } },
+        { status: 400 }
+      );
+    }
+    return jsonResponse(
+      { error: { code: 'invalid_request', message: 'Invalid JSON' } },
+      { status: 400 }
+    );
   }
 
   const idempotencyKey = req.headers.get('Idempotency-Key')?.trim();
@@ -143,6 +191,25 @@ export async function invoke(
   );
   if (authorization.authorized === false) {
     return authorization.response;
+  }
+  const verifiedPaymentIdentifier =
+    authorization.reconciliation?.paymentIdentifier;
+  if (verifiedPaymentIdentifier && !idempotency) {
+    return idempotencyError(
+      'payment_identifier_requires_idempotency',
+      'x402 Payment Identifier requires target-side HTTP idempotency storage',
+      503
+    );
+  }
+  if (
+    verifiedPaymentIdentifier &&
+    verifiedPaymentIdentifier !== idempotencyKey
+  ) {
+    return idempotencyError(
+      'payment_identifier_mismatch',
+      'The verified payment identifier does not match Idempotency-Key',
+      400
+    );
   }
 
   let idempotencyClaim:
@@ -247,7 +314,10 @@ export async function invoke(
     }
   };
 
-  const finalize = async (response: Response): Promise<Response> => {
+  const finalize = async (
+    response: Response,
+    finalizeOptions?: IncomingPaymentFinalizeOptions
+  ): Promise<Response> => {
     const completeIdempotency = async (
       completedResponse: Response,
       returnedResponse: Response = completedResponse
@@ -292,7 +362,7 @@ export async function invoke(
 
     let finalized: Response;
     try {
-      finalized = await admission.finalize(response);
+      finalized = await admission.finalize(response, finalizeOptions);
     } catch (error) {
       const failed = await abortAdmission(
         idempotencyError(
@@ -323,20 +393,7 @@ export async function invoke(
     `runId=${runId}`
   );
 
-  let rawBody: unknown;
   try {
-    rawBody = await readJson(req);
-  } catch {
-    return finalize(
-      jsonResponse(
-        { error: { code: 'invalid_request', message: 'Invalid JSON' } },
-        { status: 400 }
-      )
-    );
-  }
-
-  try {
-    const rawInput = extractInput(rawBody);
     const result = await invokeHandler(entrypoint, rawInput, {
       signal: req.signal,
       headers: req.headers,
@@ -352,7 +409,8 @@ export async function invoke(
         output: result.output,
         usage: result.usage,
         model: result.model,
-      })
+      }),
+      result.payment ? { payment: result.payment } : undefined
     );
   } catch (err) {
     if (err instanceof ZodValidationError) {

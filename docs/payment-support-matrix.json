@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "sdkVersions": {
+    "x402": "2.19.0",
+    "mppx": "0.8.14"
+  },
+  "rows": [
+    {
+      "id": "x402-exact-evm",
+      "protocol": "x402 v2",
+      "sdk": "@x402/* 2.19.0",
+      "scheme": "exact",
+      "network": "EVM (`eip155:*`)",
+      "buyer": "Built in",
+      "seller": "Built in",
+      "facilitator": "Required for verification and settlement",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Payment-policy accounting is process-local by default; SQLite and Postgres are durable options.",
+      "status": "Released",
+      "limitations": "A facilitator must advertise the exact scheme on the configured network."
+    },
+    {
+      "id": "x402-exact-svm",
+      "protocol": "x402 v2",
+      "sdk": "@x402/* 2.19.0",
+      "scheme": "exact",
+      "network": "Solana (`solana:*`)",
+      "buyer": "External x402 client",
+      "seller": "Built in",
+      "facilitator": "Required for verification and settlement",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Payment-policy accounting is process-local by default; SQLite and Postgres are durable options.",
+      "status": "Released",
+      "limitations": "Lucid's built-in paid fetch registers EVM schemes only."
+    },
+    {
+      "id": "x402-upto-evm",
+      "protocol": "x402 v2",
+      "sdk": "@x402/* 2.19.0",
+      "scheme": "upto",
+      "network": "EVM (`eip155:*`)",
+      "buyer": "Built in",
+      "seller": "Built in",
+      "facilitator": "Required; `/supported` must include `facilitatorAddress`",
+      "transport": {
+        "invoke": "supported",
+        "stream": "unsupported",
+        "task": "unsupported"
+      },
+      "storage": "The accepted ceiling is reserved; memory, SQLite, and Postgres atomically replace it with the handler's actual amount.",
+      "status": "Released",
+      "limitations": "Invoke only. The handler must return a non-negative `payment.actualAmount` no greater than the accepted ceiling."
+    },
+    {
+      "id": "x402-batch-settlement-evm",
+      "protocol": "x402 v2",
+      "sdk": "@x402/* 2.19.0",
+      "scheme": "batch-settlement",
+      "network": "EVM (`eip155:*`)",
+      "buyer": "Built in when enabled",
+      "seller": "Built in when enabled",
+      "facilitator": "Required for channel verification and settlement",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Development may use bounded memory. Production sellers require injected durable storage; SQLite and Postgres subpaths are provided. Buyers may inject upstream channel storage for restart continuation.",
+      "status": "Released",
+      "limitations": "EVM only. Seller configuration is explicit, and every route resolves to one static receiver."
+    },
+    {
+      "id": "mpp-tempo-charge",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "tempo / charge",
+      "network": "Tempo mainnet or testnet",
+      "buyer": "Via `mppx/client` intent",
+      "seller": "Built in",
+      "facilitator": "Not required",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Challenge replay fences are bounded memory by default, with durable SQLite and Postgres adapters.",
+      "status": "Released",
+      "limitations": "SSE is protected by one charge before streaming; it is not a metered Tempo session."
+    },
+    {
+      "id": "mpp-tempo-session",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "tempo / session",
+      "network": "Tempo mainnet or testnet",
+      "buyer": "Via `mppx/client` session intent",
+      "seller": "Built in with explicit `tempo.session()`",
+      "facilitator": "Not required",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "unsupported"
+      },
+      "storage": "Development may use bounded process memory. Production requires an atomic durable store; SQLite and Postgres are exported from the MPP storage subpaths.",
+      "status": "Released",
+      "limitations": "Tempo TIP-1034 only. Invoke deducts one configured unit; SSE reserves a bounded deposit ceiling and reconciles delivered units. Scheduled settlement requires a signing server account."
+    },
+    {
+      "id": "mpp-stripe-charge",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "stripe / charge",
+      "network": "Stripe Business Network",
+      "buyer": "Via `mppx/client` intent",
+      "seller": "Built in",
+      "facilitator": "Not required",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Challenge replay fences are bounded memory by default, with durable SQLite and Postgres adapters.",
+      "status": "Released",
+      "limitations": "Requires a Stripe secret and Business Network profile. Session intent is not built in."
+    },
+    {
+      "id": "mpp-evm-charge",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "evm / charge (x402 exact compatible)",
+      "network": "Configured EVM chain ID",
+      "buyer": "MPP EVM or compatible x402 exact client",
+      "seller": "Built in",
+      "facilitator": "Optional: choose a facilitator or application settlement callback",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Challenge replay fences are bounded memory by default, with durable SQLite and Postgres adapters.",
+      "status": "Released",
+      "limitations": "Charge only. Requires EIP-3009 token-domain metadata and exactly one settlement strategy; SSE settles once before streaming."
+    },
+    {
+      "id": "mpp-evm-session",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "evm / session",
+      "network": "Configured EVM chain ID",
+      "buyer": "No Lucid-native session client",
+      "seller": "Not built in",
+      "facilitator": "Application-defined",
+      "transport": {
+        "invoke": "custom",
+        "stream": "custom",
+        "task": "custom"
+      },
+      "storage": "A custom method owns session state and durability.",
+      "status": "Custom only",
+      "limitations": "The native EVM descriptor materializes `evm.charge()` only."
+    },
+    {
+      "id": "mpp-custom",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "custom / charge or session",
+      "network": "Application-defined",
+      "buyer": "Application or compatible `mppx` method",
+      "seller": "Custom verifier",
+      "facilitator": "Application-defined",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Lucid can durably fence challenges with SQLite/Postgres; the verifier owns external settlement and session deduplication.",
+      "status": "Extension point",
+      "limitations": "The verifier must validate and settle the complete method contract, return a legal receipt, and deduplicate external side effects."
+    },
+    {
+      "id": "mpp-lightning",
+      "protocol": "MPP",
+      "sdk": "mppx 0.8.14",
+      "scheme": "lightning / custom",
+      "network": "Lightning",
+      "buyer": "Application-defined",
+      "seller": "Descriptor plus custom verifier",
+      "facilitator": "Application-defined",
+      "transport": {
+        "invoke": "supported",
+        "stream": "supported",
+        "task": "supported"
+      },
+      "storage": "Challenge replay fences are bounded memory by default, with durable SQLite and Postgres adapters.",
+      "status": "Custom only",
+      "limitations": "Lucid supplies configuration metadata but no built-in Lightning verification or settlement."
+    }
+  ]
+}

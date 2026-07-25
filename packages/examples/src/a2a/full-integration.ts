@@ -16,7 +16,7 @@
  *
  * Prerequisites:
  * 1. Install dependencies: bun install
- * 2. Run: bun run examples/full-integration.ts
+ * 2. Run: bun run packages/examples/src/a2a/full-integration.ts
  */
 
 import {

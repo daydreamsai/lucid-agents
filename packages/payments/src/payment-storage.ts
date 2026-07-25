@@ -1,6 +1,8 @@
 import type {
   PaymentDirection,
   PaymentRecord,
+  PaymentReservationAdjustment,
+  PaymentSettlementAdjustment,
 } from '@lucid-agents/types/payments';
 
 export type PaymentLimitReservation = {
@@ -18,6 +20,43 @@ export type PaymentLimitReservationResult =
   | { allowed: false };
 
 export type PaymentAccountingRecord = Omit<PaymentRecord, 'id' | 'timestamp'>;
+
+export function indexPaymentReservationAdjustments(
+  reservationIds: readonly string[],
+  adjustments: readonly PaymentReservationAdjustment[]
+): Map<string, bigint> {
+  const reservationSet = new Set(reservationIds);
+  const indexed = new Map<string, bigint>();
+  for (const adjustment of adjustments) {
+    if (
+      !reservationSet.has(adjustment.reservationId) ||
+      indexed.has(adjustment.reservationId) ||
+      adjustment.amount < 0n
+    ) {
+      throw new Error('Invalid payment reservation adjustment');
+    }
+    indexed.set(adjustment.reservationId, adjustment.amount);
+  }
+  return indexed;
+}
+
+export function indexPaymentSettlementAdjustments(
+  adjustments: readonly PaymentSettlementAdjustment[]
+): Map<string, bigint> {
+  const indexed = new Map<string, bigint>();
+  for (const adjustment of adjustments) {
+    const key = JSON.stringify([
+      adjustment.groupName,
+      adjustment.scope,
+      adjustment.direction,
+    ]);
+    if (indexed.has(key) || adjustment.amount < 0n) {
+      throw new Error('Invalid payment settlement adjustment');
+    }
+    indexed.set(key, adjustment.amount);
+  }
+  return indexed;
+}
 
 /**
  * Interface for payment data storage.
@@ -83,8 +122,15 @@ export interface PaymentStorage {
    */
   stagePaymentSettlement(
     reservationIds: readonly string[],
-    records?: readonly PaymentAccountingRecord[]
+    records?: readonly PaymentAccountingRecord[],
+    adjustments?: readonly PaymentReservationAdjustment[]
   ): Promise<string | undefined>;
+
+  /** Atomically reduce selected staged policy scopes to actual usage. */
+  adjustPaymentSettlement(
+    settlementId: string,
+    adjustments: readonly PaymentSettlementAdjustment[]
+  ): Promise<boolean>;
 
   /** Atomically turn a staged settlement batch into payment history. */
   commitPaymentSettlement(settlementId: string): Promise<boolean>;

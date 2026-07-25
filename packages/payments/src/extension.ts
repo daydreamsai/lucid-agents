@@ -16,12 +16,16 @@ import {
   type PaymentStorageFactory,
   type SIWxStorageFactory,
 } from './payments';
+import type { BatchSettlementServerOptions } from './batch-settlement';
+import type { X402ReconciliationOptions } from './x402-reconciliation';
 
 export function payments(options?: {
   config?: PaymentsConfig | false;
   agentId?: string;
   storageFactory?: PaymentStorageFactory;
   siwxStorageFactory?: SIWxStorageFactory;
+  batchSettlement?: BatchSettlementServerOptions;
+  reconciliation?: X402ReconciliationOptions;
 }): Extension<{ payments: PaymentsRuntime | undefined }> {
   let paymentsRuntime: PaymentsRuntime | undefined;
 
@@ -33,18 +37,18 @@ export function payments(options?: {
         options?.config,
         options?.agentId,
         options?.storageFactory,
-        options?.siwxStorageFactory
+        options?.siwxStorageFactory,
+        options?.batchSettlement,
+        options?.reconciliation
       );
       return { payments: paymentsRuntime };
     },
     onEntrypointAdded(entrypoint: EntrypointDef) {
-      if (
-        paymentsRuntime &&
-        !paymentsRuntime.isActive &&
-        paymentsRuntime.config
-      ) {
+      if (paymentsRuntime && paymentsRuntime.config) {
         if (
           entrypointHasExplicitPrice(entrypoint) ||
+          entrypoint.paymentProtocol === 'x402' ||
+          entrypoint.x402 !== undefined ||
           entrypoint.siwx?.authOnly
         ) {
           paymentsRuntime.activate(entrypoint);

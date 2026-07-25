@@ -4,12 +4,20 @@ import type {
   WalletsRuntime,
 } from '@lucid-agents/types/wallets';
 import type { PaymentsRuntime } from '@lucid-agents/types/payments';
+import { createPublicClient, http as viemHttp } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
 import { ExactEvmScheme, toClientEvmSigner } from '@x402/evm';
 import type { ClientEvmSigner } from '@x402/evm';
+import {
+  BatchSettlementEvmScheme,
+  type RefundOptions as BatchSettlementRefundOptions,
+} from '@x402/evm/batch-settlement/client';
+import { UptoEvmScheme } from '@x402/evm/upto/client';
+import type { SettleResponse } from '@x402/core/types';
 import { sanitizeAddress, ZERO_ADDRESS, type Hex } from './crypto';
 import { wrapBaseFetchWithPolicy } from './policy-wrapper';
+import type { BatchSettlementBuyerOptions } from './batch-settlement';
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -67,6 +75,11 @@ export type RuntimePaymentOptions = {
    * Logger used for non-fatal warnings.
    */
   logger?: RuntimePaymentLogger;
+  /**
+   * Enable EVM batch-settlement. Inject durable client storage to continue
+   * cumulative vouchers after a process restart.
+   */
+  batchSettlement?: BatchSettlementBuyerOptions;
 };
 
 export type RuntimePaymentContext = {
@@ -74,6 +87,10 @@ export type RuntimePaymentContext = {
   signer: ClientEvmSigner | null;
   walletAddress: `0x${string}` | null;
   chainId: number | null;
+  refundBatchChannel?: (
+    url: string,
+    options?: BatchSettlementRefundOptions
+  ) => Promise<SettleResponse>;
 };
 
 function logWarning(
@@ -288,7 +305,12 @@ export async function createRuntimePaymentContext(
     try {
       // Create account from private key
       const account = privateKeyToAccount(options.privateKey as Hex);
-      const signer = toClientEvmSigner(account);
+      const publicClient = options.batchSettlement?.rpcUrl
+        ? createPublicClient({
+            transport: viemHttp(options.batchSettlement.rpcUrl),
+          })
+        : undefined;
+      const signer = toClientEvmSigner(account, publicClient);
 
       // Create x402 client and register the network
       const client = new x402Client();
@@ -296,6 +318,19 @@ export async function createRuntimePaymentContext(
         caip2Network as `${string}:${string}`,
         new ExactEvmScheme(signer)
       );
+      client.register(
+        caip2Network as `${string}:${string}`,
+        new UptoEvmScheme(signer)
+      );
+      const batchSettlementScheme = options.batchSettlement
+        ? new BatchSettlementEvmScheme(signer, options.batchSettlement)
+        : undefined;
+      if (batchSettlementScheme) {
+        client.register(
+          caip2Network as `${string}:${string}`,
+          batchSettlementScheme
+        );
+      }
       enforceMaxPayment(client, options.maxPaymentBaseUnits);
 
       const fetchWithPayment = attachPreconnect(
@@ -310,6 +345,14 @@ export async function createRuntimePaymentContext(
         signer,
         walletAddress: account.address,
         chainId: chainId ?? null,
+        ...(batchSettlementScheme
+          ? {
+              refundBatchChannel: (
+                url: string,
+                refundOptions?: BatchSettlementRefundOptions
+              ) => batchSettlementScheme.refund(url, refundOptions),
+            }
+          : {}),
       };
     } catch (error) {
       logWarning(
@@ -459,7 +502,9 @@ export async function createRuntimePaymentContext(
             requirements.find(requirement => {
               if (
                 requirement.network !== caip2Network ||
-                requirement.scheme !== 'exact'
+                (requirement.scheme !== 'exact' &&
+                  requirement.scheme !== 'upto' &&
+                  requirement.scheme !== 'batch-settlement')
               ) {
                 return false;
               }
@@ -482,6 +527,19 @@ export async function createRuntimePaymentContext(
       caip2Network as `${string}:${string}`,
       new ExactEvmScheme(signer)
     );
+    client.register(
+      caip2Network as `${string}:${string}`,
+      new UptoEvmScheme(signer)
+    );
+    const batchSettlementScheme = options.batchSettlement
+      ? new BatchSettlementEvmScheme(signer, options.batchSettlement)
+      : undefined;
+    if (batchSettlementScheme) {
+      client.register(
+        caip2Network as `${string}:${string}`,
+        batchSettlementScheme
+      );
+    }
     enforceMaxPayment(client, options.maxPaymentBaseUnits);
 
     const fetchWithPayment = attachPreconnect(
@@ -497,6 +555,14 @@ export async function createRuntimePaymentContext(
       signer,
       walletAddress: runtimeSigner.account.address,
       chainId,
+      ...(batchSettlementScheme
+        ? {
+            refundBatchChannel: (
+              url: string,
+              refundOptions?: BatchSettlementRefundOptions
+            ) => batchSettlementScheme.refund(url, refundOptions),
+          }
+        : {}),
     };
   } catch (error) {
     logWarning(

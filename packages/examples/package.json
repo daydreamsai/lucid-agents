@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsup",
     "clean": "rm -rf dist",
+    "test:payment-methods": "bun test src/__tests__/payment-method-examples.test.ts",
     "type-check": "tsc -p tsconfig.build.json --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
@@ -34,6 +35,7 @@
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "@lucid-dreams/agent-auth": "^0.2.24",
+    "@x402/evm": "catalog:",
     "thirdweb": "^5.113.0",
     "mppx": "catalog:",
     "viem": "catalog:",

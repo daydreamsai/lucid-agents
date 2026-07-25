@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createPostgresPaymentStorage } from '../postgres-payment-storage';
 import type { PaymentStorage } from '../payment-storage';
 
@@ -28,10 +28,17 @@ describeWithDb('PostgresPaymentStorage with agentId', () => {
   });
 
   afterEach(async () => {
-    // Clean up after tests
-    await storageWithAgent.clear();
-    await storageWithoutAgent.clear();
-    await storageAgentB.clear();
+    try {
+      await storageWithAgent.clear();
+      await storageWithoutAgent.clear();
+      await storageAgentB.clear();
+    } finally {
+      await Promise.all([
+        storageWithAgent.close?.(),
+        storageWithoutAgent.close?.(),
+        storageAgentB.close?.(),
+      ]);
+    }
   });
 
   describe('Schema initialization', () => {
