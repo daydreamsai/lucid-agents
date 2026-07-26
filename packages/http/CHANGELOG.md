@@ -1,5 +1,12 @@
 # @lucid-agents/http
 
+## 4.0.1
+
+### Patch Changes
+
+- 3d9fa1d: Refresh generated service storefronts with the Lucid Ink, Paper, and Citron
+  palette, clearer paid-operation prices, and a quiet Resolved Core attribution.
+
 ## 4.0.0
 
 ### Major Changes

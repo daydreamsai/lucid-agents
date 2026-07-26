@@ -1,5 +1,20 @@
 # @lucid-agents/examples
 
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [3d9fa1d]
+  - @lucid-agents/http@4.0.1
+  - @lucid-agents/core@5.0.1
+  - @lucid-agents/express@1.0.2
+  - @lucid-agents/hono@1.0.2
+  - @lucid-agents/tanstack@1.0.2
+  - @lucid-agents/identity@5.0.1
+  - @lucid-agents/payments@5.0.1
+  - @lucid-agents/a2a@2.0.1
+  - @lucid-agents/analytics@1.0.2
+
 ## 0.4.4
 
 ### Patch Changes
