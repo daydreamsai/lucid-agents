@@ -7,6 +7,7 @@ import {
 import * as React from 'react';
 import appCss from '@/styles/app.css?url';
 import { RootProvider } from 'fumadocs-ui/provider/tanstack';
+import markColorUrl from '../../../brand/assets/mark-color.svg?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -22,7 +23,10 @@ export const Route = createRootRoute({
         title: 'Lucid Agents Docs',
       },
     ],
-    links: [{ rel: 'stylesheet', href: appCss }],
+    links: [
+      { rel: 'stylesheet', href: appCss },
+      { rel: 'icon', type: 'image/svg+xml', href: markColorUrl },
+    ],
   }),
   component: RootComponent,
 });
@@ -37,7 +41,7 @@ function RootComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

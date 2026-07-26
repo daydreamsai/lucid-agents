@@ -126,9 +126,13 @@ describe('renderLandingPage', () => {
     expect(page).toContain('/api/agent/entrypoints/summarize/stream');
     expect(page).toContain('/api/agent/entrypoints/ping/invoke');
     expect(page).toContain('name="theme-color"');
-    expect(page).toContain('content="#0b0d0c"');
+    expect(page).toContain('content="#0c0f0d"');
     expect(page).toContain('color-scheme: dark');
     expect(page).toContain('--service-body:');
+    expect(page).toContain('class="endpoint-price-value endpoint-price-paid"');
+    expect(page).toContain('class="service-brand-mark"');
+    expect(page).toContain('Powered by Lucid Agents');
+    expect(page).not.toContain(' · v');
     expect(page).not.toContain('Public Agent Card JSON');
     expect(page).not.toContain('Input schema');
     expect(page).not.toContain('&quot;count&quot;');
@@ -149,9 +153,9 @@ describe('renderLandingPage', () => {
 
   it('applies every preset and safe font stylesheet through the same renderer', async () => {
     for (const [preset, colorScheme, canvas] of [
-      ['dossier', 'dark', '#0B0D0C'],
-      ['folio', 'light', '#F7F8FA'],
-      ['console', 'dark', '#07111A'],
+      ['dossier', 'dark', '#0C0F0D'],
+      ['folio', 'light', '#F6F7F2'],
+      ['console', 'dark', '#0C0F0D'],
     ] as const) {
       const page = await render(card, { ok: true }, { preset });
       expect(page).toContain(`data-service-ui-preset="${preset}"`);

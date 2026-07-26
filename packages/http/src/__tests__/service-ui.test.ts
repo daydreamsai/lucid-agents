@@ -16,14 +16,14 @@ describe('service UI configuration', () => {
       colorScheme: 'dark',
       tokens: {
         colors: {
-          canvas: '#0B0D0C',
-          surface: '#111512',
-          text: '#EDF2EB',
-          accent: '#7EE2A8',
+          canvas: '#0C0F0D',
+          surface: '#151917',
+          text: '#F6F7F2',
+          accent: '#DFFF45',
         },
         fonts: {
           display: [
-            'IBM Plex Mono',
+            'Fragment Mono',
             'ui-monospace',
             'SFMono-Regular',
             'Menlo',
@@ -31,7 +31,7 @@ describe('service UI configuration', () => {
             'monospace',
           ],
           body: [
-            'IBM Plex Mono',
+            'Fragment Mono',
             'ui-monospace',
             'SFMono-Regular',
             'Menlo',
@@ -39,7 +39,7 @@ describe('service UI configuration', () => {
             'monospace',
           ],
           mono: [
-            'IBM Plex Mono',
+            'Fragment Mono',
             'ui-monospace',
             'SFMono-Regular',
             'Menlo',
@@ -60,13 +60,14 @@ describe('service UI configuration', () => {
       colorScheme: 'light',
       tokens: {
         colors: {
-          canvas: '#F7F8FA',
-          surface: '#FFFFFF',
-          text: '#111827',
-          accent: '#145BCC',
+          canvas: '#F6F7F2',
+          surface: '#FAFBF7',
+          text: '#0C0F0D',
+          accent: '#2B302C',
         },
         fonts: {
           display: [
+            'Instrument Sans',
             'Avenir Next',
             'Segoe UI',
             'Helvetica Neue',
@@ -74,6 +75,7 @@ describe('service UI configuration', () => {
             'sans-serif',
           ],
           body: [
+            'Instrument Sans',
             'Avenir Next',
             'Segoe UI',
             'Helvetica Neue',
@@ -88,14 +90,14 @@ describe('service UI configuration', () => {
       colorScheme: 'dark',
       tokens: {
         colors: {
-          canvas: '#07111A',
-          surface: '#0B1824',
-          text: '#EAF7FF',
-          accent: '#39D6E7',
+          canvas: '#0C0F0D',
+          surface: '#121714',
+          text: '#F6F7F2',
+          accent: '#DFFF45',
         },
         fonts: {
           display: [
-            'DM Sans',
+            'Instrument Sans',
             'Aptos',
             'Segoe UI',
             'Helvetica Neue',
@@ -103,7 +105,7 @@ describe('service UI configuration', () => {
             'sans-serif',
           ],
           mono: [
-            'JetBrains Mono',
+            'Fragment Mono',
             'ui-monospace',
             'SFMono-Regular',
             'Menlo',
@@ -176,10 +178,13 @@ describe('service UI configuration', () => {
       resolveServiceUi({ preset: 'folio' })
     );
 
-    expect(css).toContain('--service-canvas: #F7F8FA;');
+    expect(css).toContain('--service-canvas: #F6F7F2;');
     expect(css).toContain(
-      '--service-display: "Avenir Next", "Segoe UI", "Helvetica Neue", "Arial", sans-serif;'
+      '--service-display: "Instrument Sans", "Avenir Next", "Segoe UI", "Helvetica Neue", "Arial", sans-serif;'
     );
+    expect(css).toContain('--service-lucid-mark: url("data:image/svg+xml,');
+    expect(css).toContain('.service-brand-attribution');
+    expect(css).toContain('.endpoint-price-paid');
     expect(css).toContain('[data-service-ui-preset="folio"] h1');
     expect(css).toContain('.endpoint-table');
     expect(css).not.toContain('[data-service-ui-preset="console"]');

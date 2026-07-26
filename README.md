@@ -1,9 +1,11 @@
-![Lucid Agents machine commerce runtime infographic](./lucid-agents-infographic.webp)
+<p align="center">
+  <img src="./brand/assets/lockup-horizontal.svg" width="420" alt="Lucid Agents">
+</p>
 
-<div align="center">
-  <h1>Lucid Agents</h1>
-  <p><strong>A TypeScript runtime for machine commerce.</strong></p>
-</div>
+<p align="center">
+  <strong>Machine commerce, made clear.</strong><br>
+  The TypeScript runtime for machine commerce.
+</p>
 
 <div align="center">
   <a href="https://github.com/daydreamsai/lucid-agents/blob/master/LICENSE"><img src="https://img.shields.io/github/license/daydreamsai/lucid-agents?style=flat-square" alt="License"></a>

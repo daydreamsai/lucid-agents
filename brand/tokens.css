@@ -1,0 +1,50 @@
+:root {
+  /* Brand colors */
+  --lucid-ink: #0c0f0d;
+  --lucid-paper: #f6f7f2;
+  --lucid-graphite: #2b302c;
+  --lucid-slate: #626b64;
+  --lucid-mist: #dde2dc;
+  --lucid-citron: #dfff45;
+  --lucid-citron-pale: #efffc4;
+
+  /* Light-surface semantic colors */
+  --lucid-success: #18794e;
+  --lucid-warning: #9a6700;
+  --lucid-error: #c53935;
+  --lucid-info: #2563b8;
+
+  /* Dark-surface semantic colors */
+  --lucid-success-dark: #55d590;
+  --lucid-warning-dark: #f4b942;
+  --lucid-error-dark: #ff6b66;
+  --lucid-info-dark: #72a7ff;
+
+  /* Typography */
+  --lucid-font-sans: "Instrument Sans", "Avenir Next", sans-serif;
+  --lucid-font-serif: "Instrument Serif", Georgia, serif;
+  --lucid-font-mono: "Fragment Mono", "SFMono-Regular", Menlo, monospace;
+
+  /* Spacing */
+  --lucid-space-1: 0.25rem;
+  --lucid-space-2: 0.5rem;
+  --lucid-space-3: 0.75rem;
+  --lucid-space-4: 1rem;
+  --lucid-space-6: 1.5rem;
+  --lucid-space-8: 2rem;
+  --lucid-space-12: 3rem;
+  --lucid-space-16: 4rem;
+  --lucid-space-24: 6rem;
+
+  /* UI radii. The logo squircle is governed separately in BRAND.md. */
+  --lucid-radius-sm: 0.25rem;
+  --lucid-radius-md: 0.5rem;
+
+  /* Motion */
+  --lucid-duration-micro: 80ms;
+  --lucid-duration-short: 160ms;
+  --lucid-duration-medium: 240ms;
+  --lucid-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --lucid-ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --lucid-ease-move: cubic-bezier(0.65, 0, 0.35, 1);
+}

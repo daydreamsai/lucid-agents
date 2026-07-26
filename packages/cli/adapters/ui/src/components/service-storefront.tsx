@@ -82,8 +82,10 @@ export function ServiceStorefront({
               className={`status-dot status-${service.status.state}`}
               aria-hidden="true"
             />
-            {service.status.label}
-            {service.agent.version ? ` · v${service.agent.version}` : ''}
+            <span>{service.status.label}</span>
+            {service.agent.version ? (
+              <span className="service-version">v{service.agent.version}</span>
+            ) : null}
           </div>
           <h1>{service.agent.name}</h1>
           <p className="service-purpose">{description}</p>
@@ -135,7 +137,13 @@ export function ServiceStorefront({
                         ) : null}
                       </td>
                       <td className="endpoint-price" data-label="Price">
-                        {row.operation.price ?? 'Free'}
+                        <span
+                          className={`endpoint-price-value${
+                            row.operation.price ? ' endpoint-price-paid' : ''
+                          }`}
+                        >
+                          {row.operation.price ?? 'Free'}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -152,7 +160,10 @@ export function ServiceStorefront({
 
         <footer className="service-footer">
           <span>{service.agent.name}</span>
-          <span>Generated with Lucid Agents</span>
+          <span className="service-brand-attribution">
+            <span className="service-brand-mark" aria-hidden="true" />
+            <span>Powered by Lucid Agents</span>
+          </span>
         </footer>
       </main>
     </>

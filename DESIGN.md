@@ -82,11 +82,11 @@ Every renderer consumes the same resolved semantic tokens and emits the same
 information regions. Presets change composition and visual tone, not service
 semantics:
 
-| Preset    | Posture                | Scheme | Layout character                                  |
-| --------- | ---------------------- | ------ | ------------------------------------------------- |
-| `dossier` | Quiet technical record | Dark   | Monospaced identity and restrained record density |
-| `folio`   | Editorial field guide  | Light  | Cool, spacious catalog with crisp type hierarchy  |
-| `console` | Dense operator console | Dark   | Compact grid and high-information scan lines      |
+| Preset    | Posture                | Scheme | Layout character                                    |
+| --------- | ---------------------- | ------ | --------------------------------------------------- |
+| `dossier` | Quiet technical record | Dark   | Ink field, monospaced identity, Citron price signal |
+| `folio`   | Editorial field guide  | Light  | Paper field, spacious catalog, crisp hierarchy      |
+| `console` | Dense operator console | Dark   | Compact Ink grid and high-information scan lines    |
 
 The root `service-ui.config.ts` is the single user-owned configuration file.
 `defineServiceUi()` gives it contextual types; `resolveServiceUi()` validates it
@@ -97,9 +97,11 @@ renderer contrast checks. Font stylesheets must use HTTPS or a same-origin
 path.
 
 The identity heading is text-only: published agent icons and generated
-monograms are deliberately omitted to keep the hierarchy quiet. Functional
-transitions are disabled when reduced motion is requested. There is no runtime
-theme toggle; changing the typed config creates a deterministic deployment.
+monograms are deliberately omitted to keep the hierarchy quiet. The footer may
+carry one 16px Resolved Core mark beside "Powered by Lucid Agents"; this
+attribution must never compete with the service name. Functional transitions
+are disabled when reduced motion is requested. There is no runtime theme
+toggle; changing the typed config creates a deterministic deployment.
 
 ## Interaction lifecycle
 

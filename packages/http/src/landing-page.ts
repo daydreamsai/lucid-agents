@@ -103,8 +103,11 @@ export async function renderLandingPage({
                 class="status-dot status-${service.status.state}"
                 aria-hidden="true"
               ></span>
-              ${service.status.label}${service.agent.version
-                ? ` · v${service.agent.version}`
+              <span>${service.status.label}</span>
+              ${service.agent.version
+                ? html`<span class="service-version"
+                    >v${service.agent.version}</span
+                  >`
                 : ''}
             </div>
             <h1>${service.agent.name}</h1>
@@ -159,7 +162,12 @@ export async function renderLandingPage({
                                 : ''}
                             </td>
                             <td class="endpoint-price" data-label="Price">
-                              ${row.operation.price ?? 'Free'}
+                              <span
+                                class="endpoint-price-value${row.operation.price
+                                  ? ' endpoint-price-paid'
+                                  : ''}"
+                                >${row.operation.price ?? 'Free'}</span
+                              >
                             </td>
                           </tr>`
                       )}
@@ -176,7 +184,10 @@ export async function renderLandingPage({
 
           <footer class="service-footer">
             <span>${service.agent.name}</span>
-            <span>Generated with Lucid Agents</span>
+            <span class="service-brand-attribution">
+              <span class="service-brand-mark" aria-hidden="true"></span>
+              <span>Powered by Lucid Agents</span>
+            </span>
           </footer>
         </main>
       </body>

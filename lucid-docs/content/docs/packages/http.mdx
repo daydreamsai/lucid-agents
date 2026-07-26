@@ -101,8 +101,8 @@ import { defineServiceUi } from '@lucid-agents/http/service-ui';
 export default defineServiceUi({
   preset: 'console', // dossier | folio | console
   tokens: {
-    colors: { accent: '#39D6E7' },
-    fonts: { body: ['DM Sans', 'Segoe UI', 'sans-serif'] },
+    colors: { accent: '#DFFF45' },
+    fonts: { body: ['Instrument Sans', 'Aptos', 'sans-serif'] },
   },
 });
 ```
@@ -110,7 +110,9 @@ export default defineServiceUi({
 Only bounded semantic color/font tokens are supported. Runtime validation
 rejects unknown keys, non-hex colors, unsafe font values/URLs, and primary
 contrast failures. Next and TanStack UI consume the same preset resolver and
-public model and render the same read-only table.
+public model and render the same read-only table. The built-in presets use
+Lucid's Ink/Paper/Citron foundation and a compact footer attribution while
+keeping the agent's name and offering primary.
 
 ## Fetch-native handlers
 
