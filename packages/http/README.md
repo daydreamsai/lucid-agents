@@ -47,7 +47,9 @@ descriptors. It does not accept or expose private runtime configuration.
 The default Hono and Express landing page renders the same model as a minimal,
 portable endpoint directory. It contains no client JavaScript, invoke controls,
 schemas, or raw Agent Card JSON. Every invoke and stream operation appears once
-with its HTTP path, payment method, and price.
+with its HTTP path, payment method, and price. Priced operations receive a
+high-contrast price treatment, while a compact Resolved Core mark identifies
+the quiet "Powered by Lucid Agents" footer attribution.
 
 ## Service UI configuration
 
@@ -60,9 +62,9 @@ import { defineServiceUi } from '@lucid-agents/http/service-ui';
 export default defineServiceUi({
   preset: 'folio', // dossier | folio | console
   tokens: {
-    colors: { accent: '#1859C9' },
+    colors: { accent: '#2B302C' },
     fonts: {
-      body: ['Source Sans 3', 'Segoe UI', 'sans-serif'],
+      body: ['Instrument Sans', 'Avenir Next', 'sans-serif'],
       stylesheetUrl: '/fonts/service-ui.css',
     },
   },

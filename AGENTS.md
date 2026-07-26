@@ -32,6 +32,17 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - Package Manager: Bun workspaces
 - Versioning: Changesets
 
+## Brand System
+
+Read `BRAND.md` before making brand, marketing, documentation-shell, repository
+artwork, package artwork, or public launch-material decisions. Its logo, color,
+typography, voice, layout, motion, and accessibility rules govern Lucid-owned
+surfaces.
+
+`DESIGN.md` remains the source of truth for generated agent service storefronts.
+Do not replace agent-owned identity with the Lucid master brand, and do not
+deviate from either system without explicit user approval.
+
 ## Architecture Overview
 
 ### Package Dependencies

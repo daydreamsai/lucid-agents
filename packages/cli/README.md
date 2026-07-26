@@ -68,7 +68,9 @@ deliberately generates neither the directory nor its config.
 Every UI-capable adapter writes one editable `service-ui.config.ts`. Choose
 `dossier` (dark mono), `folio` (light editorial), or `console` (compact dark).
 The file supports only validated semantic color and font tokens; all presets
-keep the same endpoint-table layout.
+keep the same endpoint-table layout. The built-in designs use Lucid's
+Ink/Paper/Citron palette and place a small "Powered by Lucid Agents" signature
+in the footer without competing with the service owner's identity.
 
 ## Options
 

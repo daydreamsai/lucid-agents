@@ -63,9 +63,9 @@ The wizard offers three distinct presets:
 
 | Preset | Design |
 | --- | --- |
-| `dossier` | Dark monospaced endpoint table. |
-| `folio` | Light editorial endpoint table. |
-| `console` | Compact dark endpoint table. |
+| `dossier` | Dark monospaced endpoint table in Ink and Citron. |
+| `folio` | Light editorial endpoint table on Paper. |
+| `console` | Compact dark endpoint table with Citron price signals. |
 
 The generated `service-ui.config.ts` is the only visual configuration surface:
 
@@ -75,9 +75,9 @@ import { defineServiceUi } from '@lucid-agents/http/service-ui';
 export default defineServiceUi({
   preset: 'folio',
   tokens: {
-    colors: { accent: '#1859C9' },
+    colors: { accent: '#2B302C' },
     fonts: {
-      display: ['Instrument Serif', 'Georgia', 'serif'],
+      display: ['Instrument Sans', 'Avenir Next', 'sans-serif'],
       stylesheetUrl: 'https://fonts.example.com/service.css',
     },
   },
@@ -88,6 +88,9 @@ The API intentionally excludes arbitrary layout and CSS overrides. Unknown
 keys, unsafe URLs/font names, invalid hex colors, and inaccessible primary
 color combinations fail validation. This keeps custom brands on the same
 semantic markup, responsive rules, and public information contract.
+
+The service name remains the primary page identity. Lucid appears only as a
+small Resolved Core mark with "Powered by Lucid Agents" in the footer.
 
 ## Configure the public origin
 

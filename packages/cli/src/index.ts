@@ -1575,7 +1575,7 @@ export default defineServiceUi({
 
   // Optional brand overrides are type checked and validated for safe contrast.
   // tokens: {
-  //   colors: { accent: "#7EE2A8" },
+  //   colors: { accent: "#DFFF45" },
   //   fonts: {
   //     body: ["Your Font", "sans-serif"],
   //     stylesheetUrl: "/fonts/service-ui.css",

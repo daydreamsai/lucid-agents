@@ -60,7 +60,7 @@ jobs:
         env:
           PRESET: ${{ matrix.preset }}
         run: |
-          PROJECT_ROOT="$(tr -d '\n' < "$RUNNER_TEMP/service-ui-root.txt")/generated-next-$PRESET"
+          PROJECT_ROOT="$(tr -d '\n' < "$RUNNER_TEMP/service-ui-root.txt")/generated-blank-next-$PRESET"
           echo "PROJECT_ROOT=$PROJECT_ROOT" >> "$GITHUB_ENV"
           cd "$PROJECT_ROOT"
           bun add --dev @opennextjs/cloudflare@1.20.2 wrangler@4.113.0

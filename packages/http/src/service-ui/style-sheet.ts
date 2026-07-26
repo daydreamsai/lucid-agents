@@ -33,15 +33,15 @@ body {
   min-width: 320px;
   background: var(--service-canvas);
   color: var(--service-text);
-  font: 15px/1.55 var(--service-body);
+  font: 16px/1.55 var(--service-body);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
 .service-page {
-  width: min(1180px, 100%);
+  width: min(1280px, 100%);
   margin: 0 auto;
-  padding: 40px clamp(24px, 5vw, 64px) 24px;
+  padding: 48px clamp(24px, 5vw, 64px) 24px;
 }
 
 .service-header {
@@ -50,9 +50,13 @@ body {
 }
 
 .service-kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   color: var(--service-text-muted);
   font: 600 12px/1.4 var(--service-mono);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -60,9 +64,14 @@ body {
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin: 0 8px 1px 0;
+  margin: 0 2px 1px 0;
   border-radius: 50%;
   background: var(--service-text-muted);
+}
+
+.service-version {
+  padding-left: 9px;
+  border-left: 1px solid var(--service-border);
 }
 
 .status-online {
@@ -86,10 +95,11 @@ h2 {
 
 h1 {
   max-width: 920px;
-  margin-top: 12px;
-  font-size: clamp(32px, 4.2vw, 46px);
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+  margin-top: 16px;
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
   overflow-wrap: anywhere;
 }
 
@@ -101,7 +111,7 @@ h2 {
 
 .service-purpose {
   max-width: 720px;
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   color: var(--service-text-muted);
   font-size: 16px;
 }
@@ -127,7 +137,7 @@ h2 {
 .endpoint-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--service-border);
-  border-radius: 10px;
+  border-radius: 4px;
   background: var(--service-surface);
 }
 
@@ -140,7 +150,7 @@ h2 {
 
 .endpoint-table th,
 .endpoint-table td {
-  padding: 16px 20px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--service-border);
   text-align: left;
   vertical-align: top;
@@ -171,8 +181,8 @@ h2 {
 }
 
 .endpoint-name {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -215,10 +225,23 @@ h2 {
   white-space: nowrap;
 }
 
+.endpoint-price-value {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+}
+
+.endpoint-price-paid {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--service-accent);
+  color: var(--service-accent-text);
+}
+
 .empty-state {
   padding: 32px;
   border: 1px solid var(--service-border);
-  border-radius: 10px;
+  border-radius: 4px;
   background: var(--service-surface);
 }
 
@@ -229,12 +252,27 @@ h2 {
 
 .service-footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--service-border);
   color: var(--service-text-muted);
   font: 11px/1.4 var(--service-mono);
+}
+
+.service-brand-attribution {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-brand-mark {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: var(--service-lucid-mark) center / contain no-repeat;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -357,7 +395,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 }
 
 [data-service-ui-preset="dossier"] .endpoint-table-wrap {
-  border-radius: 8px;
+  border-radius: 0;
 }`,
   folio: `[data-service-ui-preset="folio"] h1 {
   font-size: clamp(34px, 4.4vw, 48px);
@@ -366,7 +404,7 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="folio"] .endpoint-table-wrap,
 [data-service-ui-preset="folio"] .empty-state {
-  border-radius: 12px;
+  border-radius: 8px;
 }`,
   console: `[data-service-ui-preset="console"] {
   width: min(1240px, 100%);
@@ -374,6 +412,11 @@ export const PRESET_LAYOUT_CSS: Record<ServiceUiConfig['preset'], string> = {
 
 [data-service-ui-preset="console"] h1 {
   font-size: clamp(30px, 3.8vw, 42px);
+}
+
+[data-service-ui-preset="console"] .endpoint-table-wrap,
+[data-service-ui-preset="console"] .empty-state {
+  border-radius: 0;
 }
 
 [data-service-ui-preset="console"] .endpoint-table th,
