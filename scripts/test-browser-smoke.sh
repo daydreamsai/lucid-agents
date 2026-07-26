@@ -109,7 +109,7 @@ GENERATED_ROOT="$(tr -d '\n' <"$GENERATED_ROOT_FILE")"
 
 THEMES=(dossier folio console)
 SCHEMES=(dark light dark)
-CANVASES=("rgb(11, 13, 12)" "rgb(247, 248, 250)" "rgb(7, 17, 26)")
+CANVASES=("rgb(12, 15, 13)" "rgb(246, 247, 242)" "rgb(12, 15, 13)")
 
 for index in "${!THEMES[@]}"; do
   THEME="${THEMES[$index]}"
