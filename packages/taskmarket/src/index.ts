@@ -10,8 +10,8 @@
  * `identity` extension (for wallet access).
  */
 
-import { createTaskmarketClient } from './client';
-import { createTaskmarketRuntime } from './runtime';
+import { createTaskmarketClient } from './client.js';
+import { createTaskmarketRuntime } from './runtime.js';
 
 // --- Minimal Extension type (mirrors @lucid-agents/types/core) ---
 type BuildContext<Deps extends object = Record<string, unknown>> = {
