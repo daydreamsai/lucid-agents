@@ -1,0 +1,51 @@
+{
+  "name": "@lucid-agents/peer-cash",
+  "version": "0.0.0",
+  "description": "Custody-separated Peer Cash off-ramp extension for Lucid agents",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/peer-cash"
+  },
+  "type": "module",
+  "lucidAgents": {
+    "runtime": "node"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@lucid-agents/types": "workspace:*",
+    "@zkp2p/cash": "0.4.9",
+    "viem": "catalog:"
+  },
+  "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}

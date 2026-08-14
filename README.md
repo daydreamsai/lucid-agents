@@ -123,6 +123,7 @@ Package names below use the `@lucid-agents/` prefix.
 | Analytics                              | `analytics`, `payments`       | Bound payment summaries and JSON/CSV exports                                                                                     |
 | Scheduling                             | `scheduler`, `a2a`            | Leased, idempotent scheduled agent calls                                                                                         |
 | Catalogs                               | `catalog`                     | YAML/CSV-defined entrypoints                                                                                                     |
+| Peer Cash off-ramp                     | `peer-cash`                   | Base USDC fiat estimates, unsigned cash-out plans, order tracking, withdrawal, and top-up preparation                            |
 | Frameworks                             | `hono`, `express`, `tanstack` | Bind the canonical HTTP contract to Hono, Express, or TanStack Start                                                             |
 | Tooling                                | `cli`, `deploy`               | Project generation and guarded provider deployment                                                                               |
 | Hosted client                          | `api-sdk`                     | Generated client for the separately operated hosted Runtime API                                                                  |
