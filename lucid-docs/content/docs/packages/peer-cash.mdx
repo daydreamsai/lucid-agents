@@ -1,0 +1,86 @@
+---
+title: '@lucid-agents/peer-cash'
+description: Prepare non-custodial Base USDC cash-outs to fiat payment platforms through Peer.
+icon: Banknote
+status: next
+verifiedVersion: 0.1.0
+verifiedAt: 2026-08-14
+product: sdk
+---
+
+`@lucid-agents/peer-cash` adds a `runtime.peerCash` slice for Base USDC fiat
+off-ramps. It exposes discovery, live market-rate estimates, unsigned
+transaction preparation, and resumable order reads.
+
+<Callout type="warn">
+  The extension never accepts private keys, signs, or broadcasts. The host must
+  inspect and submit every prepared Base transaction in order through its own
+  wallet and policy boundary.
+</Callout>
+
+## Install
+
+```bash
+bun add @lucid-agents/peer-cash @lucid-agents/core
+```
+
+## Add the extension
+
+```ts
+import { createAgent } from '@lucid-agents/core';
+import { peerCash } from '@lucid-agents/peer-cash';
+
+const runtime = await createAgent({ name: 'treasury', version: '1.0.0' })
+  .use(peerCash({ environment: 'production' }))
+  .build();
+
+const estimate = await runtime.peerCash.estimate({
+  amountUsdc: '25',
+  currency: 'GBP',
+  platform: 'wise',
+});
+```
+
+Estimates use the live oracle market rate and are not locked quotes. Call
+`capabilities()` for supported payout platforms and `fillStats()` for 30-day
+corridor demand evidence before choosing a payout route.
+
+## Prepare a cash-out
+
+```ts
+const prepared = await runtime.peerCash.prepareCashout({
+  amountUsdc: '25',
+  platform: 'wise',
+  currency: 'GBP',
+  payee: 'recipient@example.com',
+});
+
+const receipt = await submitWithHostWallet(prepared.txs);
+const cashout = runtime.peerCash.finalizeCashout(receipt);
+
+if (prepared.accessPolicyRequired) {
+  await submitWithHostWallet([
+    runtime.peerCash.prepareAccessPolicy(cashout.depositId),
+  ]);
+}
+```
+
+`submitWithHostWallet` is application-owned. It may use the Lucid wallet
+runtime, an account-abstraction wallet, an external signer, or another policy
+layer.
+
+## Resume or unwind
+
+```ts
+const order = await runtime.peerCash.order(cashout.depositId);
+
+const withdrawal = await runtime.peerCash.prepareWithdrawal(cashout.depositId);
+await submitWithHostWallet(withdrawal.txs);
+```
+
+Pass `{ amountUsdc: '5' }` for a partial withdrawal. Use
+`prepareTopUp(depositId, amountUsdc)` to add funds without changing the payout
+details.
+
+See the package [README](https://github.com/daydreamsai/lucid-agents/tree/master/packages/peer-cash#readme)
+for the complete runtime surface and transaction-ordering contract.
