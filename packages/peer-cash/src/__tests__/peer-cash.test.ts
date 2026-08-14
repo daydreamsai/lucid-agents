@@ -110,6 +110,39 @@ describe('peerCash', () => {
     expect(() => JSON.stringify(prepared)).not.toThrow();
   });
 
+  it('passes structured payee data through for attested payout identities', async () => {
+    const baseClient = createCashClient({ environment: 'production' });
+    let received: CashoutInput | undefined;
+    const client = {
+      ...baseClient,
+      prepare: async (input: CashoutInput) => {
+        received = input;
+        return prepareResultFromJson({
+          txs: [],
+          steps: [],
+          register: { hashedOnchainIds: [] },
+          accessPolicyRequired: false,
+        });
+      },
+    } as CashClient;
+    const agent = await createAgent({ name: 'cash-agent', version: '1.0.0' })
+      .use(peerCash({ client }))
+      .build();
+
+    await agent.peerCash.prepareCashout({
+      amountUsdc: '25.5',
+      platform: 'revolut',
+      currency: 'gbp',
+      payee: { offchainId: 'your-revtag' },
+    });
+
+    expect(received?.receive).toMatchObject({
+      platform: 'revolut',
+      currency: 'GBP',
+      payee: { offchainId: 'your-revtag' },
+    });
+  });
+
   it('returns resumable order state as JSON', async () => {
     const depositId = '0x71e18f1b6a1c1a4dfa5c1728f5b70cf4a4d5c111_12';
     const baseClient = createCashClient({ environment: 'production' });

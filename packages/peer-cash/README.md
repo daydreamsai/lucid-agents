@@ -57,9 +57,9 @@ locked quotes. Call `fillStats()` before choosing a corridor; it returns
 ```ts
 const prepared = await runtime.peerCash.prepareCashout({
   amountUsdc: '25',
-  platform: 'wise',
+  platform: 'revolut',
   currency: 'GBP',
-  payee: 'recipient@example.com',
+  payee: { offchainId: 'your-revtag' },
 });
 
 // Host-owned wallet boundary. Inspect, sign, submit, and confirm each
@@ -78,6 +78,11 @@ if (prepared.accessPolicyRequired) {
 `submitWithHostWallet` is deliberately application-owned. Use the Lucid wallet
 runtime, an account-abstraction wallet, an external signer, or another policy
 layer that can submit Base transactions.
+
+Wise and PayPal require a verified identity for a new payee registration. Pass
+the structured `CashPayeeInput` returned by the host's identity-attestation
+flow; an already registered handle can still be reused as a string. The Peer
+Cash SDK validates this before any funds move on-chain.
 
 ## Resume and unwind
 

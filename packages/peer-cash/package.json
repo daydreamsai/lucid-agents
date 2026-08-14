@@ -9,7 +9,10 @@
   },
   "type": "module",
   "lucidAgents": {
-    "runtime": "portable"
+    "runtime": "node"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",

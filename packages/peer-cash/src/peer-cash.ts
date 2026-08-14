@@ -17,6 +17,7 @@ import {
   type CashFillStatsJson,
   type CashOrderJson,
   type CashPreparedStepJson,
+  type CashPayeeInput,
   type PrepareResultJson,
   type PreparedTransactionJson,
   type PreparedCashoutReceipt,
@@ -73,7 +74,7 @@ export type PeerCashoutInput = {
   amountUsdc: string;
   platform: string;
   currency: string;
-  payee: string;
+  payee: CashPayeeInput;
   minimumFillUsdc?: string;
   maximumFillUsdc?: string;
 };
