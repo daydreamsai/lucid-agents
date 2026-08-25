@@ -210,6 +210,7 @@
         "@lucid-agents/payments": "workspace:*",
         "@lucid-agents/scheduler": "workspace:*",
         "@lucid-agents/tanstack": "workspace:*",
+        "@lucid-agents/taskmarket": "workspace:*",
         "@lucid-agents/types": "workspace:*",
         "@lucid-agents/wallet": "workspace:*",
         "@lucid-dreams/agent-auth": "^0.2.24",
@@ -372,6 +373,19 @@
         "@lucid-agents/core": "workspace:*",
         "@lucid-agents/http": "workspace:*",
         "@lucid-agents/payments": "workspace:*",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/taskmarket": {
+      "name": "@lucid-agents/taskmarket",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+        "viem": "catalog:",
+      },
+      "devDependencies": {
+        "@lucid-agents/core": "workspace:*",
         "tsup": "catalog:",
         "typescript": "catalog:",
       },
@@ -773,6 +787,7 @@
 
     "@lucid-agents/tanstack": ["@lucid-agents/tanstack@workspace:packages/tanstack"],
 
+    "@lucid-agents/taskmarket": ["@lucid-agents/taskmarket@workspace:packages/taskmarket"],
     "@lucid-agents/types": ["@lucid-agents/types@workspace:packages/types"],
 
     "@lucid-agents/wallet": ["@lucid-agents/wallet@workspace:packages/wallet"],

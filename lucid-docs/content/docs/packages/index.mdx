@@ -20,16 +20,16 @@ when you need the exact boundary of a package.
 
 ## Runtime layers
 
-| Layer           | Packages                                                                                                              | Responsibility                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Contracts       | [`@lucid-agents/types`](/docs/packages/types)                                                                         | Canonical cross-package protocol and runtime types           |
-| Kernel          | [`@lucid-agents/core`](/docs/packages/core)                                                                           | Extension lifecycle and one capability registry              |
-| Transport       | [`@lucid-agents/http`](/docs/packages/http)                                                                           | Fetch handlers, route plan, SSE, authorization transaction   |
-| Commerce        | [`payments`](/docs/packages/payments), [`mpp`](/docs/packages/mpp), [`wallet`](/docs/packages/wallet)                 | Receive, buy, verify, enforce policy, and sign               |
-| Agent protocols | [`a2a`](/docs/packages/a2a), [`identity`](/docs/packages/identity), [`ap2`](/docs/packages/ap2)                       | Discovery, tasks, trust, and role metadata                   |
-| Operations      | [`analytics`](/docs/packages/analytics), [`scheduler`](/docs/packages/scheduler), [`catalog`](/docs/packages/catalog) | Reporting, recurring calls, and catalog-defined capabilities |
-| Adapters        | [`hono`](/docs/packages/hono), [`express`](/docs/packages/express), [`tanstack`](/docs/packages/tanstack)             | Bind the same route plan to a framework                      |
-| Tooling         | [`cli`](/docs/packages/cli), [`deploy`](/docs/packages/deploy)                                                        | Generate projects and deploy guarded previews                |
+| Layer           | Packages                                                                                                                                         | Responsibility                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Contracts       | [`@lucid-agents/types`](/docs/packages/types)                                                                                                    | Canonical cross-package protocol and runtime types                   |
+| Kernel          | [`@lucid-agents/core`](/docs/packages/core)                                                                                                      | Extension lifecycle and one capability registry                      |
+| Transport       | [`@lucid-agents/http`](/docs/packages/http)                                                                                                      | Fetch handlers, route plan, SSE, authorization transaction           |
+| Commerce        | [`payments`](/docs/packages/payments), [`mpp`](/docs/packages/mpp), [`wallet`](/docs/packages/wallet), [`taskmarket`](/docs/packages/taskmarket) | Receive, buy, verify, enforce policy, sign, and post Taskmarket work |
+| Agent protocols | [`a2a`](/docs/packages/a2a), [`identity`](/docs/packages/identity), [`ap2`](/docs/packages/ap2)                                                  | Discovery, tasks, trust, and role metadata                           |
+| Operations      | [`analytics`](/docs/packages/analytics), [`scheduler`](/docs/packages/scheduler), [`catalog`](/docs/packages/catalog)                            | Reporting, recurring calls, and catalog-defined capabilities         |
+| Adapters        | [`hono`](/docs/packages/hono), [`express`](/docs/packages/express), [`tanstack`](/docs/packages/tanstack)                                        | Bind the same route plan to a framework                              |
+| Tooling         | [`cli`](/docs/packages/cli), [`deploy`](/docs/packages/deploy)                                                                                   | Generate projects and deploy guarded previews                        |
 
 ## Dependency direction
 

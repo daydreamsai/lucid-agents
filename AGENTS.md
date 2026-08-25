@@ -15,6 +15,7 @@ This is a TypeScript/Bun monorepo for building, monetizing, and verifying AI age
 - **@lucid-agents/a2a** - A2A Protocol client for agent-to-agent communication
 - **@lucid-agents/ap2** - AP2 (Agent Payments Protocol) extension
 - **@lucid-agents/analytics** - Bound analytics over payment tracking
+- **@lucid-agents/taskmarket** - Authorization-gated Taskmarket requester toolkit
 - **@lucid-agents/scheduler** - Leased, idempotent scheduled A2A calls
 - **@lucid-agents/catalog** - YAML/CSV catalog-driven entrypoints
 - **@lucid-agents/hono** - Hono HTTP server adapter
@@ -51,7 +52,7 @@ deviate from either system without explicit user approval.
 types (shared contracts)
   ├─ core (typed extension kernel + one entrypoint registry)
   ├─ http, payments, mpp, identity, wallet, a2a, ap2,
-  │  analytics, scheduler, catalog (domain extensions)
+  │  analytics, scheduler, catalog, taskmarket (domain extensions)
   └─ hono, express, tanstack (route/handler adapters)
 
 cli scaffolds projects that compose the packages above.
@@ -71,6 +72,7 @@ The framework uses an extension-based architecture where features are added via 
 - **a2a** (`@lucid-agents/a2a`) - Agent-to-agent communication protocol
 - **ap2** (`@lucid-agents/ap2`) - Agent Payments Protocol extension
 - **analytics** (`@lucid-agents/analytics`) - Operations bound to the payments tracker
+- **taskmarket** (`@lucid-agents/taskmarket`) - Preview/fund/review Taskmarket work with spending checks
 - **scheduler** (`@lucid-agents/scheduler`) - Leased A2A invocation jobs
 - **catalog** (`@lucid-agents/catalog`) - Catalog-driven entrypoint registration
 
@@ -347,6 +349,7 @@ type PaymentsRuntime = {
 │   ├── a2a/                # Cards, client, bounded/durable task runtime
 │   ├── ap2/                # AP2 extension
 │   ├── analytics/          # Bound payment analytics runtime
+│   ├── taskmarket/         # Authorization-gated Taskmarket requester toolkit
 │   ├── scheduler/          # Leased scheduled A2A calls
 │   ├── catalog/            # Catalog-driven entrypoint registration
 │   ├── hono/               # Hono binder for runtime.http.routes
