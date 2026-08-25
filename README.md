@@ -121,6 +121,7 @@ Package names below use the `@lucid-agents/` prefix.
 | Agent discovery and tasks              | `a2a`                         | Agent Card-shaped discovery, client calls, and token-protected asynchronous tasks                                                |
 | Agent Payments Protocol (AP2) metadata | `ap2`                         | AP2 v0.1 role metadata in discovery                                                                                              |
 | Analytics                              | `analytics`, `payments`       | Bound payment summaries and JSON/CSV exports                                                                                     |
+| Taskmarket requester                   | `taskmarket`, `wallet`        | Preview, fund, and review Taskmarket tasks on Base USDC with explicit authorization                                              |
 | Scheduling                             | `scheduler`, `a2a`            | Leased, idempotent scheduled agent calls                                                                                         |
 | Catalogs                               | `catalog`                     | YAML/CSV-defined entrypoints                                                                                                     |
 | Frameworks                             | `hono`, `express`, `tanstack` | Bind the canonical HTTP contract to Hono, Express, or TanStack Start                                                             |

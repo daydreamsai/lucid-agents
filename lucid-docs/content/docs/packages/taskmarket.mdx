@@ -1,0 +1,97 @@
+---
+title: '@lucid-agents/taskmarket'
+description: Authorization-gated Taskmarket requester toolkit for Lucid agents.
+icon: ListTodo
+status: next
+verifiedVersion: 0.1.0
+verifiedAt: 2026-08-25
+product: sdk
+---
+
+`@lucid-agents/taskmarket` lets a Lucid agent complete a Taskmarket requester
+workflow from inside the runtime: preview a task, fund it on Base USDC after
+explicit authorization, retrieve live status, and present submissions for
+human review.
+
+It is not an automatic bounty bot. It never silently accepts or rejects work,
+never stores private keys, and never retries a payment whose settlement status
+is unknown.
+
+## Install and bind
+
+```bash
+bun add @lucid-agents/taskmarket @lucid-agents/core
+```
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { taskmarket } from '@lucid-agents/taskmarket';
+
+const runtime = await createAgent(meta).use(taskmarket({ account })).build();
+```
+
+`account` must already be a signing wallet (viem `LocalAccount` or a Lucid
+wallet connector account). This package does not accept, log, or persist
+private keys.
+
+## Preview before pay
+
+`previewCreate` returns the exact values a user must see before funding:
+
+- description
+- reward (USDC and base units)
+- deadline
+- deliverables
+- Base network (`eip155:8453`)
+- maximum spend
+- canonical Base USDC asset
+
+```typescript
+const preview = runtime.taskmarket.previewCreate({
+  description: 'Summarize the weekly onchain report',
+  rewardUsdc: '1.5',
+  durationHours: 24,
+  tags: ['research'],
+  deliverables: 'One markdown file, 400-800 words',
+});
+```
+
+## Explicit authorization
+
+`createTask` requires `{ confirmed: true, previewId }` matching the issued
+preview. A false, missing, or mismatched confirmation does not send a payment.
+
+```typescript
+const created = await runtime.taskmarket.createTask(preview, {
+  previewId: preview.previewId,
+  confirmed: true,
+});
+```
+
+The client probes Taskmarket without payment, validates the x402 offer against
+the confirmed Base USDC amount, then sends **one** `PAYMENT-SIGNATURE` with the
+preview's idempotency UUID.
+
+If the paid request times out or returns 5xx, the attempt is marked `unknown`.
+Call `recoverPayment(idempotencyKey)` and read `GET /api/intents`. Do not
+create a new preview to "retry" that payment.
+
+## Status and review
+
+```typescript
+const status = await runtime.taskmarket.getTask(created.taskId);
+const submissions = await runtime.taskmarket.listSubmissions(created.taskId);
+```
+
+`listSubmissions` is read-only. Accept and reject are separate authorized
+paid calls (`previewAccept` / `previewReject`) so a human can review work
+first.
+
+## Reproduction
+
+```bash
+bun test packages/taskmarket
+```
+
+See [`packages/taskmarket/README.md`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/taskmarket/README.md)
+and [`packages/taskmarket/examples/requester.ts`](https://github.com/daydreamsai/lucid-agents/blob/master/packages/taskmarket/examples/requester.ts).

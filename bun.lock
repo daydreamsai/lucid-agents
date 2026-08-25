@@ -376,6 +376,19 @@
         "typescript": "catalog:",
       },
     },
+    "packages/taskmarket": {
+      "name": "@lucid-agents/taskmarket",
+      "version": "0.1.0",
+      "dependencies": {
+        "@lucid-agents/types": "workspace:*",
+        "viem": "catalog:",
+      },
+      "devDependencies": {
+        "@lucid-agents/core": "workspace:*",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/types": {
       "name": "@lucid-agents/types",
       "version": "2.1.0",
@@ -773,6 +786,7 @@
 
     "@lucid-agents/tanstack": ["@lucid-agents/tanstack@workspace:packages/tanstack"],
 
+    "@lucid-agents/taskmarket": ["@lucid-agents/taskmarket@workspace:packages/taskmarket"],
     "@lucid-agents/types": ["@lucid-agents/types@workspace:packages/types"],
 
     "@lucid-agents/wallet": ["@lucid-agents/wallet@workspace:packages/wallet"],
