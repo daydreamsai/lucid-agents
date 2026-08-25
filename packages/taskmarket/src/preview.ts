@@ -4,6 +4,7 @@ import {
   BASE_CAIP2,
   BASE_NETWORK_NAME,
   BASE_USDC_ADDRESS,
+  DEFAULT_AUTHORIZATION_TTL_MS,
   TASKMARKET_API_FEE_BASE_UNITS,
 } from './constants';
 import { TaskmarketError } from './errors';
@@ -14,6 +15,7 @@ import {
   parseUsdcToBaseUnits,
 } from './money';
 import type {
+  AuthorizationStore,
   CreateTaskDraft,
   ExplicitAuthorization,
   TaskPreview,
@@ -184,9 +186,40 @@ export function previewRejectSubmission(
   };
 }
 
+export function issueAuthorization(
+  preview: TaskPreview,
+  options: {
+    now: () => number;
+    randomUUID: () => string;
+    store: AuthorizationStore;
+    ttlMs?: number;
+  }
+): ExplicitAuthorization {
+  const ttlMs = options.ttlMs ?? DEFAULT_AUTHORIZATION_TTL_MS;
+  if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+    throw new TaskmarketError(
+      'invalid_input',
+      'authorizationTtlMs must be > 0'
+    );
+  }
+  const token = options.randomUUID();
+  options.store.set({
+    previewId: preview.previewId,
+    token,
+    expiresAtMs: options.now() + ttlMs,
+    consumed: false,
+  });
+  return {
+    previewId: preview.previewId,
+    confirmed: true,
+    token,
+  };
+}
+
 export function assertAuthorized(
   preview: TaskPreview,
-  authorization: ExplicitAuthorization
+  authorization: ExplicitAuthorization,
+  options: { now: () => number; store: AuthorizationStore }
 ): void {
   if (authorization?.confirmed !== true) {
     throw new TaskmarketError(
@@ -200,6 +233,40 @@ export function assertAuthorized(
       'Authorization previewId does not match the issued preview'
     );
   }
+  const token =
+    typeof authorization.token === 'string' ? authorization.token.trim() : '';
+  if (!token) {
+    throw new TaskmarketError(
+      'authorization_required',
+      'Authorization token is required; call confirm() for a fresh single-use token'
+    );
+  }
+  const record = options.store.get(token);
+  if (!record) {
+    throw new TaskmarketError(
+      'authorization_unrecognized',
+      'Authorization is unrecognized after restart or was never issued by this client'
+    );
+  }
+  if (record.previewId !== preview.previewId) {
+    throw new TaskmarketError(
+      'preview_mismatch',
+      'Authorization token does not match the issued preview'
+    );
+  }
+  if (record.consumed) {
+    throw new TaskmarketError(
+      'authorization_reused',
+      'Authorization has already been used; request a fresh confirmation'
+    );
+  }
+  if (options.now() >= record.expiresAtMs) {
+    throw new TaskmarketError(
+      'authorization_expired',
+      'Authorization has expired; request a fresh confirmation'
+    );
+  }
+  options.store.set({ ...record, consumed: true });
 }
 
 export function fingerprintPreview(preview: TaskPreview): string {

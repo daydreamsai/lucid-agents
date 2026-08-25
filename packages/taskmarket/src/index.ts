@@ -7,6 +7,7 @@ export {
   BASE_NETWORK_NAME,
   TASKMARKET_API_FEE_BASE_UNITS,
   USDC_DECIMALS,
+  DEFAULT_AUTHORIZATION_TTL_MS,
 } from './constants';
 export {
   TaskmarketError,
@@ -18,10 +19,12 @@ export {
 } from './errors';
 export { formatUsdc, parseBaseUnits, parseUsdcToBaseUnits } from './money';
 export { createInMemoryPaymentAttemptStore } from './attempts';
+export { createInMemoryAuthorizationStore } from './authorizations';
 export {
   previewCreateTask,
   previewAcceptSubmission,
   previewRejectSubmission,
+  issueAuthorization,
   assertAuthorized,
   assertPreviewIntegrity,
 } from './preview';
@@ -40,6 +43,8 @@ export type {
   TaskPreview,
   RequesterOperation,
   ExplicitAuthorization,
+  IssuedAuthorization,
+  AuthorizationStore,
   PaymentAttempt,
   PaymentAttemptStatus,
   PaymentAttemptStore,

@@ -1,5 +1,6 @@
 import {
   BASE_NETWORK_NAME,
+  DEFAULT_AUTHORIZATION_TTL_MS,
   DEFAULT_TASKMARKET_API_URL,
   DEFAULT_TASKMARKET_APP_URL,
   USER_AGENT,
@@ -14,15 +15,18 @@ import {
   createInMemoryPaymentAttemptStore,
   isBlockingAttempt,
 } from './attempts';
+import { createInMemoryAuthorizationStore } from './authorizations';
 import { parsePaymentRequired, selectSafeOffer } from './payment-required';
 import {
   assertAuthorized,
   assertPreviewIntegrity,
+  issueAuthorization,
   previewAcceptSubmission,
   previewCreateTask,
   previewRejectSubmission,
 } from './preview';
 import type {
+  AuthorizationStore,
   CreateTaskDraft,
   CreateTaskResult,
   ExplicitAuthorization,
@@ -100,6 +104,8 @@ export class TaskmarketClient implements TaskmarketRuntime {
   private readonly now: () => number;
   private readonly randomUUID: () => string;
   private readonly attempts;
+  private readonly authorizations: AuthorizationStore;
+  private readonly authorizationTtlMs: number;
   private readonly legalReceipt?: string;
   private readonly logger;
 
@@ -123,6 +129,10 @@ export class TaskmarketClient implements TaskmarketRuntime {
     this.now = options.now ?? Date.now;
     this.randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
     this.attempts = options.attempts ?? createInMemoryPaymentAttemptStore();
+    this.authorizations =
+      options.authorizations ?? createInMemoryAuthorizationStore();
+    this.authorizationTtlMs =
+      options.authorizationTtlMs ?? DEFAULT_AUTHORIZATION_TTL_MS;
     this.legalReceipt = options.legalReceipt;
     this.logger = options.logger ?? {};
   }
@@ -152,12 +162,32 @@ export class TaskmarketClient implements TaskmarketRuntime {
     });
   }
 
+  confirm(preview: TaskPreview): ExplicitAuthorization {
+    assertPreviewIntegrity(preview);
+    return issueAuthorization(preview, {
+      now: this.now,
+      randomUUID: this.randomUUID,
+      store: this.authorizations,
+      ttlMs: this.authorizationTtlMs,
+    });
+  }
+
+  private consumeAuthorization(
+    preview: TaskPreview,
+    authorization: ExplicitAuthorization
+  ): void {
+    assertPreviewIntegrity(preview);
+    assertAuthorized(preview, authorization, {
+      now: this.now,
+      store: this.authorizations,
+    });
+  }
+
   async createTask(
     preview: TaskPreview,
     authorization: ExplicitAuthorization
   ): Promise<CreateTaskResult> {
-    assertPreviewIntegrity(preview);
-    assertAuthorized(preview, authorization);
+    this.consumeAuthorization(preview, authorization);
     if (preview.operation !== 'create') {
       throw new TaskmarketError('invalid_preview', 'Preview is not a create');
     }
@@ -167,6 +197,7 @@ export class TaskmarketClient implements TaskmarketRuntime {
       duration: preview.durationHours,
       tags: preview.tags,
       mode: preview.mode,
+      deliverables: preview.deliverables,
     };
     const paid = await this.paidWrite({
       preview,
@@ -229,8 +260,7 @@ export class TaskmarketClient implements TaskmarketRuntime {
     preview: TaskPreview,
     authorization: ExplicitAuthorization
   ): Promise<IntentStatus> {
-    assertPreviewIntegrity(preview);
-    assertAuthorized(preview, authorization);
+    this.consumeAuthorization(preview, authorization);
     if (
       preview.operation !== 'accept' ||
       !preview.taskId ||
@@ -258,8 +288,7 @@ export class TaskmarketClient implements TaskmarketRuntime {
     preview: TaskPreview,
     authorization: ExplicitAuthorization
   ): Promise<IntentStatus> {
-    assertPreviewIntegrity(preview);
-    assertAuthorized(preview, authorization);
+    this.consumeAuthorization(preview, authorization);
     if (
       preview.operation !== 'reject' ||
       !preview.taskId ||

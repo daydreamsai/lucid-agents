@@ -69,6 +69,20 @@ export type ExplicitAuthorization = {
   previewId: string;
   /** Must be the boolean true. Any other value is rejected. */
   confirmed: true;
+  /** Opaque single-use token issued by confirm() on this client instance. */
+  token: string;
+};
+
+export type IssuedAuthorization = {
+  previewId: string;
+  token: string;
+  expiresAtMs: number;
+  consumed: boolean;
+};
+
+export type AuthorizationStore = {
+  get: (token: string) => IssuedAuthorization | undefined;
+  set: (record: IssuedAuthorization) => void;
 };
 
 export type PaymentAttemptStatus =
@@ -164,6 +178,9 @@ export type TaskmarketClientOptions = {
   now?: () => number;
   randomUUID?: () => string;
   attempts?: PaymentAttemptStore;
+  authorizations?: AuthorizationStore;
+  /** Confirmation lifetime. Defaults to DEFAULT_AUTHORIZATION_TTL_MS. */
+  authorizationTtlMs?: number;
   /** Optional legal receipt from Taskmarket legal accept. */
   legalReceipt?: string;
   logger?: {
@@ -174,6 +191,7 @@ export type TaskmarketClientOptions = {
 
 export type TaskmarketRuntime = {
   previewCreate: (draft: CreateTaskDraft) => TaskPreview;
+  confirm: (preview: TaskPreview) => ExplicitAuthorization;
   createTask: (
     preview: TaskPreview,
     authorization: ExplicitAuthorization

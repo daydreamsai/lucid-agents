@@ -72,6 +72,7 @@ describe('TaskmarketClient requester flow', () => {
       client.createTask(preview, {
         previewId: preview.previewId,
         confirmed: false as unknown as true,
+        token: 'unused',
       })
     ).rejects.toThrow('Fresh explicit user authorization');
     expect(calls).toHaveLength(0);
@@ -98,10 +99,7 @@ describe('TaskmarketClient requester flow', () => {
     });
     const client = clientWith(fetchImpl);
     const preview = client.previewCreate(draft);
-    const created = await client.createTask(preview, {
-      previewId: preview.previewId,
-      confirmed: true,
-    });
+    const created = await client.createTask(preview, client.confirm(preview));
     expect(created.taskId).toBe('0xabc123');
     expect(created.apiUrl).toContain('/api/tasks/0xabc123');
     expect(created.appUrl).toContain('/tasks/0xabc123');
@@ -111,6 +109,40 @@ describe('TaskmarketClient requester flow', () => {
     expect(paidHeaders.get('X-Taskmarket-Idempotency-Key')).toBe(
       preview.idempotencyKey
     );
+  });
+
+  it('sends confirmed deliverables even when they differ from the description', async () => {
+    const { fetchImpl, calls } = mockFetch((_call, index) => {
+      if (index === 0) {
+        return new Response(
+          JSON.stringify({ x402Version: 2, accepts: [safeAccept] }),
+          { status: 402 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          taskId: '0xdeliv',
+          intentId: 'intent-deliv',
+        }),
+        { status: 200 }
+      );
+    });
+    const client = clientWith(fetchImpl);
+    const preview = client.previewCreate({
+      ...draft,
+      description: 'Write a research brief',
+      deliverables: 'PDF report with 3 citations, not the description text',
+    });
+    await client.createTask(preview, client.confirm(preview));
+    const bodies = calls.map(call =>
+      JSON.parse(String(call.init?.body ?? '{}'))
+    );
+    expect(bodies[0].description).toBe('Write a research brief');
+    expect(bodies[0].deliverables).toBe(
+      'PDF report with 3 citations, not the description text'
+    );
+    expect(bodies[1].deliverables).toBe(bodies[0].deliverables);
   });
 
   it('does not send payment when the 402 is for the wrong network', async () => {
@@ -126,10 +158,7 @@ describe('TaskmarketClient requester flow', () => {
     const client = clientWith(fetchImpl);
     const preview = client.previewCreate(draft);
     await expect(
-      client.createTask(preview, {
-        previewId: preview.previewId,
-        confirmed: true,
-      })
+      client.createTask(preview, client.confirm(preview))
     ).rejects.toThrow('Base');
     expect(calls).toHaveLength(1);
     expect(calls[0].payment).toBe(false);
@@ -147,21 +176,50 @@ describe('TaskmarketClient requester flow', () => {
     });
     const client = clientWith(fetchImpl, attempts);
     const preview = client.previewCreate(draft);
+    const authorization = client.confirm(preview);
     await expect(
-      client.createTask(preview, {
-        previewId: preview.previewId,
-        confirmed: true,
-      })
+      client.createTask(preview, authorization)
     ).rejects.toBeInstanceOf(PaymentSettlementUnknownError);
     expect(calls.filter(c => c.payment)).toHaveLength(1);
 
+    await expect(client.createTask(preview, authorization)).rejects.toThrow(
+      'already been used'
+    );
     await expect(
-      client.createTask(preview, {
-        previewId: preview.previewId,
-        confirmed: true,
-      })
+      client.createTask(preview, client.confirm(preview))
     ).rejects.toBeInstanceOf(PaymentInFlightError);
     expect(calls.filter(c => c.payment)).toHaveLength(1);
+  });
+
+  it('rejects expired confirmations without sending payment', async () => {
+    let now = Date.parse('2026-08-25T12:00:00.000Z');
+    const { fetchImpl, calls } = mockFetch(() => new Response('nope'));
+    const client = new TaskmarketClient({
+      account,
+      fetchImpl,
+      now: () => now,
+      randomUUID: () => '11111111-1111-4111-8111-111111111111',
+      authorizationTtlMs: 60_000,
+    });
+    const preview = client.previewCreate(draft);
+    const authorization = client.confirm(preview);
+    now += 60_000;
+    await expect(client.createTask(preview, authorization)).rejects.toThrow(
+      'expired'
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('rejects retained confirmations after a client restart', async () => {
+    const { fetchImpl, calls } = mockFetch(() => new Response('nope'));
+    const original = clientWith(fetchImpl);
+    const preview = original.previewCreate(draft);
+    const authorization = original.confirm(preview);
+    const restarted = clientWith(fetchImpl);
+    await expect(
+      restarted.createTask(preview, authorization)
+    ).rejects.toThrow('unrecognized');
+    expect(calls).toHaveLength(0);
   });
 
   it('recovers an unknown payment from GET /intents instead of paying again', async () => {
@@ -239,6 +297,7 @@ describe('TaskmarketClient requester flow', () => {
       client.acceptSubmission(preview, {
         previewId: preview.previewId,
         confirmed: false as unknown as true,
+        token: 'unused',
       })
     ).rejects.toThrow(TaskmarketError);
     expect(calls).toHaveLength(0);
@@ -277,5 +336,6 @@ describe('TaskmarketClient requester flow', () => {
       meta: { name: 'demo', version: '1' },
     } as never);
     expect(slice.taskmarket.previewCreate).toBeFunction();
+    expect(slice.taskmarket.confirm).toBeFunction();
   });
 });

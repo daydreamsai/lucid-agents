@@ -58,14 +58,14 @@ const preview = runtime.taskmarket.previewCreate({
 
 ## Explicit authorization
 
-`createTask` requires `{ confirmed: true, previewId }` matching the issued
-preview. A false, missing, or mismatched confirmation does not send a payment.
+`createTask` requires a fresh `confirm(preview)` token matching the issued
+preview. Confirmations are short-lived and single-use, and they live only in
+the current client instance. A false, missing, expired, replayed, mismatched,
+or restart-unrecognized confirmation does not send a payment.
 
 ```typescript
-const created = await runtime.taskmarket.createTask(preview, {
-  previewId: preview.previewId,
-  confirmed: true,
-});
+const authorization = runtime.taskmarket.confirm(preview);
+const created = await runtime.taskmarket.createTask(preview, authorization);
 ```
 
 The client probes Taskmarket without payment, validates the x402 offer against

@@ -40,6 +40,7 @@ import {
   type X402ReconciliationOptions,
 } from '@lucid-agents/payments';
 import { createSQLiteBatchChannelStorage } from '@lucid-agents/payments/storage/batch-sqlite';
+import { taskmarket, type TaskmarketRuntime } from '@lucid-agents/taskmarket';
 import type {
   A2ARuntime,
   AgentCardWithEntrypoints,
@@ -1834,6 +1835,89 @@ describe('Example Smoke Tests', () => {
       const card = await fetchCard(agentApp.app);
       expect(card.name).toBe('policy-agent');
       expect(card.version).toBe('1.0.0');
+    });
+  });
+
+  // =========================================================================
+  // 7. taskmarket/requester
+  // =========================================================================
+  describe('taskmarket/requester', () => {
+    let app: { fetch: (req: Request) => Response | Promise<Response> };
+
+    beforeAll(async () => {
+      const account = privateKeyToAccount(
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      );
+      const agent = await createAgent({
+        name: 'taskmarket-requester',
+        version: '1.0.0',
+        description: 'Smoke test for the taskmarket requester extension',
+      })
+        .use(http())
+        .use(taskmarket({ account }))
+        .build();
+
+      const agentApp = await createAgentApp(agent);
+      agentApp.addEntrypoint({
+        key: 'preview-task',
+        description: 'Preview a Taskmarket create without paying',
+        input: z.object({
+          description: z.string(),
+          deliverables: z.string(),
+        }),
+        output: z.object({
+          description: z.string(),
+          deliverables: z.string(),
+          rewardUsdc: z.string(),
+          confirmed: z.boolean(),
+        }),
+        async handler({
+          input,
+          runtime,
+        }: {
+          input: { description: string; deliverables: string };
+          runtime: { taskmarket?: TaskmarketRuntime };
+        }) {
+          if (!runtime.taskmarket) {
+            throw new Error('taskmarket extension is missing');
+          }
+          const preview = runtime.taskmarket.previewCreate({
+            description: input.description,
+            rewardUsdc: '1.5',
+            durationHours: 24,
+            tags: ['research'],
+            deliverables: input.deliverables,
+          });
+          const authorization = runtime.taskmarket.confirm(preview);
+          return {
+            output: {
+              description: preview.description,
+              deliverables: preview.deliverables,
+              rewardUsdc: preview.rewardUsdc,
+              confirmed: authorization.confirmed,
+            },
+          };
+        },
+      });
+      app = agentApp.app;
+    });
+
+    it('agent card is valid', async () => {
+      const card = await fetchCard(app);
+      expect(card.name).toBe('taskmarket-requester');
+    });
+
+    it('preview entrypoint returns confirmed deliverables', async () => {
+      const result = await invokeOk(app, 'preview-task', {
+        description: 'Write a research brief',
+        deliverables: 'PDF report with 3 citations, not the description text',
+      });
+      expect(result.output.description).toBe('Write a research brief');
+      expect(result.output.deliverables).toBe(
+        'PDF report with 3 citations, not the description text'
+      );
+      expect(result.output.rewardUsdc).toBe('1.5');
+      expect(result.output.confirmed).toBe(true);
     });
   });
 });

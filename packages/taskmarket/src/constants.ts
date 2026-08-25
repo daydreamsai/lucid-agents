@@ -15,3 +15,6 @@ export const TASKMARKET_API_FEE_BASE_UNITS = 1000n;
 export const USDC_DECIMALS = 6;
 
 export const USER_AGENT = 'lucid-agents-taskmarket/0.1.0';
+
+/** Confirmations expire quickly so paid mutations cannot be replayed later. */
+export const DEFAULT_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;

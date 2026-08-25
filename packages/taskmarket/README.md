@@ -9,8 +9,9 @@ whose settlement status is unknown.
 
 - Show the exact description, reward, deadline, deliverables, Base network, and
   maximum spend before any paid call.
-- Require a fresh `{ confirmed: true, previewId }` authorization that matches
-  the issued preview.
+- Require a fresh `confirm(preview)` authorization: a short-lived, single-use
+  token bound to the issued preview. Expired, replayed, or restart-unrecognized
+  confirmations are rejected.
 - Pay only canonical USDC on Base (`eip155:8453` /
   `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`).
 - Send one x402 payment per idempotency key. If settlement is unknown, poll
@@ -62,10 +63,8 @@ console.log({
   maxSpend: `${preview.maxSpendUsdc} USDC`,
 });
 
-const created = await runtime.taskmarket.createTask(preview, {
-  previewId: preview.previewId,
-  confirmed: true,
-});
+const authorization = runtime.taskmarket.confirm(preview);
+const created = await runtime.taskmarket.createTask(preview, authorization);
 
 const status = await runtime.taskmarket.getTask(created.taskId);
 const submissions = await runtime.taskmarket.listSubmissions(created.taskId);
@@ -78,10 +77,10 @@ const acceptPreview = runtime.taskmarket.previewAccept({
   taskId: created.taskId,
   workerAddress: submissions[0].workerAddress,
 });
-await runtime.taskmarket.acceptSubmission(acceptPreview, {
-  previewId: acceptPreview.previewId,
-  confirmed: true,
-});
+await runtime.taskmarket.acceptSubmission(
+  acceptPreview,
+  runtime.taskmarket.confirm(acceptPreview)
+);
 ```
 
 ## Tests

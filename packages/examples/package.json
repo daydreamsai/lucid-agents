@@ -32,6 +32,7 @@
     "@lucid-agents/payments": "workspace:*",
     "@lucid-agents/scheduler": "workspace:*",
     "@lucid-agents/tanstack": "workspace:*",
+    "@lucid-agents/taskmarket": "workspace:*",
     "@lucid-agents/types": "workspace:*",
     "@lucid-agents/wallet": "workspace:*",
     "@lucid-dreams/agent-auth": "^0.2.24",

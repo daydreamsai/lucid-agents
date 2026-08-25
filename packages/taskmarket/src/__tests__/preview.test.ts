@@ -3,8 +3,10 @@ import { describe, expect, it } from 'bun:test';
 import {
   assertAuthorized,
   assertPreviewIntegrity,
+  issueAuthorization,
   previewCreateTask,
 } from '../preview';
+import { createInMemoryAuthorizationStore } from '../authorizations';
 import { TaskmarketError } from '../errors';
 import { BASE_CAIP2, BASE_NETWORK_NAME, BASE_USDC_ADDRESS } from '../constants';
 
@@ -56,7 +58,7 @@ describe('previewCreateTask', () => {
     ).toThrow(TaskmarketError);
   });
 
-  it('binds authorization to the issued previewId', () => {
+  it('binds authorization to a short-lived single-use token', () => {
     const preview = previewCreateTask(
       {
         description: 'ok',
@@ -67,21 +69,80 @@ describe('previewCreateTask', () => {
       },
       clock
     );
+    const store = createInMemoryAuthorizationStore();
+    const authorization = issueAuthorization(preview, {
+      ...clock,
+      store,
+      ttlMs: 60_000,
+    });
     expect(() =>
-      assertAuthorized(preview, {
-        previewId: preview.previewId,
-        confirmed: true,
-      })
+      assertAuthorized(preview, authorization, { now: clock.now, store })
     ).not.toThrow();
     expect(() =>
-      assertAuthorized(preview, {
-        previewId: preview.previewId,
-        confirmed: false as unknown as true,
-      })
+      assertAuthorized(preview, authorization, { now: clock.now, store })
+    ).toThrow('already been used');
+    expect(() =>
+      assertAuthorized(
+        preview,
+        {
+          previewId: preview.previewId,
+          confirmed: false as unknown as true,
+          token: authorization.token,
+        },
+        { now: clock.now, store }
+      )
     ).toThrow('Fresh explicit user authorization');
     expect(() =>
-      assertAuthorized(preview, { previewId: '0xabc', confirmed: true })
+      assertAuthorized(
+        preview,
+        { previewId: '0xabc', confirmed: true, token: authorization.token },
+        { now: clock.now, store }
+      )
     ).toThrow('previewId');
+  });
+
+  it('rejects expired, missing, and restart-unrecognized authorizations', () => {
+    const preview = previewCreateTask(
+      {
+        description: 'ok',
+        rewardUsdc: '0.1',
+        durationHours: 2,
+        tags: ['x'],
+        deliverables: 'file',
+      },
+      clock
+    );
+    const store = createInMemoryAuthorizationStore();
+    const authorization = issueAuthorization(preview, {
+      ...clock,
+      store,
+      ttlMs: 60_000,
+    });
+    expect(() =>
+      assertAuthorized(preview, authorization, {
+        now: () => clock.now() + 60_000,
+        store,
+      })
+    ).toThrow('expired');
+
+    expect(() =>
+      assertAuthorized(
+        preview,
+        {
+          previewId: preview.previewId,
+          confirmed: true,
+          token: '',
+        },
+        { now: clock.now, store: createInMemoryAuthorizationStore() }
+      )
+    ).toThrow('Authorization token is required');
+
+    expect(() =>
+      assertAuthorized(preview, authorization, {
+        now: clock.now,
+        store: createInMemoryAuthorizationStore(),
+      })
+    ).toThrow('unrecognized');
   });
 
   it('detects tampered preview fields', () => {
