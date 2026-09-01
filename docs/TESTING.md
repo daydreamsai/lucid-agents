@@ -9,6 +9,7 @@ from package logic through packed consumer projects and a real browser.
 bun test
 bun run test:coverage
 bun run test:e2e
+bun run test:x402:sandbox
 bun run test:generated
 bun run test:browser
 bun run test:portability
@@ -19,6 +20,17 @@ and LCOV, applies the repository coverage threshold, and fails if the completed
 JUnit run contains any failed, errored, or skipped tests. PostgreSQL-backed
 tests require both `TEST_POSTGRES_URL` and `TEST_DATABASE_URL`; CI supplies a
 PostgreSQL 16 service so those tests run instead of skipping.
+
+`test:x402:sandbox` is a manual, credentialed lane. Set
+`X402_SANDBOX_EVM_URL`, `X402_SANDBOX_SOLANA_URL`,
+`X402_SANDBOX_EVM_PRIVATE_KEY`, and
+`X402_SANDBOX_SOLANA_PRIVATE_KEY_BASE58`; optionally set
+`X402_SANDBOX_SOLANA_RPC_URL`. Use Base Sepolia and Solana Devnet endpoints
+and test-only wallets. The script exits on a non-200 response or missing
+`PAYMENT-RESPONSE`, and logs only the lane, status, transaction, and network.
+It never logs keys, payment signatures, or bearer credentials. Provider
+outages are reported as sandbox failures and are intentionally not part of
+the required PR lane.
 
 ## Coverage layers
 

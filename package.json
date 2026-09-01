@@ -51,6 +51,7 @@
     "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov && bun run scripts/check-coverage.ts",
     "test:ci": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --reporter=junit --reporter-outfile=reports/junit.xml && bun run scripts/check-coverage.ts && bun run scripts/check-test-results.ts reports/junit.xml",
     "test:e2e": "bun test packages/examples/src/__tests__ packages/examples/src/kitchen-sink/__tests__",
+    "test:x402:sandbox": "bun run scripts/x402-sandbox.ts",
     "test:browser": "bash scripts/test-browser-smoke.sh",
     "test:generated": "bun run scripts/test-generated-project.ts all",
     "test:docs": "bun test scripts/docs-content.test.ts scripts/docs-drift.test.ts scripts/docs-maintenance.test.ts scripts/docs-snippets.test.ts scripts/lucid-skill.test.ts lucid-docs/src/lib/docs-telemetry.test.ts lucid-docs/examples/paid-service.test.ts && bun run scripts/check-docs-content.ts && bun run docs:drift && bun run skill:validate",

@@ -119,6 +119,7 @@ jobs:
       - run: bun run build:packages
       - name: Run deterministic payment lifecycle tests
         run: |
+          bun test packages/examples/src/__tests__/payment-e2e-runner.test.ts
           bun test packages/examples/src/__tests__/x402-batch-lifecycle.test.ts
           bun test packages/mpp/src/__tests__/custom-verifier-conformance.test.ts packages/examples/src/__tests__/custom-mpp-conformance.e2e.test.ts
 
