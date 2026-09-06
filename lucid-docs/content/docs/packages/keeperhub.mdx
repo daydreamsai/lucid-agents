@@ -1,0 +1,121 @@
+---
+title: '@lucid-agents/keeperhub'
+description: Make KeeperHub the execution layer behind entrypoints, so a priced entrypoint settles only when the onchain transaction has verifiably landed.
+icon: Anchor
+status: next
+verifiedVersion: 0.1.0
+verifiedAt: 2026-09-06
+product: sdk
+---
+
+`@lucid-agents/keeperhub` adds `runtime.keeperhub`, a capability descriptor on
+the agent card, and entrypoint factories that move value onchain through
+[KeeperHub](https://docs.keeperhub.com) and return a verified receipt.
+
+It is not a wallet, a signer, or a DeFi strategy engine. KeeperHub holds the
+organization's Turnkey wallet, simulates every write, broadcasts under a stable
+idempotency key, retries, and re-fetches the receipt from the chain. This package
+maps that lifecycle onto Lucid's authorize → admit → invoke → finalize flow: a
+handler throws on anything short of `receipts[].verified === true` with
+`receiptStatus === "success"`, so `finalize()` never settles a payment for a
+transaction that did not land.
+
+## Install and bind
+
+```bash
+bun add @lucid-agents/keeperhub @lucid-agents/core @lucid-agents/http
+```
+
+```typescript
+import { createAgent } from '@lucid-agents/core';
+import { http } from '@lucid-agents/http';
+import {
+  keeperhub,
+  keeperhubTransferEntrypoint,
+} from '@lucid-agents/keeperhub';
+import { payments, paymentsFromEnv } from '@lucid-agents/payments';
+
+const USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'; // Base Sepolia
+
+const runtime = await createAgent({ name: 'treasury', version: '1.0.0' })
+  .use(
+    keeperhub({
+      apiKey: process.env.KEEPERHUB_API_KEY!,
+      policy: { chains: ['base-sepolia'], tokens: [USDC], maxAmount: '5' },
+    })
+  )
+  .use(payments({ config: paymentsFromEnv() }))
+  .use(http())
+  .build();
+
+runtime.entrypoints.add(
+  keeperhubTransferEntrypoint({
+    key: 'payout',
+    price: '0.01',
+    chainId: 'base-sepolia',
+    tokenAddress: USDC,
+  })
+);
+```
+
+`policy.chains` is required. Everything the policy denies is refused before any
+KeeperHub call and before any payment reservation.
+
+## Entrypoint factories
+
+| Factory                       | Default key | KeeperHub surface                                       |
+| ----------------------------- | ----------- | ------------------------------------------------------- |
+| `keeperhubTransferEntrypoint` | `payout`    | direct execution: simulate, broadcast, verified receipt |
+| `keeperhubScheduleEntrypoint` | `subscribe` | agent-authored workflow: Schedule trigger → transfer    |
+| `keeperhubDryRunEntrypoint`   | `dry-run`   | simulation only; free                                   |
+| `keeperhubStatusEntrypoint`   | `execution` | the agent-side execution log for a reference; free      |
+| `keeperhubWatchEntrypoint`    | `watch`     | SSE stream of every stage for a reference; free         |
+
+Every input carries a `reference`: the caller's stable id for the work (invoice,
+task, period). KeeperHub's idempotency key is derived from it as
+`sha256(reference|chainId|recipient|amount|token)` following KeeperHub's
+documented canonical form, so a retried reference replays the original
+execution instead of paying twice. Pair it with the HTTP `Idempotency-Key`
+header (20 to 256 characters) for a second layer at the Lucid level.
+
+## Runtime API
+
+```typescript
+type KeeperHubRuntime = {
+  client: KeeperHubClient;
+  policy: NormalizedPolicy;
+  log: ExecutionLog;
+  check(intent: TransferIntent): PolicyDecision;
+  dryRun(intent: TransferIntent): Promise<DryRun>;
+  transfer(intent: TransferIntent): Promise<LandedProof>;
+  schedule(intent: ScheduleIntent): Promise<ScheduledPayout>;
+  execution(executionId: string): Promise<ExecutionState>;
+  describe(): KeeperHubCapability;
+};
+```
+
+`transfer()` resolves only with a `LandedProof` (`executionId`,
+`transactionHash`, `transactionLink`, `receipt`, `timeline`). It throws
+`LandedError` with a code of `policy_denied`, `preflight_failed`,
+`execution_failed`, `execution_unconfirmed`, or `keeperhub_error`.
+`execution_unconfirmed` means the outcome is unknown, not failed: retry with the
+same reference, never a new one.
+
+## Errors on the wire
+
+HTTP surfaces a thrown handler error as `500 internal_error`; the code is the
+prefix of `message`. The free `execution` and `watch` entrypoints expose the
+structured record and the live stages.
+
+## Streams are free on purpose
+
+Lucid settles a priced stream on admission, not on outcome. The paid contract
+therefore lives on the invoke entrypoints; `watch` is a free observability
+channel.
+
+## Testing without KeeperHub
+
+`createMockKeeperHub()` is an in-memory KeeperHub that implements the documented
+shapes of direct execution, status polling with `X-Poll-Interval-Hint`,
+idempotency replay and conflict, rate limits, and the workflow endpoints. The
+package's own tests run against it.

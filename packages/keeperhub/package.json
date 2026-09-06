@@ -1,0 +1,52 @@
+{
+  "name": "@lucid-agents/keeperhub",
+  "version": "0.1.0",
+  "description": "KeeperHub as the execution layer behind Lucid entrypoints: onchain transfers and agent-authored workflows with a verified receipt, so a paid entrypoint settles only when the transaction lands.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daydreamsai/lucid-agents",
+    "directory": "packages/keeperhub"
+  },
+  "type": "module",
+  "lucidAgents": {
+    "runtime": "portable"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@lucid-agents/types": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@lucid-agents/core": "workspace:*",
+    "@lucid-agents/eslint-config": "workspace:*",
+    "@lucid-agents/http": "workspace:*",
+    "tsup": "catalog:",
+    "typescript": "catalog:"
+  }
+}
