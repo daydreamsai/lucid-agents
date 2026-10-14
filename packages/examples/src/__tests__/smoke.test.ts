@@ -35,6 +35,7 @@ import { createSQLiteTempoSessionStore } from '@lucid-agents/mpp/storage/sqlite'
 import {
   type BatchChannelStorage,
   createInMemoryPaymentStorage,
+  createRuntimePaymentContext,
   decodePaymentRequiredHeader,
   payments,
   type X402ReconciliationOptions,
@@ -1834,6 +1835,72 @@ describe('Example Smoke Tests', () => {
       const card = await fetchCard(agentApp.app);
       expect(card.name).toBe('policy-agent');
       expect(card.version).toBe('1.0.0');
+    });
+  });
+  describe('payments/before-payment-check', () => {
+    it('blocks a denied outgoing payment before signing, without external services', async () => {
+      const agent = await createAgent({
+        name: 'before-payment-agent',
+        version: '1.0.0',
+        description: 'Agent with a before-payment check',
+      })
+        .use(
+          wallets({
+            config: {
+              agent: {
+                type: 'local',
+                privateKey:
+                  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+              },
+            },
+          })
+        )
+        .build();
+
+      const seen: string[] = [];
+      let signedRequests = 0;
+      const { fetchWithPayment } = await createRuntimePaymentContext({
+        runtime: agent,
+        network: 'base',
+        beforePayment: async ({ url }) => {
+          seen.push(url);
+          return { allowed: false, reason: 'denied by smoke test' };
+        },
+        fetch: async (input, init) => {
+          const request = new Request(input as RequestInfo, init);
+          if (request.headers.get('PAYMENT-SIGNATURE')) signedRequests++;
+          return new Response(null, {
+            status: 402,
+            headers: {
+              'PAYMENT-REQUIRED': Buffer.from(
+                JSON.stringify({
+                  x402Version: 2,
+                  resource: { url: 'https://seller.example/paid' },
+                  accepts: [
+                    {
+                      scheme: 'exact',
+                      network: 'eip155:8453',
+                      amount: '10000',
+                      asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+                      payTo: '0x209693Bc6afc0C5328bA36FaF03C514EF312287C',
+                      maxTimeoutSeconds: 60,
+                      extra: { name: 'USD Coin', version: '2' },
+                    },
+                  ],
+                })
+              ).toString('base64'),
+            },
+          });
+        },
+      });
+
+      const response = await fetchWithPayment!('https://seller.example/paid');
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.message).toBe(
+        'denied by smoke test'
+      );
+      expect(seen).toEqual(['https://seller.example/paid']);
+      expect(signedRequests).toBe(0);
     });
   });
 });

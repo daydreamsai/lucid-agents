@@ -408,6 +408,66 @@ Rate enforcement has one source of truth: the configured `PaymentStorage`.
 for custom integrations, but the payments runtime does not maintain a second
 rate counter beside its atomic storage reservations.
 
+### Before-payment checks
+
+`beforePayment` is an optional async check that runs for each outgoing 402,
+after the policy groups allow it and before any reservation or signature. A
+payment the groups reject never reaches the check. It receives the request URL,
+method, the selected requirement and the caller's abort `signal`. It blocks with
+a `policy_violation` 403 when it returns `allowed: false` or throws, so a check
+that should fail open must catch its own errors. It is off when unset, and it
+also applies when the runtime has a wallet but no payments tracker.
+`wrapBaseFetchWithPolicy()` accepts the same option;
+`wrapBaseFetchWithBeforePayment()` applies the check alone.
+
+```ts
+import { createRuntimePaymentContext } from '@lucid-agents/payments';
+
+const { fetchWithPayment } = await createRuntimePaymentContext({
+  runtime: agent,
+  beforePayment: async ({ url, method, requirement }) => {
+    // Your own rules: allowlists, price checks, an external endpoint check, ...
+    return { allowed: true };
+  },
+});
+```
+
+Optional third-party example: ask
+[402xAgent](https://github.com/withgrokbot/x402-spotcheck), a service not
+affiliated with Lucid Agents, whether the endpoint's live 402 matches its
+listing. It probes the endpoint without paying it. The example waits at most
+1.5 s and stops when the caller cancels. It blocks only on a `skip` with a
+known reason code; a timeout, an error, a non-200, a `{}` or unreadable answer,
+`recheck` or an unknown code all let the payment proceed.
+
+```ts
+import type { BeforePaymentCheck } from '@lucid-agents/payments';
+
+const CHECK = 'https://api.402xagent.com/v1/products/endpoint-spot-check';
+const SKIP_CODES = new Set([
+  'price_mismatch', 'pay_to_mismatch', 'network_mismatch', 'asset_not_usdc',
+  'network_unsupported', 'ssrf_blocked', 'bad_challenge', 'ambiguous',
+]);
+
+const beforePayment: BeforePaymentCheck = async ({ url, method, signal }) => {
+  const query = new URLSearchParams({ url });
+  if (method === 'POST') query.set('method', 'POST');
+  const timeout = AbortSignal.timeout(1_500);
+  try {
+    const res = await fetch(`${CHECK}?${query}`, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+    if (!res.ok) return { allowed: true }; // no verdict: fail open
+    const body = await res.json().catch(() => ({})); // unreadable: fail open
+    return body?.verdict === 'skip' && SKIP_CODES.has(body.reason_code)
+      ? { allowed: false, reason: `402xAgent skip: ${body.reason_code}` }
+      : { allowed: true };
+  } catch {
+    return { allowed: true }; // timeout, cancel or network error: fail open
+  }
+};
+```
+
 Node applications can load policy JSON with helpers from the Node entrypoint:
 
 ```ts

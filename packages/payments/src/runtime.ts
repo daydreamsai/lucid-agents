@@ -14,9 +14,13 @@ import {
   type RefundOptions as BatchSettlementRefundOptions,
 } from '@x402/evm/batch-settlement/client';
 import { UptoEvmScheme } from '@x402/evm/upto/client';
-import type { SettleResponse } from '@x402/core/types';
+import type { PaymentRequirements, SettleResponse } from '@x402/core/types';
 import { sanitizeAddress, ZERO_ADDRESS, type Hex } from './crypto';
-import { wrapBaseFetchWithPolicy } from './policy-wrapper';
+import {
+  wrapBaseFetchWithBeforePayment,
+  wrapBaseFetchWithPolicy,
+  type BeforePaymentCheck,
+} from './policy-wrapper';
 import type { BatchSettlementBuyerOptions } from './batch-settlement';
 
 type FetchLike = (
@@ -80,6 +84,11 @@ export type RuntimePaymentOptions = {
    * cumulative vouchers after a process restart.
    */
   batchSettlement?: BatchSettlementBuyerOptions;
+  /**
+   * Optional check run before each outgoing payment (runtime wallet path); it can block the
+   * payment. Unset means no check.
+   */
+  beforePayment?: BeforePaymentCheck;
 };
 
 export type RuntimePaymentContext = {
@@ -491,33 +500,47 @@ export async function createRuntimePaymentContext(
     const policyGroups = runtime.payments?.policyGroups;
     const paymentTracker = runtime.payments?.paymentTracker;
 
-    if (policyGroups && policyGroups.length > 0 && paymentTracker) {
+    // The same requirement the outer x402 client will pay.
+    const selectRequirement = (
+      requirements: readonly PaymentRequirements[]
+    ): PaymentRequirements | undefined =>
+      requirements.find(requirement => {
+        if (
+          requirement.network !== caip2Network ||
+          (requirement.scheme !== 'exact' &&
+            requirement.scheme !== 'upto' &&
+            requirement.scheme !== 'batch-settlement')
+        ) {
+          return false;
+        }
+        if (options.maxPaymentBaseUnits === undefined) return true;
+        try {
+          return BigInt(requirement.amount) <= options.maxPaymentBaseUnits;
+        } catch {
+          return false;
+        }
+      });
+
+    if (
+      paymentTracker &&
+      ((policyGroups && policyGroups.length > 0) || options.beforePayment)
+    ) {
       fetchWithPolicy = wrapBaseFetchWithPolicy(
         baseFetch,
-        policyGroups,
+        policyGroups ?? [],
         paymentTracker,
         undefined,
         {
-          paymentRequirementSelector: requirements =>
-            requirements.find(requirement => {
-              if (
-                requirement.network !== caip2Network ||
-                (requirement.scheme !== 'exact' &&
-                  requirement.scheme !== 'upto' &&
-                  requirement.scheme !== 'batch-settlement')
-              ) {
-                return false;
-              }
-              if (options.maxPaymentBaseUnits === undefined) return true;
-              try {
-                return (
-                  BigInt(requirement.amount) <= options.maxPaymentBaseUnits
-                );
-              } catch {
-                return false;
-              }
-            }),
+          beforePayment: options.beforePayment,
+          paymentRequirementSelector: selectRequirement,
         }
+      );
+    } else if (options.beforePayment) {
+      // No payments tracker: still enforce the check rather than paying unchecked.
+      fetchWithPolicy = wrapBaseFetchWithBeforePayment(
+        baseFetch,
+        options.beforePayment,
+        { paymentRequirementSelector: selectRequirement }
       );
     }
 

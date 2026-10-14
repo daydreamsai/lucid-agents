@@ -1,7 +1,10 @@
 import { describe, expect, it, beforeEach } from 'bun:test';
 import type { PaymentPolicyGroup } from '@lucid-agents/types/payments';
 import { encodePaymentRequiredHeader } from '@x402/core/http';
-import { wrapBaseFetchWithPolicy } from '../policy-wrapper';
+import {
+  wrapBaseFetchWithBeforePayment,
+  wrapBaseFetchWithPolicy,
+} from '../policy-wrapper';
 import { createPaymentTracker } from '../payment-tracker';
 import { createInMemoryPaymentStorage } from '../in-memory-payment-storage';
 import type { PaymentStorage } from '../payment-storage';
@@ -216,6 +219,266 @@ describe('wrapBaseFetchWithPolicy', () => {
     );
 
     expect((await wrappedFetch('https://example.com')).status).toBe(403);
+  });
+
+  describe('beforePayment', () => {
+    const challenge = () =>
+      new Response(null, {
+        status: 402,
+        headers: {
+          'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+            price: '1',
+            payTo: '0x111',
+            alternates: [{ price: '2', payTo: '0x222' }],
+          }),
+        },
+      });
+
+    it('passes the selected requirement and lets an allowed payment through', async () => {
+      const seen: unknown[] = [];
+      const wrappedFetch = wrapBaseFetchWithPolicy(
+        async () => challenge(),
+        policyGroups,
+        paymentTracker,
+        rateLimiter,
+        {
+          paymentRequirementSelector: requirements => requirements[1],
+          beforePayment: async context => {
+            seen.push(context);
+            return { allowed: true };
+          },
+        }
+      );
+
+      const response = await wrappedFetch('https://example.com/paid', {
+        method: 'POST',
+      });
+      expect(response.status).toBe(402);
+      expect(seen).toEqual([
+        {
+          url: 'https://example.com/paid',
+          method: 'POST',
+          requirement: expect.objectContaining({
+            payTo: '0x222',
+            amount: '2000000',
+          }),
+          signal: expect.any(AbortSignal),
+        },
+      ]);
+    });
+
+    it('blocks with a policy violation before any reservation', async () => {
+      const wrappedFetch = wrapBaseFetchWithPolicy(
+        async () => challenge(),
+        policyGroups,
+        paymentTracker,
+        rateLimiter,
+        {
+          paymentRequirementSelector: requirements => requirements[0],
+          beforePayment: async () => ({
+            allowed: false,
+            reason: 'Spot-Check skip',
+          }),
+        }
+      );
+
+      const response = await wrappedFetch('https://example.com/paid');
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: { code: 'policy_violation', message: 'Spot-Check skip' },
+      });
+      const retry = await wrappedFetch('https://example.com/paid', paidRetry());
+      expect(retry.status).toBe(503); // no reservation was made
+    });
+
+    it('does not run the check when the policy groups already reject the payment', async () => {
+      let calls = 0;
+      const wrappedFetch = wrapBaseFetchWithPolicy(
+        async () =>
+          new Response(null, {
+            status: 402,
+            headers: {
+              'PAYMENT-REQUIRED': buildPaymentRequiredHeader({
+                price: '50',
+                payTo: '0x111',
+              }),
+            },
+          }),
+        policyGroups, // maxPaymentUsd 10
+        paymentTracker,
+        rateLimiter,
+        {
+          paymentRequirementSelector: requirements => requirements[0],
+          beforePayment: async () => {
+            calls++;
+            return { allowed: true };
+          },
+        }
+      );
+
+      const response = await wrappedFetch('https://example.com/paid');
+      expect(response.status).toBe(403);
+      expect(calls).toBe(0);
+    });
+
+    it("passes the caller's abort signal to the check", async () => {
+      const controller = new AbortController();
+      let seen: AbortSignal | undefined;
+      const wrappedFetch = wrapBaseFetchWithPolicy(
+        async () => challenge(),
+        [],
+        paymentTracker,
+        undefined,
+        {
+          paymentRequirementSelector: requirements => requirements[0],
+          beforePayment: async ({ signal }) => {
+            seen = signal;
+            return { allowed: true };
+          },
+        }
+      );
+
+      await wrappedFetch('https://example.com/paid', {
+        signal: controller.signal,
+      });
+      controller.abort();
+      expect(seen?.aborted).toBe(true);
+    });
+
+    it('wrapBaseFetchWithBeforePayment checks unpaid 402s and passes paid retries through', async () => {
+      let calls = 0;
+      const wrappedFetch = wrapBaseFetchWithBeforePayment(
+        async request =>
+          (request as Request).headers.get('PAYMENT-SIGNATURE')
+            ? new Response('paid')
+            : challenge(),
+        async () => {
+          calls++;
+          return { allowed: false, reason: 'blocked' };
+        },
+        { paymentRequirementSelector: requirements => requirements[0] }
+      );
+
+      expect((await wrappedFetch('https://example.com/paid')).status).toBe(403);
+      expect(calls).toBe(1);
+      const retry = await wrappedFetch('https://example.com/paid', paidRetry());
+      expect(await retry.text()).toBe('paid');
+      expect(calls).toBe(1);
+    });
+
+    it('wrapBaseFetchWithBeforePayment preserves a Request input without init', async () => {
+      const controller = new AbortController();
+      let seen: Request | undefined;
+      let checkedMethod: string | undefined;
+      let checkedSignal: AbortSignal | undefined;
+      const wrappedFetch = wrapBaseFetchWithBeforePayment(
+        async request => {
+          seen = request as Request;
+          return new Response('ok');
+        },
+        async ctx => {
+          checkedMethod = ctx.method;
+          checkedSignal = ctx.signal;
+          return { allowed: true };
+        }
+      );
+      const input = new Request('https://example.com/paid', {
+        method: 'POST',
+        headers: { 'X-Test': 'a', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hello: 'world' }),
+        signal: controller.signal,
+      });
+      const response = await wrappedFetch(input);
+      expect(await response.text()).toBe('ok');
+      expect(seen).toBe(input);
+      expect(seen!.method).toBe('POST');
+      expect(seen!.headers.get('X-Test')).toBe('a');
+      expect(await seen!.text()).toBe('{"hello":"world"}');
+      controller.abort();
+      expect(seen!.signal.aborted).toBe(true);
+      expect(checkedMethod).toBeUndefined();
+      expect(checkedSignal).toBeUndefined();
+    });
+
+    it('wrapBaseFetchWithBeforePayment merges init over a Request input', async () => {
+      const original = new AbortController();
+      const override = new AbortController();
+      let seen: Request | undefined;
+      let checkedMethod: string | undefined;
+      let checkedSignal: AbortSignal | undefined;
+      const wrappedFetch = wrapBaseFetchWithBeforePayment(
+        async request => {
+          seen = request as Request;
+          return challenge();
+        },
+        async ctx => {
+          checkedMethod = ctx.method;
+          checkedSignal = ctx.signal;
+          return { allowed: true };
+        },
+        { paymentRequirementSelector: requirements => requirements[0] }
+      );
+      const input = new Request('https://example.com/paid', {
+        method: 'POST',
+        headers: { 'X-Test': 'a' },
+        body: 'original-body',
+        signal: original.signal,
+      });
+      const response = await wrappedFetch(input, {
+        method: 'PUT',
+        headers: { 'X-Test': 'b' },
+        body: 'override-body',
+        signal: override.signal,
+      });
+      expect(response.status).toBe(402);
+      expect(seen!.method).toBe('PUT');
+      expect(seen!.headers.get('X-Test')).toBe('b');
+      expect(await seen!.text()).toBe('override-body');
+      expect(checkedMethod).toBe('PUT');
+      override.abort();
+      expect(seen!.signal.aborted).toBe(true);
+      expect(checkedSignal!.aborted).toBe(true);
+    });
+
+    it('wrapBaseFetchWithBeforePayment keeps Request body when init only adds headers', async () => {
+      let seen: Request | undefined;
+      const wrappedFetch = wrapBaseFetchWithBeforePayment(
+        async request => {
+          seen = request as Request;
+          return new Response('ok');
+        },
+        async () => ({ allowed: true })
+      );
+      const input = new Request('https://example.com/paid', {
+        method: 'POST',
+        body: 'keep-me',
+      });
+      await wrappedFetch(input, { headers: { 'X-Extra': '1' } });
+      expect(seen!.method).toBe('POST');
+      expect(seen!.headers.get('X-Extra')).toBe('1');
+      expect(await seen!.text()).toBe('keep-me');
+    });
+
+    it('fails closed when the check throws', async () => {
+      const wrappedFetch = wrapBaseFetchWithPolicy(
+        async () => challenge(),
+        [],
+        paymentTracker,
+        undefined,
+        {
+          paymentRequirementSelector: requirements => requirements[0],
+          beforePayment: async () => {
+            throw new Error('boom');
+          },
+        }
+      );
+
+      const response = await wrappedFetch('https://example.com/paid');
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.message).toBe(
+        'beforePayment check failed: boom'
+      );
+    });
   });
 
   it('should record spending after successful payment', async () => {

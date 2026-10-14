@@ -287,6 +287,8 @@ const response = await paidFetch?.(
 );
 ```
 
+Pass `beforePayment` to `createRuntimePaymentContext()` to run an async check before each outgoing payment, after the policy groups allow it; returning `allowed: false` (or throwing) blocks it before anything is reserved or signed. It also applies when the runtime has no payments tracker, and it receives the caller's abort `signal`. It is off by default. The package README includes an optional third-party example (402xAgent) with a 1.5 s timeout that fails open.
+
 `createRuntimePaymentContext()` and `createX402Fetch()` support lower-level construction. Never place a server private key in an edge or client bundle.
 
 ## Stripe destination mode
