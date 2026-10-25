@@ -3,7 +3,10 @@ import type {
   PaymentRateLimiter,
   PaymentTracker,
 } from '@lucid-agents/types/payments';
-import { decodePaymentRequiredHeader } from '@x402/core/http';
+import {
+  decodePaymentRequiredHeader,
+  decodePaymentResponseHeader,
+} from '@x402/core/http';
 import type { PaymentRequirements } from '@x402/core/types';
 import { evaluatePolicyGroups, findMostSpecificOutgoingLimit } from './policy';
 
@@ -52,6 +55,8 @@ function extractDomain(url: string): string | undefined {
 
 type PaymentInfo = {
   amount: bigint;
+  scheme: string;
+  network: string;
   recipientAddress?: string;
   recipientDomain?: string;
 };
@@ -59,7 +64,9 @@ type PaymentInfo = {
 function extractPaymentInfo(
   response: Response,
   selector?: PolicyWrapperOptions['paymentRequirementSelector']
-): Pick<PaymentInfo, 'amount' | 'recipientAddress'> | undefined {
+):
+  | Pick<PaymentInfo, 'amount' | 'scheme' | 'network' | 'recipientAddress'>
+  | undefined {
   const header = response.headers.get('PAYMENT-REQUIRED');
   if (!header) return undefined;
   try {
@@ -72,7 +79,12 @@ function extractPaymentInfo(
     if (!requirement) return undefined;
     const amount = BigInt(requirement.amount);
     if (amount < 0n || !requirement.payTo?.trim()) return undefined;
-    return { amount, recipientAddress: requirement.payTo };
+    return {
+      amount,
+      scheme: requirement.scheme,
+      network: requirement.network,
+      recipientAddress: requirement.payTo,
+    };
   } catch {
     return undefined;
   }
@@ -82,7 +94,34 @@ type ReservedPolicyGroup = {
   groupName: string;
   scope: string;
   recordsPayment: boolean;
+  tracksAmount: boolean;
 };
+
+function resolveUptoSettlementAmount(
+  header: string,
+  payment: PaymentInfo
+): bigint {
+  const settlement = decodePaymentResponseHeader(header);
+  if (
+    !settlement ||
+    typeof settlement !== 'object' ||
+    settlement.success !== true ||
+    settlement.network !== payment.network ||
+    typeof settlement.transaction !== 'string' ||
+    typeof settlement.amount !== 'string' ||
+    !/^\d+$/u.test(settlement.amount)
+  ) {
+    throw new Error('Invalid upto settlement receipt for payment accounting');
+  }
+  const amount = BigInt(settlement.amount);
+  if (amount > payment.amount) {
+    throw new Error('Upto settlement amount exceeds the authorized ceiling');
+  }
+  if (amount > 0n && settlement.transaction.length === 0) {
+    throw new Error('Upto settlement receipt is missing its transaction');
+  }
+  return amount;
+}
 
 type ReservedPaymentAttempt = {
   id: string;
@@ -153,6 +192,9 @@ function policyViolationResponse(
  * 3. Evaluates policies against spending limits and rate limits
  * 4. Returns 403 if policy violation, otherwise allows payment
  * 5. Records spending/rate limit data after successful payment
+ * Successful upto receipts replace monetary ceilings with actual settled
+ * amounts before commit. Payment-count reservations are not reduced.
+ * If receipt reconciliation or accounting fails, staged capacity stays counted.
  *
  * @param baseFetch - The base fetch function to wrap
  * @param policyGroups - Array of payment policy groups to evaluate
@@ -400,6 +442,8 @@ export function wrapBaseFetchWithPolicy(
           id: globalThis.crypto.randomUUID(),
           payment: {
             amount: paymentAmount,
+            scheme: paymentInfo.scheme,
+            network: paymentInfo.network,
             recipientAddress: recipientAddress || undefined,
             recipientDomain: targetDomain,
           },
@@ -459,6 +503,7 @@ export function wrapBaseFetchWithPolicy(
               groupName: group.name,
               scope,
               recordsPayment,
+              tracksAmount: Boolean(group.outgoingLimits),
             });
           }
         } catch (error) {
@@ -484,9 +529,32 @@ export function wrapBaseFetchWithPolicy(
       response.status < 300
     ) {
       const paymentResponseHeader = response.headers.get('PAYMENT-RESPONSE');
-      if (paymentResponseHeader) {
+      const monetaryGroups = attempt.groups.filter(group => group.tracksAmount);
+      const requiresActualAmount =
+        attempt.payment.scheme === 'upto' && monetaryGroups.length > 0;
+      if (paymentResponseHeader || requiresActualAmount) {
         if (settlementId) {
           try {
+            if (requiresActualAmount) {
+              if (!paymentResponseHeader) {
+                throw new Error(
+                  'Missing upto settlement receipt for payment accounting'
+                );
+              }
+              const actualAmount = resolveUptoSettlementAmount(
+                paymentResponseHeader,
+                attempt.payment
+              );
+              await paymentTracker.adjustSettlement(
+                settlementId,
+                monetaryGroups.map(group => ({
+                  groupName: group.groupName,
+                  scope: group.scope,
+                  direction: 'outgoing' as const,
+                  amount: actualAmount,
+                }))
+              );
+            }
             await paymentTracker.commitSettlement(settlementId);
           } catch (error) {
             // The remote settlement is irreversible. Keep the durable staged

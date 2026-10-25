@@ -390,6 +390,20 @@ headers are never treated as sender identity. Outgoing recipient-domain rules
 use the destination URL. Outgoing policies wrap the payment-aware Fetch path
 even when no rate limit is configured.
 
+For the policy-wrapped agent-wallet buyer with monetary limits, an outgoing `upto` payment reserves
+the offered ceiling until the paid response arrives. A successful receipt for
+the selected network supplies the actual atomic `amount`, including zero,
+which replaces every monetary policy scope before accounting is committed.
+Payment-count reservations still count one payment. Positive settled amounts
+require a transaction identifier; zero settlements may use an empty one.
+
+If a successful HTTP response has no `upto` receipt, the receipt is incomplete
+or inconsistent, or accounting cannot be updated after settlement, the wrapper
+returns 503 and keeps the durable staged capacity counted until reconciliation.
+A zero settlement still needs an explicit receipt with `amount: "0"`.
+Exact-payment accounting continues to use its authorized amount and retains its
+existing no-receipt release behavior.
+
 MPP payments enter the same incoming policy and accounting transaction as x402.
 An MPP verifier should return the verified `payer` and `network` when available;
 the shared gate combines those with the challenged amount and currency. A
