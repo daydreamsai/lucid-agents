@@ -25,6 +25,11 @@ const json = await agent.analytics.exportJSON();
 `windowMs` is optional on every operation. When present, only records inside the
 trailing time window are included.
 
+Transaction amounts use USDC's six decimal places. `amountUsdc` preserves all
+integer digits: `10_000_000n` is shown as `"10"` and `0n` as `"0"`, including in
+CSV and JSON exports. Summary totals remain in atomic bigint units; JSON
+exports encode those raw bigint values as strings.
+
 The extension requires `payments()` at both the type and runtime levels. It
 captures the owning payments tracker during build and returns bound operations;
 consumers do not pass a tracker through a second wrapper. Build fails if payments

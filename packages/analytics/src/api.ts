@@ -11,8 +11,7 @@ import type {
  * Uses viem's formatUnits to preserve precision for very large amounts.
  */
 function formatUsdcAmount(amount: bigint): string {
-  const formatted = formatUnits(amount, 6);
-  return formatted.replace(/\.?0+$/, '');
+  return formatUnits(amount, 6);
 }
 
 /**
